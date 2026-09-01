@@ -4,5 +4,5 @@ pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "teen_center"
-database_id = "ae745bc7-388a-49b7-8823-2046bf8ad54d"
+database_name = "academy-system"
+database_id = "71875e52-75c8-4bc4-b303-564910cff8e6"
