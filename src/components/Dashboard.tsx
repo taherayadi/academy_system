@@ -61,10 +61,10 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="text-emerald-200 font-extrabold text-xs uppercase tracking-widest bg-[#8DC760]/15 px-3 py-1 rounded-full border border-[#8DC760]/25">منظومة Teen Center</span>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">مركز Teen Center</h1>
+            <span className="text-emerald-200 font-extrabold text-xs uppercase tracking-widest bg-[#8DC760]/15 px-3 py-1 rounded-full border border-[#8DC760]/25">منظومة Academy System</span>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">Academy System</h1>
             <p className="mt-2 text-slate-300 text-base max-w-xl font-light leading-relaxed">
-              مرحباً بك في لوحة قيادة Teen Center الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
+              مرحباً بك في لوحة قيادة Academy System الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
             </p>
           </div>
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center min-w-[210px] shadow-lg">

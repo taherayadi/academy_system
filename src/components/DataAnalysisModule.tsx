@@ -64,7 +64,7 @@ const TRIMESTER_MONTHS: Record<string, typeof ACADEMIC_MONTHS[number][]> = {
 
 const SERVICE_LABELS: Record<string, string> = {
   'Suivi': 'المتابعة الدراسية',
-  'Étude Teen Center': 'تأطير Étude',
+  'Étude Academy System': 'تأطير Étude',
   'Cours Particuliers': 'الدروس الخصوصية',
   'Revision': 'حصة مراجعة',
   'Bibliothèque': 'المكتبة',
