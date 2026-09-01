@@ -190,7 +190,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
             <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-xl flex items-center justify-center">
               <Clock className="h-5 w-5" />
             </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Étude Teen Center</h4>
+            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Étude Academy System</h4>
             <p className="text-[11px] text-slate-500 mt-1">الخانات الزمنية والتايم شيت</p>
           </button>
 
@@ -202,7 +202,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
               <div className="w-10 h-10 bg-orange-100 text-orange-700 rounded-xl flex items-center justify-center">
                 <BookMarked className="h-5 w-5" />
               </div>
-              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Études Hors Teen Center</h4>
+              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Études Hors Academy System</h4>
               <p className="text-[11px] text-slate-500 mt-1">الكورسات الخاصة</p>
             </button>
           )}
