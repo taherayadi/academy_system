@@ -72,7 +72,7 @@ export const APP_SUBJECTS = [
 ];
 
 export const initialCenterSettings: CenterSettings = {
-  centerName: 'Academy System',
+  centerName: src.centerName || src.center_name || 'Academy System',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
   fees: initialStudentFeeSet,
