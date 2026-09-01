@@ -1,0 +1,8 @@
+name = "system-academy"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "teen_center"
+database_id = "ae745bc7-388a-49b7-8823-2046bf8ad54d"
