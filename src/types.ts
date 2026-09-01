@@ -72,7 +72,7 @@ export const APP_SUBJECTS = [
 ];
 
 export const initialCenterSettings: CenterSettings = {
-  centerName: 'Teen Center',
+  centerName: 'Academy System',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
   fees: initialStudentFeeSet,
@@ -168,7 +168,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-    centerName: src.centerName || src.center_name || 'Teen Center',
+    centerName: src.centerName || src.center_name || 'Academy System',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     geminiApiKey: src.geminiApiKey || src.gemini_api_key || '',
@@ -302,7 +302,7 @@ export interface PaymentRecord {
   amountPaid: number;
   totalRequired: number;
   remainingBalance: number;
-  service: 'Suivi' | 'Étude Teen Center' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Repas' | 'Inscription' | 'Assurance' | 'Autres';
+  service: 'Suivi' | 'Étude Academy System' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Repas' | 'Inscription' | 'Assurance' | 'Autres';
   month: string; // e.g. "Octobre"
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
   method: 'Espèces' | 'Chèque' | 'Virement';
@@ -387,7 +387,7 @@ export interface Student {
     monthlyFee: number;            // ex: 250 DT
   };
   
-  // MODULE 3: Teen Center Fees
+  // MODULE 3: Academy System Fees
   teenCenterFees: {
     annualRegistrationFee: number; // ex: 50 DT
     monthlyFee: number;            // ex: 80 DT

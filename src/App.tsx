@@ -575,7 +575,7 @@ export default function App() {
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
             <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
-              <img src={logo} alt="Teen Center" className="w-full h-full rounded-xl object-cover" />
+              <img src={logo} alt="Academy System" className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
@@ -637,10 +637,10 @@ export default function App() {
       <header className="md:hidden bg-white border-b border-[#257C86]/20 text-slate-900 p-4 flex justify-between items-center shadow-xs no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={logo} alt="Teen Center" className="w-full h-full rounded-lg object-cover" />
+            <img src={logo} alt="Academy System" className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">Teen Center</h1>
+            <h1 className="font-black text-sm text-slate-900">Academy System</h1>
             <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
           </div>
         </div>
@@ -701,7 +701,7 @@ export default function App() {
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/15 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={logo} alt="Teen Center" className="w-full h-full rounded-xl object-cover" />
+<img src={logo} alt="Academy System" className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
@@ -783,7 +783,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">Teen Center System © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">Academy System © 2026</p>
           )}
         </div>
       </aside>
