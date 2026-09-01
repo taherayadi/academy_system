@@ -168,7 +168,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-    centerName: src.centerName || src.center_name || 'Academy System',
+centerName: 'Academy System',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     geminiApiKey: src.geminiApiKey || src.gemini_api_key || '',
