@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   UserPlus, 
@@ -27,7 +27,7 @@ import {
   Loader2,
   WifiOff
 } from 'lucide-react';
-import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear } from '../types';
+import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { capitalizeFirst } from '../utils/format';
@@ -140,6 +140,36 @@ export default function StudentRegistrationModule({
   const [grade, setGrade] = useState('Lycée 1ère Année');
   const [academicYearInput, setAcademicYearInput] = useState<string>(academicYearFilter);
 
+  // Etablissement
+  const [etablissement, setEtablissement] = useState('');
+  const [isAddingEtablissement, setIsAddingEtablissement] = useState(false);
+  const [newEtablissementInput, setNewEtablissementInput] = useState('');
+  const [customEtablissements, setCustomEtablissements] = useState<string[]>([]);
+
+  const availableEtablissements = useMemo(() => {
+    const set = new Set<string>(customEtablissements);
+    (settings?.etablissements || []).forEach(e => {
+      if (e?.trim()) set.add(e.trim());
+    });
+    students.forEach(s => {
+      if (s.etablissement?.trim()) set.add(s.etablissement.trim());
+    });
+    if (etablissement?.trim()) set.add(etablissement.trim());
+    return Array.from(set).sort();
+  }, [students, settings?.etablissements, customEtablissements, etablissement]);
+
+  const handleAddEtablissement = () => {
+    const trimmed = newEtablissementInput.trim();
+    if (!trimmed) return;
+    if (!customEtablissements.includes(trimmed)) {
+      setCustomEtablissements(prev => [...prev, trimmed]);
+    }
+    setEtablissement(trimmed);
+    setNewEtablissementInput('');
+    setIsAddingEtablissement(false);
+    toast.success(`تمت إضافة المؤسسة "${trimmed}" بنجاح!`);
+  };
+
   // Parents
   const [mother, setMother] = useState<ParentInfo>(emptyParent());
   const [father, setFather] = useState<ParentInfo>(emptyParent());
@@ -187,6 +217,7 @@ export default function StudentRegistrationModule({
     setBirthDate('');
     setBirthPlace('');
     setGrade('Lycée 1ère Année');
+    setEtablissement('');
     setMother(emptyParent());
     setFather(emptyParent());
     setParentalSituation('mariés');
@@ -275,6 +306,7 @@ export default function StudentRegistrationModule({
     setBirthDate(d.birthDate || '');
     setBirthPlace(d.birthPlace || '');
     setGrade(d.grade || 'Lycée 1ère Année');
+    setEtablissement(d.etablissement || '');
     setMother({
       name: d.mother?.name || '',
       birthDate: d.mother?.birthDate || '',
@@ -329,6 +361,7 @@ export default function StudentRegistrationModule({
     setBirthDate(st.birthDate);
     setBirthPlace(st.birthPlace);
     setGrade(st.grade);
+    setEtablissement(st.etablissement || '');
     setMother(st.mother || emptyParent());
     setFather(st.father || emptyParent());
     setParentalSituation(st.parentalSituation || 'mariés');
@@ -393,6 +426,7 @@ export default function StudentRegistrationModule({
     setBirthDate(sourceSt.birthDate);
     setBirthPlace(sourceSt.birthPlace);
     setGrade(sourceSt.grade);
+    setEtablissement(sourceSt.etablissement || '');
     setMother(sourceSt.mother || emptyParent());
     setFather(sourceSt.father || emptyParent());
     setParentalSituation(sourceSt.parentalSituation || 'mariés');
@@ -462,6 +496,7 @@ export default function StudentRegistrationModule({
       birthDate,
       birthPlace,
       grade,
+      etablissement: etablissement.trim() || undefined,
       mother,
       father,
       parentalSituation,
@@ -663,13 +698,7 @@ export default function StudentRegistrationModule({
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
           >
             <option value="all">كل المستويات</option>
-            <option value="Collège 7ème Année">Collège 7ème</option>
-            <option value="Collège 8ème Année">Collège 8ème</option>
-            <option value="Collège 9ème Année">Collège 9ème</option>
-            <option value="Lycée 1ère Année">Lycée 1ère</option>
-            <option value="Lycée 2ème Année">Lycée 2ème</option>
-            <option value="Lycée 3ème Année">Lycée 3ème</option>
-            <option value="Baccalauréat">Baccalauréat</option>
+            {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
       </div>
@@ -694,6 +723,9 @@ export default function StudentRegistrationModule({
                       {st.academicYear || getCurrentAcademicYear()}
                     </span>
                   </div>
+                  {st.etablissement && (
+                    <p className="text-[11px] text-[#257C86] font-bold mt-1 truncate" title={st.etablissement}>{st.etablissement}</p>
+                  )}
                   <h3 className="text-xl font-black text-slate-900 mt-2 truncate whitespace-nowrap" title={`${st.firstName} ${st.lastName}`}>
                     {st.firstName} {st.lastName}
                   </h3>
@@ -914,14 +946,62 @@ export default function StudentRegistrationModule({
                           backgroundSize: '1rem'
                         }}
                       >
-                        <option value="Collège 7ème Année">Collège 7ème</option>
-                        <option value="Collège 8ème Année">Collège 8ème</option>
-                        <option value="Collège 9ème Année">Collège 9ème</option>
-                        <option value="Lycée 1ère Année">Lycée 1ère</option>
-                        <option value="Lycée 2ème Année">Lycée 2ème</option>
-                        <option value="Lycée 3ème Année">Lycée 3ème</option>
-                        <option value="Baccalauréat">Baccalauréat</option>
+                        {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">المؤسسة التعليمية (المعهد / الإعدادية / الابتدائية)</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={etablissement}
+                          onChange={(e) => setEtablissement(e.target.value)}
+                          className="flex-1 h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer appearance-none pr-8 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          style={{
+                            backgroundImage: "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%2364748b\" stroke-width=\"2\"><path d=\"m6 9 6 6 6-6\"/></svg>')",
+                            backgroundPosition: 'right 0.6rem center',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: '1rem'
+                          }}
+                        >
+                          <option value="">-- اختر المؤسسة التعليمية --</option>
+                          {availableEtablissements.map(etab => (
+                            <option key={etab} value={etab}>{etab}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingEtablissement(!isAddingEtablissement)}
+                          className="px-3 py-2 bg-[#E0EFF1] hover:bg-[#C3E0E4] text-[#14464E] font-bold text-xs rounded-xl cursor-pointer shrink-0 transition"
+                        >
+                          {isAddingEtablissement ? 'إلغاء' : '+ إضافة مؤسسة'}
+                        </button>
+                      </div>
+
+                      {isAddingEtablissement && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newEtablissementInput}
+                            onChange={(e) => setNewEtablissementInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddEtablissement();
+                              }
+                            }}
+                            placeholder="اسم المؤسسة الجديدة (مثال: معهد الحبيب بورقيبة)..."
+                            className="flex-1 px-3 py-1.5 bg-white border border-[#A0CBCF] rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddEtablissement}
+                            className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1E6A73] text-white font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
+                          >
+                            إضافة
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

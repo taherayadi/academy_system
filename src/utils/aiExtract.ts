@@ -16,7 +16,7 @@ Extract the student information and return a JSON object with EXACTLY this struc
   "lastName": "string — last name (اللقب)",
   "birthDate": "string — date of birth DD/MM/YYYY (تاريخ الميلاد)",
   "birthPlace": "string — place of birth (مكان الميلاد)",
-  "grade": "string — current school grade. Use EXACTLY one of: Collège 7ème Année, Collège 8ème Année, Collège 9ème Année, Lycée 1ère Année, Lycée 2ème Année, Lycée 3ème Année, Baccalauréat",
+  "grade": "string — current school grade. Use EXACTLY one of: Primaire 1ère Année, Primaire 2ème Année, Primaire 3ème Année, Primaire 4ème Année, Primaire 5ème Année, Primaire 6ème Année, Collège 7ème Année, Collège 8ème Année, Collège 9ème Année, Lycée 1ère Année, Lycée 2ème Année, Lycée 3ème Année, Baccalauréat",
   "mother": {
     "name": "string",
     "birthDate": "string — DD/MM/YYYY or empty",
@@ -72,7 +72,7 @@ RULES:
 - Return ONLY the raw JSON object. No markdown, no \`\`\` fences, no explanation.
 - Phone numbers: keep the exact digits as written (Tunisian format usually +216 or 71/72/73/74/75/78/79 numbers).
 - If a name is in Arabic script, transliterate it to Latin characters (e.g. "محمد" → "Mohamed", " ben Ali" → "Ben Ali").
-- Arabic grade mapping: "أولى ثانوي" = "Lycée 1ère Année", "ثانية ثانوي" = "Lycée 2ème Année", "ثالثة ثانوي" = "Lycée 3ème Année", "رابعة ثانوي" = "Lycée 4ème" → map to "Lycée 3ème Année" or "Baccalauréat" if Bac, "ثالثة متوسطة" = "Collège 9ème Année", "ثامنة متوسطة" = "Collège 8ème Année", "سابعة متوسطة" = "Collège 7ème Année".
+- Arabic grade mapping: "أولى ابتدائي" = "Primaire 1ère Année", "ثانية ابتدائي" = "Primaire 2ème Année", "ثالثة ابتدائي" = "Primaire 3ème Année", "رابعة ابتدائي" = "Primaire 4ème Année", "خامسة ابتدائي" = "Primaire 5ème Année", "سادسة ابتدائي" = "Primaire 6ème Année", "أولى ثانوي" = "Lycée 1ère Année", "ثانية ثانوي" = "Lycée 2ème Année", "ثالثة ثانوي" = "Lycée 3ème Année", "رابعة ثانوي" = "Lycée 4ème" → map to "Lycée 3ème Année" or "Baccalauréat" if Bac, "ثالثة متوسطة" = "Collège 9ème Année", "ثامنة متوسطة" = "Collège 8ème Année", "سابعة متوسطة" = "Collège 7ème Année".
 - Parental situation: "متزوجان" = "mariés", "مطلق/ة" or "منفصلان" = "séparés_garde_mere", nothing visible = "mariés".
 - Extract ALL siblings listed, ALL authorized persons listed.
 - Extract parent birth dates (تاريخ الميلاد) and emails (البريد الإلكتروني / e-mail) when visible.

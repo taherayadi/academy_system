@@ -231,7 +231,7 @@ describe('generateReceiptNumber', () => {
 describe('buildExternalGradeOptions', () => {
   it('returns all grade levels', () => {
     const options = buildExternalGradeOptions();
-    expect(options.length).toBe(7);
+    expect(options.length).toBe(13);
   });
 
   it('strips " Année" from labels', () => {
@@ -239,6 +239,7 @@ describe('buildExternalGradeOptions', () => {
     const labels = options.map(o => o.label);
     expect(labels).not.toContain('Lycée 1ère Année');
     expect(labels).toContain('Lycée 1ère');
+    expect(labels).toContain('Primaire 1ère');
   });
 
   it('preserves values as-is', () => {

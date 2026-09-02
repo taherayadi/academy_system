@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Student, StudentTimeSheet, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth,
            getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, SuiviNotes, SuiviSubjectGrade,
-           isMathSubject, getAppSubjects, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear } from '../types';
+           isMathSubject, getAppSubjects, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS } from '../types';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
@@ -609,13 +609,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
           >
             <option value="all">كل المستويات</option>
-            <option value="Collège 7ème Année">Collège 7ème</option>
-            <option value="Collège 8ème Année">Collège 8ème</option>
-            <option value="Collège 9ème Année">Collège 9ème</option>
-            <option value="Lycée 1ère Année">Lycée 1ère</option>
-            <option value="Lycée 2ème Année">Lycée 2ème</option>
-            <option value="Lycée 3ème Année">Lycée 3ème</option>
-            <option value="Baccalauréat">Baccalauréat</option>
+            {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
       </div>

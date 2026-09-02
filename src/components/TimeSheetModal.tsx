@@ -76,6 +76,34 @@ export default function TimeSheetModal({
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  const [isAddingEtablissement, setIsAddingEtablissement] = useState(false);
+  const [newEtablissementInput, setNewEtablissementInput] = useState('');
+  const [customEtablissements, setCustomEtablissements] = useState<string[]>([]);
+
+  const availableEtablissements = useMemo(() => {
+    const set = new Set<string>(customEtablissements);
+    students.forEach(s => {
+      if (s.etablissement?.trim()) set.add(s.etablissement.trim());
+    });
+    timeSheets.forEach(ts => {
+      if (ts.establishmentName?.trim()) set.add(ts.establishmentName.trim());
+    });
+    if (tsEstablishment?.trim()) set.add(tsEstablishment.trim());
+    return Array.from(set).sort();
+  }, [students, timeSheets, customEtablissements, tsEstablishment]);
+
+  const handleAddEtablissement = () => {
+    const trimmed = newEtablissementInput.trim();
+    if (!trimmed) return;
+    if (!customEtablissements.includes(trimmed)) {
+      setCustomEtablissements(prev => [...prev, trimmed]);
+    }
+    setTsEstablishment(trimmed);
+    setNewEtablissementInput('');
+    setIsAddingEtablissement(false);
+    toast.success(`تمت إضافة المؤسسة "${trimmed}" بنجاح!`);
+  };
+
   const tsBranches = useMemo(() => getTimesheetBranches(tsGradeLevel), [tsGradeLevel]);
 
   const handleAddSlot = (day: TimesheetDay) => {
@@ -93,6 +121,8 @@ export default function TimeSheetModal({
   const resetForm = () => {
     setTsSchoolYear(DEFAULT_ACADEMIC_YEARS[3]);
     setTsEstablishment('');
+    setIsAddingEtablissement(false);
+    setNewEtablissementInput('');
     setTsGradeLevel(GRADE_LEVELS[0]);
     setTsBranch('');
     setTsClassName('');
@@ -195,13 +225,51 @@ export default function TimeSheetModal({
                 </div>
                 <div>
                   <label className="text-xs font-black text-slate-700 block mb-1">اسم المؤسسة *</label>
-                  <input
-                    type="text"
-                    value={tsEstablishment}
-                    onChange={e => setTsEstablishment(e.target.value)}
-                    placeholder="مثال: المعهد الثانوي"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={tsEstablishment}
+                      onChange={e => setTsEstablishment(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    >
+                      <option value="">-- اختر المؤسسة التعليمية --</option>
+                      {availableEtablissements.map(etab => (
+                        <option key={etab} value={etab}>{etab}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingEtablissement(!isAddingEtablissement)}
+                      className="px-2.5 py-1 bg-[#E0EFF1] hover:bg-[#C3E0E4] text-[#14464E] font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
+                    >
+                      {isAddingEtablissement ? 'إلغاء' : '+ إضافة مؤسسة'}
+                    </button>
+                  </div>
+
+                  {isAddingEtablissement && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newEtablissementInput}
+                        onChange={e => setNewEtablissementInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddEtablissement();
+                          }
+                        }}
+                        placeholder="اسم المؤسسة الجديدة..."
+                        className="flex-1 px-3 py-1 bg-white border border-[#A0CBCF] rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddEtablissement}
+                        className="px-3 py-1 bg-[#257C86] hover:bg-[#1E6A73] text-white font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
+                      >
+                        إضافة
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

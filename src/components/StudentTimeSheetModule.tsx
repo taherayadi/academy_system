@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Plus, Trash2, Users, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { Student, StudentTimeSheet } from '../types';
+import { Student, StudentTimeSheet, EXTERNAL_GRADE_OPTIONS } from '../types';
 import { useToast } from './Toast';
 import { AnimatePresence, motion } from 'motion/react';
 import TimeSheetModal from './TimeSheetModal';
@@ -123,9 +123,7 @@ export default function StudentTimeSheetModule({
                   className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]/30 cursor-pointer"
                 >
                   <option value="">كل المستويات</option>
-                  {Array.from(new Set(studentTimeSheets.map(ts => ts.gradeLevel).filter(Boolean))).sort().map(g => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
+                  {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
               </div>
             </div>

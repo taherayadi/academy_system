@@ -28,6 +28,8 @@ export interface CenterSettings {
   feesByYear: Record<string, CenterFeeSet>;
   // Shared list of matières (subjects) used across the whole app (Suivi notes, staff, cours)
   subjects?: string[];
+  // Shared list of known etablissements (schools/establishments)
+  etablissements?: string[];
 }
 
 export const initialCenterFeeSet: CenterFeeSet = {
@@ -581,8 +583,14 @@ export interface EtudeSlot {
   isExtra?: boolean; // Seance outside the teacher's weekly schedule → counted as additional hours
 }
 
-// Tunisian school levels (Collège 7ème → Bac) — same as student fiche
+// Tunisian school levels (Primaire 1ère → 6ème, Collège 7ème → 9ème, Lycée 1ère → Bac)
 export const EXTERNAL_GRADE_LEVELS: { level: string; branches: string[] }[] = [
+  { level: 'Primaire 1ère Année', branches: [] },
+  { level: 'Primaire 2ème Année', branches: [] },
+  { level: 'Primaire 3ème Année', branches: [] },
+  { level: 'Primaire 4ème Année', branches: [] },
+  { level: 'Primaire 5ème Année', branches: [] },
+  { level: 'Primaire 6ème Année', branches: [] },
   { level: 'Collège 7ème Année', branches: [] },
   { level: 'Collège 8ème Année', branches: [] },
   { level: 'Collège 9ème Année', branches: [] },
@@ -595,7 +603,7 @@ export const EXTERNAL_GRADE_LEVELS: { level: string; branches: string[] }[] = [
 // Shared subject list used in course (1 matière/course) and enseignant selection
 export const COURSE_SUBJECTS = APP_SUBJECTS;
 
-// Build a grade list ("Collège 7ème", ..., "Baccalauréat") for dropdowns — same labels as student fiche
+// Build a grade list ("Primaire 1ère", ..., "Baccalauréat") for dropdowns — same labels as student fiche
 export function buildExternalGradeOptions(): { value: string; label: string }[] {
   const options: { value: string; label: string }[] = [];
   EXTERNAL_GRADE_LEVELS.forEach(({ level }) => {
@@ -630,7 +638,10 @@ export interface StudentTimeSheet {
   updatedAt: string;
 }
 
-export const TIMESHEET_GRADES_NO_BRANCH = ['Collège 7ème', 'Collège 8ème', 'Collège 9ème', 'Lycée 1ère'];
+export const TIMESHEET_GRADES_NO_BRANCH = [
+  'Primaire 1ère', 'Primaire 2ème', 'Primaire 3ème', 'Primaire 4ème', 'Primaire 5ème', 'Primaire 6ème',
+  'Collège 7ème', 'Collège 8ème', 'Collège 9ème', 'Lycée 1ère'
+];
 
 export const TIMESHEET_GRADES_2EME_BRANCHES = [
   'Lettres (آداب)',
@@ -651,6 +662,7 @@ export const TIMESHEET_GRADES_3EME_BAC_BRANCHES = [
 
 export function getTimesheetBranches(grade: string): string[] {
   if (TIMESHEET_GRADES_NO_BRANCH.some(g => grade.includes(g))) return [];
+  if (grade.includes('Primaire') || grade.includes('Collège')) return [];
   if (grade.includes('2ème') || grade.includes('2eme')) return TIMESHEET_GRADES_2EME_BRANCHES;
   if (grade.includes('3ème') || grade.includes('3eme') || grade.includes('Bac')) return TIMESHEET_GRADES_3EME_BAC_BRANCHES;
   return [];

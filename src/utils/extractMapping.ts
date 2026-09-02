@@ -1,4 +1,10 @@
 const FORM_GRADES = [
+  'Primaire 1ère Année',
+  'Primaire 2ème Année',
+  'Primaire 3ème Année',
+  'Primaire 4ème Année',
+  'Primaire 5ème Année',
+  'Primaire 6ème Année',
   'Collège 7ème Année',
   'Collège 8ème Année',
   'Collège 9ème Année',
