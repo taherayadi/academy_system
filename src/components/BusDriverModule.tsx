@@ -855,9 +855,8 @@ export default function BusDriverModule({
               <p className="text-xs font-bold text-slate-600">ورقة مسار حافلة النقل المدرسي (Feuille de Route)</p>
             </div>
           </div>
-          <div className="text-left text-xs font-bold space-y-1">
+          <div className="text-left text-xs font-bold">
             <div><span className="text-slate-500">اليوم: </span><span className="font-black">{selectedDay}</span></div>
-            <div><span className="text-slate-500">التاريخ: </span><span className="font-mono">{new Date().toISOString().split('T')[0]}</span></div>
           </div>
         </div>
 
@@ -882,7 +881,7 @@ export default function BusDriverModule({
         </div>
 
         {/* Trips List in Print */}
-        <div className="space-y-6">
+        <div className="space-y-8">
           {printTrips.map((trip, tripIndex) => {
             const isToSchool = trip.tripType === 'to_school';
             return (
@@ -974,13 +973,13 @@ export default function BusDriverModule({
           </div>
         )}
 
-        {/* Print Signatures Footer */}
-        <div className="mt-8 pt-4 border-t-2 border-slate-800 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
+        {/* Print Signatures Footer - at bottom of last page */}
+        <div className="mt-12 pt-6 border-t-2 border-slate-800 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
           <div>
             <p className="font-bold text-slate-700">ملاحظات سائق الحافلة:</p>
             <div className="h-16 border-b border-dotted border-slate-400 mt-2"></div>
           </div>
-          <div className="text-left space-y-4">
+          <div className="text-left space-y-6">
             <div>
               <p className="font-black text-slate-900">إمضاء سائق الحافلة</p>
               <div className="h-14 border-b-2 border-dotted border-slate-600 mt-1"></div>
