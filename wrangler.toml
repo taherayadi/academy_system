@@ -4,5 +4,5 @@ pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "academy-system"
-database_id = "71875e52-75c8-4bc4-b303-564910cff8e6"
+database_name = "academy-system-v2"
+database_id = "3e3ae55b-8b21-483e-87e3-ae527cbdf08a"

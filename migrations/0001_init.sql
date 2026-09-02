@@ -1,5 +1,5 @@
--- Teen Center D1 schema (fully normalized) + seed data
--- Applies to the `teen_center` D1 database.
+-- System Academy D1 schema (fully normalized) + seed data
+-- Applies to the academy_system D1 database.
 -- NOTE: D1 rejects explicit BEGIN/COMMIT (transactions are implicit per statement).
 
 -- ============================================================
@@ -25,9 +25,9 @@ CREATE TABLE IF NOT EXISTS fee_sets (
   frais_abonnement_repas_traiteur REAL,
   frais_par_repas_traiteur REAL,
   prix_plat_traiteur REAL DEFAULT 6,
-  frais_annuel_etude_teen_center REAL NOT NULL,
-  frais_mensuel_etude_teen_center REAL NOT NULL,
-  frais_assurance_cours_hors_teen_center REAL NOT NULL
+  frais_annuel_etude REAL NOT NULL,
+  frais_mensuel_etude REAL NOT NULL,
+  frais_assurance_cours_externes REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS subjects (
@@ -68,13 +68,13 @@ CREATE TABLE IF NOT EXISTS students (
   registration_signed_electronically INTEGER NOT NULL DEFAULT 0,
   registration_signature_name TEXT,
   enrolled_suivi INTEGER NOT NULL DEFAULT 0,
-  enrolled_teen_center INTEGER NOT NULL DEFAULT 0,
+  enrolled_etude INTEGER NOT NULL DEFAULT 0,
   enrolled_library INTEGER NOT NULL DEFAULT 0,
   enrolled_meals INTEGER NOT NULL DEFAULT 0,
   suivi_annual_fee REAL NOT NULL DEFAULT 0,
   suivi_monthly_fee REAL NOT NULL DEFAULT 0,
-  teen_center_annual_fee REAL NOT NULL DEFAULT 0,
-  teen_center_monthly_fee REAL NOT NULL DEFAULT 0,
+  etude_annual_fee REAL NOT NULL DEFAULT 0,
+  etude_monthly_fee REAL NOT NULL DEFAULT 0,
   library_annual_fee REAL NOT NULL DEFAULT 0,
   library_monthly_fee REAL NOT NULL DEFAULT 0,
   meal_mode TEXT NOT NULL DEFAULT 'unit' CHECK (meal_mode IN ('subscription', 'unit')),
@@ -298,10 +298,10 @@ CREATE TABLE IF NOT EXISTS student_time_sheets (
 );
 
 -- ============================================================
--- TEEN CENTER SLOTS
+-- ÉTUDE SLOTS
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS teen_center_slots (
+CREATE TABLE IF NOT EXISTS etude_slots (
   id TEXT PRIMARY KEY,
   day TEXT NOT NULL,
   start_time TEXT NOT NULL,
@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS slot_enrollments (
   slot_id TEXT NOT NULL,
   student_id TEXT NOT NULL,
   PRIMARY KEY (slot_id, student_id),
-  FOREIGN KEY (slot_id) REFERENCES teen_center_slots(id) ON DELETE CASCADE,
+  FOREIGN KEY (slot_id) REFERENCES etude_slots(id) ON DELETE CASCADE,
   FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
 );
 
@@ -645,15 +645,15 @@ CREATE INDEX IF NOT EXISTS idx_formation_student_matieres_student_id ON formatio
 
 -- Settings (single row)
 INSERT INTO settings (id, center_name, phone_number, location_city)
-VALUES (1, 'Teen Center', '+216 71 000 000', 'Sfax / تونس');
+VALUES (1, 'System Academy', '+216 71 000 000', 'Sfax / تونس');
 
 -- Fee sets (default + per-year overrides)
 INSERT INTO fee_sets (
   year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque,
   frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas,
   frais_abonnement_repas_traiteur, frais_par_repas_traiteur,
-  frais_annuel_etude_teen_center, frais_mensuel_etude_teen_center,
-  frais_assurance_cours_hors_teen_center
+  frais_annuel_etude, frais_mensuel_etude,
+  frais_assurance_cours_externes
 ) VALUES
   ('DEFAULT', 150, 250, 20, 30, 120, 8, 100, 6, 100, 180, 50),
   ('2022/2023', 150, 250, 20, 30, 120, 8, 100, 6, 100, 180, 50),
@@ -689,9 +689,9 @@ INSERT INTO students (
   id, first_name, last_name, birth_date, birth_place, grade, academic_year,
   parental_situation, parental_comments, allergies,
   registration_date, registration_location, registration_signed_electronically, registration_signature_name,
-  enrolled_suivi, enrolled_teen_center, enrolled_library, enrolled_meals,
+  enrolled_suivi, enrolled_etude, enrolled_library, enrolled_meals,
   suivi_annual_fee, suivi_monthly_fee,
-  teen_center_annual_fee, teen_center_monthly_fee,
+  etude_annual_fee, etude_monthly_fee,
   library_annual_fee, library_monthly_fee,
   meal_mode, meal_monthly_price, meal_unit_price, meal_prepaid, meal_consumed, meal_active
 ) VALUES
@@ -803,8 +803,8 @@ INSERT INTO staff_payments (
 ) VALUES
   ('sp_1', 'staff_1', 'سبتمبر 2026', 1200, 100, 0, 1300, '2026-09-30', 'SAL-2026-09-01', 'راتب شهر سبتمبر + مكافأة تفوق');
 
--- Teen Center slots
-INSERT INTO teen_center_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra) VALUES
+-- Étude slots
+INSERT INTO etude_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra) VALUES
   ('slot_1', 'Lundi', '08:00', '10:00', 'Collège 7ème & 8ème', 'staff_1', 0),
   ('slot_2', 'Lundi', '16:00', '18:00', 'Lycée 1ère & 2ème', 'staff_1', 0),
   ('slot_3', 'Mardi', '14:00', '16:00', 'Collège 9ème', 'staff_2', 0),
@@ -874,7 +874,7 @@ CREATE INDEX IF NOT EXISTS idx_staff_leave_requests_staff_id ON staff_leave_requ
 CREATE INDEX IF NOT EXISTS idx_staff_advances_staff_id ON staff_advances(staff_id);
 CREATE INDEX IF NOT EXISTS idx_timesheets_staff_id ON timesheets(staff_id);
 CREATE INDEX IF NOT EXISTS idx_external_course_sessions_course_id ON external_course_sessions(course_id);
-CREATE INDEX IF NOT EXISTS idx_teen_center_slots_teacher_id ON teen_center_slots(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_etude_slots_teacher_id ON etude_slots(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_slot_enrollments_slot_id ON slot_enrollments(slot_id);
 CREATE INDEX IF NOT EXISTS idx_course_enrolled_students_course_id ON course_enrolled_students(course_id);
 CREATE INDEX IF NOT EXISTS idx_session_one_time_students_session_id ON session_one_time_students(session_id);
