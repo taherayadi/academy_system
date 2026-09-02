@@ -145,10 +145,10 @@ function normalizeExtractedData(data: ExtractedStudentData): ExtractedStudentDat
       relation: ap.relation || '',
     })),
     enrolledServices: data.enrolledServices ?? {
-      suivi: true,
-      etude: true,
+      suivi: false,
+      etude: false,
       library: false,
-      meals: true,
+      meals: false,
     },
   };
 }

@@ -314,10 +314,10 @@ export default function StudentRegistrationModule({
     setNMinus3School(d.academicHistory?.nMinus3?.school || '');
     setNMinus3Grade(d.academicHistory?.nMinus3?.grade || '');
     if (d.enrolledServices) {
-      setSuiviEnrolled(d.enrolledServices.suivi ?? true);
-      setEtudeEnrolled(d.enrolledServices.etude ?? true);
+      setSuiviEnrolled(d.enrolledServices.suivi ?? false);
+      setEtudeEnrolled(d.enrolledServices.etude ?? false);
       setLibraryEnrolled(d.enrolledServices.library ?? false);
-      setMealsEnrolled(d.enrolledServices.meals ?? true);
+      setMealsEnrolled(d.enrolledServices.meals ?? false);
     }
   };
 
