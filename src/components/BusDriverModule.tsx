@@ -326,11 +326,11 @@ export default function BusDriverModule({
       tripsList.push({
         id: key, departureTime: depTime, tripType,
         title: tripType === 'to_school'
-          ? 'رحلة الذهاب: من المحل إلى المؤسسات التعليمية'
-          : 'رحلة العودة: من المؤسسات التعليمية إلى المحل',
+          ? `رحلة الذهاب: من ${centerName} إلى المؤسسات التعليمية`
+          : `رحلة العودة: من المؤسسات التعليمية إلى ${centerName}`,
         description: tripType === 'to_school'
-          ? `نقل التلاميذ من المركز للالتحاق بصفوفهم (بداية الحصة: ${groupPassengers[0]?.targetTime || depTime})`
-          : `إحضار التلاميذ من المدارس إلى المحل بعد انتهاء الحصص (المغادرة: ${depTime})`,
+          ? `نقل التلاميذ من ${centerName} للالتحاق بصفوفهم (بداية الحصة: ${groupPassengers[0]?.targetTime || depTime})`
+          : `إحضار التلاميذ من المدارس إلى ${centerName} بعد انتهاء الحصص (المغادرة: ${depTime})`,
         passengers: groupPassengers,
         etablissements: Array.from(etabMap.keys()),
         etabGroups
