@@ -678,10 +678,8 @@ INSERT INTO subjects (name) VALUES
   ('الإقتصاد والتصرف (Économie-Gestion)');
 
 -- Users (admin accounts, SHA-256 hashed passwords)
--- teens_center@gmail.com / teens_center  (restricted_admin)
--- academy_system@gmail.com / academy_system    (super_admin)
 INSERT INTO users (email, name, role, description, password_hash) VALUES
-  ('teens_center@gmail.com', 'إدارة Academy System (محدودة)', 'restricted_admin', 'إخفاء الكورسات الخارجية والمطعم', '33a8ea8c23c99ee45b6c7177230b658b674e09eef78566ec5ce511dc2e36acc9'),
+
   ('academy_system@gmail.com', 'إدارة Academy System (شاملة)', 'super_admin', 'جميع الصلاحيات', 'ff85c1201b1985d278c28a3f82f569a1ab412abe2ffb5a94f4b489bd020ae126');
 
 -- Students
