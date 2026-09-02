@@ -437,7 +437,7 @@ export default function BusDriverModule({
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              تخطيط رحلات الذهاب والإياب لنقل التلاميذ بين المحل والمؤسسات التربوية حسب جداول التوقيت
+              تخطيط رحلات الذهاب والإياب لنقل التلاميذ بين {centerName} والمؤسسات التربوية حسب جداول التوقيت
             </p>
           </div>
         </div>
@@ -525,8 +525,8 @@ export default function BusDriverModule({
           <select value={tripTypeFilter} onChange={(e) => setTripTypeFilter(e.target.value as any)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer">
             <option value="all">كل الاتجاهات (ذهاب وعودة)</option>
-            <option value="to_school">الذهاب فقط (من المحل إلى المؤسسة)</option>
-            <option value="to_center">العودة فقط (من المؤسسة إلى المحل)</option>
+            <option value="to_school">الذهاب فقط (من {centerName} إلى المؤسسة)</option>
+            <option value="to_center">العودة فقط (من المؤسسة إلى {centerName})</option>
           </select>
 
           <select value={selectedEtabFilter} onChange={(e) => setSelectedEtabFilter(e.target.value)}
@@ -612,7 +612,7 @@ export default function BusDriverModule({
                               رحلة #{tripIndex + 1}
                             </span>
                             <span className="text-xs font-bold text-emerald-200">
-                              {isToSchool ? 'الانطلاق من المحل ← إلى المؤسسات' : 'الإحضار من المؤسسات ← إلى المحل'}
+                              {isToSchool ? `الانطلاق من ${centerName} ← إلى المؤسسات` : `الإحضار من المؤسسات ← إلى ${centerName}`}
                             </span>
                           </div>
                           <h3 className="text-base font-black mt-0.5 flex items-center gap-2">
