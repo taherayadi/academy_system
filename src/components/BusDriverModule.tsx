@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bus, 
   Search, 
@@ -13,7 +13,10 @@ import {
   Users, 
   CheckCircle2, 
   Building2,
-  Sparkles
+  Trash2,
+  RotateCcw,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { 
   Student, 
@@ -46,14 +49,12 @@ export const ARABIC_DAYS_MAP: Record<string, string> = {
 
 const DAY_NAMES_ORDER: TimesheetDay[] = ['الأثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
-// Helper to convert time "HH:MM" to minutes for sorting
 const timeToMin = (t: string): number => {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 };
 
-// Compute departure time from center (usually 30 mins before school start)
 const computeDepartureTime = (schoolStartTime: string): string => {
   const mins = timeToMin(schoolStartTime) - 30;
   if (mins < 0) return '07:30';
@@ -61,6 +62,53 @@ const computeDepartureTime = (schoolStartTime: string): string => {
   const m = mins % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
+
+const MERGE_GAP_MIN = 120;
+
+function mergeDaySeances(
+  slots: { startTime: string; endTime: string }[],
+  gapMin = MERGE_GAP_MIN
+): { startTime: string; endTime: string }[] {
+  const sorted = slots
+    .filter(s => s.startTime && s.endTime && timeToMin(s.startTime) < timeToMin(s.endTime))
+    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
+  if (sorted.length === 0) return [];
+  const blocks: { startTime: string; endTime: string }[] = [];
+  for (const s of sorted) {
+    const last = blocks[blocks.length - 1];
+    if (last && timeToMin(s.startTime) - timeToMin(last.endTime) <= gapMin) {
+      if (timeToMin(s.endTime) > timeToMin(last.endTime)) {
+        last.endTime = s.endTime;
+      }
+    } else {
+      blocks.push({ startTime: s.startTime, endTime: s.endTime });
+    }
+  }
+  return blocks;
+}
+
+// ─── LocalStorage for per-day bus edits ──────────────────────────────
+const STORAGE_KEY = 'bus_driver_edits_v1';
+
+interface DayTripEdit {
+  departureTime?: string;
+  removed?: Record<string, string>;
+}
+
+type BusEditsStorage = Record<string, Record<string, DayTripEdit>>;
+
+function loadBusEdits(): BusEditsStorage {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveBusEdits(edits: BusEditsStorage): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); } catch {}
+}
+
+// ─── Interfaces ──────────────────────────────────────────────────────
 
 export interface TransportPassenger {
   student: Student;
@@ -89,6 +137,8 @@ export interface TransportTrip {
   etabGroups: EtablissementGroup[];
 }
 
+// ─── Component ───────────────────────────────────────────────────────
+
 export default function BusDriverModule({
   students,
   staff,
@@ -99,9 +149,7 @@ export default function BusDriverModule({
   const centerName = settings?.centerName || 'المركز';
   const [selectedDay, setSelectedDay] = useState<TimesheetDay>(() => {
     const jsDay = new Date().getDay();
-    if (jsDay >= 1 && jsDay <= 6) {
-      return DAY_NAMES_ORDER[jsDay - 1];
-    }
+    if (jsDay >= 1 && jsDay <= 6) return DAY_NAMES_ORDER[jsDay - 1];
     return 'الأثنين';
   });
 
@@ -110,17 +158,77 @@ export default function BusDriverModule({
   const [selectedEtabFilter, setSelectedEtabFilter] = useState('all');
   const [tripTypeFilter, setTripTypeFilter] = useState<'all' | 'to_school' | 'to_center'>('all');
 
-  // Automatically find the bus chauffeur from staff
-  const busDriver = useMemo(() => {
-    return staff.find(s => s.role === 'chauffeur_bus') || null;
-  }, [staff]);
+  const busDriver = useMemo(() => staff.find(s => s.role === 'chauffeur_bus') || null, [staff]);
 
   const [boardedStatus, setBoardedStatus] = useState<Record<string, boolean>>({});
+  const toggleBoarded = (key: string) => setBoardedStatus(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const toggleBoarded = (key: string) => {
-    setBoardedStatus(prev => ({ ...prev, [key]: !prev[key] }));
+  // ─── Editable program state ──────────────────────────────────────
+  const [busEdits, setBusEdits] = useState<BusEditsStorage>(loadBusEdits);
+  const [editingRemoval, setEditingRemoval] = useState<{ tripId: string; studentId: string } | null>(null);
+  const [removeRemark, setRemoveRemark] = useState('');
+
+  useEffect(() => { saveBusEdits(busEdits); }, [busEdits]);
+
+  // ─── Edit helpers ────────────────────────────────────────────────
+  const overrideDepartureTime = (tripId: string, newTime: string) => {
+    setBusEdits(prev => ({
+      ...prev,
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [tripId]: { ...prev[selectedDay]?.[tripId], departureTime: newTime || undefined }
+      }
+    }));
   };
 
+  const confirmRemovePassenger = () => {
+    if (!editingRemoval) return;
+    const remark = removeRemark.trim() || 'غياب بترخيص من الولي';
+    setBusEdits(prev => ({
+      ...prev,
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [editingRemoval.tripId]: {
+          ...prev[selectedDay]?.[editingRemoval.tripId],
+          removed: {
+            ...(prev[selectedDay]?.[editingRemoval.tripId]?.removed || {}),
+            [editingRemoval.studentId]: remark
+          }
+        }
+      }
+    }));
+    setEditingRemoval(null);
+    setRemoveRemark('');
+  };
+
+  const restorePassenger = (tripId: string, studentId: string) => {
+    setBusEdits(prev => {
+      const dayEdits = { ...(prev[selectedDay] || {}) };
+      const tripEdit = { ...(dayEdits[tripId] || {}) };
+      const removed = { ...(tripEdit.removed || {}) };
+      delete removed[studentId];
+      tripEdit.removed = Object.keys(removed).length > 0 ? removed : undefined;
+      dayEdits[tripId] = tripEdit;
+      return { ...prev, [selectedDay]: dayEdits };
+    });
+  };
+
+  const clearDayEdits = () => {
+    setBusEdits(prev => { const next = { ...prev }; delete next[selectedDay]; return next; });
+  };
+
+  // ─── Day edit summary ────────────────────────────────────────────
+  const dayEdits = busEdits[selectedDay] || {};
+  const dayRemovedPassengers = (Object.entries(dayEdits) as [string, DayTripEdit][]).flatMap(([tripId, te]) => {
+    if (!te.removed) return [];
+    return Object.entries(te.removed).map(([studentId, remark]) => {
+      const student = students.find(s => s.id === studentId);
+      return { tripId, studentId, studentName: student ? `${student.lastName} ${student.firstName}` : studentId, remark };
+    });
+  });
+  const dayRemovedCount = dayRemovedPassengers.length;
+
+  // ─── Main trip computation (merged blocks + edit overrides) ──────
   const { trips, passengersByEtab, allDayPassengers, allEtablissements } = useMemo(() => {
     const passengers: TransportPassenger[] = [];
     const tsMap = new Map<string, StudentTimeSheet>();
@@ -132,12 +240,10 @@ export default function BusDriverModule({
       let timeSheet: StudentTimeSheet | undefined;
       if (st.timeSheetId && tsMap.has(st.timeSheetId)) {
         const candidate = tsMap.get(st.timeSheetId)!;
-        // Only use the assigned timesheet if it matches the student's academic year
         if (!stYear || !candidate.schoolYear || candidate.schoolYear === stYear) {
           timeSheet = candidate;
         }
       }
-      // Fallback: find by grade level, also restricted to student's academic year
       if (!timeSheet) {
         timeSheet = studentTimeSheets.find(ts =>
           ts.gradeLevel === st.grade &&
@@ -147,76 +253,54 @@ export default function BusDriverModule({
 
       if (timeSheet && timeSheet.weeklySchedule) {
         const daySlots = timeSheet.weeklySchedule.filter(s => s.day === selectedDay);
-        daySlots.forEach(slot => {
+        const blocks = mergeDaySeances(daySlots);
+        blocks.forEach(block => {
           passengers.push({
-            student: st,
-            timeSheet,
-            etablissement: etab,
-            tripType: 'to_school',
-            departureTime: computeDepartureTime(slot.startTime),
-            targetTime: slot.startTime,
-            gradeLevel: st.grade
+            student: st, timeSheet, etablissement: etab,
+            tripType: 'to_school', departureTime: computeDepartureTime(block.startTime),
+            targetTime: block.startTime, gradeLevel: st.grade
           });
           passengers.push({
-            student: st,
-            timeSheet,
-            etablissement: etab,
-            tripType: 'to_center',
-            departureTime: slot.endTime,
-            targetTime: slot.endTime,
-            gradeLevel: st.grade
+            student: st, timeSheet, etablissement: etab,
+            tripType: 'to_center', departureTime: block.endTime,
+            targetTime: block.endTime, gradeLevel: st.grade
           });
         });
       } else {
         const engDay = Object.keys(ARABIC_DAYS_MAP).find(k => ARABIC_DAYS_MAP[k] === selectedDay);
         const centerSlots = slots.filter(s => s.day === engDay && (s.enrolledStudentIds || []).includes(st.id));
-
         if (centerSlots.length > 0) {
-          centerSlots.forEach(cs => {
+          const blocks = mergeDaySeances(centerSlots);
+          blocks.forEach(block => {
             passengers.push({
-              student: st,
-              etablissement: etab,
-              tripType: 'to_center',
-              departureTime: cs.startTime,
-              targetTime: cs.startTime,
-              gradeLevel: st.grade
+              student: st, etablissement: etab,
+              tripType: 'to_center', departureTime: block.startTime,
+              targetTime: block.startTime, gradeLevel: st.grade
             });
             passengers.push({
-              student: st,
-              etablissement: etab,
-              tripType: 'to_school',
-              departureTime: cs.endTime,
-              targetTime: cs.endTime,
-              gradeLevel: st.grade
+              student: st, etablissement: etab,
+              tripType: 'to_school', departureTime: block.endTime,
+              targetTime: block.endTime, gradeLevel: st.grade
             });
           });
         } else if (st.etablissement) {
           passengers.push({
-            student: st,
-            etablissement: etab,
-            tripType: 'to_school',
-            departureTime: '07:30',
-            targetTime: '08:00',
-            gradeLevel: st.grade
+            student: st, etablissement: etab,
+            tripType: 'to_school', departureTime: '07:30', targetTime: '08:00', gradeLevel: st.grade
           });
           passengers.push({
-            student: st,
-            etablissement: etab,
-            tripType: 'to_center',
-            departureTime: '12:00',
-            targetTime: '12:30',
-            gradeLevel: st.grade
+            student: st, etablissement: etab,
+            tripType: 'to_center', departureTime: '12:00', targetTime: '12:30', gradeLevel: st.grade
           });
         }
       }
     });
 
+    // Group into trips
     const tripGroups = new Map<string, TransportPassenger[]>();
     passengers.forEach(p => {
       const key = `${p.departureTime}__${p.tripType}`;
-      if (!tripGroups.has(key)) {
-        tripGroups.set(key, []);
-      }
+      if (!tripGroups.has(key)) tripGroups.set(key, []);
       tripGroups.get(key)!.push(p);
     });
 
@@ -224,96 +308,116 @@ export default function BusDriverModule({
     tripGroups.forEach((groupPassengers, key) => {
       const [depTime, typeStr] = key.split('__');
       const tripType = typeStr as 'to_school' | 'to_center';
-      
-      // Sort passengers by establishment name, then by student last/first name
       groupPassengers.sort((a, b) => {
         const c = a.etablissement.localeCompare(b.etablissement, 'ar');
         if (c !== 0) return c;
         return a.student.lastName.localeCompare(b.student.lastName, 'ar');
       });
-
-      // Group by establishment
       const etabMap = new Map<string, TransportPassenger[]>();
       groupPassengers.forEach(p => {
         const list = etabMap.get(p.etablissement) || [];
         list.push(p);
         etabMap.set(p.etablissement, list);
       });
-
       const etabGroups: EtablissementGroup[] = [];
       etabMap.forEach((pList, etabName) => {
-        etabGroups.push({
-          etablissement: etabName,
-          count: pList.length,
-          passengers: pList
-        });
+        etabGroups.push({ etablissement: etabName, count: pList.length, passengers: pList });
       });
-
-      const etabs = Array.from(etabMap.keys());
-
       tripsList.push({
-        id: key,
-        departureTime: depTime,
-        tripType,
-        title: tripType === 'to_school' 
-          ? 'رحلة الذهاب: من المحل إلى المؤسسات التعليمية' 
+        id: key, departureTime: depTime, tripType,
+        title: tripType === 'to_school'
+          ? 'رحلة الذهاب: من المحل إلى المؤسسات التعليمية'
           : 'رحلة العودة: من المؤسسات التعليمية إلى المحل',
         description: tripType === 'to_school'
           ? `نقل التلاميذ من المركز للالتحاق بصفوفهم (بداية الحصة: ${groupPassengers[0]?.targetTime || depTime})`
           : `إحضار التلاميذ من المدارس إلى المحل بعد انتهاء الحصص (المغادرة: ${depTime})`,
         passengers: groupPassengers,
-        etablissements: etabs,
+        etablissements: Array.from(etabMap.keys()),
         etabGroups
       });
     });
 
+    // ─── Apply busEdits: departure overrides + passenger removals ──
+    const dayBusEdits = busEdits[selectedDay] || {};
+    for (const trip of tripsList) {
+      const edit = dayBusEdits[trip.id];
+      if (edit?.departureTime) trip.departureTime = edit.departureTime;
+    }
     tripsList.sort((a, b) => timeToMin(a.departureTime) - timeToMin(b.departureTime));
+
+    const processedTrips: TransportTrip[] = [];
+    for (const trip of tripsList) {
+      const edit = dayBusEdits[trip.id];
+      const removedIds = new Set(edit?.removed ? Object.keys(edit.removed) : []);
+      if (removedIds.size === 0) { processedTrips.push(trip); continue; }
+      const kept = trip.passengers.filter(p => !removedIds.has(p.student.id));
+      if (kept.length === 0) continue;
+      const etabMap = new Map<string, TransportPassenger[]>();
+      kept.forEach(p => { const l = etabMap.get(p.etablissement) || []; l.push(p); etabMap.set(p.etablissement, l); });
+      const etabGroups: EtablissementGroup[] = [];
+      etabMap.forEach((pList, etabName) => {
+        etabGroups.push({ etablissement: etabName, count: pList.length, passengers: pList });
+      });
+      processedTrips.push({ ...trip, passengers: kept, etablissements: Array.from(etabMap.keys()), etabGroups });
+    }
 
     const byEtab: Record<string, TransportPassenger[]> = {};
     const etabsSet = new Set<string>();
-    passengers.forEach(p => {
+    processedTrips.forEach(trip => trip.passengers.forEach(p => {
       etabsSet.add(p.etablissement);
       if (!byEtab[p.etablissement]) byEtab[p.etablissement] = [];
       byEtab[p.etablissement].push(p);
-    });
+    }));
 
     return {
-      trips: tripsList,
+      trips: processedTrips,
       passengersByEtab: byEtab,
-      allDayPassengers: passengers,
+      allDayPassengers: processedTrips.flatMap(t => t.passengers),
       allEtablissements: Array.from(etabsSet).sort()
     };
-  }, [students, studentTimeSheets, slots, selectedDay]);
+  }, [students, studentTimeSheets, slots, selectedDay, busEdits]);
 
   const filteredTrips = useMemo(() => {
     return trips.filter(trip => {
       if (tripTypeFilter !== 'all' && trip.tripType !== tripTypeFilter) return false;
       if (selectedEtabFilter !== 'all' && !trip.etablissements.includes(selectedEtabFilter)) return false;
-      
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
-        const matchesPassenger = trip.passengers.some(p => 
+        const matches = trip.passengers.some(p =>
           `${p.student.firstName} ${p.student.lastName}`.toLowerCase().includes(query) ||
           p.etablissement.toLowerCase().includes(query) ||
           p.gradeLevel.toLowerCase().includes(query) ||
           (p.student.father?.phoneMobile || '').includes(query) ||
           (p.student.mother?.phoneMobile || '').includes(query)
         );
-        if (!matchesPassenger) return false;
+        if (!matches) return false;
       }
       return true;
     });
   }, [trips, tripTypeFilter, selectedEtabFilter, searchTerm]);
 
-  const handlePrintRoute = () => {
-    window.print();
-  };
+  // ─── Print trips (excludes removed passengers) ───────────────────
+  const printTrips = useMemo(() => {
+    const dayBusEdits = busEdits[selectedDay] || {};
+    return trips.map(trip => {
+      const edit = dayBusEdits[trip.id];
+      const removedIds = new Set(edit?.removed ? Object.keys(edit.removed) : []);
+      if (removedIds.size === 0) return trip;
+      const kept = trip.passengers.filter(p => !removedIds.has(p.student.id));
+      const etabMap = new Map<string, TransportPassenger[]>();
+      kept.forEach(p => { const l = etabMap.get(p.etablissement) || []; l.push(p); etabMap.set(p.etablissement, l); });
+      const etabGroups: EtablissementGroup[] = [];
+      etabMap.forEach((pList, etabName) => {
+        etabGroups.push({ etablissement: etabName, count: pList.length, passengers: pList });
+      });
+      return { ...trip, passengers: kept, etablissements: Array.from(etabMap.keys()), etabGroups };
+    }).filter(trip => trip.passengers.length > 0);
+  }, [trips, busEdits, selectedDay]);
+
+  const handlePrintRoute = () => window.print();
 
   const todayArabicFormatted = new Intl.DateTimeFormat('ar-TN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   }).format(new Date());
 
   return (
@@ -338,24 +442,17 @@ export default function BusDriverModule({
           </div>
         </div>
 
-        {/* Quick Driver Banner */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           {busDriver ? (
             <div className="flex items-center gap-2.5 px-4 py-2 bg-[#F2F8F9] border border-[#A0CBCF]/40 rounded-2xl">
-              <div className="w-8 h-8 rounded-xl bg-[#2D7282] text-white flex items-center justify-center font-bold text-sm">
-                🚌
-              </div>
+              <div className="w-8 h-8 rounded-xl bg-[#2D7282] text-white flex items-center justify-center font-bold text-sm">🚌</div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-slate-400 font-bold">سائق الحافلة المعين:</span>
                   <span className="text-xs font-black text-slate-800">{busDriver.firstName} {busDriver.lastName}</span>
                 </div>
                 {busDriver.phone && (
-                  <a 
-                    href={`tel:${busDriver.phone}`} 
-                    className="text-xs font-mono font-black text-[#2D7282] hover:underline flex items-center gap-1 mt-0.5"
-                    dir="ltr"
-                  >
+                  <a href={`tel:${busDriver.phone}`} className="text-xs font-mono font-black text-[#2D7282] hover:underline flex items-center gap-1 mt-0.5" dir="ltr">
                     <Phone className="h-3 w-3" />
                     <span>{busDriver.phone}</span>
                   </a>
@@ -366,6 +463,16 @@ export default function BusDriverModule({
             <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 font-bold">
               <span>⚠️ لم يتم تسجيل سائق حافلة في قائمة الإطار بعد.</span>
             </div>
+          )}
+
+          {dayRemovedCount > 0 && (
+            <button
+              onClick={clearDayEdits}
+              className="flex items-center gap-2 px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-xs rounded-xl transition cursor-pointer shrink-0"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              استعادة تعديلات اليوم ({dayRemovedCount})
+            </button>
           )}
 
           <button
@@ -388,9 +495,7 @@ export default function BusDriverModule({
                 key={day}
                 onClick={() => setSelectedDay(day)}
                 className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                  isSelected 
-                    ? 'bg-[#2D7282] text-white shadow-xs' 
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  isSelected ? 'bg-[#2D7282] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {day}
@@ -398,7 +503,6 @@ export default function BusDriverModule({
             );
           })}
         </div>
-
         <div className="text-left px-3 text-xs font-bold text-slate-400 shrink-0 hidden md:block">
           {todayArabicFormatted}
         </div>
@@ -418,21 +522,15 @@ export default function BusDriverModule({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <select
-            value={tripTypeFilter}
-            onChange={(e) => setTripTypeFilter(e.target.value as any)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer"
-          >
+          <select value={tripTypeFilter} onChange={(e) => setTripTypeFilter(e.target.value as any)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer">
             <option value="all">كل الاتجاهات (ذهاب وعودة)</option>
             <option value="to_school">الذهاب فقط (من المحل إلى المؤسسة)</option>
             <option value="to_center">العودة فقط (من المؤسسة إلى المحل)</option>
           </select>
 
-          <select
-            value={selectedEtabFilter}
-            onChange={(e) => setSelectedEtabFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer"
-          >
+          <select value={selectedEtabFilter} onChange={(e) => setSelectedEtabFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer">
             <option value="all">كل المؤسسات التعليمية</option>
             {allEtablissements.map(etab => (
               <option key={etab} value={etab}>{etab}</option>
@@ -441,24 +539,43 @@ export default function BusDriverModule({
         </div>
 
         <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
-          <button
-            onClick={() => setActiveView('trips')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-              activeView === 'trips' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
+          <button onClick={() => setActiveView('trips')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'trips' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
             الرحلات المجمعة
           </button>
-          <button
-            onClick={() => setActiveView('etablissements')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-              activeView === 'etablissements' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
+          <button onClick={() => setActiveView('etablissements')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'etablissements' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
             حسب المؤسسة
           </button>
         </div>
       </div>
+
+      {/* MODIFICATIONS STRIP (removals for today) */}
+      {dayRemovedCount > 0 && activeView === 'trips' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 no-print">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <span className="text-xs font-black text-amber-800">تعديلات اليوم — {dayRemovedCount} تلميذ محذوف{dayRemovedCount > 1 ? 'و' : ''}</span>
+            </div>
+            <button onClick={clearDayEdits}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-xs rounded-xl cursor-pointer transition">
+              <RotateCcw className="h-3.5 w-3.5" />
+              استعادة الكل
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {dayRemovedPassengers.map(({ tripId, studentId, studentName, remark }) => (
+              <div key={`${tripId}-${studentId}`} className="flex items-center gap-1.5 bg-white border border-amber-200 rounded-xl px-3 py-1.5 text-[11px]">
+                <span className="font-black text-amber-800">{studentName}</span>
+                <span className="text-amber-600">— {remark}</span>
+                <button onClick={() => restorePassenger(tripId, studentId)}
+                  className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer px-1 underline">إعادة</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* MAIN CONTENT (INTERACTIVE UI) */}
       <div className="no-print space-y-4">
@@ -500,7 +617,13 @@ export default function BusDriverModule({
                           </div>
                           <h3 className="text-base font-black mt-0.5 flex items-center gap-2">
                             <span>توقيت الانطلاق:</span>
-                            <span className="font-mono bg-white/20 px-2 py-0.5 rounded-lg text-sm">{trip.departureTime}</span>
+                            <input
+                              type="time"
+                              value={trip.departureTime}
+                              onChange={(e) => overrideDepartureTime(trip.id, e.target.value)}
+                              className="font-mono bg-white/20 px-2 py-1 rounded-lg text-sm w-24 text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/40 border-none"
+                              dir="ltr"
+                            />
                           </h3>
                         </div>
                       </div>
@@ -512,6 +635,15 @@ export default function BusDriverModule({
                         <span className="bg-white/15 px-3 py-1 rounded-xl">
                           {trip.etablissements.length} {trip.etablissements.length === 1 ? 'مؤسسة' : 'مؤسسات'}
                         </span>
+                        {busEdits[selectedDay]?.[trip.id]?.departureTime && (
+                          <button
+                            onClick={() => overrideDepartureTime(trip.id, '')}
+                            className="bg-white/30 hover:bg-white/40 px-2 py-1 rounded-xl text-[10px] font-bold cursor-pointer transition flex items-center gap-1"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            إعادة التوقيت
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -519,23 +651,16 @@ export default function BusDriverModule({
                     <div className="bg-[#F7FAFA] px-4 py-2 border-b border-slate-100 flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-bold text-slate-500 text-[11px]">محطات المسار المبرمجة:</span>
                       {trip.etabGroups.map((grp) => (
-                        <span 
-                          key={grp.etablissement} 
-                          className={`px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 ${
-                            grp.count >= 2 
-                              ? 'bg-[#E0EFF1] text-[#14464E] border border-[#A0CBCF]' 
-                              : 'bg-white text-slate-700 border border-slate-200'
-                          }`}
-                        >
+                        <span key={grp.etablissement} className={`px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 ${
+                          grp.count >= 2
+                            ? 'bg-[#E0EFF1] text-[#14464E] border border-[#A0CBCF]'
+                            : 'bg-white text-slate-700 border border-slate-200'
+                        }`}>
                           <School className="h-3.5 w-3.5 text-[#2D7282]" />
                           <span>{grp.etablissement}</span>
-                          <span className="px-1.5 py-0.2 bg-[#2D7282] text-white text-[10px] rounded-full">
-                            {grp.count}
-                          </span>
+                          <span className="px-1.5 py-0.2 bg-[#2D7282] text-white text-[10px] rounded-full">{grp.count}</span>
                           {grp.count >= 2 && (
-                            <span className="text-[10px] text-[#2D7282] font-black mr-0.5">
-                              (مجموعة)
-                            </span>
+                            <span className="text-[10px] text-[#2D7282] font-black mr-0.5">(مجموعة)</span>
                           )}
                         </span>
                       ))}
@@ -552,14 +677,14 @@ export default function BusDriverModule({
                             <th className="p-3">المؤسسة التعليمية</th>
                             <th className="p-3">هاتف الولي</th>
                             <th className="p-3 text-center">حالة الصعود</th>
+                            <th className="p-3 text-center w-10"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {trip.etabGroups.map((grp, gIdx) => (
+                          {trip.etabGroups.map((grp) => (
                             <React.Fragment key={grp.etablissement}>
-                              {/* Establishment Subheader Row */}
                               <tr className="bg-[#F0F7F8] border-y border-[#A0CBCF]/30">
-                                <td colSpan={6} className="py-2 px-3">
+                                <td colSpan={7} className="py-2 px-3">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 font-black text-[#17555F] text-xs">
                                       <School className="h-4 w-4 text-[#2D7282]" />
@@ -577,54 +702,90 @@ export default function BusDriverModule({
                                 </td>
                               </tr>
 
-                              {/* Student Rows under this Establishment */}
                               {grp.passengers.map((p, pIdx) => {
                                 const checkKey = `${p.student.id}_${trip.id}`;
                                 const isBoarded = boardedStatus[checkKey];
                                 const phone = p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—';
+                                const isRemoving = editingRemoval?.tripId === trip.id && editingRemoval?.studentId === p.student.id;
 
                                 return (
-                                  <tr 
-                                    key={p.student.id} 
-                                    className={`transition ${isBoarded ? 'bg-emerald-50/60' : 'hover:bg-slate-50/50'}`}
-                                  >
-                                    <td className="p-3 text-center font-mono text-slate-400">
-                                      {pIdx + 1}
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="font-black text-slate-900 text-xs block">
-                                        {p.student.lastName} {p.student.firstName}
-                                      </span>
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md font-bold text-[11px]">
-                                        {p.gradeLevel}
-                                      </span>
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="text-[#2D7282] font-black flex items-center gap-1">
-                                        <School className="h-3.5 w-3.5" />
-                                        {p.etablissement}
-                                      </span>
-                                    </td>
-                                    <td className="p-3 font-mono font-bold text-slate-700" dir="ltr">
-                                      {phone}
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleBoarded(checkKey)}
-                                        className={`px-3 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 mx-auto ${
-                                          isBoarded 
-                                            ? 'bg-emerald-600 text-white shadow-xs' 
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                        }`}
-                                      >
-                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                        <span>{isBoarded ? 'تم الصعود ✓' : 'في الانتظار'}</span>
-                                      </button>
-                                    </td>
-                                  </tr>
+                                  <React.Fragment key={p.student.id}>
+                                    <tr className={`transition ${isBoarded ? 'bg-emerald-50/60' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                                      <td className="p-3 text-center font-mono text-slate-400">{pIdx + 1}</td>
+                                      <td className="p-3">
+                                        <span className="font-black text-slate-900 text-xs block">
+                                          {p.student.lastName} {p.student.firstName}
+                                        </span>
+                                      </td>
+                                      <td className="p-3">
+                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md font-bold text-[11px]">
+                                          {p.gradeLevel}
+                                        </span>
+                                      </td>
+                                      <td className="p-3">
+                                        <span className="text-[#2D7282] font-black flex items-center gap-1">
+                                          <School className="h-3.5 w-3.5" />
+                                          {p.etablissement}
+                                        </span>
+                                      </td>
+                                      <td className="p-3 font-mono font-bold text-slate-700" dir="ltr">{phone}</td>
+                                      <td className="p-3 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleBoarded(checkKey)}
+                                          className={`px-3 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 mx-auto ${
+                                            isBoarded
+                                              ? 'bg-emerald-600 text-white shadow-xs'
+                                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                          }`}
+                                        >
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                          <span>{isBoarded ? 'تم الصعود ✓' : 'في الانتظار'}</span>
+                                        </button>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingRemoval({ tripId: trip.id, studentId: p.student.id })}
+                                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                          title="حذف التلميذ من هذه الرحلة اليوم"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+
+                                    {isRemoving && (
+                                      <tr className="bg-amber-50 border-y border-amber-200">
+                                        <td colSpan={7} className="p-3">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                                            <span className="text-xs font-bold text-amber-800 shrink-0">سبب الغياب:</span>
+                                            <input
+                                              type="text"
+                                              value={removeRemark}
+                                              onChange={(e) => setRemoveRemark(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') { e.preventDefault(); confirmRemovePassenger(); }
+                                                if (e.key === 'Escape') { setEditingRemoval(null); setRemoveRemark(''); }
+                                              }}
+                                              placeholder="مثال: إبلاغ من الولي بالغياب..."
+                                              className="flex-1 min-w-[200px] px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                              autoFocus
+                                            />
+                                            <button onClick={confirmRemovePassenger}
+                                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer transition shrink-0">
+                                              تأكيد الحذف
+                                            </button>
+                                            <button onClick={() => { setEditingRemoval(null); setRemoveRemark(''); }}
+                                              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition shrink-0">
+                                              إلغاء
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
                                 );
                               })}
                             </React.Fragment>
@@ -651,9 +812,7 @@ export default function BusDriverModule({
                 <div key={etab} className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-[#C8D400]/20 flex items-center justify-center text-xl">
-                        🏫
-                      </div>
+                      <div className="w-10 h-10 rounded-2xl bg-[#C8D400]/20 flex items-center justify-center text-xl">🏫</div>
                       <div>
                         <h4 className="font-black text-slate-900 text-sm">{etab}</h4>
                         <span className="text-[11px] text-slate-400 font-bold block">{distinctStudents.length} تلاميذ مسجلين</span>
@@ -718,13 +877,13 @@ export default function BusDriverModule({
           )}
           <div>
             <span className="font-bold text-slate-700">إجمالي الرحلات: </span>
-            <span className="font-black text-slate-900">{trips.length} رحلات</span>
+            <span className="font-black text-slate-900">{printTrips.length} رحلات</span>
           </div>
         </div>
 
         {/* Trips List in Print */}
         <div className="space-y-6">
-          {trips.map((trip, tripIndex) => {
+          {printTrips.map((trip, tripIndex) => {
             const isToSchool = trip.tripType === 'to_school';
             return (
               <div key={trip.id} className="border border-slate-400 rounded-lg overflow-hidden break-inside-avoid">
@@ -791,6 +950,29 @@ export default function BusDriverModule({
             );
           })}
         </div>
+
+        {/* Print Absence Notes */}
+        {dayRemovedCount > 0 && (
+          <div className="border border-slate-400 rounded-lg p-3 break-inside-avoid">
+            <p className="font-bold text-slate-800 mb-2">ملاحظات اليوم — غيابات مسجلة ({dayRemovedCount}):</p>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-300">
+                  <th className="p-1.5 text-right font-black">التلميذ</th>
+                  <th className="p-1.5 text-right font-black">الملاحظة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {dayRemovedPassengers.map(({ studentId, studentName, remark }) => (
+                  <tr key={studentId}>
+                    <td className="p-1.5 font-black text-slate-900">{studentName}</td>
+                    <td className="p-1.5 text-slate-700">{remark}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Print Signatures Footer */}
         <div className="mt-8 pt-4 border-t-2 border-slate-800 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
