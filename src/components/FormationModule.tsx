@@ -828,7 +828,7 @@ export default function FormationModule({
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {FORMATION_WORK_DAYS.map(day => {
-                        const daySeances = (selectedFormation.schedule || []).filter(s => s.day === day);
+                        const daySeances = (Array.isArray(selectedFormation.schedule) ? selectedFormation.schedule : []).filter(s => s.day === day);
                         return (
                           <div key={day} className="bg-[#F2F8F9] rounded-xl p-2.5 border border-[#C3E0E4]">
                             <span className="text-[11px] font-black text-[#14464E] block mb-1.5">{day}</span>
@@ -1950,7 +1950,7 @@ export default function FormationModule({
                     </thead>
                     <tbody>
                       {FORMATION_WORK_DAYS.map(day => {
-                        const daySeances = (f.schedule || [])
+                        const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
                           .filter(s => s.day === day)
                           .sort((a, b) => a.startTime.localeCompare(b.startTime));
                         if (daySeances.length === 0) {

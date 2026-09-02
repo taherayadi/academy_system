@@ -792,7 +792,7 @@ export async function readFormations(db: D1Database): Promise<any[]> {
       packPrice: num(f.pack_price),
       matieres: matieresByFormation[fid] || [],
       students: studentsByFormation[fid] || [],
-      schedule: parseJson(f.schedule, []),
+      schedule: (() => { const s = parseJson<unknown>(f.schedule, []); return Array.isArray(s) ? s : []; })(),
       createdAt: str(f.created_at)
     };
   });

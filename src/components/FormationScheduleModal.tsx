@@ -80,7 +80,7 @@ export default function FormationScheduleModal({
       setError(null);
       setLoading(false);
       setDraft(
-        (formation?.schedule || []).map(s => ({
+        (Array.isArray(formation?.schedule) ? formation.schedule : []).map(s => ({
           ...s,
           id: s.id || crypto.randomUUID()
         }))
