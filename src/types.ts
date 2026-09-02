@@ -320,7 +320,7 @@ export interface PaymentRecord {
 export function normalizePaymentService(service: unknown, month?: unknown): PaymentRecord['service'] | string {
   const legacyService = String(service ?? '').replace(/\s+/g, ' ').trim();
   const isAnnual = String(month ?? '').startsWith('Annuel');
-  const brandedEtude = /(?:inscription\s+)?[ée]tude\s+(teen\s*center|academy\s*system)/i.test(legacyService);
+  const brandedEtude = /(?:inscription\s+)?[ée]tude\s+academy\s*system/i.test(legacyService);
   if (brandedEtude) {
     return /^inscription\s+/i.test(legacyService) || isAnnual ? 'Inscription Étude' : 'Étude';
   }
