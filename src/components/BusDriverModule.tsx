@@ -892,7 +892,7 @@ export default function BusDriverModule({
                     <span className="bg-[#C8D400] text-slate-900 px-2 py-0.5 rounded font-black text-[11px]">
                       رحلة #{tripIndex + 1}
                     </span>
-                    <span>{isToSchool ? '← انطلاق إلى المؤسسات' : '← عودة إلى المحل'}</span>
+                    <span>{isToSchool ? `← انطلاق إلى المؤسسات` : `← عودة إلى ${centerName}`}</span>
                     <span className="bg-white/20 px-2 py-0.5 rounded font-mono font-black">
                       {trip.departureTime}
                     </span>
