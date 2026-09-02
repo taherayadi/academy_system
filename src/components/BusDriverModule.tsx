@@ -844,7 +844,7 @@ export default function BusDriverModule({
       </div>
 
       {/* PRINTABLE ROUTE SHEET (FEUILLE DE ROUTE A4) */}
-      <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col hidden print:flex">
+      <div className="print-area bg-white text-slate-900 text-xs font-sans hidden print:block">
         
         {/* Printable Header */}
         <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-center">
@@ -974,7 +974,7 @@ export default function BusDriverModule({
         )}
 
         {/* Print Signatures Footer - at bottom of last page */}
-        <div className="mt-12 pt-6 border-t-2 border-slate-800 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
+        <div className="print-footer mt-12 pt-6 border-t-2 border-slate-800 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
           <div>
             <p className="font-bold text-slate-700">ملاحظات سائق الحافلة:</p>
             <div className="h-16 border-b border-dotted border-slate-400 mt-2"></div>
