@@ -844,7 +844,7 @@ export default function BusDriverModule({
       </div>
 
       {/* PRINTABLE ROUTE SHEET (FEUILLE DE ROUTE A4) */}
-      <div className="hidden print:block text-black bg-white p-4 font-sans text-xs space-y-6">
+      <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col hidden print:flex">
         
         {/* Printable Header */}
         <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-center">
