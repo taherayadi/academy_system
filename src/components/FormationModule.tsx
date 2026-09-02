@@ -1788,7 +1788,7 @@ export default function FormationModule({
                   {/* Header */}
                   <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
                     <div>
-                      <p className="text-lg font-black text-[#257C86]">{settings?.centerName || 'Teen Center'}</p>
+                      <p className="text-lg font-black text-[#257C86]">{settings?.centerName || 'المركز'}</p>
                       <p className="text-[11px] font-bold text-slate-500 mt-0.5">وصل تسجيل في تكوين</p>
                     </div>
                     <div className="text-right">
@@ -1930,7 +1930,7 @@ export default function FormationModule({
                 <div className="print-area print-landscape p-6 bg-white text-slate-900 border border-slate-300 rounded-2xl mx-auto my-4 text-xs font-sans">
                   <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3 mb-4">
                     <div>
-                      <p className="text-lg font-black text-[#257C86]">{settings?.centerName || 'Teen Center'}</p>
+                      <p className="text-lg font-black text-[#257C86]">{settings?.centerName || 'المركز'}</p>
                       <p className="text-[11px] font-bold text-slate-500 mt-0.5">جدول حصص أسبوعي — تكوين: {f.name}</p>
                     </div>
                     <div className="text-right">
@@ -1999,6 +1999,7 @@ export default function FormationModule({
         open={isScheduleModalOpen}
         formation={selectedFormation}
         apiKey={settings?.geminiApiKey}
+        centerName={settings?.centerName}
         onClose={() => setIsScheduleModalOpen(false)}
         onSave={handleSaveFormationSchedule}
       />

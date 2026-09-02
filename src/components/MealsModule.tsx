@@ -57,6 +57,7 @@ export default function MealsModule({
   onUpdateMealPlans,
   settings
 }: MealsModuleProps) {
+  const centerName = settings?.centerName || 'المركز';
   const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDay, setSelectedDay] = useState<MealPlanDay['day']>(() => DAY_BY_INDEX[new Date().getDay()] || 'Lundi');
@@ -343,7 +344,7 @@ export default function MealsModule({
     const updatedStudent: Student = {
       ...st,
       enrolledServices: {
-        ...(st.enrolledServices || { teenCenter: true, suivi: true, library: false, meals: false }),
+        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
         meals: true
       },
       mealSubscription: {
@@ -859,7 +860,7 @@ export default function MealsModule({
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — المطعم المدرسي (وصل مدفوعات)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — المطعم المدرسي (وصل مدفوعات)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
@@ -957,8 +958,8 @@ export default function MealsModule({
 
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
-                        <p>نشكركم على استخدام مطعم Teen Center.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p>نشكركم على استخدام مطعم {centerName}.</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>

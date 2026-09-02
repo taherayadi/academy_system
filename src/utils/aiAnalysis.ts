@@ -29,8 +29,8 @@ export interface AnalysisStats {
   monthlyIncomeByMonth: Record<string, number>;
 }
 
-const SYSTEM_PROMPT = `أنت محلل أعمال محترف متخصص في إدارة مراكز التعليم وال戕벌 في تونس.
-المستخدم يدير مركز تعليمي اسمه "Teen Center" في صفاقس.
+const buildSystemPrompt = (centerName: string) => `أنت محلل أعمال محترف متخصص في إدارة مراكز التعليم وال戕벌 في تونس.
+المستخدم يدير مركزاً تعليمياً اسمه "${centerName}" في صفاقس.
 يحتوي المركز على:
 - تسجيل تلاميذ داخليين ( suivi, étude, مكتبة, وجبات)
 - دروس خصوصية مع تلاميذ خارجيين
@@ -49,7 +49,7 @@ const SYSTEM_PROMPT = `أنت محلل أعمال محترف متخصص في إ�
 
 استخدم جداول وأرقام محددة. كن عملياً ومقتراحاً.`;
 
-export async function analyzeCenterData(stats: AnalysisStats, apiKey?: string): Promise<string> {
+export async function analyzeCenterData(stats: AnalysisStats, apiKey?: string, centerName = 'المركز'): Promise<string> {
   if (!apiKey) throw new Error('مفتاح Gemini API غير مهيأ. أدخل المفتاح في صفحة الإعدادات');
 
   const ai = new GoogleGenAI({ apiKey });
@@ -68,7 +68,7 @@ ${dataSummary}
 
   const response = await ai.models.generateContent({
     model: 'gemini-3.6-flash',
-    contents: [{ role: 'user', parts: [{ text: SYSTEM_PROMPT + '\n\n' + userMessage }] }],
+    contents: [{ role: 'user', parts: [{ text: buildSystemPrompt(centerName) + '\n\n' + userMessage }] }],
     config: { temperature: 0.3 },
   });
 

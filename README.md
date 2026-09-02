@@ -130,7 +130,7 @@ teen_center_local/
 │   │   ├── Dashboard.tsx              # Overview with stats and quick actions
 │   │   ├── StudentRegistrationModule.tsx  # Full student CRUD with AI import
 │   │   ├── SuiviScolaireModule.tsx    # Grade tracking per trimester
-│   │   ├── TeenCenterModule.tsx       # Time-slot scheduling and enrollment
+│   │   ├── EtudeModule.tsx            # Time-slot scheduling and enrollment
 │   │   ├── ExternalCoursesModule.tsx  # External course management
 │   │   ├── SeanceRevisionModule.tsx   # One-time revision sessions
 │   │   ├── LibraryModule.tsx          # Library enrollment and fees

@@ -12,7 +12,7 @@ describe('Payments & Discount Business Logic', () => {
     academicYear: '2026/2027',
     parentalSituation: 'Ensemble',
     allergies: 'Aucune',
-    enrolledServices: { suivi: true, teenCenter: false, library: false, meals: false },
+    enrolledServices: { suivi: true, etude: false, library: false, meals: false },
     suiviFees: { annualRegistrationFee: 150, monthlyFee: 250 },
     payments: []
   };
@@ -202,7 +202,7 @@ describe('Payments & Discount Business Logic', () => {
         payments: [
           {
             id: 'p1', date: '2026-09-01', amountPaid: 150, totalRequired: 150, remainingBalance: 0,
-            service: 'Inscription', month: 'Annuel', paymentType: 'full', method: 'Espèces', receiptNumber: 'REC-001'
+            service: 'Inscription Suivi', month: 'Annuel', paymentType: 'full', method: 'Espèces', receiptNumber: 'REC-001'
           }
         ]
       };

@@ -161,7 +161,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   value={formData.centerName}
                   onChange={(e) => setFormData({ ...formData, centerName: e.target.value })}
                   className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                  placeholder="Teen Center"
+                  placeholder="اسم المركز"
                 />
               </div>
             </div>
@@ -387,7 +387,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
               </div>
             )}
 
-            {/* Étude Teen Center */}
+            {/* Étude */}
             <div className="bg-purple-50/40 p-4 rounded-2xl border border-purple-200/60 space-y-3">
               <span className="text-xs font-extrabold text-purple-900 block border-b border-purple-200/60 pb-1">
                 تأطير Étude
@@ -401,9 +401,9 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   <input 
                     type="number" 
                     min="0"
-                    value={currentYearFees.fraisAnnuelEtudeTeenCenter}
+                    value={currentYearFees.fraisAnnuelEtude}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => updateFee('fraisAnnuelEtudeTeenCenter', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                    onChange={(e) => updateFee('fraisAnnuelEtude', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                   />
                   <span className="text-xs font-black text-slate-500">د.ت</span>
@@ -418,9 +418,9 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   <input 
                     type="number" 
                     min="0"
-                    value={currentYearFees.fraisMensuelEtudeTeenCenter}
+                    value={currentYearFees.fraisMensuelEtude}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => updateFee('fraisMensuelEtudeTeenCenter', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                    onChange={(e) => updateFee('fraisMensuelEtude', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                   />
                   <span className="text-xs font-black text-slate-500">د.ت</span>
@@ -444,9 +444,9 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       <input 
                         type="number" 
                         min="0"
-                        value={currentYearFees.fraisAssuranceCoursHorsTeenCenter}
+                        value={currentYearFees.fraisAssuranceCoursExternes}
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => updateFee('fraisAssuranceCoursHorsTeenCenter', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                        onChange={(e) => updateFee('fraisAssuranceCoursExternes', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                       />
                       <span className="text-xs font-black text-slate-500">د.ت</span>

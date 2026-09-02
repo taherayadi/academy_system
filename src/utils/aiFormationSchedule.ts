@@ -136,7 +136,8 @@ function buildFallbackSchedule(formation: Formation): FormationSeanceProposal[] 
 export async function proposeFormationSchedule(
   formation: Formation,
   studentsSummary: { matiere: string; count: number }[],
-  apiKey?: string
+  apiKey?: string,
+  centerName = 'المركز'
 ): Promise<FormationSeanceProposal[]> {
   if (!apiKey) throw new Error('مفتاح Gemini API غير مهيأ. أدخل المفتاح في صفحة الإعدادات');
 
@@ -161,7 +162,7 @@ export async function proposeFormationSchedule(
     studentsByMatiere: studentsSummary,
   };
 
-  const prompt = `أنت منسق تكوينات في مركز تعليمي تونسي (Teen Center، صفاقس).
+  const prompt = `أنت منسق تكوينات في مركز تعليمي تونسي (${centerName}، صفاقس).
 المطلوب: اقتراح جدول حصص أسبوعي للتكوين التالي، موزّع على أيام الأسبوع.
 
 قواعد الجدول (إلزامية):

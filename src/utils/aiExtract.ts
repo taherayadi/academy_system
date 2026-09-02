@@ -2,12 +2,12 @@ import { GoogleGenAI } from '@google/genai';
 import type { PageImage } from './pdfExtract';
 import { digitsOnlyPhone, normalizeExtractedGrade, parseExtractedDate } from './extractMapping';
 
-const SYSTEM_PROMPT = `You are a data extraction assistant. You receive SCANNED IMAGES of handwritten Tunisian student registration forms (فصح التسجيل) from a student support center called "Teen Center".
+const buildSystemPrompt = (centerName: string) => `You are a data extraction assistant. You receive SCANNED IMAGES of handwritten Tunisian student registration forms (فصح التسجيل) from a student support center called "${centerName}".
 
 The forms are in Arabic and/or French, handwritten on paper, then scanned. Read the handwriting carefully from ALL pages — the form often spans 2+ pages.
 
 PAGE 1 typically contains: student identity, parents (mother/father), siblings, authorized pickup persons, allergies.
-PAGE 2 (or later) typically contains: "Inscription aux services scolaires" / "التسجيل في الخدمات المدرسية" with checkboxes for center services (Suivi Scolaire, Étude Teen Center, Bibliothèque, Repas).
+PAGE 2 (or later) typically contains: "Inscription aux services scolaires" / "التسجيل في الخدمات المدرسية" with checkboxes for center services (Suivi Scolaire, Étude ${centerName}, Bibliothèque, Repas).
 
 Extract the student information and return a JSON object with EXACTLY this structure. Use empty strings / defaults for any field you cannot find:
 
@@ -50,7 +50,7 @@ Extract the student information and return a JSON object with EXACTLY this struc
   "vaccinationCopyAttached": "boolean",
   "enrolledServices": {
     "suivi": true,
-    "teenCenter": true,
+    "etude": true,
     "library": false,
     "meals": true
   },
@@ -63,10 +63,10 @@ Extract the student information and return a JSON object with EXACTLY this struc
 
 For enrolledServices: read the "Inscription aux services scolaires" section on page 2+. Set each boolean to true ONLY if the checkbox/tick is clearly marked for that service:
 - suivi = Suivi Scolaire / المتابعة المدرسية
-- teenCenter = Étude Teen Center / دراسة Teen Center
+- etude = Étude ${centerName} / دراسة ${centerName}
 - library = Bibliothèque / المكتبة
 - meals = Repas / المطعم / وجبات
-If the section is missing or unreadable, default: suivi=true, teenCenter=true, library=false, meals=true.
+If the section is missing or unreadable, default: suivi=true, etude=true, library=false, meals=true.
 
 RULES:
 - Return ONLY the raw JSON object. No markdown, no \`\`\` fences, no explanation.
@@ -110,7 +110,7 @@ export interface ExtractedStudentData {
     vaccinationCopyAttached: boolean;
   enrolledServices?: {
     suivi: boolean;
-    teenCenter: boolean;
+    etude: boolean;
     library: boolean;
     meals: boolean;
   };
@@ -146,21 +146,21 @@ function normalizeExtractedData(data: ExtractedStudentData): ExtractedStudentDat
     })),
     enrolledServices: data.enrolledServices ?? {
       suivi: true,
-      teenCenter: true,
+      etude: true,
       library: false,
       meals: true,
     },
   };
 }
 
-export async function extractStudentFromPages(pages: PageImage[], apiKeyOverride?: string): Promise<ExtractedStudentData> {
+export async function extractStudentFromPages(pages: PageImage[], apiKeyOverride?: string, centerName = 'المركز'): Promise<ExtractedStudentData> {
   const apiKey = apiKeyOverride;
   if (!apiKey) throw new Error('مفتاح Gemini API غير مهيأ. أدخل المفتاح في صفحة الإعدادات');
 
   const ai = new GoogleGenAI({ apiKey });
 
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-    { text: SYSTEM_PROMPT },
+    { text: buildSystemPrompt(centerName) },
   ];
   for (let i = 0; i < pages.length; i++) {
     parts.push({ text: `--- Page ${i + 1} of ${pages.length} ---` });

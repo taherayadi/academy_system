@@ -17,6 +17,7 @@ interface FormationScheduleModalProps {
   open: boolean;
   formation: Formation | null;
   apiKey?: string;
+  centerName?: string;
   onClose: () => void;
   onSave: (schedule: FormationSeance[]) => void;
 }
@@ -38,6 +39,7 @@ export default function FormationScheduleModal({
   open,
   formation,
   apiKey,
+  centerName,
   onClose,
   onSave
 }: FormationScheduleModalProps) {
@@ -96,7 +98,7 @@ export default function FormationScheduleModal({
     setLoading(true);
     setError(null);
     try {
-      const proposals = await proposeFormationSchedule(formation, studentsSummary, apiKey);
+      const proposals = await proposeFormationSchedule(formation, studentsSummary, apiKey, centerName);
       if (proposals.length === 0) {
         toast.error('لم يتمكن الذكاء الاصطناعي من إنشاء جدول.');
       } else {

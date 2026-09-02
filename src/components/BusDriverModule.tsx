@@ -18,7 +18,7 @@ import {
 import { 
   Student, 
   StaffMember, 
-  TeenCenterSlot, 
+  EtudeSlot,
   StudentTimeSheet, 
   CenterSettings, 
   TIMESHEET_DAYS, 
@@ -29,7 +29,7 @@ import logo from '../assets/logo.png';
 interface BusDriverModuleProps {
   students: Student[];
   staff: StaffMember[];
-  slots: TeenCenterSlot[];
+  slots: EtudeSlot[];
   studentTimeSheets: StudentTimeSheet[];
   settings?: CenterSettings;
   sidebarCollapsed?: boolean;
@@ -96,6 +96,7 @@ export default function BusDriverModule({
   studentTimeSheets,
   settings,
 }: BusDriverModuleProps) {
+  const centerName = settings?.centerName || 'المركز';
   const [selectedDay, setSelectedDay] = useState<TimesheetDay>(() => {
     const jsDay = new Date().getDay();
     if (jsDay >= 1 && jsDay <= 6) {
@@ -691,7 +692,7 @@ export default function BusDriverModule({
           <div className="flex items-center gap-3">
             <img src={logo} alt="Logo" className="w-14 h-14 object-contain" />
             <div>
-              <h1 className="text-xl font-black text-slate-900">Academy System</h1>
+              <h1 className="text-xl font-black text-slate-900">{centerName}</h1>
               <p className="text-xs font-bold text-slate-600">ورقة مسار حافلة النقل المدرسي (Feuille de Route)</p>
             </div>
           </div>
@@ -803,7 +804,7 @@ export default function BusDriverModule({
               <div className="h-14 border-b-2 border-dotted border-slate-600 mt-1"></div>
             </div>
             <div>
-              <p className="font-black text-slate-900">ختم وإمضاء إدارة Academy System</p>
+              <p className="font-black text-slate-900">ختم وإمضاء إدارة {centerName}</p>
               <div className="h-14 border-b-2 border-dotted border-slate-600 mt-1"></div>
             </div>
           </div>

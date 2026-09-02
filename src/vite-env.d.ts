@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface Window {
-  teenCenterAPI?: {
+  appAPI?: {
     onCloseRequest: (callback: () => void) => () => void;
     confirmClose: () => void;
   };

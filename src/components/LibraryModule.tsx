@@ -32,6 +32,7 @@ const ACADEMIC_INDEX: Record<AcademicMonth, number> = {
 
 export default function LibraryModule({ students, onUpdateStudent, settings, studentTimeSheets }: LibraryModuleProps) {
   const toast = useToast();
+  const centerName = settings?.centerName || 'المركز';
   const [searchTerm, setSearchTerm] = useState('');
   const [schoolYear, setSchoolYear] = useState<string>(getCurrentAcademicYear());
   const [customYears, setCustomYears] = useState<string[]>(DEFAULT_ACADEMIC_YEARS);
@@ -54,7 +55,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
   const [viewingTimeSheetId, setViewingTimeSheetId] = useState<string | null>(null);
 
   // New Payment Modal Form States
-  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Bibliothèque' | 'Inscription'>('Bibliothèque');
+  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Bibliothèque' | 'Inscription Bibliothèque'>('Bibliothèque');
   const [paymentMonth, setPaymentMonth] = useState<string>('Octobre');
   const [amountPaid, setAmountPaid] = useState<number>(30);
   const [totalRequired, setTotalRequired] = useState<number>(30);
@@ -143,7 +144,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
 
   const getStudentInscriptionStatus = (st: Student) => {
     const payments = (st.payments || []).filter(p =>
-      p.service === 'Bibliothèque' && p.month === `Annuel (${schoolYear})`
+      p.service === 'Inscription Bibliothèque' && p.month === `Annuel (${schoolYear})`
     );
     const discount = payments.reduce((m, p) => Math.max(m, p.discount || 0), 0);
     const required = Math.max(0, currentFees(st).annualRegistrationFee - discount);
@@ -201,7 +202,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
       return;
     }
     setSelectedStudentForPayment(st);
-    setPaymentServiceTarget('Inscription');
+    setPaymentServiceTarget('Inscription Bibliothèque');
     setPaymentMonth(`Annuel (${schoolYear})`);
     // Use the CURRENT fee defined in settings for this academic year
     const fee = currentFees(st).annualRegistrationFee;
@@ -222,7 +223,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
     const updatedStudent: Student = {
       ...st,
       enrolledServices: {
-        ...(st.enrolledServices || { teenCenter: true, suivi: true, meals: false }),
+        ...(st.enrolledServices || { etude: true, suivi: true, meals: false }),
         library: true
       },
       libraryFees: st.libraryFees || { 
@@ -247,7 +248,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
     }
 
     const numDiscount = Number(discount) || 0;
-    const baseRequired = paymentServiceTarget === 'Inscription'
+    const baseRequired = paymentServiceTarget === 'Inscription Bibliothèque'
       ? (Number(totalRequired) || 0)
       : currentFees(selectedStudentForPayment).monthlyFee;
 
@@ -266,7 +267,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
     const disc = Math.max(0, numDiscount);
     const paid = Math.max(0, Number(amountPaid) || 0);
 
-    if (paymentServiceTarget === 'Inscription') {
+    if (paymentServiceTarget === 'Inscription Bibliothèque') {
       const currentStatus = getStudentInscriptionStatus(selectedStudentForPayment);
       const effectiveRequired = Math.max(0, Number(totalRequired) - disc);
       const maxPayable = Math.max(0, effectiveRequired - currentStatus.paidAmount);
@@ -283,7 +284,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
         amountPaid: paid,
         totalRequired: effectiveRequired,
         remainingBalance: remaining,
-        service: 'Bibliothèque',
+        service: 'Inscription Bibliothèque',
         month: `Annuel (${schoolYear})`,
         paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
         method: paymentMethod,
@@ -753,7 +754,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-[#3A93A0]" />
-                    {paymentServiceTarget === 'Inscription' 
+                    {paymentServiceTarget === 'Inscription Bibliothèque'
                       ? `تنزيل خلاص التسجيل السنوي (${schoolYear})`
                       : `خلاص اشتراك المكتبة — ${paymentMonth} (${schoolYear})`}
                   </h3>
@@ -772,7 +773,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
               <form onSubmit={handleSubmitPayment} className="p-6 space-y-4">
                 {(() => {
-                  const isInscription = paymentServiceTarget === 'Inscription';
+                  const isInscription = paymentServiceTarget === 'Inscription Bibliothèque';
                   const activeMonthStatus = selectedStudentForPayment
                     ? (isInscription
                       ? getStudentInscriptionStatus(selectedStudentForPayment)
@@ -1047,7 +1048,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — المكتبة (وصل مدفوعات)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — المكتبة (وصل مدفوعات)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
@@ -1145,8 +1146,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
-                        <p>نشكركم على استخدام مكتبة مركز Teen Center.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p>نشكركم على استخدام مكتبة مركز {centerName}.</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>

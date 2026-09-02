@@ -1,5 +1,5 @@
 import {
-  CenterSettings, Student, StaffMember, TeenCenterSlot,
+  CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
   StudentTimeSheet, Formation
@@ -47,7 +47,7 @@ export interface DatabaseState {
   settings: CenterSettings;
   students: Student[];
   staff: StaffMember[];
-  slots: TeenCenterSlot[];
+  slots: EtudeSlot[];
   courses: ExternalCourse[];
   sessions: ExternalCourseSession[];
   mealPlans: MealPlanDay[];
@@ -84,7 +84,7 @@ export async function saveStaff(staff: StaffMember[]): Promise<void> {
   return putDomain('/staff', staff, 'تعذر حفظ بيانات الإطار التربوي.');
 }
 
-export async function saveSlots(slots: TeenCenterSlot[]): Promise<void> {
+export async function saveSlots(slots: EtudeSlot[]): Promise<void> {
   return putDomain('/slots', slots, 'تعذر حفظ بيانات الحصص.');
 }
 
@@ -163,7 +163,7 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     getDomain<CenterSettings>('/settings', 'تعذر تحميل إعدادات المنظومة.'),
     getDomain<Student[]>('/students', 'تعذر تحميل بيانات التلاميذ.'),
     getDomain<StaffMember[]>('/staff', 'تعذر تحميل بيانات الإطار التربوي.'),
-    getDomain<TeenCenterSlot[]>('/slots', 'تعذر تحميل بيانات الحصص.'),
+    getDomain<EtudeSlot[]>('/slots', 'تعذر تحميل بيانات الحصص.'),
     getDomain<ExternalCourse[]>('/courses', 'تعذر تحميل بيانات الدروس الخصوصية.'),
     getDomain<ExternalCourseSession[]>('/sessions', 'تعذر تحميل بيانات الجلسات.'),
     getDomain<MealPlanDay[]>('/meals', 'تعذر تحميل بيانات الوجبات.'),

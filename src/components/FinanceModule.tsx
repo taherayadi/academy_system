@@ -21,7 +21,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, TeenCenterSlot, Formation } from '../types';
+import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, EtudeSlot, Formation } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -36,7 +36,7 @@ interface FinanceModuleProps {
   revisions?: RevisionSeance[];
   formations?: Formation[];
   onUpdateFormations?: (formations: Formation[]) => void;
-  slots?: TeenCenterSlot[];
+  slots?: EtudeSlot[];
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
 }
@@ -56,15 +56,17 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'Autres'
 ];
 
-const SERVICE_OPTIONS: { value: string; label: string }[] = [
+const getServiceOptions = (centerName: string): { value: string; label: string }[] => [
   { value: 'Suivi', label: 'متابعة' },
-  { value: 'Étude Teen Center', label: 'تأطير Teen Center' },
+  { value: 'Inscription Suivi', label: 'تسجيل المتابعة' },
+  { value: 'Étude', label: `تأطير ${centerName}` },
+  { value: 'Inscription Étude', label: `تسجيل التأطير (${centerName})` },
   { value: 'Cours Particuliers', label: 'دروس خصوصية' },
   { value: 'Revision', label: 'حصة مراجعة' },
   { value: 'Formation', label: 'تكوينات' },
   { value: 'Bibliothèque', label: 'مكتبة' },
+  { value: 'Inscription Bibliothèque', label: 'تسجيل المكتبة' },
   { value: 'Repas', label: 'وجبات' },
-  { value: 'Inscription', label: 'تسجيل' },
   { value: 'Assurance', label: 'تأمين' },
   { value: 'Autres', label: 'أخرى' }
 ];
@@ -76,6 +78,8 @@ const fmt = (n: number) => n.toFixed(3);
 
 export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings }: FinanceModuleProps) {
   const toast = useToast();
+  const centerName = settings?.centerName || 'المركز';
+  const serviceOptions = getServiceOptions(centerName);
   const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -138,7 +142,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return (['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mIdx]) || 'Annuel';
   };
 
-  // External course (hors Teen Center) revenue: monthly course payments + yearly assurance.
+  // External-course revenue: monthly payments plus the yearly insurance fee.
   // The center keeps only its share (centerShare); the prof share (teacherShare) is
   // automatically recorded as an expense — same model as revision seances / repas.
   type ExternalPaymentRec = PaymentRecord & { studentName: string; studentGrade: string; studentYear: string; teacherShare: number; centerShare: number };
@@ -433,21 +437,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   
   const SERVICE_LABELS: Record<string, string> = {
     'Suivi': 'متابعة دراسية',
-    'Étude Teen Center': 'تأطير Teen Center',
+    'Inscription Suivi': 'تسجيل المتابعة',
+    'Étude': `تأطير ${centerName}`,
+    'Inscription Étude': `تسجيل التأطير (${centerName})`,
     'Cours Particuliers': 'دروس خصوصية',
     'Revision': 'حصة مراجعة',
     'Formation': 'تكوينات ودورات',
     'Bibliothèque': 'مكتبة',
+    'Inscription Bibliothèque': 'تسجيل المكتبة',
     'Repas': 'وجبات',
-    'Inscription': 'تسجيل',
     'Assurance': 'تأمين',
     'Autres': 'أخرى'
   };
 
   const paymentServiceLabel = (p: { service: string; month?: string }): string => {
-    if (p.service === 'Inscription') return 'تسجيل متابعة دراسية';
-    const base = SERVICE_LABELS[p.service] || p.service;
-    return String(p.month || '').startsWith('Annuel') ? `تسجيل ${base}` : base;
+    return SERVICE_LABELS[p.service] || p.service;
   };
 
   // Pending cheque amounts for filtered period (not yet cashed)
@@ -490,13 +494,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   } : null;
 
   const revenueByService = {
-    Suivi: filteredPayments.filter(p => p.service === 'Suivi' || p.service === 'Inscription').reduce((s, p) => s + p.amountPaid, 0),
-    TeenCenter: filteredPayments.filter(p => p.service === 'Étude Teen Center').reduce((s, p) => s + p.amountPaid, 0),
+    Suivi: filteredPayments.filter(p => p.service === 'Suivi' || p.service === 'Inscription Suivi').reduce((s, p) => s + p.amountPaid, 0),
+    Etude: filteredPayments.filter(p => p.service === 'Étude' || p.service === 'Inscription Étude').reduce((s, p) => s + p.amountPaid, 0),
     CoursParticuliers: externalCenterTotal,
     Revision: revisionCenterTotal,
     Formation: filteredPayments.filter(p => p.service === 'Formation').reduce((s, p) => s + (p.refund ? -p.amountPaid : p.amountPaid), 0),
-    Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
-    Inscription: filteredPayments.filter(p => p.service === 'Inscription').reduce((s, p) => s + p.amountPaid, 0),
+    Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
     Assurance: filteredPayments.filter(p => p.service === 'Assurance').reduce((s, p) => s + p.amountPaid, 0),
     Autres: filteredPayments.filter(p => p.service === 'Autres').reduce((s, p) => s + p.amountPaid, 0),
     Refunds: filteredPayments.filter(p => p.refund).reduce((s, p) => s + p.amountPaid, 0)
@@ -791,8 +794,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Suivi)} د.ت</span>
               </div>
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
-                <span className="text-slate-700">2. دراسات Teen Center:</span>
-                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.TeenCenter)} د.ت</span>
+                <span className="text-slate-700">2. دراسات {centerName}:</span>
+                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
               {!hideRestrictedModules && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
@@ -884,7 +887,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     <th className="p-4">السنة الدراسية</th>
                     <th className="p-4">المستوى</th>
                     <th className="p-4">Suivi Scolaire</th>
-                    <th className="p-4">Étude Teen Center</th>
+                    <th className="p-4">Étude {centerName}</th>
                     <th className="p-4">Bibliothèque</th>
                     {!hideRestrictedModules && <th className="p-4">Repas (مطعم)</th>}
                   </tr>
@@ -897,7 +900,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   ) : (
                     paginatedLedger.map(st => {
                       const hasSuiviPaid = (st.payments || []).some(p => p.service === 'Suivi');
-                      const hasTC = (st.payments || []).some(p => p.service === 'Étude Teen Center');
+                      const hasTC = (st.payments || []).some(p => p.service === 'Étude' || p.service === 'Inscription Étude');
                       const hasLib = (st.payments || []).some(p => p.service === 'Bibliothèque');
                       const hasMeal = (st.payments || []).some(p => p.service === 'Repas');
 
@@ -998,7 +1001,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
                 >
                   <option value="all">جميع الخدمات</option>
-                  {(hideRestrictedModules ? SERVICE_OPTIONS.filter(s => !RESTRICTED_SERVICES.includes(s.value)) : SERVICE_OPTIONS).map(svc => (
+                  {(hideRestrictedModules ? serviceOptions.filter(s => !RESTRICTED_SERVICES.includes(s.value)) : serviceOptions).map(svc => (
                     <option key={svc.value} value={svc.value}>{svc.label}</option>
                   ))}
                 </select>

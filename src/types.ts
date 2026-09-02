@@ -13,9 +13,9 @@ export interface CenterFeeSet {
   fraisAbonnementRepas: number;
   fraisParRepas: number;
   prixPlatTraiteur: number;
-  fraisAnnuelEtudeTeenCenter: number;
-  fraisMensuelEtudeTeenCenter: number;
-  fraisAssuranceCoursHorsTeenCenter: number;
+  fraisAnnuelEtude: number;
+  fraisMensuelEtude: number;
+  fraisAssuranceCoursExternes: number;
 }
 
 export interface CenterSettings {
@@ -38,9 +38,9 @@ export const initialCenterFeeSet: CenterFeeSet = {
   fraisAbonnementRepas: 150,
   fraisParRepas: 8,
   prixPlatTraiteur: 6,
-  fraisAnnuelEtudeTeenCenter: 100,
-  fraisMensuelEtudeTeenCenter: 180,
-  fraisAssuranceCoursHorsTeenCenter: 50
+  fraisAnnuelEtude: 100,
+  fraisMensuelEtude: 180,
+  fraisAssuranceCoursExternes: 50
 };
 
 // Default fees applied at student creation time
@@ -52,9 +52,9 @@ export const initialStudentFeeSet: CenterFeeSet = {
   fraisAbonnementRepas: 150,
   fraisParRepas: 8,
   prixPlatTraiteur: 6,
-  fraisAnnuelEtudeTeenCenter: 100,
-  fraisMensuelEtudeTeenCenter: 180,
-  fraisAssuranceCoursHorsTeenCenter: 50
+  fraisAnnuelEtude: 100,
+  fraisMensuelEtude: 180,
+  fraisAssuranceCoursExternes: 50
 };
 
 // Shared default list of matières used across the whole app (Suivi notes devoirs, staff enseignant, cours)
@@ -72,7 +72,7 @@ export const APP_SUBJECTS = [
 ];
 
 export const initialCenterSettings: CenterSettings = {
-  centerName: src.centerName || src.center_name || 'Academy System',
+  centerName: 'المركز',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
   fees: initialStudentFeeSet,
@@ -104,9 +104,9 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
       fraisAbonnementRepas: Number(fb.fraisAbonnementRepas) || 0,
       fraisParRepas: Number(fb.fraisParRepas) || 0,
       prixPlatTraiteur: fb.prixPlatTraiteur != null ? Number(fb.prixPlatTraiteur) : 6,
-      fraisAnnuelEtudeTeenCenter: Number(fb.fraisAnnuelEtudeTeenCenter) || 0,
-      fraisMensuelEtudeTeenCenter: Number(fb.fraisMensuelEtudeTeenCenter) || 0,
-      fraisAssuranceCoursHorsTeenCenter: Number(fb.fraisAssuranceCoursHorsTeenCenter) || 0
+      fraisAnnuelEtude: Number(fb.fraisAnnuelEtude) || 0,
+      fraisMensuelEtude: Number(fb.fraisMensuelEtude) || 0,
+      fraisAssuranceCoursExternes: Number(fb.fraisAssuranceCoursExternes) || 0
     };
   }
 
@@ -125,9 +125,9 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
     fraisAbonnementRepas: getNum('fraisAbonnementRepas', 'frais_abonnement_repas', 'mealMonthlyPrice', Number(fb.fraisAbonnementRepas) || 0),
     fraisParRepas: getNum('fraisParRepas', 'frais_par_repas', 'mealUnitPrice', Number(fb.fraisParRepas) || 0),
     prixPlatTraiteur: raw.prixPlatTraiteur != null ? Number(raw.prixPlatTraiteur) : (raw.prix_plat_traiteur != null ? Number(raw.prix_plat_traiteur) : (fb.prixPlatTraiteur != null ? Number(fb.prixPlatTraiteur) : 6)),
-    fraisAnnuelEtudeTeenCenter: getNum('fraisAnnuelEtudeTeenCenter', 'frais_annuel_etude_teen_center', 'teenCenterAnnualFee', Number(fb.fraisAnnuelEtudeTeenCenter) || 0),
-    fraisMensuelEtudeTeenCenter: getNum('fraisMensuelEtudeTeenCenter', 'frais_mensuel_etude_teen_center', 'teenCenterMonthlyFee', Number(fb.fraisMensuelEtudeTeenCenter) || 0),
-    fraisAssuranceCoursHorsTeenCenter: getNum('fraisAssuranceCoursHorsTeenCenter', 'frais_assurance_cours_hors_teen_center', 'assuranceFee', Number(fb.fraisAssuranceCoursHorsTeenCenter) || 0)
+    fraisAnnuelEtude: getNum('fraisAnnuelEtude', 'frais_annuel_etude', undefined, Number(fb.fraisAnnuelEtude) || 0),
+    fraisMensuelEtude: getNum('fraisMensuelEtude', 'frais_mensuel_etude', undefined, Number(fb.fraisMensuelEtude) || 0),
+    fraisAssuranceCoursExternes: getNum('fraisAssuranceCoursExternes', 'frais_assurance_cours_externes', 'assuranceFee', Number(fb.fraisAssuranceCoursExternes) || 0)
   };
 }
 
@@ -168,7 +168,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-centerName: 'Academy System',
+centerName: src.centerName || src.center_name || 'المركز',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     geminiApiKey: src.geminiApiKey || src.gemini_api_key || '',
@@ -189,16 +189,16 @@ export function getFeesForYear(settings: CenterSettings | null | undefined, year
       fraisAbonnementRepas: 0,
       fraisParRepas: 0,
       prixPlatTraiteur: 6,
-      fraisAnnuelEtudeTeenCenter: 0,
-      fraisMensuelEtudeTeenCenter: 0,
-      fraisAssuranceCoursHorsTeenCenter: 0
+      fraisAnnuelEtude: 0,
+      fraisMensuelEtude: 0,
+      fraisAssuranceCoursExternes: 0
     };
   }
   const raw = (settings.feesByYear && settings.feesByYear[year]) || settings.fees;
   return normalizeFeeSet(raw, settings.fees);
 }
 
-export type ServiceType = 'suivi' | 'teenCenter' | 'externalCourse' | 'library' | 'meals';
+export type ServiceType = 'suivi' | 'etude' | 'externalCourse' | 'library' | 'meals';
 
 export type PaymentStatus = 'paid' | 'advance' | 'unpaid';
 
@@ -302,7 +302,7 @@ export interface PaymentRecord {
   amountPaid: number;
   totalRequired: number;
   remainingBalance: number;
-  service: 'Suivi' | 'Étude Academy System' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Repas' | 'Inscription' | 'Assurance' | 'Autres';
+  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Assurance' | 'Autres';
   month: string; // e.g. "Octobre"
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
   method: 'Espèces' | 'Chèque' | 'Virement';
@@ -314,6 +314,19 @@ export interface PaymentRecord {
   discount?: number;  // discount granted on this month/registration fee (حسم / تخفيض)
   refund?: boolean;       // true when this record is a refund (remboursement)
   refundOf?: string;      // id of the original payment being refunded
+}
+
+/** Stored payment.service must stay generic and independent of the center name. */
+export function normalizePaymentService(service: unknown, month?: unknown): PaymentRecord['service'] | string {
+  const legacyService = String(service ?? '').replace(/\s+/g, ' ').trim();
+  const isAnnual = String(month ?? '').startsWith('Annuel');
+  const brandedEtude = /(?:inscription\s+)?[ée]tude\s+(teen\s*center|academy\s*system)/i.test(legacyService);
+  if (brandedEtude) {
+    return /^inscription\s+/i.test(legacyService) || isAnnual ? 'Inscription Étude' : 'Étude';
+  }
+  if (legacyService === 'Inscription') return 'Inscription Suivi';
+  if (legacyService === 'Bibliothèque' && isAnnual) return 'Inscription Bibliothèque';
+  return legacyService;
 }
 
 export interface MealSubscription {
@@ -376,7 +389,7 @@ export interface Student {
   // Service Enrolments
   enrolledServices: {
     suivi: boolean;
-    teenCenter: boolean;
+    etude: boolean;
     library: boolean;
     meals: boolean;
   };
@@ -387,8 +400,8 @@ export interface Student {
     monthlyFee: number;            // ex: 250 DT
   };
   
-  // MODULE 3: Academy System Fees
-  teenCenterFees: {
+  // MODULE 3: Étude / tutoring fees
+  etudeFees: {
     annualRegistrationFee: number; // ex: 50 DT
     monthlyFee: number;            // ex: 80 DT
   };
@@ -545,7 +558,7 @@ export interface TimesheetEntry {
   extraHours?: number;  // supplementary hours (heures supplémentaires)
 }
 
-export const TEEN_CENTER_TIME_SLOTS = [
+export const ETUDE_TIME_SLOTS = [
   '08:00 - 10:00',
   '10:00 - 12:00',
   '14:00 - 16:00',
@@ -553,17 +566,17 @@ export const TEEN_CENTER_TIME_SLOTS = [
   '18:00 - 20:00'
 ] as const;
 
-export type TimeSlot = typeof TEEN_CENTER_TIME_SLOTS[number];
+export type TimeSlot = typeof ETUDE_TIME_SLOTS[number];
 
-export const TEEN_CENTER_DAYS = [
+export const ETUDE_DAYS = [
   'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'
 ] as const;
 
-export type TeenCenterDay = typeof TEEN_CENTER_DAYS[number];
+export type EtudeDay = typeof ETUDE_DAYS[number];
 
-export interface TeenCenterSlot {
+export interface EtudeSlot {
   id: string;
-  day: TeenCenterDay;
+  day: EtudeDay;
   startTime: string; // e.g. "08:30"
   endTime: string;   // e.g. "10:30"
   gradeLevel: string; // Level target

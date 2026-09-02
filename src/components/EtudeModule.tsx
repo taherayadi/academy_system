@@ -21,9 +21,9 @@ import {
 import { 
   Student, 
   StaffMember, 
-  TeenCenterSlot, 
-  TEEN_CENTER_DAYS, 
-  TeenCenterDay, 
+  EtudeSlot, 
+  ETUDE_DAYS, 
+  EtudeDay, 
   TimesheetEntry,
   PaymentRecord,
   ACADEMIC_MONTHS,
@@ -49,19 +49,19 @@ for (let h = 7; h <= 21; h++) {
   TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:30`);
 }
 
-interface TeenCenterModuleProps {
+interface EtudeModuleProps {
   students: Student[];
   staff: StaffMember[];
-  slots: TeenCenterSlot[];
+  slots: EtudeSlot[];
   timesheets: TimesheetEntry[];
-  onUpdateSlots: (slots: TeenCenterSlot[]) => void;
+  onUpdateSlots: (slots: EtudeSlot[]) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
   onUpdateStudent: (student: Student) => void;
   settings?: CenterSettings;
   sidebarCollapsed?: boolean;
 }
 
-const ARABIC_TEEN_CENTER_DAYS: Record<TeenCenterDay, string> = {
+const ARABIC_ETUDE_DAYS: Record<EtudeDay, string> = {
   'Lundi': 'الإثنين',
   'Mardi': 'الثلاثاء',
   'Mercredi': 'الأربعاء',
@@ -90,7 +90,7 @@ const parseScheduleRange = (range: string) => {
   return { start: timeToMinutes(parts[0]), end: timeToMinutes(parts[1]) };
 };
 
-export default function TeenCenterModule({
+export default function EtudeModule({
   students,
   staff,
   slots,
@@ -100,17 +100,18 @@ export default function TeenCenterModule({
   onUpdateStudent,
   settings,
   sidebarCollapsed
-}: TeenCenterModuleProps) {
+}: EtudeModuleProps) {
   const toast = useToast();
-  const [selectedDay, setSelectedDay] = useState<TeenCenterDay>(() => {
+  const centerName = settings?.centerName || 'المركز';
+  const [selectedDay, setSelectedDay] = useState<EtudeDay>(() => {
     const idx = new Date().getDay();
-    return idx >= 1 && idx <= 6 ? TEEN_CENTER_DAYS[idx - 1] : 'Lundi';
+    return idx >= 1 && idx <= 6 ? ETUDE_DAYS[idx - 1] : 'Lundi';
   });
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
 
   // Slot Form State
-  const [modalDay, setModalDay] = useState<TeenCenterDay>('Lundi');
+  const [modalDay, setModalDay] = useState<EtudeDay>('Lundi');
   const [modalStartTime, setModalStartTime] = useState<string>('08:00');
   const [modalEndTime, setModalEndTime] = useState<string>('10:00');
   const [gradeLevel, setGradeLevel] = useState(EXTERNAL_GRADE_LEVELS[0].level);
@@ -119,7 +120,7 @@ export default function TeenCenterModule({
   const [slotIsExtra, setSlotIsExtra] = useState(false);
 
   // Timesheet Modal State
-  const [markingTimesheetSlot, setMarkingTimesheetSlot] = useState<TeenCenterSlot | null>(null);
+  const [markingTimesheetSlot, setMarkingTimesheetSlot] = useState<EtudeSlot | null>(null);
   const [tsDate, setTsDate] = useState(new Date().toISOString().split('T')[0]);
   const [tsStatus, setTsStatus] = useState<'present' | 'absent' | 'retard' | 'conge'>('present');
   const [leaveReason, setLeaveReason] = useState('');
@@ -145,7 +146,7 @@ export default function TeenCenterModule({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
 
   // New Payment Modal Form States
-  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Étude Teen Center' | 'Inscription'>('Étude Teen Center');
+  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Étude' | 'Inscription Étude'>('Étude');
   const [paymentMonth, setPaymentMonth] = useState<string>('Octobre');
   const [amountPaid, setAmountPaid] = useState<number>(180);
   const [totalRequired, setTotalRequired] = useState<number>(180);
@@ -169,11 +170,11 @@ export default function TeenCenterModule({
     setIsAddYearModalOpen(false);
   };
 
-  // Students already enrolled in Étude Teen Center (for the slot picker)
+  // Students already enrolled in Étude (for the slot picker)
 
-  // Filter students enrolled in Teen Center by year + search
-  const teenCenterStudents = students.filter(st => {
-    const isEnrolled = st.enrolledServices?.teenCenter !== false;
+  // Filter students enrolled in Étude by year + search
+  const etudeStudents = students.filter(st => {
+    const isEnrolled = st.enrolledServices?.etude !== false;
     const studentYear = st.academicYear || getCurrentAcademicYear();
     const matchesYear = schoolYear === 'all' || studentYear === schoolYear;
     const matchesGrade = gradeFilter === 'all' || st.grade === gradeFilter;
@@ -181,12 +182,12 @@ export default function TeenCenterModule({
     return isEnrolled && matchesYear && matchesGrade && name.includes(searchTerm.toLowerCase());
   });
 
-  const totalPages = Math.ceil(teenCenterStudents.length / 20) || 1;
-  const paginatedStudents = teenCenterStudents.slice((currentPage - 1) * 20, currentPage * 20);
+  const totalPages = Math.ceil(etudeStudents.length / 20) || 1;
+  const paginatedStudents = etudeStudents.slice((currentPage - 1) * 20, currentPage * 20);
 
-  // Students NOT enrolled in Teen Center by year
+  // Students not enrolled in Étude by year
   const nonEnrolledStudents = students.filter(st => {
-    const isNotEnrolled = st.enrolledServices?.teenCenter === false;
+    const isNotEnrolled = st.enrolledServices?.etude === false;
     const studentYear = st.academicYear || getCurrentAcademicYear();
     const matchesYear = schoolYear === 'all' || studentYear === schoolYear;
     const matchesGrade = gradeFilter === 'all' || st.grade === gradeFilter;
@@ -199,24 +200,24 @@ export default function TeenCenterModule({
     if (settings) {
       const f = getFeesForYear(settings, y);
       return {
-        annualRegistrationFee: f.fraisAnnuelEtudeTeenCenter,
-        monthlyFee: f.fraisMensuelEtudeTeenCenter
+        annualRegistrationFee: f.fraisAnnuelEtude,
+        monthlyFee: f.fraisMensuelEtude
       };
     }
     return {
-      annualRegistrationFee: st.teenCenterFees?.annualRegistrationFee || 100,
-      monthlyFee: st.teenCenterFees?.monthlyFee || 180
+      annualRegistrationFee: st.etudeFees?.annualRegistrationFee || 100,
+      monthlyFee: st.etudeFees?.monthlyFee || 180
     };
   };
 
-  const getStudentTeenCenterStatus = (st: Student, month: AcademicMonth): {
+  const getStudentEtudeStatus = (st: Student, month: AcademicMonth): {
     status: 'paid' | 'advance' | 'unpaid';
     paidAmount: number;
     remaining: number;
     discount: number;
     paymentRecord?: PaymentRecord;
   } => {
-    const monthPayments = (st.payments || []).filter(p => p.service === 'Étude Teen Center' && p.month.includes(month) && p.month.includes(schoolYear));
+    const monthPayments = (st.payments || []).filter(p => p.service === 'Étude' && p.month.includes(month) && p.month.includes(schoolYear));
     const discount = monthPayments.reduce((m, p) => Math.max(m, p.discount || 0), 0);
     const required = Math.max(0, currentFees(st).monthlyFee - discount);
     if (monthPayments.length === 0) {
@@ -235,7 +236,7 @@ export default function TeenCenterModule({
 
   const getStudentInscriptionStatus = (st: Student) => {
     const payments = (st.payments || []).filter(p =>
-      p.service === 'Étude Teen Center' && p.month === `Annuel (${schoolYear})`
+      p.service === 'Inscription Étude' && p.month === `Annuel (${schoolYear})`
     );
     const discount = payments.reduce((m, p) => Math.max(m, p.discount || 0), 0);
     const required = Math.max(0, currentFees(st).annualRegistrationFee - discount);
@@ -256,14 +257,14 @@ export default function TeenCenterModule({
     return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'Septembre';
   })();
 
-  // Students enrolled in Étude Teen Center who PAID the annual registration fee (for the slot picker)
-  const etudeStudents = students.filter(st =>
-    st.enrolledServices?.teenCenter === true &&
+  // Students enrolled in Étude who paid the annual registration fee (for the slot picker)
+  const paidEtudeStudents = students.filter(st =>
+    st.enrolledServices?.etude === true &&
     getStudentInscriptionStatus(st).status === 'paid'
   );
 
   // Further narrows the slot picker to the selected educational level
-  const filteredEtudeStudents = etudeStudents.filter(st => st.grade === gradeLevel);
+  const filteredEtudeStudents = paidEtudeStudents.filter(st => st.grade === gradeLevel);
 
   // Is the seance (day + time) covered by the teacher's weekly schedule (Timesheet)?
   const selectedTeacher = staff.find(s => s.id === teacherId);
@@ -280,7 +281,7 @@ export default function TeenCenterModule({
   })();
 
   const handleOpenPayment = (st: Student, month: AcademicMonth) => {
-    const monthStatus = getStudentTeenCenterStatus(st, month);
+    const monthStatus = getStudentEtudeStatus(st, month);
 
     // If ALREADY PAID, open receipt view directly showing history
     if (monthStatus.status === 'paid' && monthStatus.paymentRecord) {
@@ -289,7 +290,7 @@ export default function TeenCenterModule({
     }
 
     setSelectedStudentForPayment(st);
-    setPaymentServiceTarget('Étude Teen Center');
+    setPaymentServiceTarget('Étude');
     setPaymentMonth(month);
 
     const fullFee = currentFees(st).monthlyFee;
@@ -322,7 +323,7 @@ export default function TeenCenterModule({
       return;
     }
     setSelectedStudentForPayment(st);
-    setPaymentServiceTarget('Inscription');
+    setPaymentServiceTarget('Inscription Étude');
     setPaymentMonth(`Annuel (${schoolYear})`);
     const fee = currentFees(st).annualRegistrationFee;
     const storedDiscount = paymentStatus.discount || 0;
@@ -334,8 +335,8 @@ export default function TeenCenterModule({
     setChequeNumber('');
     setChequeDate(new Date().toISOString().split('T')[0]);
     setNotes(paymentStatus.status === 'advance'
-      ? `تكملة خلاص رسوم التسجيل السنوي بتأطير Teen Center (${schoolYear})`
-      : `رسوم التسجيل السنوي بتأطير Teen Center (${schoolYear})`);
+      ? `تكملة خلاص رسوم التسجيل السنوي بتأطير ${centerName} (${schoolYear})`
+      : `رسوم التسجيل السنوي بتأطير ${centerName} (${schoolYear})`);
   };
 
   const handleEnrollStudent = (st: Student) => {
@@ -343,11 +344,11 @@ export default function TeenCenterModule({
       ...st,
       enrolledServices: {
         ...(st.enrolledServices || { suivi: true, library: false, meals: false }),
-        teenCenter: true
+        etude: true
       },
-      teenCenterFees: st.teenCenterFees || {
-        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelEtudeTeenCenter : 100,
-        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelEtudeTeenCenter : 180
+      etudeFees: st.etudeFees || {
+        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelEtude : 100,
+        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelEtude : 180
       }
     };
     onUpdateStudent(updatedStudent);
@@ -367,7 +368,7 @@ export default function TeenCenterModule({
     }
 
     const numDiscount = Number(discount) || 0;
-    const baseRequired = paymentServiceTarget === 'Inscription'
+    const baseRequired = paymentServiceTarget === 'Inscription Étude'
       ? (Number(totalRequired) || 0)
       : currentFees(selectedStudentForPayment).monthlyFee;
 
@@ -386,7 +387,7 @@ export default function TeenCenterModule({
     const disc = Math.max(0, numDiscount);
     const paid = Math.max(0, Number(amountPaid) || 0);
 
-    if (paymentServiceTarget === 'Inscription') {
+    if (paymentServiceTarget === 'Inscription Étude') {
       const currentStatus = getStudentInscriptionStatus(selectedStudentForPayment);
       const effectiveRequired = Math.max(0, Number(totalRequired) - disc);
       const maxPayable = Math.max(0, effectiveRequired - currentStatus.paidAmount);
@@ -403,14 +404,14 @@ export default function TeenCenterModule({
         amountPaid: paid,
         totalRequired: effectiveRequired,
         remainingBalance: remaining,
-        service: 'Étude Teen Center',
+        service: 'Inscription Étude',
         month: `Annuel (${schoolYear})`,
         paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
         method: paymentMethod,
         chequeNumber: paymentMethod === 'Chèque' ? chequeNumber : undefined,
         chequeDate: paymentMethod === 'Chèque' ? chequeDate : undefined,
         receiptNumber: generateReceiptNumber(students, 'REC-ETU-'),
-        notes: notes || `رسوم التسجيل السنوي بتأطير Teen Center (${schoolYear})`,
+        notes: notes || `رسوم التسجيل السنوي بتأطير ${centerName} (${schoolYear})`,
         discount: disc > 0 ? disc : undefined
       };
 
@@ -426,7 +427,7 @@ export default function TeenCenterModule({
       return;
     }
 
-    const currentStatus = getStudentTeenCenterStatus(selectedStudentForPayment, paymentMonth as AcademicMonth);
+    const currentStatus = getStudentEtudeStatus(selectedStudentForPayment, paymentMonth as AcademicMonth);
 
     const fullFee = currentFees(selectedStudentForPayment).monthlyFee;
     const effectiveRequired = Math.max(0, fullFee - disc);
@@ -447,7 +448,7 @@ export default function TeenCenterModule({
       amountPaid: paid,
       totalRequired: effectiveRequired,
       remainingBalance: remaining,
-      service: 'Étude Teen Center',
+      service: 'Étude',
       month: `${paymentMonth} (${schoolYear})`,
 paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
         method: paymentMethod,
@@ -469,16 +470,16 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
     setIsSubmitting(false);
   };
 
-  // Open refund modal for future paid months in Teen Center
+  // Open refund modal for future paid Étude months
   const handleOpenRefund = (st: Student) => {
     setRefundStudent(st);
     const currentIdx = getCurrentAcademicIndex();
     const refundable: Record<string, boolean> = {};
     ACADEMIC_MONTHS.forEach(m => {
-      const ms = getStudentTeenCenterStatus(st, m);
+      const ms = getStudentEtudeStatus(st, m);
       if (ms.paidAmount > 0 && ACADEMIC_INDEX[m] > currentIdx) {
         const alreadyRefunded = (st.payments || []).some(
-          p => p.refund && p.service === 'Étude Teen Center' && p.month === `${m} (${schoolYear})`
+          p => p.refund && p.service === 'Étude' && p.month === `${m} (${schoolYear})`
         );
         if (!alreadyRefunded) refundable[m] = true;
       }
@@ -487,7 +488,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
     setIsRefundModalOpen(true);
   };
 
-  // Execute Teen Center refund for selected months
+  // Execute Étude refunds for selected months
   const handleConfirmRefund = () => {
     if (!refundStudent) return;
     const currentIdx = getCurrentAcademicIndex();
@@ -496,10 +497,10 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
     ACADEMIC_MONTHS.forEach(m => {
       if (!refundMonths[m]) return;
-      const ms = getStudentTeenCenterStatus(refundStudent, m);
+      const ms = getStudentEtudeStatus(refundStudent, m);
       if (ms.paidAmount <= 0 || ACADEMIC_INDEX[m] <= currentIdx) return;
       const alreadyRefunded = (refundStudent.payments || []).some(
-        p => p.refund && p.service === 'Étude Teen Center' && p.month === `${m} (${schoolYear})`
+        p => p.refund && p.service === 'Étude' && p.month === `${m} (${schoolYear})`
       );
       if (alreadyRefunded) {
         toast.warning(`شهر ${monthToArabic(m)} تمت استرجاعه مسبقاً — تم تخطيه.`);
@@ -512,7 +513,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         amountPaid: -ms.paidAmount,
         totalRequired: ms.paidAmount,
         remainingBalance: 0,
-        service: 'Étude Teen Center',
+        service: 'Étude',
         month: `${m} (${schoolYear})`,
         paymentType: 'balance',
         method: 'Espèces',
@@ -547,7 +548,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
     setIsSlotModalOpen(true);
   };
 
-  const openEditSlot = (slot: TeenCenterSlot) => {
+  const openEditSlot = (slot: EtudeSlot) => {
     setEditingSlotId(slot.id);
     setModalDay(slot.day);
     setModalStartTime(slot.startTime);
@@ -612,7 +613,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       return;
     }
 
-    const payload: TeenCenterSlot = {
+    const payload: EtudeSlot = {
       id: editingSlotId || 'slot_' + crypto.randomUUID(),
       day: modalDay,
       startTime: modalStartTime,
@@ -660,7 +661,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
   const sortedDaySlots = [...currentDaySlots].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
   // Slot delete confirmation state
-  const [slotToDelete, setSlotToDelete] = useState<TeenCenterSlot | null>(null);
+  const [slotToDelete, setSlotToDelete] = useState<EtudeSlot | null>(null);
 
   return (
     <div className="space-y-6">
@@ -670,13 +671,13 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         <div>
           <div className="flex items-center gap-2">
            <span className="px-3 py-1 bg-[#F2F8F9] text-[#14464E] text-xs font-bold rounded-lg border border-[#C3E0E4]/60">
-               تأطير Étude Teen Center
+               تأطير Étude {centerName}
              </span>
             <span className="text-xs text-slate-400 font-bold">الجدول الأسبوعي والتايم شيت</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
             <Clock className="h-6 w-6 text-[#257C86]" />
-            دراسات Teen Center المنهجية
+            دراسات {centerName} المنهجية
           </h2>
           <p className="text-slate-500 text-xs mt-1">
             برمجة الحصص الأسبوعية وربطها بالمعلمين وتسجيل التايم شيت اليومي.
@@ -689,7 +690,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
             className="px-4 py-3 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-2xl shadow-md cursor-pointer flex items-center gap-2 shrink-0"
           >
             <UserPlus className="h-4 w-4" />
-            إلحاق تلميذ بتأطير Teen Center
+            إلحاق تلميذ بتأطير {centerName}
           </button>
         )}
       </div>
@@ -739,7 +740,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         </div>
       </div>
 
-      {/* TEEN CENTER ACADEMIC MONTH GRID TABLE */}
+      {/* Étude academic month grid table */}
       <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs no-print">
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <button
@@ -838,7 +839,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                       {/* Academic months cells */}
                       {ACADEMIC_MONTHS.map(m => {
-                        const mStatus = getStudentTeenCenterStatus(st, m);
+                        const mStatus = getStudentEtudeStatus(st, m);
                         return (
                           <td key={m} className="p-3 text-center">
                             {mStatus.status === 'paid' && (
@@ -886,7 +887,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         {totalPages > 1 && (
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <span className="text-xs text-slate-500 font-bold">
-              عرض {((currentPage - 1) * 20) + 1} - {Math.min(currentPage * 20, teenCenterStudents.length)} من أصل {teenCenterStudents.length} تلميذ
+              عرض {((currentPage - 1) * 20) + 1} - {Math.min(currentPage * 20, etudeStudents.length)} من أصل {etudeStudents.length} تلميذ
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -916,7 +917,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       {/* DAYS SELECTOR (Lundi -> Samedi) */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center gap-2 overflow-x-auto no-print">
         <span className="text-xs font-bold text-slate-500 px-3 shrink-0">اختر اليوم:</span>
-        {TEEN_CENTER_DAYS.map(day => (
+        {ETUDE_DAYS.map(day => (
           <button
             key={day}
             onClick={() => setSelectedDay(day)}
@@ -926,7 +927,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
             }`}
           >
-            {ARABIC_TEEN_CENTER_DAYS[day]}
+            {ARABIC_ETUDE_DAYS[day]}
           </button>
         ))}
       </div>
@@ -936,7 +937,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-black text-slate-800">
-              برنامج يوم {ARABIC_TEEN_CENTER_DAYS[selectedDay]}
+              برنامج يوم {ARABIC_ETUDE_DAYS[selectedDay]}
             </h3>
             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
               {currentDaySlots.length} حصّة
@@ -1067,7 +1068,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-[#3A93A0]" />
                   <h3 className="text-lg font-black">
-                    {editingSlotId ? 'تعديل حِصّة دراسية' : 'إضافة حِصّة في Teen Center'}
+                    {editingSlotId ? 'تعديل حِصّة دراسية' : <>إضافة حِصّة في {centerName}</>}
                   </h3>
                 </div>
 
@@ -1086,7 +1087,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     value={modalDay} onChange={(e) => setModalDay(e.target.value as any)}
                     className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold"
                   >
-                    {TEEN_CENTER_DAYS.map(d => <option key={d} value={d}>{ARABIC_TEEN_CENTER_DAYS[d]}</option>)}
+                    {ETUDE_DAYS.map(d => <option key={d} value={d}>{ARABIC_ETUDE_DAYS[d]}</option>)}
                   </select>
                 </div>
 
@@ -1148,7 +1149,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   <div className="p-3 rounded-2xl border border-slate-200 bg-slate-50 space-y-2">
                     <div className="flex items-center gap-2 text-[11px] font-black text-red-600">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      تنبيه: الحصّة (يوم {ARABIC_TEEN_CENTER_DAYS[modalDay]} من {modalStartTime} إلى {modalEndTime}) خارج برنامج (Timesheet) الأستاذ(ة) «{selectedTeacher ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}` : ''}».
+                      تنبيه: الحصّة (يوم {ARABIC_ETUDE_DAYS[modalDay]} من {modalStartTime} إلى {modalEndTime}) خارج برنامج (Timesheet) الأستاذ(ة) «{selectedTeacher ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}` : ''}».
                     </div>
                     <p className="text-[10px] font-bold text-slate-500">
                       هل تريد اعتبار هذه الحصّة كساعات إضافية؟
@@ -1172,7 +1173,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   </div>
                 )}
 
-                {/* Students check multi select — only students enrolled in Étude Teen Center AND paid annual fee */}
+                {/* Students check multi select — only students enrolled in Étude and paid annually */}
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">
                     التلاميذ المسجلون ({enrolledStudentIds.length}):
@@ -1183,7 +1184,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     ) : (
                       filteredEtudeStudents.map(st => {
                         const isChecked = enrolledStudentIds.includes(st.id);
-                        const monthlyStatus = getStudentTeenCenterStatus(st, currentAcademicMonth);
+                        const monthlyStatus = getStudentEtudeStatus(st, currentAcademicMonth);
                         const monthlyUnpaid = monthlyStatus.status !== 'paid';
                         return (
                           <label key={st.id} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
@@ -1325,7 +1326,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#3A93A0]" />
-                  <h3 className="text-lg font-black">إلحاق تلميذ بتأطير Teen Center</h3>
+                  <h3 className="text-lg font-black">إلحاق تلميذ بتأطير {centerName}</h3>
                 </div>
 
                 <button 
@@ -1410,7 +1411,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-[#3A93A0]" />
-                    {paymentServiceTarget === 'Inscription' 
+                    {paymentServiceTarget === 'Inscription Étude'
                       ? `خلاص تسجيل التأطير السنوي - ${schoolYear}`
                       : `خلاص اشتراك التأطير — شهر ${paymentMonth} (${schoolYear})`}
                   </h3>
@@ -1429,11 +1430,11 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
               <form onSubmit={handleSubmitPayment} className="p-6 space-y-4 overflow-y-auto min-h-0">
                 {(() => {
-                  const isInscription = paymentServiceTarget === 'Inscription';
+                  const isInscription = paymentServiceTarget === 'Inscription Étude';
                   const activeMonthStatus = selectedStudentForPayment
                     ? (isInscription
                       ? getStudentInscriptionStatus(selectedStudentForPayment)
-                      : getStudentTeenCenterStatus(selectedStudentForPayment, paymentMonth as AcademicMonth))
+                      : getStudentEtudeStatus(selectedStudentForPayment, paymentMonth as AcademicMonth))
                     : null;
                   const isAdvanceStatus = activeMonthStatus?.status === 'advance';
                   const stFees = selectedStudentForPayment ? currentFees(selectedStudentForPayment) : null;
@@ -1693,7 +1694,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               {/* RECEIPT PRINT TEMPLATE */}
               {(() => {
                 const allMonthPayments = (printingReceipt.student.payments || []).filter(p => 
-                  (p.service === 'Étude Teen Center') && p.month === printingReceipt.payment.month
+                  (p.service === printingReceipt.payment.service) && p.month === printingReceipt.payment.month
                 );
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
@@ -1704,7 +1705,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — التأطير الدراسي (وصل مدفوعات)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — التأطير الدراسي (وصل مدفوعات)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
@@ -1803,7 +1804,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
                         <p>نشكركم على ثقتكم في خدمة التأطير.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>
@@ -1859,7 +1860,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto">
                     {Object.keys(refundMonths).map(m => {
-                      const ms = getStudentTeenCenterStatus(refundStudent, m as AcademicMonth);
+                      const ms = getStudentEtudeStatus(refundStudent, m as AcademicMonth);
                       return (
                         <label
                           key={m}
@@ -1916,7 +1917,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
             <>
               هل أنت متأكد من حذف هذه الحصة من الجدول؟
               <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
-                <p><span className="text-slate-400">اليوم:</span> <strong>{ARABIC_TEEN_CENTER_DAYS[slotToDelete.day]}</strong> — <span className="text-slate-400">التوقيت:</span> <strong className="font-mono">{slotToDelete.startTime} - {slotToDelete.endTime}</strong></p>
+                <p><span className="text-slate-400">اليوم:</span> <strong>{ARABIC_ETUDE_DAYS[slotToDelete.day]}</strong> — <span className="text-slate-400">التوقيت:</span> <strong className="font-mono">{slotToDelete.startTime} - {slotToDelete.endTime}</strong></p>
                 <p><span className="text-slate-400">المستوى:</span> <strong>{slotToDelete.gradeLevel}</strong></p>
               </div>
             </>

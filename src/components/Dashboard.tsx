@@ -14,7 +14,7 @@ import {
   Library,
   Sparkles
 } from 'lucide-react';
-import { StaffMember, Student, ACADEMIC_MONTHS } from '../types';
+import { StaffMember, Student, ACADEMIC_MONTHS, CenterSettings } from '../types';
 
 interface DashboardProps {
   staff: StaffMember[];
@@ -23,9 +23,10 @@ interface DashboardProps {
   openAddStudent: () => void;
   openAddStaff: () => void;
   hideRestrictedModules?: boolean;
+  settings?: CenterSettings;
 }
 
-export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules }: DashboardProps) {
+export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings }: DashboardProps) {
   const totalStaff = staff.length;
   const totalStudents = students.length;
   const moduleCount = hideRestrictedModules ? 6 : 8;
@@ -61,10 +62,10 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="text-emerald-200 font-extrabold text-xs uppercase tracking-widest bg-[#8DC760]/15 px-3 py-1 rounded-full border border-[#8DC760]/25">منظومة Academy System</span>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">Academy System</h1>
+            <span className="text-emerald-200 font-extrabold text-xs uppercase tracking-widest bg-[#8DC760]/15 px-3 py-1 rounded-full border border-[#8DC760]/25">منظومة {settings?.centerName || 'المركز'}</span>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">{settings?.centerName || 'المركز'}</h1>
             <p className="mt-2 text-slate-300 text-base max-w-xl font-light leading-relaxed">
-              مرحباً بك في لوحة قيادة Academy System الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
+              مرحباً بك في لوحة قيادة {settings?.centerName || 'المركز'} الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
             </p>
           </div>
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center min-w-[210px] shadow-lg">
@@ -190,7 +191,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
             <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-xl flex items-center justify-center">
               <Clock className="h-5 w-5" />
             </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Étude Academy System</h4>
+            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Étude {settings?.centerName || 'المركز'}</h4>
             <p className="text-[11px] text-slate-500 mt-1">الخانات الزمنية والتايم شيت</p>
           </button>
 
@@ -202,7 +203,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
               <div className="w-10 h-10 bg-orange-100 text-orange-700 rounded-xl flex items-center justify-center">
                 <BookMarked className="h-5 w-5" />
               </div>
-              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Études Hors Academy System</h4>
+              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Études Hors {settings?.centerName || 'المركز'}</h4>
               <p className="text-[11px] text-slate-500 mt-1">الكورسات الخاصة</p>
             </button>
           )}

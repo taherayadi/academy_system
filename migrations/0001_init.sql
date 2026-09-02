@@ -752,14 +752,14 @@ INSERT INTO payments (
   id, student_id, date, amount_paid, total_required, remaining_balance,
   service, month, payment_type, method, receipt_number, notes, discount, refund, refund_of
 ) VALUES
-  ('pay_1', 'student_1', '2026-09-02', 150, 150, 0, 'Inscription', 'Septembre', 'full', 'Espèces', 'REC-2026-001', 'دفع رسوم التسجيل السنوي الكامل', NULL, 0, NULL),
+  ('pay_1', 'student_1', '2026-09-02', 150, 150, 0, 'Inscription Suivi', 'Septembre', 'full', 'Espèces', 'REC-2026-001', 'دفع رسوم التسجيل السنوي الكامل', NULL, 0, NULL),
   ('pay_2', 'student_1', '2026-09-02', 150, 250, 100, 'Suivi', 'Septembre', 'advance', 'Espèces', 'REC-2026-002', 'تسبقة (أكونت) لشهر سبتمبر - المتبقي 100 د.ت', NULL, 0, NULL),
   ('pay_3', 'student_1', '2026-09-15', 100, 100, 0, 'Suivi', 'Septembre', 'balance', 'Espèces', 'REC-2026-003', 'خلاص باقي شهر سبتمبر', NULL, 0, NULL),
-  ('pay_4', 'student_1', '2026-10-01', 80, 80, 0, 'Étude Teen Center', 'Octobre', 'full', 'Espèces', 'REC-2026-010', NULL, NULL, 0, NULL),
+  ('pay_4', 'student_1', '2026-10-01', 80, 80, 0, 'Étude', 'Octobre', 'full', 'Espèces', 'REC-2026-010', NULL, NULL, 0, NULL),
   ('pay_5', 'student_1', '2026-10-01', 150, 150, 0, 'Repas', 'Octobre', 'full', 'Espèces', 'REC-2026-011', NULL, NULL, 0, NULL),
   ('pay_6', 'student_2', '2026-09-01', 250, 250, 0, 'Suivi', 'Septembre', 'full', 'Virement', 'REC-2026-004', NULL, NULL, 0, NULL),
   ('pay_7', 'student_2', '2026-10-02', 250, 250, 0, 'Suivi', 'Octobre', 'full', 'Virement', 'REC-2026-015', NULL, NULL, 0, NULL),
-  ('pay_8', 'student_3', '2026-09-05', 80, 80, 0, 'Étude Teen Center', 'Septembre', 'full', 'Espèces', 'REC-2026-005', NULL, NULL, 0, NULL),
+  ('pay_8', 'student_3', '2026-09-05', 80, 80, 0, 'Étude', 'Septembre', 'full', 'Espèces', 'REC-2026-005', NULL, NULL, 0, NULL),
   ('pay_9', 'student_3', '2026-09-05', 30, 30, 0, 'Bibliothèque', 'Septembre', 'full', 'Espèces', 'REC-2026-006', NULL, NULL, 0, NULL);
 
 -- Staff

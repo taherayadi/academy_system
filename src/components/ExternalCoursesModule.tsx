@@ -51,6 +51,7 @@ export default function ExternalCoursesModule({
   sidebarCollapsed
 }: ExternalCoursesModuleProps) {
   const toast = useToast();
+  const centerName = settings?.centerName || 'المركز';
   const [selectedCourse, setSelectedCourse] = useState<ExternalCourse | null>(courses[0] || null);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
@@ -230,7 +231,7 @@ export default function ExternalCoursesModule({
       return;
     }
 
-    const assuranceAmount = settings ? getFeesForYear(settings, extYear || selectedCourse.schoolYear || schoolYear).fraisAssuranceCoursHorsTeenCenter : 50;
+    const assuranceAmount = settings ? getFeesForYear(settings, extYear || selectedCourse.schoolYear || schoolYear).fraisAssuranceCoursExternes : 50;
 
     // Upsert into the global register (shared across all courses), reuse existing id
     const existing = externalStudents.find(s => s.name.toLowerCase() === extName.trim().toLowerCase());
@@ -910,7 +911,7 @@ export default function ExternalCoursesModule({
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
                   <span className="text-slate-400 text-[10px] block font-bold">رسوم التأمين المدرسي:</span>
                   <span className="font-extrabold text-slate-900">
-                    {settings ? getFeesForYear(settings, selectedCourse.schoolYear || getCurrentAcademicYear()).fraisAssuranceCoursHorsTeenCenter : 50} د.ت
+                    {settings ? getFeesForYear(settings, selectedCourse.schoolYear || getCurrentAcademicYear()).fraisAssuranceCoursExternes : 50} د.ت
                   </span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
@@ -1798,7 +1799,7 @@ export default function ExternalCoursesModule({
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — التأمين المدرسي (وصل خلاص)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — التأمين المدرسي (وصل خلاص)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {receiptNumber}</p>
                         {reg.assuranceDate && <p className="text-[10px] text-slate-400">تاريخ الخلاص: {reg.assuranceDate}</p>}
                       </div>
@@ -1838,8 +1839,8 @@ export default function ExternalCoursesModule({
 
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
-                        <p>نشكركم على تأمين تلميذكم في Teen Center.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p>نشكركم على تأمين تلميذكم في {centerName}.</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>
@@ -1899,7 +1900,7 @@ export default function ExternalCoursesModule({
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — خلاص الشهر (وصل)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — خلاص الشهر (وصل)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ الحصة: {sess.date}</p>
                       </div>
@@ -1947,7 +1948,7 @@ export default function ExternalCoursesModule({
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
                         <p>الغياب بعد الخلاص لا يُرجع المبلغ.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>
@@ -2041,7 +2042,7 @@ export default function ExternalCoursesModule({
                   <div>
                     <p className="text-xs font-black text-[#103840]">التأمين المدرسي السنوي</p>
                     <p className="text-[10px] text-[#17555F] font-bold">
-                      المبلغ: {(settings ? getFeesForYear(settings, extYear || selectedCourse?.schoolYear || schoolYear).fraisAssuranceCoursHorsTeenCenter : 50)} د.ت — يُخلّص مرة واحدة للسنة
+                      المبلغ: {(settings ? getFeesForYear(settings, extYear || selectedCourse?.schoolYear || schoolYear).fraisAssuranceCoursExternes : 50)} د.ت — يُخلّص مرة واحدة للسنة
                     </p>
                   </div>
                 </label>

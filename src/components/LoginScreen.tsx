@@ -7,9 +7,10 @@ import logo from '../assets/logo.png';
 
 interface LoginScreenProps {
   onLogin: (user: UserAccount) => void;
+  centerName?: string;
 }
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, centerName }: LoginScreenProps) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -61,9 +62,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0e3036] via-[#17555f] to-[#2b6b4f] text-white p-8 text-center relative">
           <div className="w-20 h-20 mx-auto mb-3 overflow-hidden rounded-2xl bg-white p-1.5 ring-1 ring-white/40 shadow-lg">
-            <img src={logo} alt="Academy System" className="w-full h-full object-cover rounded-xl" />
+            <img src={logo} alt={centerName || 'المركز'} className="w-full h-full object-cover rounded-xl" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">منظمة Academy System</h1>
+          <h1 className="text-2xl font-black text-white tracking-tight">منظمة {centerName || 'المركز'}</h1>
           <p className="text-xs text-emerald-200 font-bold mt-1">تسجيل الدخول الإداري</p>
         </div>
 
@@ -131,7 +132,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </form>
 
           <p className="text-[10px] text-slate-400 text-center font-bold pt-2">
-            منظمة Academy System © 2026
+            منظمة {centerName || 'المركز'} © 2026
           </p>
 
         </div>

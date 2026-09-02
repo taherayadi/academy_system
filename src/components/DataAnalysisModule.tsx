@@ -22,7 +22,7 @@ import {
 import {
   Student,
   StaffMember,
-  TeenCenterSlot,
+  EtudeSlot,
   ExternalCourse,
   ExternalCourseSession,
   MealPlanDay,
@@ -42,7 +42,7 @@ import { analyzeCenterData, AnalysisStats } from '../utils/aiAnalysis';
 interface DataAnalysisModuleProps {
   students: Student[];
   staff: StaffMember[];
-  slots: TeenCenterSlot[];
+  slots: EtudeSlot[];
   courses: ExternalCourse[];
   sessions: ExternalCourseSession[];
   mealPlans: MealPlanDay[];
@@ -62,17 +62,19 @@ const TRIMESTER_MONTHS: Record<string, typeof ACADEMIC_MONTHS[number][]> = {
   T3: ['Mars', 'Avril', 'Mai'],
 };
 
-const SERVICE_LABELS: Record<string, string> = {
+const getServiceLabels = (centerName: string): Record<string, string> => ({
   'Suivi': 'المتابعة الدراسية',
-  'Étude Academy System': 'تأطير Étude',
+  'Inscription Suivi': 'تسجيل المتابعة',
+  'Étude': `تأطير ${centerName}`,
+  'Inscription Étude': `تسجيل التأطير (${centerName})`,
   'Cours Particuliers': 'الدروس الخصوصية',
   'Revision': 'حصة مراجعة',
   'Bibliothèque': 'المكتبة',
+  'Inscription Bibliothèque': 'تسجيل المكتبة',
   'Repas': 'الوجبات',
-  'Inscription': 'تسجيل المتابعة',
   'Assurance': 'التأمين',
   'Autres': 'أخرى',
-};
+});
 
 const ROLE_LABELS: Record<string, string> = {
   'enseignant': 'أستاذ',
@@ -95,6 +97,7 @@ function getPaymentMonths(payment: PaymentRecord): string[] {
 export default function DataAnalysisModule({
   students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, revisionSeances, externalStudents, settings,
 }: DataAnalysisModuleProps) {
+  const serviceLabels = getServiceLabels(settings.centerName || 'المركز');
   const [schoolYear, setSchoolYear] = useState<string>(DEFAULT_ACADEMIC_YEARS[DEFAULT_ACADEMIC_YEARS.length - 1]);
   const [period, setPeriod] = useState<PeriodOption>('all');
   const [loading, setLoading] = useState(false);
@@ -254,7 +257,7 @@ export default function DataAnalysisModule({
     setError(null);
     setAnalysis(null);
     try {
-      const result = await analyzeCenterData(stats, settings.geminiApiKey);
+      const result = await analyzeCenterData(stats, settings.geminiApiKey, settings.centerName);
       setAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'تعذر إجراء التحليل.');
@@ -417,7 +420,7 @@ export default function DataAnalysisModule({
                     const pct = stats.totalIncome > 0 ? (amount / stats.totalIncome * 100) : 0;
                     return (
                       <tr key={service} className="border-b border-slate-50 hover:bg-slate-50/50">
-                        <td className="py-2.5 px-3 font-bold text-slate-800">{SERVICE_LABELS[service] || service}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-800">{serviceLabels[service] || service}</td>
                         <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{amount.toLocaleString('fr-TN')} د.ت</td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-2">

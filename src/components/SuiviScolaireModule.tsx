@@ -74,6 +74,7 @@ function upsertNotes(student: Student, year: string, trimester: 1 | 2 | 3, subje
 
 export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, studentTimeSheets, settings, onUpdateSettings }: SuiviScolaireModuleProps) {
   const toast = useToast();
+  const centerName = settings?.centerName || 'المركز';
   const [searchTerm, setSearchTerm] = useState('');
   const [schoolYear, setSchoolYear] = useState<string>(getCurrentAcademicYear());
   const [gradeFilter, setGradeFilter] = useState<string>('all');
@@ -114,7 +115,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
   };
 
   // New Payment Modal Form States
-  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Suivi' | 'Inscription'>('Suivi');
+  const [paymentServiceTarget, setPaymentServiceTarget] = useState<'Suivi' | 'Inscription Suivi'>('Suivi');
   const [paymentMonth, setPaymentMonth] = useState<string>('Octobre');
   const [amountPaid, setAmountPaid] = useState<number>(250);
   const [totalRequired, setTotalRequired] = useState<number>(250);
@@ -205,7 +206,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
 
   const getStudentInscriptionStatus = (st: Student) => {
     const payments = (st.payments || []).filter(p =>
-      p.service === 'Inscription' && p.month === `Annuel (${schoolYear})`
+      p.service === 'Inscription Suivi' && p.month === `Annuel (${schoolYear})`
     );
     const discount = payments.reduce((m, p) => Math.max(m, p.discount || 0), 0);
     const required = Math.max(0, currentFees(st).annualRegistrationFee - discount);
@@ -264,7 +265,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
       return;
     }
     setSelectedStudentForPayment(st);
-    setPaymentServiceTarget('Inscription');
+    setPaymentServiceTarget('Inscription Suivi');
     setPaymentMonth(`Annuel (${schoolYear})`);
     // Use the CURRENT fee defined in settings for this academic year
     const fee = currentFees(st).annualRegistrationFee;
@@ -285,7 +286,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
     const updatedStudent: Student = {
       ...st,
       enrolledServices: {
-        ...(st.enrolledServices || { teenCenter: true, library: false, meals: false }),
+        ...(st.enrolledServices || { etude: true, library: false, meals: false }),
         suivi: true
       },
       suiviFees: st.suiviFees || { 
@@ -310,7 +311,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
     }
 
     const numDiscount = Number(discount) || 0;
-    const baseRequired = paymentServiceTarget === 'Inscription'
+    const baseRequired = paymentServiceTarget === 'Inscription Suivi'
       ? (Number(totalRequired) || 0)
       : currentFees(selectedStudentForPayment).monthlyFee;
 
@@ -329,7 +330,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
     const disc = Math.max(0, numDiscount);
     const paid = Math.max(0, Number(amountPaid) || 0);
 
-    if (paymentServiceTarget === 'Inscription') {
+    if (paymentServiceTarget === 'Inscription Suivi') {
       const currentStatus = getStudentInscriptionStatus(selectedStudentForPayment);
       const effectiveRequired = Math.max(0, Number(totalRequired) - disc);
       const maxPayable = Math.max(0, effectiveRequired - currentStatus.paidAmount);
@@ -346,7 +347,7 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
         amountPaid: paid,
         totalRequired: effectiveRequired,
         remainingBalance: remaining,
-        service: 'Inscription',
+        service: 'Inscription Suivi',
         month: `Annuel (${schoolYear})`,
         paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
         method: paymentMethod,
@@ -910,7 +911,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   <CreditCard className="h-5 w-5 text-[#3A93A0]" />
                   <div>
                     <h3 className="text-lg font-black">
-                      {paymentServiceTarget === 'Inscription' 
+                      {paymentServiceTarget === 'Inscription Suivi'
                         ? `تنزيل خلاص التسجيل السنوي (${schoolYear})`
                         : `تنزيل دفعة شهر ${paymentMonth} (${schoolYear})`}
                     </h3>
@@ -930,7 +931,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
               <form onSubmit={handleSubmitPayment} className="p-6 space-y-4">
                 {(() => {
-                  const isInscription = paymentServiceTarget === 'Inscription';
+                  const isInscription = paymentServiceTarget === 'Inscription Suivi';
                   const activeMonthStatus = selectedStudentForPayment
                     ? (isInscription
                       ? getStudentInscriptionStatus(selectedStudentForPayment)
@@ -1198,20 +1199,20 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 );
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
-                const fullFeeRequired = printingReceipt.payment.totalRequired || (printingReceipt.payment.service === 'Inscription' ? 150 : 250);
+                const fullFeeRequired = printingReceipt.payment.totalRequired || (printingReceipt.payment.service === 'Inscription Suivi' ? 150 : 250);
                 const finalRemaining = Math.max(0, fullFeeRequired - totalPaidForMonth);
 
                 return (
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">Teen Center — وصل خلاص كشف المدفوعات</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — وصل خلاص كشف المدفوعات</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
                       <div className="text-left font-mono font-bold text-xs bg-slate-100 p-2 rounded border border-slate-300">
                         <p>الخدمة: <strong>{printingReceipt.payment.service}</strong></p>
-                        <p className="text-[11px] text-[#14464E] mt-0.5">{printingReceipt.payment.service === 'Inscription' ? 'الفترة:' : 'الشهر:'} {printingReceipt.payment.month}</p>
+                        <p className="text-[11px] text-[#14464E] mt-0.5">{printingReceipt.payment.service === 'Inscription Suivi' ? 'الفترة:' : 'الشهر:'} {printingReceipt.payment.month}</p>
                       </div>
                     </div>
 
@@ -1229,7 +1230,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                       {/* Payment History Table for this month */}
                       <div className="space-y-1.5 pt-2">
                         <h4 className="font-extrabold text-xs text-slate-900 flex justify-between items-center">
-                          <span>{printingReceipt.payment.service === 'Inscription' ? 'سجل دفعات التسجيل:' : 'سجل دفعات هذا الشهر:'}</span>
+                          <span>{printingReceipt.payment.service === 'Inscription Suivi' ? 'سجل دفعات التسجيل:' : 'سجل دفعات هذا الشهر:'}</span>
                           <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: {allMonthPayments.length}</span>
                         </h4>
 
@@ -1265,7 +1266,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                       <div className="grid grid-cols-3 gap-2 pt-2">
                         <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-300">
-                          <span className="text-[10px] text-slate-600 block font-bold">{printingReceipt.payment.service === 'Inscription' ? 'مبلغ التسجيل السنوي:' : 'مبلغ الشهر:'}</span>
+                          <span className="text-[10px] text-slate-600 block font-bold">{printingReceipt.payment.service === 'Inscription Suivi' ? 'مبلغ التسجيل السنوي:' : 'مبلغ الشهر:'}</span>
                           <span className="text-base font-black text-slate-900 font-mono">{fullFeeRequired} د.ت</span>
                         </div>
 
@@ -1291,11 +1292,11 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                         {finalRemaining === 0 ? (
                           <span className="text-emerald-700 text-xs flex items-center justify-center gap-1">
                             <CheckCircle2 className="h-4 w-4" />
-                            {printingReceipt.payment.service === 'Inscription' ? 'حالة التسجيل: مسدد بالكامل' : 'حالة الشهر: مسدد بالكامل'}
+                            {printingReceipt.payment.service === 'Inscription Suivi' ? 'حالة التسجيل: مسدد بالكامل' : 'حالة الشهر: مسدد بالكامل'}
                           </span>
                         ) : (
                           <span className="text-[#14464E] text-xs">
-                            {printingReceipt.payment.service === 'Inscription' ? `حالة التسجيل: خلاص جزئي — باقي: ${finalRemaining} د.ت` : `حالة الشهر: خلاص جزئي — باقي: ${finalRemaining} د.ت`}
+                            {printingReceipt.payment.service === 'Inscription Suivi' ? `حالة التسجيل: خلاص جزئي — باقي: ${finalRemaining} د.ت` : `حالة الشهر: خلاص جزئي — باقي: ${finalRemaining} د.ت`}
                           </span>
                         )}
                       </div>
@@ -1303,8 +1304,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                     <div className="mt-8 pt-4 border-t border-slate-300">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
-                        <p>نشكركم على ثقتكم في مركز Teen Center.</p>
-                        <p className="font-bold text-slate-900">ختم وإدارة مركز Teen Center</p>
+                        <p>نشكركم على ثقتكم في مركز {centerName}.</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
                       </div>
                       <div className="w-1/2 text-center mr-auto">
                         <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>

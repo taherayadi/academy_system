@@ -11,7 +11,7 @@ export default function CloseConfirmDialog() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const api = window.teenCenterAPI;
+    const api = window.appAPI;
     if (!api) return;
     return api.onCloseRequest(() => setOpen(true));
   }, []);
@@ -32,7 +32,7 @@ export default function CloseConfirmDialog() {
       }
       onConfirm={() => {
         setOpen(false);
-        window.teenCenterAPI?.confirmClose();
+        window.appAPI?.confirmClose();
       }}
       onCancel={() => setOpen(false)}
     />

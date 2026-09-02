@@ -21,7 +21,7 @@ import {
   CheckSquare,
   FileCheck
 } from 'lucide-react';
-import { StaffMember, TimesheetEntry, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, StaffRole, StaffScheduleSlot, MONTH_BY_CALENDAR_INDEX, CenterSettings, CenterExpense, getAppSubjects, TeenCenterSlot, TEEN_CENTER_DAYS } from '../types';
+import { StaffMember, TimesheetEntry, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, StaffRole, StaffScheduleSlot, MONTH_BY_CALENDAR_INDEX, CenterSettings, CenterExpense, getAppSubjects, EtudeSlot, ETUDE_DAYS } from '../types';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
 import DateField from './DateField';
@@ -29,7 +29,7 @@ import { capitalizeFirst } from '../utils/format';
 
 interface StaffManagementModuleProps {
   staff: StaffMember[];
-  slots?: TeenCenterSlot[];
+  slots?: EtudeSlot[];
   timesheets: TimesheetEntry[];
   onUpdateStaff: (staff: StaffMember[]) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
@@ -78,7 +78,7 @@ const timeToMinutes = (t: string) => {
 };
 
 // Duration of a seance in hours (08:30 → 10:30 = 2h)
-const seanceHours = (slot: TeenCenterSlot) => Math.max(0, (timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime)) / 60);
+const seanceHours = (slot: EtudeSlot) => Math.max(0, (timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime)) / 60);
 
 // Reduce multiple seance entries of the same day into a single day-level severity
 const daySeverity = (entries: TimesheetEntry[]): PointageStatus => {
@@ -119,6 +119,7 @@ export default function StaffManagementModule({
   onUpdateExpenses
 }: StaffManagementModuleProps) {
    const toast = useToast();
+   const centerName = settings?.centerName || 'المركز';
    const [activeSubTab, setActiveSubTab] = useState<'profiles' | 'pointage'>('profiles');
    // selectedStaffId drives the detail view so that schedule/avance/leave changes persist automatically
    const [selectedStaffId, setSelectedStaffId] = useState<string | null>(staff[0]?.id || null);
@@ -397,13 +398,13 @@ export default function StaffManagementModule({
      }));
    };
 
-   // Seances (Étude Teen Center schedule) of a staff member on a given date
-   const getStaffSeancesForDate = (st: StaffMember, dateStr: string): TeenCenterSlot[] => {
+   // Étude schedule of a staff member on a given date
+   const getStaffSeancesForDate = (st: StaffMember, dateStr: string): EtudeSlot[] => {
      if (!slots) return [];
      const d = new Date(dateStr + 'T00:00:00');
      const dayIdx = d.getDay(); // 0=Sunday .. 6=Saturday
      if (dayIdx < 1 || dayIdx > 6) return [];
-     const dayName = TEEN_CENTER_DAYS[dayIdx - 1];
+     const dayName = ETUDE_DAYS[dayIdx - 1];
      return slots
        .filter(s => s.day === dayName && s.teacherId === st.id)
        .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
@@ -586,7 +587,7 @@ export default function StaffManagementModule({
     const monthTs = timesheets.filter(t => t.staffId === staffId && t.date.startsWith(prefix));
     const summary = summarizeEntries(monthTs);
 
-    // Additional hours are counted ONLY for seances flagged "ساعات إضافية" (isExtra) in Étude Teen Center
+    // Additional hours are counted only for Étude seances flagged "ساعات إضافية" (isExtra)
     // that were recorded as PRESENT in the teacher's timesheet (تسجيل تايم شيت الأستاذ).
     // Never auto-calculated from the schedule alone.
     let extraHours = 0;
@@ -1755,7 +1756,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                 <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                   <div>
-                    <h2 className="text-xl font-black text-slate-950">Teen Center — Bulletin de Paie</h2>
+                    <h2 className="text-xl font-black text-slate-950">{centerName} — Bulletin de Paie</h2>
                     <p className="text-xs text-slate-500 font-bold">كشف راتب شهر: {printedPayslip.month}</p>
                   </div>
                   <div className="text-left font-mono font-bold text-xs bg-slate-100 p-2 rounded">
@@ -1823,7 +1824,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                 <div className="mt-8 pt-4 border-t border-slate-300">
                   <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
                     <p>توقيع الموظف المستلم</p>
-                    <p className="font-bold text-slate-900">إدارة مركز Teen Center</p>
+                    <p className="font-bold text-slate-900">إدارة مركز {centerName}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-10">
                     <div className="text-center">

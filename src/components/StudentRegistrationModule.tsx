@@ -90,6 +90,7 @@ export default function StudentRegistrationModule({
   sidebarCollapsed
 }: StudentRegistrationModuleProps) {
   const toast = useToast();
+  const centerName = settings?.centerName || 'المركز';
   const [searchTerm, setSearchTerm] = useState('');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -166,7 +167,7 @@ export default function StudentRegistrationModule({
 
     // Services
   const [suiviEnrolled, setSuiviEnrolled] = useState(false);
-  const [teenCenterEnrolled, setTeenCenterEnrolled] = useState(false);
+  const [etudeEnrolled, setEtudeEnrolled] = useState(false);
   const [libraryEnrolled, setLibraryEnrolled] = useState(false);
   const [mealsEnrolled, setMealsEnrolled] = useState(false);
 
@@ -204,7 +205,7 @@ export default function StudentRegistrationModule({
     setSignatureName('');
     setSignedElectronically(true);
     setSuiviEnrolled(false);
-    setTeenCenterEnrolled(false);
+    setEtudeEnrolled(false);
     setLibraryEnrolled(false);
     setMealsEnrolled(false);
     setEditingStudentId(null);
@@ -237,7 +238,7 @@ export default function StudentRegistrationModule({
         return;
       }
 
-      const data = await extractStudentFromPages(pages, settings?.geminiApiKey);
+      const data = await extractStudentFromPages(pages, settings?.geminiApiKey, centerName);
       if (!pdfImportActiveRef.current) return;
 
       resetForm();
@@ -314,7 +315,7 @@ export default function StudentRegistrationModule({
     setNMinus3Grade(d.academicHistory?.nMinus3?.grade || '');
     if (d.enrolledServices) {
       setSuiviEnrolled(d.enrolledServices.suivi ?? true);
-      setTeenCenterEnrolled(d.enrolledServices.teenCenter ?? true);
+      setEtudeEnrolled(d.enrolledServices.etude ?? true);
       setLibraryEnrolled(d.enrolledServices.library ?? false);
       setMealsEnrolled(d.enrolledServices.meals ?? true);
     }
@@ -349,7 +350,7 @@ export default function StudentRegistrationModule({
     setSignedElectronically(st.registration?.signedElectronically ?? true);
 
     setSuiviEnrolled(st.enrolledServices?.suivi ?? true);
-    setTeenCenterEnrolled(st.enrolledServices?.teenCenter ?? true);
+    setEtudeEnrolled(st.enrolledServices?.etude ?? true);
     setLibraryEnrolled(st.enrolledServices?.library ?? false);
     setMealsEnrolled(st.enrolledServices?.meals ?? true);
 
@@ -358,11 +359,11 @@ export default function StudentRegistrationModule({
 
   // Services already paid (annual or monthly) for the student in the editing year → locked, cannot be removed until a refund is issued
   const editingPayments = editingStudentId ? (students.find(s => s.id === editingStudentId)?.payments || []) : [];
-  const hasPaidService = (service: PaymentRecord['service']) =>
-    editingPayments.some(p => p.service === service && !p.refund && p.month.includes(academicYear));
-  const lockedSuivi = hasPaidService('Suivi');
-  const lockedTeenCenter = hasPaidService('Étude Teen Center');
-  const lockedLibrary = hasPaidService('Bibliothèque');
+  const hasPaidService = (...services: PaymentRecord['service'][]) =>
+    editingPayments.some(p => services.includes(p.service) && !p.refund && p.month.includes(academicYear));
+  const lockedSuivi = hasPaidService('Suivi', 'Inscription Suivi');
+  const lockedEtude = hasPaidService('Étude', 'Inscription Étude');
+  const lockedLibrary = hasPaidService('Bibliothèque', 'Inscription Bibliothèque');
   const lockedMeals = hasPaidService('Repas');
 
   // Import/Copy student file from previous academic year
@@ -414,7 +415,7 @@ export default function StudentRegistrationModule({
     setSignedElectronically(true);
 
     setSuiviEnrolled(sourceSt.enrolledServices?.suivi ?? true);
-    setTeenCenterEnrolled(sourceSt.enrolledServices?.teenCenter ?? true);
+    setEtudeEnrolled(sourceSt.enrolledServices?.etude ?? true);
     setLibraryEnrolled(sourceSt.enrolledServices?.library ?? false);
     setMealsEnrolled(sourceSt.enrolledServices?.meals ?? true);
 
@@ -481,7 +482,7 @@ export default function StudentRegistrationModule({
       },
       enrolledServices: {
         suivi: lockedSuivi ? true : suiviEnrolled,
-        teenCenter: lockedTeenCenter ? true : teenCenterEnrolled,
+        etude: lockedEtude ? true : etudeEnrolled,
         library: lockedLibrary ? true : libraryEnrolled,
         meals: lockedMeals ? true : mealsEnrolled
       },
@@ -489,9 +490,9 @@ export default function StudentRegistrationModule({
         annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelSuivi : 150,
         monthlyFee: settings ? getFeesForYear(settings, academicYear).fraisMensuelSuivi : 250
       },
-      teenCenterFees: {
-        annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelEtudeTeenCenter : 100,
-        monthlyFee: settings ? getFeesForYear(settings, academicYear).fraisMensuelEtudeTeenCenter : 180
+      etudeFees: {
+        annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelEtude : 100,
+        monthlyFee: settings ? getFeesForYear(settings, academicYear).fraisMensuelEtude : 180
       },
       libraryFees: {
         annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelBibliotheque : 20,
@@ -752,9 +753,9 @@ export default function StudentRegistrationModule({
                     Suivi Scolaire
                   </span>
                 )}
-                {st.enrolledServices?.teenCenter && (
+                {st.enrolledServices?.etude && (
                   <span className="text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-200/50">
-                    Étude Teen Center
+                    Étude {centerName}
                   </span>
                 )}
                 {st.enrolledServices?.library && (
@@ -833,7 +834,7 @@ export default function StudentRegistrationModule({
                     <h3 className="text-xl font-black">
                       {editingStudentId ? 'تعديل بطاقة التسجيل' : 'تسجيل تلميذ جديد'}
                     </h3>
-                    <p className="text-xs text-slate-300">مركز Teen Center — منظومة التسجيل</p>
+                    <p className="text-xs text-slate-300">مركز {centerName} — منظومة التسجيل</p>
                   </div>
                 </div>
 
@@ -1356,14 +1357,14 @@ export default function StudentRegistrationModule({
                       </div>
                     </label>
 
-                    <label className={`p-4 rounded-2xl border transition flex items-center gap-3 ${lockedTeenCenter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : teenCenterEnrolled ? 'bg-[#F2F8F9] border-[#3A93A0] text-[#103840] cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600 cursor-pointer'}`}>
+                    <label className={`p-4 rounded-2xl border transition flex items-center gap-3 ${lockedEtude ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : etudeEnrolled ? 'bg-[#F2F8F9] border-[#3A93A0] text-[#103840] cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600 cursor-pointer'}`}>
                       <input 
-                        type="checkbox" checked={teenCenterEnrolled} disabled={lockedTeenCenter} onChange={(e) => setTeenCenterEnrolled(e.target.checked)}
+                        type="checkbox" checked={etudeEnrolled} disabled={lockedEtude} onChange={(e) => setEtudeEnrolled(e.target.checked)}
                         className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]"
                       />
                       <div>
-                        <span className="font-bold text-xs block">Étude Teen Center</span>
-                        {lockedTeenCenter && (
+                        <span className="font-bold text-xs block">Étude {centerName}</span>
+                        {lockedEtude && (
                           <span className="flex items-center gap-1 text-[9px] font-black text-slate-600 mt-0.5">
                             <Lock className="h-3 w-3 shrink-0" /> مدفوع — الاسترجاع مطلوب لتغيير الاشتراك
                           </span>
@@ -1632,7 +1633,7 @@ export default function StudentRegistrationModule({
                 {/* Header */}
                 <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                   <div>
-                    <h2 className="text-xl font-black text-slate-950">Teen Center — مركز الدعم والدروس الخصوصية</h2>
+                    <h2 className="text-xl font-black text-slate-950">{centerName} — مركز الدعم والدروس الخصوصية</h2>
                     <p className="text-[10px] text-slate-500 font-bold">بطاقة التسجيل الرسمية</p>
                     <p className="text-[10px] text-slate-400">
                       {settings?.locationCity || 'Sfax / تونس'} — الهاتف: <span dir="ltr" className="font-mono font-bold">{settings?.phoneNumber || '+216 71 000 000'}</span>
@@ -1749,7 +1750,7 @@ export default function StudentRegistrationModule({
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">5. الخدمات والاشتراكات</h3>
                     <div className="flex flex-wrap gap-2 text-[10px]">
                       {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-blue-100 text-blue-900 rounded font-bold">✓ Suivi Scolaire</span>}
-                      {printingRegistrationStudent.enrolledServices?.teenCenter && <span className="px-2 py-1 bg-purple-100 text-purple-900 rounded font-bold">✓ Étude Teen Center</span>}
+                      {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-purple-100 text-purple-900 rounded font-bold">✓ Étude {centerName}</span>}
                       {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Bibliothèque</span>}
                       {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-[#E0EFF1] text-[#103840] rounded font-bold">✓ Repas</span>}
                     </div>
@@ -1770,7 +1771,7 @@ export default function StudentRegistrationModule({
                   <div className="flex justify-between items-center">
                     <div>
                       <p>حرر بـ: <strong>{printingRegistrationStudent.registration?.location || 'تونس'}</strong> في: <strong>{printingRegistrationStudent.registration?.date}</strong></p>
-                      <p className="mt-1 text-slate-500 text-[10px]">التوقيع يلزم بالنظام الداخلي لمركز Teen Center.</p>
+                      <p className="mt-1 text-slate-500 text-[10px]">التوقيع يلزم بالنظام الداخلي لمركز {centerName}.</p>
                     </div>
 
                     <div className="text-center">

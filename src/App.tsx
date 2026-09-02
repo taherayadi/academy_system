@@ -29,7 +29,7 @@ import {
 import { 
   Student, 
   StaffMember, 
-  TeenCenterSlot, 
+  EtudeSlot,
   ExternalCourse, 
   ExternalCourseSession, 
   MealPlanDay, 
@@ -45,7 +45,8 @@ import {
   initialStudentFeeSet,
   APP_SUBJECTS,
   getCurrentAcademicYear,
-  normalizeSettings
+  normalizeSettings,
+  normalizePaymentService
 } from './types';
 
 import { 
@@ -73,7 +74,7 @@ import Dashboard from './components/Dashboard';
 import StudentRegistrationModule from './components/StudentRegistrationModule';
 import SuiviScolaireModule from './components/SuiviScolaireModule';
 import StudentTimeSheetModule from './components/StudentTimeSheetModule';
-import TeenCenterModule from './components/TeenCenterModule';
+import EtudeModule from './components/EtudeModule';
 import ExternalCoursesModule from './components/ExternalCoursesModule';
 import SeanceRevisionModule from './components/SeanceRevisionModule';
 import FormationModule from './components/FormationModule';
@@ -143,7 +144,7 @@ export default function App() {
   // Server-backed state (data lives in local SQLite via Express)
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [slots, setSlots] = useState<TeenCenterSlot[]>([]);
+  const [slots, setSlots] = useState<EtudeSlot[]>([]);
   const [courses, setCourses] = useState<ExternalCourse[]>([]);
   const [sessions, setSessions] = useState<ExternalCourseSession[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlanDay[]>([]);
@@ -155,6 +156,10 @@ export default function App() {
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
 
+  useEffect(() => {
+    document.title = settings?.centerName || 'المركز';
+  }, [settings?.centerName]);
+
   // Import confirmation state
   const [importPendingData, setImportPendingData] = useState<Record<string, unknown> | null>(null);
   const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
@@ -164,7 +169,7 @@ export default function App() {
   // Latest-known state mirrored in a ref so commits never read stale closures.
   const stateRef = useRef<{
     settings: CenterSettings | null;
-    students: Student[]; staff: StaffMember[]; slots: TeenCenterSlot[];
+    students: Student[]; staff: StaffMember[]; slots: EtudeSlot[];
     courses: ExternalCourse[]; sessions: ExternalCourseSession[]; mealPlans: MealPlanDay[];
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
@@ -274,7 +279,7 @@ export default function App() {
     commitDomain(() => saveStaff(updated));
   };
 
-  const handleUpdateSlots = (updated: TeenCenterSlot[]) => {
+  const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
   };
@@ -324,6 +329,10 @@ export default function App() {
     commitDomain(() => saveFormations(updated));
   };
 
+  // Build a filesystem-safe filename prefix from the center name
+  const backupFilePrefix = (name: string): string =>
+    (name || 'center').trim().replace(/[^\w\u0600-\u06FF-]+/g, '_').replace(/^_+|_+$/g, '') || 'center';
+
   // Export database backup
   const handleExportDatabase = () => {
     const currentSettings: CenterSettings = settings || stateRef.current.settings || initialCenterSettings;
@@ -346,7 +355,7 @@ export default function App() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
     const dlAnchor = document.createElement('a');
     dlAnchor.setAttribute("href", dataStr);
-    dlAnchor.setAttribute("download", `TeenCenter_Database_${new Date().toISOString().split('T')[0]}.json`);
+    dlAnchor.setAttribute("download", `${backupFilePrefix(currentSettings.centerName)}_Database_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(dlAnchor);
     dlAnchor.click();
     dlAnchor.remove();
@@ -415,7 +424,7 @@ export default function App() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `TeenCenter_AutoBackup_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `${backupFilePrefix(currentSettings.centerName)}_AutoBackup_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -471,7 +480,7 @@ export default function App() {
     }
     if (next.slots !== undefined) {
       if (!validateArray(next.slots as unknown[], ['id', 'day'], 'الأقسام')) return;
-      setSlots(next.slots as TeenCenterSlot[]);
+      setSlots(next.slots as EtudeSlot[]);
     }
     if (next.courses !== undefined) {
       if (!validateArray(next.courses as unknown[], ['id'], 'الدروس')) return;
@@ -523,7 +532,7 @@ export default function App() {
       settings: next.settings !== undefined ? (next.settings as CenterSettings) : (settings || stateRef.current.settings),
       students: next.students !== undefined ? (next.students as Student[]) : students,
       staff: next.staff !== undefined ? (next.staff as StaffMember[]) : staff,
-      slots: next.slots !== undefined ? (next.slots as TeenCenterSlot[]) : slots,
+      slots: next.slots !== undefined ? (next.slots as EtudeSlot[]) : slots,
       courses: next.courses !== undefined ? (next.courses as ExternalCourse[]) : courses,
       sessions: next.sessions !== undefined ? (next.sessions as ExternalCourseSession[]) : sessions,
       mealPlans: next.mealPlans !== undefined ? (next.mealPlans as MealPlanDay[]) : mealPlans,
@@ -563,7 +572,7 @@ export default function App() {
   if (!currentUser) {
     return (
       <>
-        <LoginScreen onLogin={handleLogin} />
+        <LoginScreen onLogin={handleLogin} centerName={settings?.centerName} />
         <CloseConfirmDialog />
       </>
     );
@@ -575,7 +584,7 @@ export default function App() {
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
             <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
-<img src={logo} alt={settings?.center_name || 'Academy System'} className="w-full h-full rounded-xl object-cover" />
+<img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
@@ -637,10 +646,10 @@ export default function App() {
       <header className="md:hidden bg-white border-b border-[#257C86]/20 text-slate-900 p-4 flex justify-between items-center shadow-xs no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={logo} alt={settings?.center_name || 'Academy System'} className="w-full h-full rounded-lg object-cover" />
+            <img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">{settings?.center_name || 'Academy System'}</h1>
+            <h1 className="font-black text-sm text-slate-900">{settings?.centerName || 'المركز'}</h1>
             <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
           </div>
         </div>
@@ -701,11 +710,11 @@ export default function App() {
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/15 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-<img src={logo} alt="Academy System" className="w-full h-full rounded-xl object-cover" />
+<img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
-                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">System Academy</h1>
+                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{settings?.centerName || 'المركز'}</h1>
                   <span className="text-[11px] text-[#257C86] font-bold block truncate">الإدارة والتأطير</span>
                 </div>
               )}
@@ -783,7 +792,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">Academy System © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{settings?.centerName || 'المركز'} © 2026</p>
           )}
         </div>
       </aside>
@@ -808,6 +817,7 @@ export default function App() {
                   openAddStudent={() => setActiveTab('module1')}
                   openAddStaff={() => setActiveTab('module8')}
                   hideRestrictedModules={hideRestrictedModules}
+                  settings={settings}
                 />
               )}
 
@@ -851,7 +861,7 @@ export default function App() {
               )}
 
               {activeTab === 'module3' && (
-                <TeenCenterModule 
+                <EtudeModule
                   students={students}
                   staff={staff}
                   slots={slots}

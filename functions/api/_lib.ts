@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 /**
- * Shared helpers for the Teen Center Cloudflare Pages Functions.
+ * Shared helpers for the Cloudflare Pages Functions.
  * Faithfully translated from server/data.ts (SQLite) to Cloudflare D1 (async).
  * All business logic, error messages, and data shapes preserved from production.
  */
@@ -17,6 +17,13 @@ export interface Env {
 function num(v: unknown): number { return typeof v === 'number' ? v : Number(v ?? 0) || 0; }
 function bool(v: unknown): boolean { return !!v && v !== 0 && v !== '0' && v !== 'false'; }
 function str(v: unknown): string { return typeof v === 'string' ? v : v == null ? '' : String(v); }
+export function normalizePaymentService(service: unknown, month: unknown): string {
+  const legacyService = str(service).replace(/\s+/g, ' ').trim();
+  const isAnnual = str(month).startsWith('Annuel');
+  if (legacyService === 'Inscription') return 'Inscription Suivi';
+  if (legacyService === 'Bibliothèque' && isAnnual) return 'Inscription Bibliothèque';
+  return legacyService;
+}
 function parseJson<T = any>(v: unknown, fallback: T): T {
   if (!v) return fallback;
   try { return JSON.parse(String(v)); } catch { return fallback; }
@@ -45,7 +52,7 @@ const DEFAULT_ACADEMIC_YEARS = [
 
 function extractFeeValues(f: any): any {
   if (!f || typeof f !== 'object') {
-    return { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtudeTeenCenter: 0, fraisMensuelEtudeTeenCenter: 0, fraisAssuranceCoursHorsTeenCenter: 0 };
+    return { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0 };
   }
   const getNum = (camelKey: string, snakeKey: string, altKey?: string, fallback = 0): number => {
     if (f[camelKey] != null && f[camelKey] !== '') return Number(f[camelKey]) || 0;
@@ -61,9 +68,9 @@ function extractFeeValues(f: any): any {
     fraisAbonnementRepas: getNum('fraisAbonnementRepas', 'frais_abonnement_repas', 'mealMonthlyPrice'),
     fraisParRepas: getNum('fraisParRepas', 'frais_par_repas', 'mealUnitPrice'),
     prixPlatTraiteur: getNum('prixPlatTraiteur', 'prix_plat_traiteur', undefined, 6),
-    fraisAnnuelEtudeTeenCenter: getNum('fraisAnnuelEtudeTeenCenter', 'frais_annuel_etude_teen_center', 'teenCenterAnnualFee'),
-    fraisMensuelEtudeTeenCenter: getNum('fraisMensuelEtudeTeenCenter', 'frais_mensuel_etude_teen_center', 'teenCenterMonthlyFee'),
-    fraisAssuranceCoursHorsTeenCenter: getNum('fraisAssuranceCoursHorsTeenCenter', 'frais_assurance_cours_hors_teen_center', 'assuranceFee')
+    fraisAnnuelEtude: getNum('fraisAnnuelEtude', 'frais_annuel_etude', 'etudeAnnualFee'),
+    fraisMensuelEtude: getNum('fraisMensuelEtude', 'frais_mensuel_etude', 'etudeMonthlyFee'),
+    fraisAssuranceCoursExternes: getNum('fraisAssuranceCoursExternes', 'frais_assurance_cours_externes', 'assuranceFee')
   };
 }
 
@@ -287,9 +294,9 @@ export async function readSettings(db: D1Database): Promise<any> {
       fraisAbonnementRepas: num(row.frais_abonnement_repas),
       fraisParRepas: num(row.frais_par_repas),
       prixPlatTraiteur: row.prix_plat_traiteur == null ? 6 : num(row.prix_plat_traiteur),
-      fraisAnnuelEtudeTeenCenter: num(row.frais_annuel_etude_teen_center),
-      fraisMensuelEtudeTeenCenter: num(row.frais_mensuel_etude_teen_center),
-      fraisAssuranceCoursHorsTeenCenter: num(row.frais_assurance_cours_hors_teen_center)
+      fraisAnnuelEtude: num(row.frais_annuel_etude),
+      fraisMensuelEtude: num(row.frais_mensuel_etude),
+      fraisAssuranceCoursExternes: num(row.frais_assurance_cours_externes)
     };
     if (row.year === 'DEFAULT') defaultFees = fees;
     else feesByYear[row.year] = fees;
@@ -303,10 +310,10 @@ export async function readSettings(db: D1Database): Promise<any> {
     fraisAbonnementRepas: num((feeRows[0] as any).frais_abonnement_repas),
     fraisParRepas: num((feeRows[0] as any).frais_par_repas),
     prixPlatTraiteur: (feeRows[0] as any).prix_plat_traiteur == null ? 6 : num((feeRows[0] as any).prix_plat_traiteur),
-    fraisAnnuelEtudeTeenCenter: num((feeRows[0] as any).frais_annuel_etude_teen_center),
-    fraisMensuelEtudeTeenCenter: num((feeRows[0] as any).frais_mensuel_etude_teen_center),
-    fraisAssuranceCoursHorsTeenCenter: num((feeRows[0] as any).frais_assurance_cours_hors_teen_center)
-  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtudeTeenCenter: 0, fraisMensuelEtudeTeenCenter: 0, fraisAssuranceCoursHorsTeenCenter: 0 });
+    fraisAnnuelEtude: num((feeRows[0] as any).frais_annuel_etude),
+    fraisMensuelEtude: num((feeRows[0] as any).frais_mensuel_etude),
+    fraisAssuranceCoursExternes: num((feeRows[0] as any).frais_assurance_cours_externes)
+  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0 });
 
   DEFAULT_ACADEMIC_YEARS.forEach(yr => { if (!feesByYear[yr]) feesByYear[yr] = { ...baseFees }; });
 
@@ -319,7 +326,7 @@ export async function readSettings(db: D1Database): Promise<any> {
     : [];
 
   return {
-    centerName: settingsRow?.center_name || 'Academy System',
+    centerName: settingsRow?.center_name || 'المركز',
     phoneNumber: settingsRow?.phone_number || '',
     locationCity: settingsRow?.location_city || '',
     geminiApiKey: settingsRow?.gemini_api_key || '',
@@ -332,13 +339,13 @@ export async function writeSettings(db: D1Database, settings: any): Promise<void
   const stmts: D1PreparedStatement[] = [];
   stmts.push(db.prepare(
     'INSERT INTO settings (id, center_name, phone_number, location_city, gemini_api_key) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key'
-  ).bind(str(settings.centerName || settings.center_name || 'Academy System'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
+  ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
   stmts.push(db.prepare('DELETE FROM fee_sets'));
   stmts.push(db.prepare('DELETE FROM subjects'));
   stmts.push(db.prepare('DELETE FROM etablissements'));
   const addFee = (yearKey: string, rawFeeObj: any) => {
     const fee = extractFeeValues(rawFeeObj);
-    stmts.push(db.prepare('INSERT OR REPLACE INTO fee_sets (year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude_teen_center, frais_mensuel_etude_teen_center, frais_assurance_cours_hors_teen_center) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtudeTeenCenter, fee.fraisMensuelEtudeTeenCenter, fee.fraisAssuranceCoursHorsTeenCenter));
+    stmts.push(db.prepare('INSERT OR REPLACE INTO fee_sets (year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes));
   };
   let baseFeeObj = settings.fees;
   if (!baseFeeObj || typeof baseFeeObj !== 'object') { if (settings.fraisAnnuelSuivi != null || settings.frais_annuel_suivi != null) baseFeeObj = settings; }
@@ -388,7 +395,7 @@ export async function readStudents(db: D1Database): Promise<any[]> {
   const histByStudent: Record<string, any> = {};
   histRows.results.forEach((r: any) => { const key = str(r.student_id); if (!histByStudent[key]) histByStudent[key] = {}; histByStudent[key]['nMinus' + num(r.n_minus)] = { school: str(r.school), grade: str(r.grade) }; });
   const paymentsByStudent: Record<string, any[]> = {};
-  paymentRows.results.forEach((r: any) => { const key = str(r.student_id); (paymentsByStudent[key] = paymentsByStudent[key] || []).push({ id: str(r.id), date: str(r.date), amountPaid: num(r.amount_paid), totalRequired: num(r.total_required), remainingBalance: num(r.remaining_balance), service: str(r.service), month: str(r.month), paymentType: str(r.payment_type), method: str(r.method), receiptNumber: str(r.receipt_number), notes: r.notes == null ? undefined : str(r.notes), discount: r.discount == null ? undefined : num(r.discount), refund: bool(r.refund), refundOf: r.refund_of == null ? undefined : str(r.refund_of), chequeNumber: r.cheque_number == null ? undefined : str(r.cheque_number), chequeDate: r.cheque_date == null ? undefined : str(r.cheque_date), chequePaid: r.cheque_paid ? true : undefined }); });
+  paymentRows.results.forEach((r: any) => { const key = str(r.student_id); const month = str(r.month); (paymentsByStudent[key] = paymentsByStudent[key] || []).push({ id: str(r.id), date: str(r.date), amountPaid: num(r.amount_paid), totalRequired: num(r.total_required), remainingBalance: num(r.remaining_balance), service: normalizePaymentService(r.service, month), month, paymentType: str(r.payment_type), method: str(r.method), receiptNumber: str(r.receipt_number), notes: r.notes == null ? undefined : str(r.notes), discount: r.discount == null ? undefined : num(r.discount), refund: bool(r.refund), refundOf: r.refund_of == null ? undefined : str(r.refund_of), chequeNumber: r.cheque_number == null ? undefined : str(r.cheque_number), chequeDate: r.cheque_date == null ? undefined : str(r.cheque_date), chequePaid: r.cheque_paid ? true : undefined }); });
   const mealsByStudent: Record<string, any[]> = {};
   mealRows.results.forEach((r: any) => { (mealsByStudent[str(r.student_id)] = mealsByStudent[str(r.student_id)] || []).push({ date: str(r.date), type: str(r.type), paid: bool(r.paid), paidAt: r.paid_at == null ? undefined : str(r.paid_at) }); });
   const notesByStudent: Record<string, any[]> = {};
@@ -406,9 +413,9 @@ export async function readStudents(db: D1Database): Promise<any[]> {
       siblings: siblingsByStudent[id] || [], authorizedPersons: authByStudent[id] || [], allergies: str(r.allergies),
       academicHistory: { nMinus1: histByStudent[id]?.nMinus1 ?? { school: '', grade: '' }, nMinus2: histByStudent[id]?.nMinus2 ?? { school: '', grade: '' }, nMinus3: histByStudent[id]?.nMinus3 ?? { school: '', grade: '' } },
       registration: { date: str(r.registration_date), location: str(r.registration_location), signedElectronically: bool(r.registration_signed_electronically), signatureName: r.registration_signature_name == null ? undefined : str(r.registration_signature_name) },
-      enrolledServices: { suivi: bool(r.enrolled_suivi), teenCenter: bool(r.enrolled_teen_center), library: bool(r.enrolled_library), meals: bool(r.enrolled_meals) },
+      enrolledServices: { suivi: bool(r.enrolled_suivi), etude: bool(r.enrolled_etude), library: bool(r.enrolled_library), meals: bool(r.enrolled_meals) },
       suiviFees: { annualRegistrationFee: num(r.suivi_annual_fee), monthlyFee: num(r.suivi_monthly_fee) },
-      teenCenterFees: { annualRegistrationFee: num(r.teen_center_annual_fee), monthlyFee: num(r.teen_center_monthly_fee) },
+      etudeFees: { annualRegistrationFee: num(r.etude_annual_fee), monthlyFee: num(r.etude_monthly_fee) },
       libraryFees: { annualRegistrationFee: num(r.library_annual_fee), monthlyFee: num(r.library_monthly_fee) },
       mealSubscription: { mode: str(r.meal_mode) === 'subscription' ? 'subscription' : 'unit', monthlyPrice: num(r.meal_monthly_price), unitPrice: num(r.meal_unit_price), prepaidMeals: num(r.meal_prepaid), consumedMealsCount: num(r.meal_consumed), active: bool(r.meal_active) },
       mealAttendances: mealsByStudent[id] || [], payments: paymentsByStudent[id] || [], suiviNotes: buildSuiviNotes(notesByStudent[id] || []),
@@ -420,7 +427,7 @@ export async function readStudents(db: D1Database): Promise<any[]> {
 function buildStudentsStmts(db: D1Database, students: any[]): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of students || []) {
-    stmts.push(db.prepare('INSERT INTO students (id, first_name, last_name, birth_date, birth_place, grade, etablissement, academic_year, parental_situation, parental_comments, allergies, registration_date, registration_location, registration_signed_electronically, registration_signature_name, enrolled_suivi, enrolled_teen_center, enrolled_library, enrolled_meals, suivi_annual_fee, suivi_monthly_fee, teen_center_annual_fee, teen_center_monthly_fee, library_annual_fee, library_monthly_fee, meal_mode, meal_monthly_price, meal_unit_price, meal_prepaid, meal_consumed, meal_active, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.birthDate, s.birthPlace, s.grade, s.etablissement ?? null, s.academicYear ?? null, s.parentalSituation, s.parentalComments ?? null, s.allergies, s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null, s.enrolledServices?.suivi ? 1 : 0, s.enrolledServices?.teenCenter ? 1 : 0, s.enrolledServices?.library ? 1 : 0, s.enrolledServices?.meals ? 1 : 0, num(s.suiviFees?.annualRegistrationFee), num(s.suiviFees?.monthlyFee), num(s.teenCenterFees?.annualRegistrationFee), num(s.teenCenterFees?.monthlyFee), num(s.libraryFees?.annualRegistrationFee), num(s.libraryFees?.monthlyFee), s.mealSubscription?.mode === 'subscription' ? 'subscription' : 'unit', num(s.mealSubscription?.monthlyPrice), num(s.mealSubscription?.unitPrice), num(s.mealSubscription?.prepaidMeals), num(s.mealSubscription?.consumedMealsCount), s.mealSubscription?.active ? 1 : 0, s.timeSheetId ?? null));
+    stmts.push(db.prepare('INSERT INTO students (id, first_name, last_name, birth_date, birth_place, grade, etablissement, academic_year, parental_situation, parental_comments, allergies, registration_date, registration_location, registration_signed_electronically, registration_signature_name, enrolled_suivi, enrolled_etude, enrolled_library, enrolled_meals, suivi_annual_fee, suivi_monthly_fee, etude_annual_fee, etude_monthly_fee, library_annual_fee, library_monthly_fee, meal_mode, meal_monthly_price, meal_unit_price, meal_prepaid, meal_consumed, meal_active, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.birthDate, s.birthPlace, s.grade, s.etablissement ?? null, s.academicYear ?? null, s.parentalSituation, s.parentalComments ?? null, s.allergies, s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null, s.enrolledServices?.suivi ? 1 : 0, s.enrolledServices?.etude ? 1 : 0, s.enrolledServices?.library ? 1 : 0, s.enrolledServices?.meals ? 1 : 0, num(s.suiviFees?.annualRegistrationFee), num(s.suiviFees?.monthlyFee), num(s.etudeFees?.annualRegistrationFee), num(s.etudeFees?.monthlyFee), num(s.libraryFees?.annualRegistrationFee), num(s.libraryFees?.monthlyFee), s.mealSubscription?.mode === 'subscription' ? 'subscription' : 'unit', num(s.mealSubscription?.monthlyPrice), num(s.mealSubscription?.unitPrice), num(s.mealSubscription?.prepaidMeals), num(s.mealSubscription?.consumedMealsCount), s.mealSubscription?.active ? 1 : 0, s.timeSheetId ?? null));
     if (s.etablissement && String(s.etablissement).trim()) {
       stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (name) VALUES (?)').bind(String(s.etablissement).trim()));
     }
@@ -431,7 +438,7 @@ function buildStudentsStmts(db: D1Database, students: any[]): D1PreparedStatemen
     for (const ap of s.authorizedPersons || []) stmts.push(db.prepare('INSERT INTO authorized_persons (id, student_id, name, phone, relation) VALUES (?, ?, ?, ?, ?)').bind(ap.id, s.id, ap.name, ap.phone, ap.relation));
     const hist = s.academicHistory || {};
     [['nMinus1', 1], ['nMinus2', 2], ['nMinus3', 3]].forEach(([key, n]) => { const h = hist[key]; stmts.push(db.prepare('INSERT INTO academic_history (student_id, n_minus, school, grade) VALUES (?, ?, ?, ?)').bind(s.id, n, h?.school ?? '', h?.grade ?? '')); });
-    for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO payments (id, student_id, date, amount_paid, total_required, remaining_balance, service, month, payment_type, method, receipt_number, notes, discount, refund, refund_of, cheque_number, cheque_date, cheque_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, s.id, p.date, num(p.amountPaid), num(p.totalRequired), num(p.remainingBalance), p.service, p.month, p.paymentType, p.method, p.receiptNumber, p.notes ?? null, p.discount ?? null, p.refund ? 1 : 0, p.refundOf ?? null, p.chequeNumber ?? null, p.chequeDate ?? null, p.chequePaid ? 1 : 0));
+    for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO payments (id, student_id, date, amount_paid, total_required, remaining_balance, service, month, payment_type, method, receipt_number, notes, discount, refund, refund_of, cheque_number, cheque_date, cheque_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, s.id, p.date, num(p.amountPaid), num(p.totalRequired), num(p.remainingBalance), normalizePaymentService(p.service, p.month), p.month, p.paymentType, p.method, p.receiptNumber, p.notes ?? null, p.discount ?? null, p.refund ? 1 : 0, p.refundOf ?? null, p.chequeNumber ?? null, p.chequeDate ?? null, p.chequePaid ? 1 : 0));
     for (const m of s.mealAttendances || []) stmts.push(db.prepare('INSERT INTO meal_attendances (student_id, date, type, paid, paid_at) VALUES (?, ?, ?, ?, ?)').bind(s.id, m.date, m.type, m.paid ? 1 : 0, m.paidAt ?? null));
     for (const yr of s.suiviNotes || []) for (const tr of yr.trimesters || []) for (const [subject, grades] of Object.entries(tr.subjects || {})) { const g = grades as any; stmts.push(db.prepare('INSERT INTO suivi_notes (student_id, school_year, trimester, subject, devoir1, devoir2, synthese) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, yr.schoolYear, tr.trimester, subject, g?.devoir1 ?? null, g?.devoir2 ?? null, g?.synthese ?? null)); }
   }
@@ -517,11 +524,11 @@ export async function writeTimesheets(db: D1Database, timesheets: any[]): Promis
 }
 
 // ===========================================================================
-// TEEN CENTER SLOTS
+// ÉTUDE SLOTS
 // ===========================================================================
 
 export async function readSlots(db: D1Database): Promise<any[]> {
-  const [slotRows, enrollRows] = await Promise.all([db.prepare('SELECT * FROM teen_center_slots').all(), db.prepare('SELECT * FROM slot_enrollments').all()]);
+  const [slotRows, enrollRows] = await Promise.all([db.prepare('SELECT * FROM etude_slots').all(), db.prepare('SELECT * FROM slot_enrollments').all()]);
   const enrollBySlot: Record<string, string[]> = {};
   enrollRows.results.forEach((r: any) => { (enrollBySlot[str(r.slot_id)] = enrollBySlot[str(r.slot_id)] || []).push(str(r.student_id)); });
   return slotRows.results.map((r: any) => ({ id: str(r.id), day: str(r.day), startTime: str(r.start_time), endTime: str(r.end_time), gradeLevel: str(r.grade_level), teacherId: str(r.teacher_id), enrolledStudentIds: enrollBySlot[str(r.id)] || [], isExtra: r.is_extra ? true : undefined }));
@@ -530,14 +537,14 @@ export async function readSlots(db: D1Database): Promise<any[]> {
 function buildSlotsStmts(db: D1Database, slots: any[]): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of slots || []) {
-    stmts.push(db.prepare('INSERT INTO teen_center_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.day, s.startTime, s.endTime, s.gradeLevel, s.teacherId, s.isExtra ? 1 : 0));
+    stmts.push(db.prepare('INSERT INTO etude_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.day, s.startTime, s.endTime, s.gradeLevel, s.teacherId, s.isExtra ? 1 : 0));
     for (const sid of s.enrolledStudentIds || []) stmts.push(db.prepare('INSERT INTO slot_enrollments (slot_id, student_id) VALUES (?, ?)').bind(s.id, sid));
   }
   return stmts;
 }
 
 export async function writeSlots(db: D1Database, slots: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM slot_enrollments'), db.prepare('DELETE FROM teen_center_slots'), ...buildSlotsStmts(db, slots)];
+  const stmts = [db.prepare('DELETE FROM slot_enrollments'), db.prepare('DELETE FROM etude_slots'), ...buildSlotsStmts(db, slots)];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -832,7 +839,7 @@ export async function writeState(db: D1Database, state: AppState): Promise<void>
     for (const r of rows) { if (!r || r.id == null) continue; if (seen.has(String(r.id))) continue; seen.add(String(r.id)); out.push(r); }
     return out;
   };
-  const tables = ['payments','meal_attendances','suivi_notes','academic_history','authorized_persons','siblings','student_parents','students','staff_payslips','staff_payments','staff_advances','staff_leave_requests','staff_schedule','staff_subjects','staff','timesheets','slot_enrollments','teen_center_slots','course_enrolled_students','external_courses','session_seance_amount','session_seance_status','session_month_paid','session_one_time_students','session_present_students','external_course_sessions','external_attendance','external_payments','external_students','meal_plan_attendees','meal_plan_days','expenses','revision_seance_students','revision_seances','student_time_sheets','formation_student_matieres','formation_students','formation_matieres','formations'];
+  const tables = ['payments','meal_attendances','suivi_notes','academic_history','authorized_persons','siblings','student_parents','students','staff_payslips','staff_payments','staff_advances','staff_leave_requests','staff_schedule','staff_subjects','staff','timesheets','slot_enrollments','etude_slots','course_enrolled_students','external_courses','session_seance_amount','session_seance_status','session_month_paid','session_one_time_students','session_present_students','external_course_sessions','external_attendance','external_payments','external_students','meal_plan_attendees','meal_plan_days','expenses','revision_seance_students','revision_seances','student_time_sheets','formation_student_matieres','formation_students','formation_matieres','formations'];
   const deleteStmts = tables.map(t => db.prepare('DELETE FROM ' + t));
   const settingsDeleteStmts = state.settings && typeof state.settings === 'object' ? [db.prepare('DELETE FROM fee_sets'), db.prepare('DELETE FROM subjects'), db.prepare('DELETE FROM etablissements')] : [];
   const allDataStmts = [
