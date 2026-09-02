@@ -182,7 +182,6 @@ CREATE TABLE IF NOT EXISTS staff (
   cin TEXT NOT NULL,
   cnss_number TEXT NOT NULL,
   salary REAL NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('salariÃ©', 'externe')),
   phone TEXT NOT NULL,
   role TEXT NOT NULL,
   contract_start_date TEXT NOT NULL,

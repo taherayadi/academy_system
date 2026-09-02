@@ -128,6 +128,7 @@ export default function StaffManagementModule({
   const [staffPage, setStaffPage] = useState<number>(1);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [cinErrorDialog, setCinErrorDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
 
   // Subjects state (shared list from settings so it stays in sync across the app)
   const [newSubjectInput, setNewSubjectInput] = useState('');
@@ -304,7 +305,13 @@ export default function StaffManagementModule({
 
     const cinClean = cin.trim();
     if (!cinClean || !/^\d{8}$/.test(cinClean)) {
-      toast.error('رقم CIN يجب أن يكون 8 أرقام بالضبط.');
+      setCinErrorDialog({ open: true, message: 'رقم CIN يجب أن يكون 8 أرقام بالضبط.' });
+      return;
+    }
+
+    const duplicateCIN = staff.some(s => s.cin === cinClean && s.id !== editingStaffId);
+    if (duplicateCIN) {
+      setCinErrorDialog({ open: true, message: 'رقم CIN موجود مسبقاً. يجب أن يكون رقم CIN فريداً لكل موظف/أستاذ.' });
       return;
     }
 
@@ -314,7 +321,6 @@ export default function StaffManagementModule({
       lastName: lastName.trim(),
       cin: cinClean,
       role,
-      type: 'salarié',
       salary: Number(baseSalary),
       phone: phone.trim(),
       email: email.trim(),
@@ -2009,6 +2015,48 @@ const base = generatingPayslipStaff.baseSalary || 850;
         }}
         onCancel={() => setStaffToDelete(null)}
       />
+
+      {/* CIN ERROR DIALOG */}
+      <AnimatePresence>
+        {cinErrorDialog.open && (
+          <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 no-print">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 border border-slate-200/80"
+            >
+              <div className="p-6 bg-red-600 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <XCircle className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-base font-black">خطأ في رقم CIN</h3>
+                </div>
+                <button
+                  onClick={() => setCinErrorDialog({ open: false, message: '' })}
+                  className="p-2 hover:bg-red-700 rounded-xl text-white/80 hover:text-white transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="text-sm text-slate-600 font-semibold leading-relaxed text-right">
+                  {cinErrorDialog.message}
+                </div>
+                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    onClick={() => setCinErrorDialog({ open: false, message: '' })}
+                    className="px-5 py-2.5 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+                  >
+                    موافق
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

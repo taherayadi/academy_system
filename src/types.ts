@@ -525,7 +525,6 @@ export interface StaffMember {
   cnssNumber: string; // Numéro CNSS
   subjects: string[]; // Matières enseignées
   salary: number;     // Salaire fixe ou tarif
-  type: 'salarié' | 'externe'; // Salarié du centre ou externe
   phone: string;
   role: StaffRole;
   contractStartDate: string;
