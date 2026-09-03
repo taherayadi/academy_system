@@ -121,6 +121,14 @@ input[type="date"] {
   @page {
     size: A4 portrait;
     margin: 12mm 15mm;
+
+    /* Remove browser-generated headers/footers (date, URL, page number, title) */
+    @top-left   { content: none; }
+    @top-center { content: none; }
+    @top-right  { content: none; }
+    @bottom-left   { content: none; }
+    @bottom-center { content: none; }
+    @bottom-right  { content: none; }
   }
 
   html {
