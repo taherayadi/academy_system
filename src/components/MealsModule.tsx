@@ -45,11 +45,6 @@ const ARABIC_WEEKDAYS: Record<MealPlanDay['day'], string> = {
   'Vendredi': 'الجمعة'
 };
 
-const ACADEMIC_INDEX: Record<AcademicMonth, number> = {
-  'Septembre': 0, 'Octobre': 1, 'Novembre': 2, 'Décembre': 3,
-  'Janvier': 4, 'Février': 5, 'Mars': 6, 'Avril': 7, 'Mai': 8
-};
-
 export default function MealsModule({
   students,
   mealPlans,
@@ -70,6 +65,7 @@ export default function MealsModule({
   const [paymentMonth, setPaymentMonth] = useState<AcademicMonth>('Septembre');
   const [amountPaid, setAmountPaid] = useState(0);
   const [totalRequired, setTotalRequired] = useState(0);
+  const [discount, setDiscount] = useState<number>(0);
   const [paymentType, setPaymentType] = useState<'full' | 'advance' | 'balance'>('full');
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Espèces' | 'Chèque'>('Espèces');
@@ -107,10 +103,10 @@ export default function MealsModule({
   // Removal from daily meal list confirmation
   const [removeAttendanceStudent, setRemoveAttendanceStudent] = useState<Student | null>(null);
 
-  // Consumption tracking month filter ('all' = every active subscriber). Default = current academic month (Septembre if outside the calendar, e.g. August testing)
+  // Consumption tracking month filter ('all' = every active subscriber). Default = current academic month; during off-season (Jun-Aug) default to 'all'
   const [consumptionMonth, setConsumptionMonth] = useState<string>(() => {
     const idx = getCurrentAcademicIndex();
-    return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'Septembre';
+    return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'all';
   });
 
   // Clear all meals data confirmation
@@ -132,12 +128,31 @@ export default function MealsModule({
     const text = `${s.firstName} ${s.lastName} ${s.grade}`.toLowerCase();
     return (s.academicYear || getCurrentAcademicYear()) === schoolYear && text.includes(searchTerm.toLowerCase());
   });
-  const subscribedStudents = yearStudents.filter(s => s.mealSubscription?.mode === 'subscription' && s.mealSubscription?.active);
+  const subscribedStudents = yearStudents.filter(s =>
+    s.enrolledServices?.meals === true &&
+    s.mealSubscription?.active !== false
+  );
   const getMealStatus = (st: Student, month: AcademicMonth) => {
     const total = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : (st.mealSubscription?.monthlyPrice || 150);
     const payments = (st.payments || []).filter(p => p.service === 'Repas' && p.month === `${month} (${schoolYear})`);
     const paidAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
-    return { status: paidAmount >= total ? 'paid' as const : paidAmount > 0 ? 'advance' as const : 'unpaid' as const, paidAmount, remaining: Math.max(0, total - paidAmount), total };
+    const discount = payments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
+    const effectiveRequired = Math.max(0, total - discount);
+    return {
+      status: paidAmount >= effectiveRequired && effectiveRequired > 0 ? ('paid' as const) : paidAmount > 0 ? ('advance' as const) : ('unpaid' as const),
+      paidAmount,
+      remaining: Math.max(0, effectiveRequired - paidAmount),
+      total,
+      discount,
+      effectiveRequired
+    };
+  };
+  // True only when a refund exists AND hasn't been re-paid (net ≤ 0)
+  const hasUncoveredRefund = (st: Student, month: AcademicMonth) => {
+    const payments = (st.payments || []).filter(p => p.service === 'Repas' && p.month === `${month} (${schoolYear})`);
+    const hasRefundRecord = payments.some(p => p.refund);
+    const net = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    return hasRefundRecord && net <= 0;
   };
   const getAttendance = (st: Student) => (st.mealAttendances || []).find(a => a.date === selectedDate);
 
@@ -151,7 +166,7 @@ export default function MealsModule({
   };
   const consumptionStudents = consumptionMonth === 'all'
     ? subscribedStudents
-    : subscribedStudents.filter(st => getMealStatus(st, consumptionMonth as AcademicMonth).paidAmount > 0);
+    : subscribedStudents;
   const consumptionTotalPages = Math.ceil(consumptionStudents.length / pageSize) || 1;
   const consumptionCurrentPage = Math.min(Math.max(1, consumptionPage), consumptionTotalPages);
   const paginatedConsumption = consumptionStudents.slice((consumptionCurrentPage - 1) * pageSize, consumptionCurrentPage * pageSize);
@@ -207,23 +222,42 @@ export default function MealsModule({
 
   // Mark consumption for subscribed student
   const handleMarkConsumption = (st: Student) => {
-    if (!st.mealSubscription) return;
+    if (!st.mealSubscription && st.enrolledServices?.meals !== true) return;
     if (getAttendance(st)) {
       toast.info('وجبة هذا التلميذ مسجلة لهذا التاريخ مسبقاً.');
       return;
     }
 
-    const currentConsumed = st.mealSubscription.consumedMealsCount || 0;
+    // Determine academic month from selectedDate to check payment status
+    const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
+    const monthMap: Record<number, AcademicMonth> = {
+      8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
+      0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
+    };
+    const academicMonth = monthMap[dateMonth];
+    const hasPaid = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
+
+    // If student has an uncovered refund for this month, treat meal as unit (pay per plate)
+    const hasRefund = academicMonth ? hasUncoveredRefund(st, academicMonth) : false;
+    const isSubscribedSys = st.mealSubscription?.active === true;
+
+    const mealType = (!isSubscribedSys || hasRefund) ? 'unit' : 'subscription';
+
     const updatedStudent: Student = {
       ...st,
-      mealSubscription: {
-        ...st.mealSubscription,
-        consumedMealsCount: currentConsumed + 1
-      },
-      mealAttendances: [...(st.mealAttendances || []), { date: selectedDate, type: 'subscription', paid: true }]
+      mealSubscription: st.mealSubscription
+        ? {
+            ...st.mealSubscription,
+            consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + (mealType === 'subscription' ? 1 : 0)
+          }
+        : undefined,
+      mealAttendances: [...(st.mealAttendances || []), { date: selectedDate, type: mealType, paid: mealType === 'unit' ? false : hasPaid }]
     };
 
     onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    if (hasRefund) {
+      toast.info(`تم تسجيل وجبة كوجبة منفردة (مسترجع شهر ${academicMonth}) — يُدفع عند الاستلام.`);
+    }
   };
 
   // Add one-time unit student for today's dish
@@ -325,22 +359,43 @@ export default function MealsModule({
     const status = getMealStatus(st, month);
     if (status.status === 'paid') return;
     const fullFee = status.total;
+    const wasRefunded = (st.payments || []).some(
+      p => p.service === 'Repas' && p.refund && p.month === `${month} (${schoolYear})`
+    );
     setSelectedStudentForPayment(st);
     setPaymentMonth(month);
     setTotalRequired(fullFee);
-    setAmountPaid(status.status === 'advance' ? status.remaining : fullFee);
-    setPaymentType(status.status === 'advance' ? 'balance' : 'full');
-    setPaymentMethod('Espèces');
-    setChequeNumber('');
-    setChequeDate(new Date().toISOString().split('T')[0]);
-    setNotes(status.status === 'advance'
-      ? `تكملة خلاص اشتراك المطعم لشهر ${month} (${schoolYear})`
-      : `خلاص اشتراك المطعم لشهر ${month} (${schoolYear})`);
+    const storedDiscount = status.discount || 0;
+    setDiscount(storedDiscount);
+
+    if (status.status === 'advance' && !wasRefunded) {
+      setAmountPaid(status.remaining);
+      setPaymentType('balance');
+      setPaymentMethod('Espèces');
+      setChequeNumber('');
+      setChequeDate(new Date().toISOString().split('T')[0]);
+      setNotes(`تكملة خلاص اشتراك المطعم لشهر ${month} (${schoolYear})`);
+    } else {
+      setAmountPaid(Math.max(0, fullFee - storedDiscount));
+      setPaymentType('full');
+      setPaymentMethod('Espèces');
+      setChequeNumber('');
+      setChequeDate(new Date().toISOString().split('T')[0]);
+      setNotes(wasRefunded
+        ? `خلاص اشتراك المطعم لشهر ${month} (${schoolYear}) بعد الاسترجاع`
+        : `خلاص اشتراك المطعم لشهر ${month} (${schoolYear})`);
+    }
   };
 
   const handleEnrollStudent = (st: Student) => {
     const monthlyPrice = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150;
     const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 8;
+    // On re-enrollment, always start completely fresh.
+    // Clear ALL subscription-based Repas payments (monthly + refund records).
+    // Keep unit meal records (وجبة منفردة) — they are independent daily history.
+    const clearedPayments = (st.payments || []).filter(
+      p => !(p.service === 'Repas' && !p.month.includes('Repas unitaire'))
+    );
     const updatedStudent: Student = {
       ...st,
       enrolledServices: {
@@ -354,11 +409,12 @@ export default function MealsModule({
         unitPrice,
         prepaidMeals: Math.floor(monthlyPrice / unitPrice) || 18,
         consumedMealsCount: 0
-      }
+      },
+      payments: clearedPayments
     };
     onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
     setIsEnrollModalOpen(false);
-    toast.success(`تم إلحاق التلميذ (${st.firstName} ${st.lastName}) بالمطعم بنجاح!`);
+    toast.success(`تم إلحاق التلميذ (${st.firstName} ${st.lastName}) بالمطعم — يبدأ كمنخرط جديد بدون أي رصيد سابق.`);
   };
 
   // Remove all students from Repas: clear payments, subscriptions and attendances
@@ -384,10 +440,18 @@ export default function MealsModule({
 
   // Students with any MONTHLY meal activity — shown in the payments grid even after cancelling the subscription.
   // Unit meals (وجبة منفردة) for a single day do NOT add the student to this monthly grid.
-  const hasMealActivity = (st: Student) =>
-    st.enrolledServices?.meals === true ||
-    st.mealSubscription?.active === true ||
-    (st.payments || []).some(p => p.service === 'Repas' && !p.month.includes('Repas unitaire'));
+  // A student whose repas service was FINISHED via refund of the actual month is excluded
+  // (they move to the unit-meal list until they re-inscribe).
+  const repasServiceFinished = (st: Student) =>
+    st.mealSubscription?.active === false ||
+    st.enrolledServices?.meals === false;
+
+  const hasMealActivity = (st: Student) => {
+    if (repasServiceFinished(st)) return false;
+    return st.enrolledServices?.meals === true ||
+      st.mealSubscription?.active === true ||
+      (st.payments || []).some(p => p.service === 'Repas' && !p.month.includes('Repas unitaire'));
+  };
 
   const enrolledStudents = students.filter(st => {
     const studentYear = st.academicYear || getCurrentAcademicYear();
@@ -418,35 +482,56 @@ export default function MealsModule({
       return;
     }
 
-    const status = selectedStudentForPayment.payments
-      ?.filter(p => p.service === 'Repas' && p.month === `${paymentMonth} (${schoolYear})`)
+    const monthKey = `${paymentMonth} (${schoolYear})`;
+    // Compute the current net (including refund records) to know how much is still payable.
+    const priorRefundAmount = Math.abs((selectedStudentForPayment.payments || [])
+      .filter(p => p.service === 'Repas' && p.month === monthKey && p.refund)
+      .reduce((a, b) => a + b.amountPaid, 0));
+    const wasRefunded = priorRefundAmount > 0;
+
+    const numDiscount = Math.max(0, Number(discount) || 0);
+    const standardFee = Number(totalRequired) || (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150);
+    const effectiveRequired = Math.max(0, standardFee - numDiscount);
+
+    const status = (selectedStudentForPayment.payments || [])
+      ?.filter(p => p.service === 'Repas' && p.month === monthKey && !p.refund)
       ?.reduce((acc, p) => acc + p.amountPaid, 0) || 0;
     const paid = Math.max(0, Number(amountPaid) || 0);
-    const maxPayable = Math.max(0, Number(totalRequired) - status);
-    if (paid > maxPayable) {
-      toast.error(`عذراً، المبلغ المدفوع (${paid} د.ت) أكبر من باقي اشتراك الشهر (${maxPayable} د.ت)!`);
+    const maxPayable = Math.max(0, effectiveRequired - status);
+    if (paid > maxPayable && maxPayable > 0) {
+      toast.error(`عذراً، المبلغ المدفوع (${paid} د.ت) أكبر من باقي اشتراك الشهر بعد التخفيض (${maxPayable} د.ت)!`);
       setIsSubmitting(false);
       return;
     }
     const paidAfterThis = status + paid;
-    const remainingAfterThis = Math.max(0, Number(totalRequired) - paidAfterThis);
+    const remainingAfterThis = Math.max(0, effectiveRequired - paidAfterThis);
     const newPayment: PaymentRecord = {
       id: `pay_meal_${crypto.randomUUID()}`,
       date: new Date().toISOString().split('T')[0],
       amountPaid: paid,
-      totalRequired: Number(totalRequired),
+      totalRequired: standardFee,
       remainingBalance: remainingAfterThis,
       service: 'Repas',
-      month: `${paymentMonth} (${schoolYear})`,
-      paymentType: paidAfterThis >= Number(totalRequired) ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
+      month: monthKey,
+      paymentType: paidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
       method: paymentMethod,
       chequeNumber: paymentMethod === 'Chèque' ? chequeNumber : undefined,
       chequeDate: paymentMethod === 'Chèque' ? chequeDate : undefined,
       receiptNumber: generateReceiptNumber(students, 'REC-MEAL-'),
-      notes: notes || `خلاص اشتراك المطعم لشهر ${paymentMonth} (${schoolYear})`
+      notes: notes || (numDiscount > 0
+        ? `خلاص اشتراك المطعم لشهر ${paymentMonth} (${schoolYear}) - تخفيض: ${numDiscount} د.ت`
+        : `خلاص اشتراك المطعم لشهر ${paymentMonth} (${schoolYear})`),
+      discount: numDiscount > 0 ? numDiscount : undefined
     };
+    // Re-activate the repas service and keep ALL payment/refund records (history preserved).
     const updatedStudent: Student = {
       ...selectedStudentForPayment,
+      enrolledServices: {
+        ...(selectedStudentForPayment.enrolledServices || {}),
+        meals: true,
+        etude: selectedStudentForPayment.enrolledServices?.etude ?? true,
+        suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true
+      },
       mealSubscription: selectedStudentForPayment.mealSubscription
         ? { ...selectedStudentForPayment.mealSubscription, mode: 'subscription' as const, active: true }
         : selectedStudentForPayment.mealSubscription,
@@ -455,22 +540,28 @@ export default function MealsModule({
     onUpdateStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
-    toast.success(`تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك.`);
+    toast.success(wasRefunded
+      ? `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك وتغطية الاسترجاع السابق (${priorRefundAmount} د.ت).`
+      : `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك.`);
     setIsSubmitting(false);
   };
 
-  // Open refund modal for future paid months in Meals (Library-style)
+  // Open refund modal for all paid (non-refunded or re-paid) months
   const handleOpenRefund = (st: Student) => {
     setRefundingStudent(st);
-    const currentIdx = getCurrentAcademicIndex();
     const refundable: Record<string, boolean> = {};
     ACADEMIC_MONTHS.forEach(m => {
+      const monthKey = `${m} (${schoolYear})`;
+      const monthPayments = (st.payments || []).filter(
+        p => p.service === 'Repas' && p.month === monthKey
+      );
       const ms = getMealStatus(st, m);
-      if (ms.paidAmount > 0 && ACADEMIC_INDEX[m] > currentIdx) {
-        const alreadyRefunded = (st.payments || []).some(
-          p => p.refund && p.service === 'Repas' && p.month === `${m} (${schoolYear})`
-        );
-        if (!alreadyRefunded) refundable[m] = true;
+      const latestPayment = monthPayments.length > 0 ? monthPayments[monthPayments.length - 1] : null;
+
+      // A month is refundable if the student currently has money paid (ms.paidAmount > 0)
+      // and the latest transaction is not an uncovered refund with 0 balance.
+      if (ms.paidAmount > 0 && latestPayment?.refund !== true) {
+        refundable[m] = true;
       }
     });
     setRefundMonths(refundable);
@@ -478,21 +569,26 @@ export default function MealsModule({
     setIsRefundModalOpen(true);
   };
 
-  // Execute meals refund for selected future paid months + deactivate subscription
+  // Execute meals refund for selected paid months.
+  // Refunding the CURRENT actual month removes the student from the repas service;
+  // refunding only UPCOMING months keeps the service active.
   const handleConfirmRefund = () => {
     if (!refundingStudent) return;
-    const currentIdx = getCurrentAcademicIndex();
     const refundRecords: PaymentRecord[] = [];
     let totalRefund = 0;
+    const currentIdx = getCurrentAcademicIndex();
+    const currentMonth = currentIdx >= 0 ? ACADEMIC_MONTHS[currentIdx] : null;
 
     ACADEMIC_MONTHS.forEach(m => {
       if (!refundMonths[m]) return;
       const ms = getMealStatus(refundingStudent, m);
-      if (ms.paidAmount <= 0 || ACADEMIC_INDEX[m] <= currentIdx) return;
-      const alreadyRefunded = (refundingStudent.payments || []).some(
-        p => p.refund && p.service === 'Repas' && p.month === `${m} (${schoolYear})`
+      if (ms.paidAmount <= 0) return;
+      const monthKey = `${m} (${schoolYear})`;
+      const monthPayments = (refundingStudent.payments || []).filter(
+        p => p.service === 'Repas' && p.month === monthKey
       );
-      if (alreadyRefunded) {
+      const latestPayment = monthPayments.length > 0 ? monthPayments[monthPayments.length - 1] : null;
+      if (latestPayment?.refund === true && ms.paidAmount <= 0) {
         toast.warning(`شهر ${monthToArabic(m)} تمت استرجاعه مسبقاً — تم تخطيه.`);
         return;
       }
@@ -503,10 +599,36 @@ export default function MealsModule({
         ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
         : (refundingStudent.mealSubscription?.monthlyPrice || 150);
       const prepaid = Math.floor(subFee / unitPrice) || 18;
-      const consumedThisMonth = getConsumedInMonth(refundingStudent, m);
+
+      // Find if there was an earlier refund for this month
+      const previousRefund = (refundingStudent.payments || []).filter(
+        p => p.service === 'Repas' && p.refund && p.month === monthKey
+      ).pop();
+
+      const [startYear, endYear] = schoolYear.split('/');
+      const mNum: Record<string, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
+      const num = mNum[m as AcademicMonth] ?? 9;
+      const yr = num >= 9 ? startYear : endYear;
+      const prefix = `${yr}-${String(num).padStart(2, '0')}`;
+
+      // Only count attendances that occurred AFTER the previous refund (if any)
+      const allMonthAttendances = (refundingStudent.mealAttendances || []).filter(
+        a => a.type === 'subscription' && a.date.startsWith(prefix)
+      );
+      const currentSubAttendances = previousRefund
+        ? allMonthAttendances.filter(a => a.date > previousRefund.date)
+        : allMonthAttendances;
+
+      const consumedThisMonth = currentSubAttendances.length;
       const remainingMeals = Math.max(0, prepaid - consumedThisMonth);
-      const defaultRefund = remainingMeals * unitPrice;
-      const refundAmount = Math.min(refundAmounts[m] !== undefined ? refundAmounts[m] : defaultRefund, defaultRefund);
+      // If nothing was consumed in current subscription, refund full current paidAmount
+      const defaultRefund = consumedThisMonth === 0
+        ? ms.paidAmount
+        : Math.max(0, ms.paidAmount - (consumedThisMonth * unitPrice));
+      // Respect user's manually entered amount. Cap at actual paid amount (not defaultRefund).
+      const refundAmount = refundAmounts[m] !== undefined
+        ? Math.min(Math.max(0, refundAmounts[m]), ms.paidAmount)
+        : defaultRefund;
       totalRefund += refundAmount;
       refundRecords.push({
         id: 'ref_meal_' + crypto.randomUUID() + '_' + m,
@@ -519,15 +641,43 @@ export default function MealsModule({
         paymentType: 'balance',
         method: 'Espèces',
         receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
-        notes: `استرجاع (Remboursement) ثمن ${remainingMeals} وجبة متبقية لشهر ${monthToArabic(m)} (${ms.paidAmount} د.ت مسددة - ${consumedThisMonth} مستهلكة × ${unitPrice} د.ت) - ${schoolYear}`,
+        notes: `استرجاع (Remboursement) لشهر ${monthToArabic(m)} — مبلغ الاسترجاع: ${refundAmount} د.ت (${ms.paidAmount} د.ت مسددة - ${consumedThisMonth} وجبة مستهلكة) - ${schoolYear}`,
         refund: true
       });
     });
 
+    // Determine the effective current month (if during summer/off-season, default to Septembre, or selected consumptionMonth)
+    const effectiveCurrentMonth = currentMonth || (consumptionMonth !== 'all' ? consumptionMonth : 'Septembre');
+
+    // Check if the current (actual) month was refunded
+    const isCurrentMonthRefunded = refundRecords.some(r =>
+      r.month === `${effectiveCurrentMonth} (${schoolYear})` || r.month.startsWith(`${effectiveCurrentMonth} `)
+    );
+
+    // Also check if any paid un-refunded months remain for this student
+    const allRefundedMonthKeys = new Set(
+      [
+        ...(refundingStudent.payments || []).filter(p => p.service === 'Repas' && p.refund).map(p => p.month),
+        ...refundRecords.map(r => r.month)
+      ]
+    );
+    const hasRemainingPaidMonth = ACADEMIC_MONTHS.some(m => {
+      const monthKey = `${m} (${schoolYear})`;
+      if (allRefundedMonthKeys.has(monthKey)) return false;
+      const ms = getMealStatus(refundingStudent, m);
+      return ms.paidAmount > 0;
+    });
+
+    // Shut down service if the current/actual month was refunded OR if the student has no more paid months
+    const shutsDownService = isCurrentMonthRefunded || !hasRemainingPaidMonth;
+
     const updatedStudent: Student = {
       ...refundingStudent,
+      enrolledServices: shutsDownService
+        ? { ...(refundingStudent.enrolledServices || {}), meals: false }
+        : refundingStudent.enrolledServices,
       mealSubscription: refundingStudent.mealSubscription
-        ? { ...refundingStudent.mealSubscription, active: false }
+        ? { ...refundingStudent.mealSubscription, active: !shutsDownService }
         : refundingStudent.mealSubscription,
       payments: [...(refundingStudent.payments || []), ...refundRecords]
     };
@@ -537,8 +687,10 @@ export default function MealsModule({
     setRefundingStudent(null);
     setRefundAmounts({});
     toast.success(refundRecords.length > 0
-      ? `أُلغي الاشتراك واستُرجِع ${totalRefund} د.ت مقابل ${refundRecords.length} شهر (سُجّل في الميزانية)!`
-      : `أُلغي اشتراك المطعم للتلميذ(ة) ${updatedStudent.firstName} ${updatedStudent.lastName}.`);
+      ? shutsDownService
+        ? `تم استرجاع ${totalRefund} د.ت (سُجّل في الميزانية)! أُنهيت خدمة المطعم للتلميذ(ة) ${updatedStudent.firstName} ${updatedStudent.lastName} — يمكنه أخذ وجبات منفردة حتى يعيد الخلاص.`
+        : `تم استرجاع ${totalRefund} د.ت مقابل ${refundRecords.length} شهر (سُجّل في الميزانية)! تبقى خدمة المطعم نشطة.`
+      : `لا توجد أشهر قابلة للاسترجاع للتلميذ(ة) ${updatedStudent.firstName} ${updatedStudent.lastName}.`);
   };
 
   return (
@@ -669,14 +821,18 @@ export default function MealsModule({
                       {/* Academic months cells */}
                       {ACADEMIC_MONTHS.map(m => {
                         const mStatus = getMealStatus(st, m);
-                        const hasRefund = (st.payments || []).some(p => p.service === 'Repas' && p.refund && p.month === `${m} (${schoolYear})`);
+                        const hasRefund = hasUncoveredRefund(st, m);
                         return (
                           <td key={m} className="p-3 text-center">
                             {hasRefund ? (
-                              <div className="w-full py-1.5 px-2 bg-slate-100 text-slate-500 border border-slate-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1" title="تم استرجاع مبلغ هذا الشهر">
+                              <button
+                                onClick={() => handlePayMonthlySubscription(st, m)}
+                                className="w-full py-1.5 px-2 bg-amber-50 text-amber-600 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-amber-100 transition cursor-pointer"
+                                title="مسترجع — اضغط لخلاص هذا الشهر من جديد"
+                              >
                                 <Undo2 className="h-3 w-3" />
                                 مسترجع
-                              </div>
+                              </button>
                             ) : mStatus.status === 'paid' && (
                               <button
                                 onClick={() => {
@@ -854,7 +1010,7 @@ export default function MealsModule({
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
                 const fullFeeRequired = printingReceipt.payment.totalRequired || (!!printingReceipt.payment.month.includes('Annuel') ? 150 : 300);
-                const finalRemaining = Math.max(0, fullFeeRequired - totalPaidForMonth);
+                const finalRemaining = Math.max(0, fullFeeRequired - totalMonthDiscount - totalPaidForMonth);
 
                 return (
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
@@ -1018,7 +1174,7 @@ export default function MealsModule({
             <p className="text-xs text-slate-500">
               {consumptionMonth === 'all'
                 ? `الاستهلاك الفعلي مقابل المسبق الدفع — ${subscribedStudents.length} مشترك(ة)`
-                : `المسددون لشهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]} — ${consumptionStudents.length} تلميذ(ة)`}
+                : `المشتركون لشهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]} — ${consumptionStudents.length} تلميذ(ة) (مسددون + غير مسددين)`}
             </p>
           </div>
 
@@ -1041,21 +1197,19 @@ export default function MealsModule({
             <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
               <tr>
                 <th className="p-4">التلميذ</th>
-                <th className="p-4">نوع الاشتراك</th>
-                <th className="p-4">{consumptionMonth === 'all' ? 'الوجبات المستهلكة (كل المدة)' : `المستهلكة في شهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]}`}</th>
-                <th className="p-4">الوجبات المستهلكة / المسبقة الدفع</th>
-                <th className="p-4">الوجبات المتبقية</th>
+                <th className="p-4">حالة الدفع</th>
+                <th className="p-4">{consumptionMonth === 'all' ? 'الوجبات المستهلكة (كل المدة)' : `الوجبات المستهلكة في شهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]}`}</th>
                 <th className="p-4 text-center">تأكيد وجبة اليوم</th>
-                <th className="p-4 text-left">إلغاء الاشتراك والتعويض</th>
+                <th className="p-4 text-left">إلغاء الاشتراك والاسترجاع</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {consumptionStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">
+                  <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">
                     {consumptionMonth === 'all'
                       ? 'لا يوجد تلاميذ مشتركون حالياً'
-                      : `لا يوجد تلاميذ مسددون لشهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]} (${consumptionMonth}).`}
+                      : `لا يوجد تلاميذ مشتركون لشهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]} (${consumptionMonth}).`}
                   </td>
                 </tr>
               ) : paginatedConsumption.map(st => {
@@ -1064,59 +1218,109 @@ export default function MealsModule({
                 const subFee = settings
                   ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
                   : (st.mealSubscription?.monthlyPrice || 150);
-                const unitPrice = settings
-                  ? getFeesForYear(settings, schoolYear).fraisParRepas
-                  : (st.mealSubscription?.unitPrice || 8);
-                // Prepaid meals derived from the monthly fee ÷ price per day (e.g. 150 ÷ 8 = 18 repas)
-                const prepaid = Math.floor(subFee / unitPrice) || 18;
-                const remaining = Math.max(0, prepaid - consumed);
                 const monthStatus = consumptionMonth === 'all'
                   ? null
                   : getMealStatus(st, consumptionMonth as AcademicMonth);
+                const hasRefundThisMonth = consumptionMonth !== 'all' && hasUncoveredRefund(st, consumptionMonth as AcademicMonth);
+
+                // Check for refund & repayment in this month to show detailed breakdown
+                const [startYear, endYear] = schoolYear.split('/');
+                const mNum: Record<string, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
+                const num = consumptionMonth !== 'all' ? (mNum[consumptionMonth] ?? 9) : null;
+                const yr = num ? (num >= 9 ? startYear : endYear) : null;
+                const prefix = yr && num ? `${yr}-${String(num).padStart(2, '0')}` : null;
+
+                const monthAttendances = prefix
+                  ? (st.mealAttendances || []).filter(a => a.type === 'subscription' && a.date.startsWith(prefix))
+                  : (st.mealAttendances || []).filter(a => a.type === 'subscription');
+
+                const monthRefund = consumptionMonth !== 'all'
+                  ? (st.payments || []).find(p => p.service === 'Repas' && p.refund && p.month === `${consumptionMonth} (${schoolYear})`)
+                  : null;
+
+                let beforeRefundCount = 0;
+                let afterRefundCount = 0;
+                if (monthRefund) {
+                  beforeRefundCount = monthAttendances.filter(a => a.date <= monthRefund.date).length;
+                  afterRefundCount = monthAttendances.filter(a => a.date > monthRefund.date).length;
+                }
 
                 return (
                   <tr key={st.id} className="hover:bg-slate-50/80 transition">
                     <td className="p-4 font-black text-slate-900">{st.firstName} {st.lastName} </td>
                     <td className="p-4">
-                      <span className={`inline-flex flex-col items-start gap-0.5 px-2.5 py-1 font-bold text-[10px] rounded-md border ${
-                        st.mealSubscription?.active === false
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-[#F2F8F9] text-[#103840] border-[#C3E0E4]/60'
-                      }`}>
-                        <span>{st.mealSubscription?.active === false ? '❌ اشتراك ملغي (مسترجع)' : `اشتراك (${subFee} د.ت)`}</span>
-                        {monthStatus && (
-                          <span className={`text-[9px] font-black ${monthStatus.status === 'paid' ? 'text-emerald-700' : 'text-[#17555F]'}`}>
-                            {monthStatus.status === 'paid' ? '✓ خلاص كامل' : `تسبقة (${monthStatus.paidAmount} د.ت)`}
-                          </span>
-                        )}
+                      {consumptionMonth === 'all' ? (
+                        <span className="inline-block px-2.5 py-1 font-bold text-[10px] rounded-md border bg-[#F2F8F9] text-[#103840] border-[#C3E0E4]">
+                          مشترك
+                        </span>
+                      ) : (
+                        <span className={`inline-block px-2.5 py-1 font-black text-[10px] rounded-md border ${
+                          monthStatus?.status === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : monthStatus?.status === 'advance'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : hasRefundThisMonth
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : 'bg-red-50 text-red-600 border-red-200'
+                        }`}>
+                          {monthStatus?.status === 'paid'
+                            ? '✓ خالص'
+                            : monthStatus?.status === 'advance'
+                              ? 'تسبقة'
+                              : hasRefundThisMonth
+                                ? 'مسترجع'
+                                : 'غير خالص'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <span className="font-mono font-black text-[#17555F] text-sm">
+                        {consumedThisMonth} وجبة
                       </span>
-                    </td>
-                    <td className="p-4 font-mono font-black text-[#17555F]">
-                      {consumedThisMonth} وجبة
-                    </td>
-                    <td className="p-4 font-mono font-bold text-slate-800">
-                      {consumed} / {prepaid} وجبة
-                    </td>
-                    <td className="p-4 font-mono font-black text-emerald-700">
-                      {remaining} وجبات متبقية
+                      {monthRefund && afterRefundCount > 0 && (
+                        <div className="text-[10px] font-bold mt-1 flex flex-wrap items-center gap-1">
+                          <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            {beforeRefundCount} قبل الاسترجاع
+                          </span>
+                          <span className="text-slate-400">+</span>
+                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            {afterRefundCount} بعد إعادة الخلاص
+                          </span>
+                        </div>
+                      )}
+                      {monthRefund && afterRefundCount === 0 && beforeRefundCount > 0 && (
+                        <div className="text-[10px] text-amber-700 font-bold mt-1">
+                          <span className="bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-block">
+                            ({beforeRefundCount} قبل الاسترجاع)
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <button
                         onClick={() => handleMarkConsumption(st)}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-[11px] shadow-xs cursor-pointer flex items-center justify-center gap-1 mx-auto"
+                        className={`px-3 py-1.5 rounded-xl font-bold text-[11px] shadow-xs cursor-pointer flex items-center justify-center gap-1 mx-auto ${
+                          hasRefundThisMonth
+                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        }`}
+                        title={hasRefundThisMonth ? 'عند الاسترجاع يُسجَّل كوجبة منفردة يُدفع عند الاستلام' : 'تسجيل وجبة ضمن الاشتراك'}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        تسجيل الوجبة
+                        {hasRefundThisMonth ? 'وجبة منفردة' : 'تسجيل الوجبة'}
                       </button>
                     </td>
                     <td className="p-4 text-left">
-                      <button
-                        onClick={() => handleOpenRefund(st)}
-                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold cursor-pointer flex items-center gap-1 mx-auto"
-                      >
-                        <Undo2 className="h-3.5 w-3.5" />
-                        إلغاء الاشتراك
-                      </button>
+                      {consumptionMonth !== 'all' && monthStatus?.status === 'paid' && (
+                        <button
+                          onClick={() => handleOpenRefund(st)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold cursor-pointer flex items-center gap-1 mx-auto"
+                          title={`استرجاع اشتراك شهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]}`}
+                        >
+                          <Undo2 className="h-3.5 w-3.5" />
+                          استرجاع الشهر
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1124,7 +1328,7 @@ export default function MealsModule({
             </tbody>
             <tfoot className="bg-slate-100/80 border-t-2 border-slate-200 font-black text-slate-900">
               <tr>
-                <td className="p-4 text-center" colSpan={7}>
+                <td className="p-4 text-center" colSpan={5}>
                   {consumptionMonth === 'all'
                     ? `الإجمالي — الوجبات المستهلكة: ${totalMealsConsumed} وجبة`
                     : `الإجمالي — الوجبات المستهلكة في شهر ${ARABIC_ACADEMIC_MONTHS[consumptionMonth as AcademicMonth]}: ${getMonthConsumedTotal(consumptionMonth as AcademicMonth)} وجبة`}
@@ -1178,7 +1382,18 @@ export default function MealsModule({
             <tbody className="divide-y divide-slate-100">
               {yearStudents.filter(st => getAttendance(st)).map(st => {
                 const attendance = getAttendance(st)!;
-                return <tr key={st.id} className="hover:bg-slate-50/80"><td className="p-4 font-bold">{st.firstName} {st.lastName} ({st.grade})</td><td className="p-4">{attendance.type === 'subscription' ? 'اشتراك شهري' : 'وجبة منفردة'}</td><td className="p-4 font-bold">{attendance.paid ? 'مدفوع' : 'غير مدفوع'}</td><td className="p-4"><div className="flex items-center justify-end gap-2">{attendance.type === 'unit' && !attendance.paid && <button onClick={() => handlePayUnitMeal(st)} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold cursor-pointer">تسجيل الدفع</button>}<button onClick={() => setRemoveAttendanceStudent(st)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold cursor-pointer flex items-center gap-1" title={attendance.paid ? 'إزالة مع استرجاع الثمن' : 'إزالة من القائمة'}><Trash2 className="h-3.5 w-3.5" />إزالة</button></div></td></tr>;
+                // For subscription type, compute actual payment status from current data
+                let displayPaid = attendance.paid;
+                if (attendance.type === 'subscription') {
+                  const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
+                  const monthMap: Record<number, AcademicMonth> = {
+                    8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
+                    0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
+                  };
+                  const academicMonth = monthMap[dateMonth];
+                  if (academicMonth) displayPaid = getMealStatus(st, academicMonth).status !== 'unpaid';
+                }
+                return <tr key={st.id} className="hover:bg-slate-50/80"><td className="p-4 font-bold">{st.firstName} {st.lastName} ({st.grade})</td><td className="p-4">{attendance.type === 'subscription' ? 'اشتراك شهري' : 'وجبة منفردة'}</td><td className="p-4 font-bold">{displayPaid ? 'مدفوع' : attendance.type === 'subscription' ? 'لم يدفع الإشتراك' : 'غير مدفوع'}</td><td className="p-4"><div className="flex items-center justify-end gap-2">{attendance.type === 'unit' && !attendance.paid && <button onClick={() => handlePayUnitMeal(st)} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold cursor-pointer">تسجيل الدفع</button>}<button onClick={() => setRemoveAttendanceStudent(st)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold cursor-pointer flex items-center gap-1" title={attendance.paid ? 'إزالة مع استرجاع الثمن' : 'إزالة من القائمة'}><Trash2 className="h-3.5 w-3.5" />إزالة</button></div></td></tr>;
               })}
               {yearStudents.filter(st => getAttendance(st)).length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-400">لا توجد وجبات مسجلة لهذا التاريخ.</td></tr>}
             </tbody>
@@ -1222,7 +1437,7 @@ export default function MealsModule({
                     : null;
                   const isAdvanceStatus = activeMonthStatus?.status === 'advance';
                   const hasRefund = selectedStudentForPayment
-                    ? (selectedStudentForPayment.payments || []).some(p => p.service === 'Repas' && p.refund && p.month === `${paymentMonth} (${schoolYear})`)
+                    ? hasUncoveredRefund(selectedStudentForPayment, paymentMonth)
                     : false;
                   const standardFee = activeMonthStatus?.total || (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150);
 
@@ -1248,7 +1463,7 @@ export default function MealsModule({
                             type="button"
                             onClick={() => {
                               setPaymentType('full');
-                              const targetVal = isAdvanceStatus ? activeMonthStatus.remaining : standardFee;
+                              const targetVal = isAdvanceStatus ? activeMonthStatus.remaining : Math.max(0, standardFee - discount);
                               setAmountPaid(targetVal);
                               setTotalRequired(standardFee);
                             }}
@@ -1260,19 +1475,24 @@ export default function MealsModule({
                           >
                             {isAdvanceStatus 
                               ? `خلاص الباقي (${activeMonthStatus?.remaining} د.ت)` 
-                              : `خلاص كامل (${standardFee} د.ت)`}
+                              : `خلاص كامل (${Math.max(0, standardFee - discount)} د.ت)`}
                           </button>
                           <button
                             type="button"
+                            disabled={hasRefund}
+                            title={hasRefund ? 'عند إعادة خلاص شهر مسترجع يجب دفع المبلغ كاملاً' : undefined}
                             onClick={() => {
                               setPaymentType('advance');
+                              const effectiveReq = Math.max(0, standardFee - discount);
                               const defaultAdv = isAdvanceStatus 
                                 ? Math.min(10, activeMonthStatus.remaining) 
-                                : Math.round(standardFee / 2);
+                                : Math.round(effectiveReq / 2);
                               setAmountPaid(defaultAdv);
                               setTotalRequired(standardFee);
                             }}
-                            className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                            className={`py-2 rounded-xl text-xs font-bold border transition ${
+                              hasRefund ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                            } ${
                               paymentType === 'advance' 
                                 ? 'bg-[#257C86] text-white border-[#257C86]' 
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
@@ -1298,6 +1518,34 @@ export default function MealsModule({
                           </button>
                         </div>
                       </div>
+
+                      {/* Remise / Discount Field */}
+                      {!isAdvanceStatus && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-600 block mb-1">
+                            التخفيض / Remise (د.ت) <span className="text-[10px] text-amber-600 font-semibold">(مثال: خصم الأيام غير المستهلكة أو التحاق متأخر)</span>
+                          </label>
+                          <input 
+                            type="number" min="0" max={Math.max(0, standardFee - 1)}
+                            value={discount}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(standardFee - 1, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0));
+                              setDiscount(val);
+                              if (paymentType === 'full') {
+                                setAmountPaid(Math.max(0, standardFee - val));
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-emerald-700"
+                          />
+                          <p className="text-[10px] text-slate-400 font-bold mt-1 flex items-center justify-between">
+                            <span>المستوجب بعد التخفيض: <strong className="text-slate-700 font-mono">{Math.max(0, standardFee - (Number(discount) || 0))} د.ت</strong></span>
+                            {Number(discount) > 0 && (
+                              <span className="text-emerald-700 font-black">✓ تخفيض بقيمة {discount} د.ت</span>
+                            )}
+                          </p>
+                        </div>
+                      )}
 
                       <div>
                         <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع *</label>
@@ -1359,13 +1607,14 @@ export default function MealsModule({
                            <input 
                             type="number" required min="0"
                             value={amountPaid} 
-                            max={isAdvanceStatus ? activeMonthStatus?.remaining : undefined}
+                            max={isAdvanceStatus ? activeMonthStatus?.remaining : Math.max(0, standardFee - discount)}
                             onFocus={(e) => e.target.select()}
                             onChange={(e) => {
+                              const maxVal = isAdvanceStatus ? activeMonthStatus?.remaining : Math.max(0, standardFee - discount);
                               const val = Math.max(0, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0);
-                              if (isAdvanceStatus && activeMonthStatus && val > activeMonthStatus.remaining) {
-                                 toast.warning(`المطلوب لاستكمال الشهر ${activeMonthStatus.remaining} د.ت فقط!`);
-                                setAmountPaid(activeMonthStatus.remaining);
+                              if (maxVal !== undefined && val > maxVal) {
+                                toast.warning(`المطلوب ${maxVal} د.ت فقط!`);
+                                setAmountPaid(maxVal);
                               } else {
                                 setAmountPaid(val);
                               }
@@ -1391,7 +1640,7 @@ export default function MealsModule({
                         <span className="font-mono text-sm font-black text-red-700">
                           {isAdvanceStatus && activeMonthStatus 
                             ? Math.max(0, activeMonthStatus.remaining - amountPaid) 
-                            : Math.max(0, totalRequired - amountPaid)} د.ت
+                            : Math.max(0, standardFee - discount - amountPaid)} د.ت
                         </span>
                       </div>
                     </>
@@ -1514,55 +1763,75 @@ export default function MealsModule({
 
               <div className="p-6 space-y-4">
                 <p className="text-xs text-slate-500 font-medium">
-                  التلاميذ الذين لا يملكون اشتراكاً شهرياً فعّالاً بالمطعم لهذه السنة الدراسية. تُحتسب الوجبة بالثمن الفردي فقط.
+                  التلاميذ الذين لا يملكون اشتراكاً شهرياً فعّالاً بالمطعم لهذه السنة الدراسية، أو مشتركون لكنهم مسترجعون (refunded) لهذا الشهر ويواصلون تناوُل أطباقهم الفردية بالثمن الفردي. تُحتسب الوجبة بالثمن الفردي فقط.
                 </p>
 
                 {(() => {
-                  const candidates = yearStudents.filter(s =>
-                    !(s.mealSubscription?.mode === 'subscription' && s.mealSubscription?.active) && !getAttendance(s)
-                  ).filter(s => {
+                  const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
+                  const mMap: Record<number, AcademicMonth> = {
+                    8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
+                    0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
+                  };
+                  const selMonth = mMap[dateMonth];
+                  const refundedForMonth = (s: Student) => selMonth ? hasUncoveredRefund(s, selMonth) : false;
+                  const activelySubscribed = (s: Student) =>
+                    (s.mealSubscription?.mode === 'subscription' && s.mealSubscription?.active) ||
+                    s.enrolledServices?.meals === true;
+                  const eligible = yearStudents.filter(s =>
+                    (refundedForMonth(s) || !activelySubscribed(s)) && !getAttendance(s)
+                  );
+                  const candidates = eligible.filter(s => {
                     if (!unitMealSearch.trim()) return true;
                     const full = `${s.firstName} ${s.lastName} ${s.grade}`.toLowerCase();
                     return full.includes(unitMealSearch.toLowerCase());
                   });
-                  return candidates.length === 0 ? (
+                  return eligible.length === 0 ? (
                     <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border">
-                      {yearStudents.filter(s => !(s.mealSubscription?.mode === 'subscription' && s.mealSubscription?.active) && !getAttendance(s)).length === 0
-                        ? 'لا يوجد تلاميذ غير مشتركين متاحين لإضافتهم لهذا التاريخ.'
-                        : 'لا توجد نتائج مطابقة لبحثك.'}
+                      لا توجد تلاميذ متاحين لإضافتهم كوجبة منفردة لهذا التاريخ.
                     </div>
                   ) : (
-                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
-                      {yearStudents.filter(s => !(s.mealSubscription?.mode === 'subscription' && s.mealSubscription?.active) && !getAttendance(s)).length > 0 && (
-                        <div className="p-2 sticky top-0 bg-white border-b border-slate-100 z-10">
-                          <div className="relative">
-                            <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
-                              type="text"
-                              value={unitMealSearch}
-                              onChange={(e) => setUnitMealSearch(e.target.value)}
-                              placeholder="بحث باسم التلميذ..."
-                              className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
-                            />
-                          </div>
+                    <>
+                      <div className="p-2 border border-slate-200 rounded-t-2xl bg-white border-b-0">
+                        <div className="relative">
+                          <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                          <input
+                            type="text"
+                            value={unitMealSearch}
+                            onChange={(e) => setUnitMealSearch(e.target.value)}
+                            placeholder="بحث باسم التلميذ..."
+                            className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                      {candidates.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-b-2xl border border-t-0 border-slate-200">
+                          لا توجد نتائج مطابقة لبحثك.
+                        </div>
+                      ) : (
+                        <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 border-t-0 rounded-b-2xl">
+                          {candidates.map(s => (
+                            <div key={s.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
+                              <div className="flex-1">
+                                <p className="font-extrabold text-xs text-slate-900">{s.firstName} {s.lastName}</p>
+                                <p className="text-[10px] text-slate-400">{s.grade} — ولي الأمر: <span dir="ltr">{s.father?.phoneMobile || s.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                                {refundedForMonth(s) && (
+                                  <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-md border border-orange-200">
+                                    مسترجع الشهر الحالي — يُدفع عند الاستلام
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleAddOneTimeMealStudent(s.id)}
+                                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1 shrink-0"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                أضف وجبة اليوم
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
-                      {candidates.map(s => (
-                        <div key={s.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
-                          <div>
-                            <p className="font-extrabold text-xs text-slate-900">{s.firstName} {s.lastName}</p>
-                            <p className="text-[10px] text-slate-400">{s.grade} — ولي الأمر: <span dir="ltr">{s.father?.phoneMobile || s.mother?.phoneMobile || 'لا يوجد'}</span></p>
-                          </div>
-                          <button
-                            onClick={() => handleAddOneTimeMealStudent(s.id)}
-                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            أضف وجبة اليوم
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    </>
                   );
                 })()}
 
@@ -1594,9 +1863,9 @@ export default function MealsModule({
                 <div className="flex items-center gap-2">
                   <Undo2 className="h-5 w-5 text-red-400" />
                   <div>
-                    <h3 className="text-lg font-black">استرجاع اشتراكات مطعم مستقبلية</h3>
+                    <h3 className="text-lg font-black">استرجاع اشتراك المطعم</h3>
                     <p className="text-xs text-slate-300">
-                      التلميذ(ة): {refundingStudent.firstName} {refundingStudent.lastName} — عند الانسحاب
+                      التلميذ(ة): {refundingStudent.firstName} {refundingStudent.lastName} — اختر الأشهر المدفوعة للاسترجاع
                     </p>
                   </div>
                 </div>
@@ -1611,9 +1880,10 @@ export default function MealsModule({
 
               <div className="p-6 space-y-4">
                 <p className="text-xs text-slate-600 font-bold leading-relaxed bg-[#F2F8F9] border border-[#C3E0E4] rounded-2xl p-3">
-                  في حالة انسحاب التلميذ من المطعم، يتم استرجاع قيمة الوجبات المتبقية (غير المستهلكة) للأشهر المستقبلية المدفوعة.
+                  يتم استرجاع قيمة الوجبات المتبقية (غير المستهلكة) للأشهر المدفوعة المختارة.
                   يُحتسب الاسترجاع على أساس: عدد الوجبات المتبقية × سعر الوجبة. يمكنك تعديل المبلغ يدوياً إذا لزم الأمر.
-                  يقع إثبات العملية في الميزانية والمالية.
+                  إذا استرجعت الشهر الحالي (الجاري) تُنهى خدمة المطعم للتلميذ ويمكنه أخذ وجبات منفردة حتى يعيد الخلاص.
+                  إذا استرجعت أشهراً قادمة فقط تبقى خدمة المطعم نشطة. يُثبت الاسترجاع في الميزانية والمالية.
                 </p>
 
                 {Object.keys(refundMonths).length === 0 ? (
@@ -1621,7 +1891,7 @@ export default function MealsModule({
                     لا توجد اشتراكات أشهر مستقبلية مدفوعة لهذا التلميذ. يمكنك تأكيد إلغاء الاشتراك فقط دون أي استرجاع.
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                     {Object.keys(refundMonths).map(m => {
                       const ms = getMealStatus(refundingStudent, m as AcademicMonth);
                       const unitPrice = settings
@@ -1631,56 +1901,113 @@ export default function MealsModule({
                         ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
                         : (refundingStudent.mealSubscription?.monthlyPrice || 150);
                       const prepaid = Math.floor(subFee / unitPrice) || 18;
-                      const consumedThisMonth = getConsumedInMonth(refundingStudent, m as AcademicMonth);
+                      const monthKey = `${m} (${schoolYear})`;
+                      const previousRefund = (refundingStudent.payments || []).filter(
+                        p => p.service === 'Repas' && p.refund && p.month === monthKey
+                      ).pop();
+
+                      // Get list of consumed meal dates for this month
+                      const [startYear, endYear] = schoolYear.split('/');
+                      const mNum: Record<string, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
+                      const num = mNum[m as AcademicMonth] ?? 9;
+                      const yr = num >= 9 ? startYear : endYear;
+                      const prefix = `${yr}-${String(num).padStart(2, '0')}`;
+                      const allConsumedDates = (refundingStudent.mealAttendances || [])
+                        .filter(a => a.type === 'subscription' && a.date.startsWith(prefix))
+                        .map(a => a.date)
+                        .sort();
+
+                      const consumedDates = previousRefund
+                        ? allConsumedDates.filter(d => d > previousRefund.date)
+                        : allConsumedDates;
+                      const settledDates = previousRefund
+                        ? allConsumedDates.filter(d => d <= previousRefund.date)
+                        : [];
+
+                      const consumedThisMonth = consumedDates.length;
                       const remainingMeals = Math.max(0, prepaid - consumedThisMonth);
-                      const defaultRefund = remainingMeals * unitPrice;
+                      const defaultRefund = consumedThisMonth === 0
+                        ? ms.paidAmount
+                        : Math.max(0, ms.paidAmount - (consumedThisMonth * unitPrice));
                       const refundAmount = refundAmounts[m] !== undefined ? refundAmounts[m] : defaultRefund;
+
                       return (
-                        <label
+                        <div
                           key={m}
-                          className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition ${refundMonths[m] ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-200'}`}
+                          className={`rounded-2xl border overflow-hidden ${refundMonths[m] ? 'border-red-300' : 'border-slate-200'}`}
                         >
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={!!refundMonths[m]}
-                              onChange={(e) => setRefundMonths({ ...refundMonths, [m]: e.target.checked })}
-                              className="h-4 w-4 accent-red-600"
-                            />
-                            <div>
-                              <p className="text-xs font-black text-slate-900">{monthToArabic(m)} ({m})</p>
-                              <p className="text-[10px] text-slate-500">المبلغ المسدد: <span className="font-mono font-bold">{ms.paidAmount} د.ت</span></p>
-                              <p className="text-[10px] text-slate-500">
-                                الوجبات المتبقية: <span className="font-mono font-bold">{remainingMeals} من {prepaid} وجبات</span>
-                              </p>
-                            </div>
-                          </div>
-                            <div className="text-left space-y-1">
-                            <span className="text-[10px] font-bold text-red-600">قابل للاسترجاع</span>
-                            <div className="flex items-center gap-1">
+                          {/* Month header row */}
+                          <label className={`flex items-center justify-between p-3 cursor-pointer transition ${refundMonths[m] ? 'bg-red-50' : 'bg-slate-50 hover:bg-slate-100'}`}>
+                            <div className="flex items-center gap-3">
                               <input
-                                type="number"
-                                min={0}
-                                max={defaultRefund}
-                                value={refundAmounts[m] !== undefined ? refundAmounts[m] : ''}
-                                placeholder={defaultRefund.toString()}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? undefined : Math.min(Number(e.target.value), defaultRefund);
-                                  setRefundAmounts(prev => {
-                                    const next = { ...prev };
-                                    if (val === undefined || val < 0) { delete next[m]; } else { next[m] = val; }
-                                    return next;
-                                  });
-                                }}
-                                className="w-20 px-2 py-1 border border-red-200 rounded-lg text-xs font-mono font-bold text-red-700 text-center bg-white focus:outline-none focus:ring-1 focus:ring-red-400"
+                                type="checkbox"
+                                checked={!!refundMonths[m]}
+                                onChange={(e) => setRefundMonths({ ...refundMonths, [m]: e.target.checked })}
+                                className="h-4 w-4 accent-red-600"
                               />
-                              <span className="text-[10px] font-bold text-red-500">د.ت</span>
+                              <div>
+                                <p className="text-xs font-black text-slate-900">{monthToArabic(m)} ({m})</p>
+                                <p className="text-[10px] text-slate-500">المبلغ المسدد: <span className="font-mono font-bold">{ms.paidAmount} د.ت</span></p>
+                                <p className="text-[10px] text-slate-500">
+                                  الوجبات المستهلكة (الاشتراك الحالي): <span className="font-mono font-bold text-[#17555F]">{consumedThisMonth}</span>
+                                  {settledDates.length > 0 && (
+                                    <span className="text-amber-700 mr-1.5 font-bold">
+                                      ({settledDates.length} وجبة تمت تسويتها بالاسترجاع السابق)
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                            {refundAmounts[m] !== undefined && refundAmounts[m] !== defaultRefund && (
-                              <p className="text-[9px] text-slate-400">الافتراضي: {defaultRefund} د.ت</p>
-                            )}
-                          </div>
-                        </label>
+                            <div className="text-left space-y-1">
+                              <span className="text-[10px] font-bold text-red-600">مبلغ الاسترجاع</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={ms.paidAmount}
+                                  step={0.5}
+                                  value={refundAmounts[m] !== undefined ? refundAmounts[m] : ''}
+                                  placeholder={defaultRefund.toString()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? undefined : Math.min(Number(e.target.value), ms.paidAmount);
+                                    setRefundAmounts(prev => {
+                                      const next = { ...prev };
+                                      if (val === undefined || val < 0) { delete next[m]; } else { next[m] = val; }
+                                      return next;
+                                    });
+                                  }}
+                                  className="w-20 px-2 py-1 border border-red-200 rounded-lg text-xs font-mono font-bold text-red-700 text-center bg-white focus:outline-none focus:ring-1 focus:ring-red-400"
+                                />
+                                <span className="text-[10px] font-bold text-red-500">د.ت</span>
+                              </div>
+                              {refundAmounts[m] !== undefined && refundAmounts[m] !== defaultRefund && (
+                                <p className="text-[9px] text-slate-400">المقترح: {defaultRefund} د.ت</p>
+                              )}
+                            </div>
+                          </label>
+
+                          {/* Consumed meals dates */}
+                          {consumedDates.length > 0 && (
+                            <div className="px-3 pb-3 pt-1 bg-white border-t border-slate-100">
+                              <p className="text-[10px] font-extrabold text-slate-500 mb-1.5 flex items-center gap-1">
+                                <span>🗓</span> تاريخ الوجبات المستهلكة لشهر {monthToArabic(m)}:
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {consumedDates.map(d => (
+                                  <span key={d} className="inline-block px-2 py-0.5 bg-[#F2F8F9] text-[#257C86] border border-[#C3E0E4] rounded-md text-[9px] font-mono font-bold">
+                                    {d}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {consumedDates.length === 0 && (
+                            <div className="px-3 pb-2 pt-1 bg-white border-t border-slate-100">
+                              <p className="text-[10px] text-slate-400 italic">لا توجد وجبات مستهلكة مسجلة لهذا الشهر.</p>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

@@ -27,7 +27,7 @@ import {
   Loader2,
   WifiOff
 } from 'lucide-react';
-import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS } from '../types';
+import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { capitalizeFirst } from '../utils/format';
@@ -306,7 +306,7 @@ export default function StudentRegistrationModule({
     setBirthDate(d.birthDate || '');
     setBirthPlace(d.birthPlace || '');
     setGrade(d.grade || 'Lycée 1ère Année');
-    setEtablissement(d.etablissement || '');
+    setEtablissement((d as any).etablissement || '');
     setMother({
       name: d.mother?.name || '',
       birthDate: d.mother?.birthDate || '',
@@ -385,15 +385,53 @@ export default function StudentRegistrationModule({
     setSuiviEnrolled(st.enrolledServices?.suivi ?? true);
     setEtudeEnrolled(st.enrolledServices?.etude ?? true);
     setLibraryEnrolled(st.enrolledServices?.library ?? false);
-    setMealsEnrolled(st.enrolledServices?.meals ?? true);
+
+    // Repas is active only if explicitly enrolled and not terminated/refunded
+    const currentIdx = getCurrentAcademicIndex();
+    const currentMonth = currentIdx >= 0 ? ACADEMIC_MONTHS[currentIdx] : 'Septembre';
+    const hasCurrentMonthMealRefund = (st.payments || []).some(
+      p => p.service === 'Repas' && p.refund && p.month.startsWith(`${currentMonth} `)
+    );
+    const isMealsActive = st.enrolledServices?.meals === true &&
+      st.mealSubscription?.active !== false &&
+      !hasCurrentMonthMealRefund;
+
+    setMealsEnrolled(isMealsActive);
 
     setIsFormOpen(true);
   };
 
   // Services already paid (annual or monthly) for the student in the editing year → locked, cannot be removed until a refund is issued
-  const editingPayments = editingStudentId ? (students.find(s => s.id === editingStudentId)?.payments || []) : [];
-  const hasPaidService = (...services: PaymentRecord['service'][]) =>
-    editingPayments.some(p => services.includes(p.service) && !p.refund && p.month.includes(academicYear));
+  const editingStudent = editingStudentId ? students.find(s => s.id === editingStudentId) : undefined;
+  const editingPayments = editingStudent ? (editingStudent.payments || []) : [];
+  const hasPaidService = (...services: PaymentRecord['service'][]) => {
+    // If the student is already unenrolled from meals or subscription is inactive, do NOT lock it
+    if (services.includes('Repas')) {
+      if (editingStudent?.enrolledServices?.meals === false || editingStudent?.mealSubscription?.active === false) {
+        return false;
+      }
+      // If student has any meal refund in this academic year, liberate (unlock) the checkbox
+      const hasMealRefund = editingPayments.some(
+        p => p.service === 'Repas' && p.refund && p.month.includes(academicYear)
+      );
+      if (hasMealRefund) {
+        return false;
+      }
+    }
+
+    // General check: if any refund exists for this service in this academic year, liberate it
+    const hasRefund = editingPayments.some(
+      p => services.includes(p.service) && p.refund && p.month.includes(academicYear)
+    );
+    if (hasRefund) {
+      return false;
+    }
+
+    const netPaid = editingPayments
+      .filter(p => services.includes(p.service) && p.month.includes(academicYear))
+      .reduce((sum, p) => sum + p.amountPaid, 0);
+    return netPaid > 0;
+  };
   const lockedSuivi = hasPaidService('Suivi', 'Inscription Suivi');
   const lockedEtude = hasPaidService('Étude', 'Inscription Étude');
   const lockedLibrary = hasPaidService('Bibliothèque', 'Inscription Bibliothèque');
@@ -451,7 +489,7 @@ export default function StudentRegistrationModule({
     setSuiviEnrolled(sourceSt.enrolledServices?.suivi ?? true);
     setEtudeEnrolled(sourceSt.enrolledServices?.etude ?? true);
     setLibraryEnrolled(sourceSt.enrolledServices?.library ?? false);
-    setMealsEnrolled(sourceSt.enrolledServices?.meals ?? true);
+    setMealsEnrolled(sourceSt.enrolledServices?.meals ?? false);
 
     setIsImportModalOpen(false);
     setIsFormOpen(true);

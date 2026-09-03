@@ -1616,12 +1616,30 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           const totalRefunded = Math.abs(subPayments.filter(p => p.refund).reduce((sum, p) => sum + p.amountPaid, 0));
           const totalMeals = subscriptionMeals.length + unitMeals.length;
           const centerMargin = f.fraisParRepas - f.prixPlatTraiteur;
-          const isRefunded = s.mealSubscription?.active === false && (s.payments || []).some(p => p.service === 'Repas' && p.refund);
+          const isEnrolled = s.mealSubscription?.active === true || s.enrolledServices?.meals === true;
+          const monthlySubPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
+          const latestMonthlyPayment = monthlySubPayments.length > 0
+            ? monthlySubPayments[monthlySubPayments.length - 1]
+            : null;
+          const isCurrentlyActive = isEnrolled;
+
+          // If the latest transaction for this period was a refund (and not repaid), they are 'مسترجع'.
+          // If they paid again after refund, the latest transaction is a normal payment, so they are 'مشترك'.
+          const isRefunded = monthFilter === 'all'
+            ? (!isCurrentlyActive && latestMonthlyPayment?.refund === true)
+            : (latestMonthlyPayment?.refund === true);
+
+          const isSubscribed = !isRefunded && (
+            (latestMonthlyPayment !== null && !latestMonthlyPayment.refund) ||
+            (isCurrentlyActive && grossPaid > totalRefunded)
+          );
+
           return {
             id: s.id,
             name: `${s.firstName} ${s.lastName}`,
             grade: s.grade,
-            isSubscribed: grossPaid > 0,
+            isEnrolled,
+            isSubscribed,
             isRefunded,
             grossPaid,
             totalRefunded,
@@ -1727,9 +1745,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-slate-600">{s.grade}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              s.isRefunded ? 'bg-red-100 text-red-700' : s.isSubscribed ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                              s.isRefunded ? 'bg-orange-100 text-orange-700' : s.isSubscribed ? 'bg-blue-100 text-blue-700' : s.isEnrolled ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'
                             }`}>
-                              {s.isRefunded ? 'ملغى' : s.isSubscribed ? 'مشترك' : 'Units'}
+                              {s.isRefunded ? 'مسترجع' : s.isSubscribed ? 'مشترك' : s.isEnrolled ? 'لم يدفع الإشتراك' : 'وجبة منفردة'}
                             </span>
                           </td>
                           <td className="p-3 text-center font-mono font-bold text-blue-700">{s.subscriptionMeals}</td>
