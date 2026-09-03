@@ -112,104 +112,136 @@ input[type="date"] {
   text-align: right;
 }
 
+
 /* Custom CSS for Print Layouts */
-.print-area {
-  min-height: 297mm;
-}
+/* NOTE: no forced min-height on .print-area - templates size to their content so
+   short documents (like a receipt) print on a single page with data at the top. */
 
 @media print {
-  /* margin: 0 on the page removes the browser's own print header/footer
-     (title, date, URL, page number) — Chrome/Edge hide them when the page
-     has no margin box to render them in. The printable area adds its own
-     padding instead so the content still has nice A4 margins. */
   @page {
-    size: A4;
-    margin: 0;
+    size: A4 portrait;
+    margin: 12mm 15mm;
   }
 
-  /* Printed documents keep the fixed 16px base — A4 paper must not depend on
-     the screen's viewport width. */
   html {
-    font-size: 16px;
+    font-size: 13.5px;
   }
 
   html,
   body {
     background-color: #ffffff !important;
+    background: #ffffff !important;
     color: #000000 !important;
+    width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Only the printable template (.print-area) is shown, everything else is hidden */
+  /* Always hide all UI elements flagged with .no-print */
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Hide all background and sibling elements that do not contain .print-area */
+  body:has(.print-area) *:not(:has(.print-area)):not(.print-area):not(.print-area *) {
+    display: none !important;
+  }
+
+  /* Fallback: Only printable content (.print-area) is visible */
   body * {
     visibility: hidden;
   }
   .print-area,
   .print-area * {
-    visibility: visible;
+    visibility: visible !important;
   }
-  .print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
+
+  /* Neutralize all parent layout wrappers and remove max-width constraints */
+  #root,
+  main,
+  .fixed,
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-hidden,
+  [class*="max-w-"],
+  [class*="max-h-"],
+  [class*="min-h-"] {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 100% !important;
     max-width: 100% !important;
-    margin: 0 !important;
-    padding: 10mm 8mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  /* Printable Document Container: Clean, Full-Width, Centered, No Grey Outer Border */
+  .print-area {
+    visibility: visible !important;
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    min-height: auto !important;
+    outline: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  /* Keep section boxes whole — never split across pages */
-  .print-area .rounded {
-    break-inside: avoid;
+  /* Specific single-page receipt adjustments */
+  .print-one {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
   }
 
-  /* Notes + Signature must stay together and never split across a page break */
-  .print-area .print-footer {
-    break-inside: avoid;
+  /* Avoid page breaks inside sections and footers */
+  .print-area .rounded,
+  .print-area .rounded-2xl,
+  .print-area .rounded-xl,
+  .print-area .print-footer,
+  .print-area table,
+  .print-area tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  /* Neutralize modal overlays so the receipt flows naturally onto A4 pages */
-  .fixed {
-    position: static !important;
-    inset: auto !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding: 0 !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-  .fixed > * {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  /* Collapse the rest of the app so no blank pages trail the printed document */
-  #root {
-    height: 0 !important;
-    overflow: visible !important;
-  }
-
-  /* Keep colored backgrounds/badges visible on paper */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
   .print-card {
     border: none !important;
     box-shadow: none !important;
@@ -222,9 +254,46 @@ input[type="date"] {
 @media print {
   @page landscape {
     size: A4 landscape;
-    margin: 0;
+    margin: 10mm 12mm;
   }
   .print-landscape {
     page: landscape;
+  }
+}
+
+/* Bus Route Sheet — ensure trip blocks allow page breaks between them,
+   and show the mini-header (bus-trip-page-header) only at top of a new printed page */
+@media print {
+  /* Allow page breaks between trip blocks */
+  .bus-trip-block {
+    break-before: auto;
+  }
+
+  /* The print-area for the bus sheet must NOT avoid breaks (it's multi-page) */
+  .print-area:has(.bus-trip-block) {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  /* Trip tables: allow rows to break across pages */
+  .print-area:has(.bus-trip-block) table,
+  .print-area:has(.bus-trip-block) tr {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  /* The per-trip mini-header: hidden by default, shown only in print on non-first trips */
+  .bus-trip-page-header {
+    display: flex !important;
+    visibility: visible !important;
+    padding-top: 4mm;
+    padding-bottom: 2mm;
+    margin-bottom: 2mm;
+  }
+
+  /* Main bus header: only show once, at the very top */
+  .bus-print-header {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 }

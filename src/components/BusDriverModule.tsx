@@ -846,12 +846,12 @@ export default function BusDriverModule({
       {/* PRINTABLE ROUTE SHEET (FEUILLE DE ROUTE A4) */}
       <div className="print-area bg-white text-slate-900 text-xs font-sans hidden print:block">
         
-        {/* Printable Header */}
-        <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-center">
+        {/* Printable Header — shown once on screen, repeats via CSS on every page */}
+        <div className="bus-print-header border-b-2 border-slate-900 pb-3 mb-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <img src={logo} alt="Logo" className="w-14 h-14 object-contain" />
+            <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
             <div>
-              <h1 className="text-xl font-black text-slate-900">{centerName}</h1>
+              <h1 className="text-lg font-black text-slate-900">{centerName}</h1>
               <p className="text-xs font-bold text-slate-600">ورقة مسار حافلة النقل المدرسي (Feuille de Route)</p>
             </div>
           </div>
@@ -861,7 +861,7 @@ export default function BusDriverModule({
         </div>
 
         {/* Chauffeur info on top */}
-        <div className="bg-slate-100 p-3 rounded-lg border border-slate-300 flex justify-between items-center text-xs">
+        <div className="bg-slate-100 p-3 rounded-lg border border-slate-300 flex justify-between items-center text-xs mb-4">
           <div>
             <span className="font-bold text-slate-700">سائق الحافلة: </span>
             <span className="font-black text-slate-900 text-sm">
@@ -881,11 +881,19 @@ export default function BusDriverModule({
         </div>
 
         {/* Trips List in Print */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           {printTrips.map((trip, tripIndex) => {
             const isToSchool = trip.tripType === 'to_school';
             return (
-              <div key={trip.id} className="border border-slate-400 rounded-lg overflow-hidden break-inside-avoid">
+              <div key={trip.id} className={`border border-slate-400 rounded-lg overflow-hidden break-inside-avoid${tripIndex > 0 ? ' bus-trip-block' : ''}`}>
+                {/* Repeated mini-header inside each trip block (visible only on print for page 2+) */}
+                {tripIndex > 0 && (
+                  <div className="bus-trip-page-header hidden border-b border-slate-300 pb-2 mb-2 flex justify-between items-center text-[10px] text-slate-600 font-bold">
+                    <span>{centerName} — ورقة مسار الحافلة</span>
+                    <span>اليوم: {selectedDay} | سائق: {busDriver ? `${busDriver.firstName} ${busDriver.lastName}` : 'سائق معتمد'}</span>
+                  </div>
+                )}
+
                 <div className="bg-slate-800 text-white p-2 flex justify-between items-center text-xs font-bold">
                   <div className="flex items-center gap-2">
                     <span className="bg-[#C8D400] text-slate-900 px-2 py-0.5 rounded font-black text-[11px]">
