@@ -114,21 +114,15 @@ input[type="date"] {
 
 
 /* Custom CSS for Print Layouts */
-/* NOTE: no forced min-height on .print-area - templates size to their content so
-   short documents (like a receipt) print on a single page with data at the top. */
+/* Zero page margin removes browser-generated headers (date, title) and footers (URL, page number) in Chromium */
+@page {
+  margin: 0mm !important;
+}
 
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 15mm;
-
-    /* Remove browser-generated headers/footers (date, URL, page number, title) */
-    @top-left   { content: none; }
-    @top-center { content: none; }
-    @top-right  { content: none; }
-    @bottom-left   { content: none; }
-    @bottom-center { content: none; }
-    @bottom-right  { content: none; }
+    margin: 0mm !important;
   }
 
   html {
@@ -217,7 +211,7 @@ input[type="date"] {
     max-width: 100% !important;
     box-sizing: border-box !important;
     margin: 0 auto !important;
-    padding: 0 !important;
+    padding: 10mm 12mm !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #0f172a !important;
@@ -262,10 +256,11 @@ input[type="date"] {
 @media print {
   @page landscape {
     size: A4 landscape;
-    margin: 10mm 12mm;
+    margin: 0mm !important;
   }
   .print-landscape {
     page: landscape;
+    padding: 8mm 10mm !important;
   }
 }
 

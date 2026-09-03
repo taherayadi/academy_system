@@ -583,14 +583,6 @@ export default function BusDriverModule({
 
 
           <button
-            onClick={openManualForm}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer shrink-0"
-          >
-            <PlusCircle className="h-4 w-4" />
-            <span>إضافة رحلة يدوية</span>
-          </button>
-
-          <button
             onClick={handlePrintRoute}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#2D7282] hover:bg-[#1E6A73] text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer shrink-0"
           >
@@ -653,14 +645,24 @@ export default function BusDriverModule({
           </select>
         </div>
 
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
-          <button onClick={() => setActiveView('trips')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'trips' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
-            الرحلات المجمعة
-          </button>
-          <button onClick={() => setActiveView('etablissements')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'etablissements' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
-            حسب المؤسسة
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
+            <button onClick={() => setActiveView('trips')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'trips' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
+              الرحلات المجمعة
+            </button>
+            <button onClick={() => setActiveView('etablissements')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'etablissements' ? 'bg-white text-[#2D7282] shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
+              حسب المؤسسة
+            </button>
+          </div>
+
+          <button
+            onClick={openManualForm}
+            className="flex items-center gap-2 px-4 py-2 bg-[#2D7282] hover:bg-[#1E6A73] text-white font-extrabold text-xs rounded-xl shadow-md shadow-[#2D7282]/20 transition cursor-pointer shrink-0"
+          >
+            <PlusCircle className="h-4 w-4 text-[#C8D400]" />
+            <span>إضافة رحلة يدوية</span>
           </button>
         </div>
       </div>
@@ -832,7 +834,7 @@ export default function BusDriverModule({
                                           {p.student.lastName} {p.student.firstName}
                                         </span>
                                         {p.isManual && (
-                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-md">
+                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#EAF3F4] text-[#17555F] border border-[#A0CBCF]/60 text-[10px] font-black rounded-md">
                                             ✏️ يدوي
                                           </span>
                                         )}
@@ -855,7 +857,7 @@ export default function BusDriverModule({
                                           onClick={() => toggleBoarded(checkKey)}
                                           className={`px-3 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 mx-auto ${
                                             isBoarded
-                                              ? 'bg-emerald-600 text-white shadow-xs'
+                                              ? 'bg-[#2D7282] text-white shadow-xs'
                                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                           }`}
                                         >
@@ -868,7 +870,7 @@ export default function BusDriverModule({
                                           <button
                                             type="button"
                                             onClick={() => deleteManualPassenger(p.manualEntryId!, p.student.id)}
-                                            className="p-1.5 text-emerald-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                             title="حذف التلميذ اليدوي من هذه الرحلة"
                                           >
                                             <X className="h-4 w-4" />
@@ -996,8 +998,8 @@ export default function BusDriverModule({
               {/* Modal Header */}
               <div className="flex items-center justify-between p-5 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center">
-                    <PlusCircle className="h-5 w-5 text-emerald-600" />
+                  <div className="w-10 h-10 rounded-2xl bg-[#EAF3F4] text-[#2D7282] flex items-center justify-center">
+                    <PlusCircle className="h-5 w-5 text-[#2D7282]" />
                   </div>
                   <div>
                     <h3 className="font-black text-slate-900 text-sm">إضافة رحلة يدوية</h3>
@@ -1057,7 +1059,7 @@ export default function BusDriverModule({
                   <label className="block text-xs font-black text-slate-700 mb-1.5">
                     اختر التلاميذ
                     {manualFormStudentIds.size > 0 && (
-                      <span className="mr-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px]">
+                      <span className="mr-2 px-2 py-0.5 bg-[#EAF3F4] text-[#17555F] border border-[#A0CBCF]/40 rounded-full text-[10px] font-black">
                         {manualFormStudentIds.size} محدد
                       </span>
                     )}
@@ -1090,14 +1092,14 @@ export default function BusDriverModule({
                           <label
                             key={st.id}
                             className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition text-xs ${
-                              checked ? 'bg-emerald-50' : 'hover:bg-slate-50'
+                              checked ? 'bg-[#F2F8F9] border-r-4 border-r-[#2D7282]' : 'hover:bg-slate-50'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleManualStudent(st.id)}
-                              className="w-4 h-4 accent-emerald-600 cursor-pointer shrink-0"
+                              className="w-4 h-4 accent-[#2D7282] cursor-pointer shrink-0"
                             />
                             <div className="flex-1 min-w-0">
                               <span className="font-black text-slate-900 block truncate">
@@ -1107,7 +1109,7 @@ export default function BusDriverModule({
                                 {st.grade} — {st.etablissement || 'مؤسسة غير محددة'}
                               </span>
                             </div>
-                            {checked && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />}
+                            {checked && <CheckCircle2 className="h-4 w-4 text-[#2D7282] shrink-0" />}
                           </label>
                         );
                       })
@@ -1127,9 +1129,9 @@ export default function BusDriverModule({
                 <button
                   onClick={submitManualTrip}
                   disabled={manualFormStudentIds.size === 0 || !manualFormTime}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-xs"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-[#2D7282] hover:bg-[#1E6A73] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-[#2D7282]/20"
                 >
-                  <PlusCircle className="h-4 w-4" />
+                  <PlusCircle className="h-4 w-4 text-[#C8D400]" />
                   إضافة {manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}
                 </button>
               </div>
