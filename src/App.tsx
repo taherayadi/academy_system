@@ -86,6 +86,7 @@ import DataAnalysisModule from './components/DataAnalysisModule';
 import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
+import LandingPage from './components/LandingPage';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
@@ -108,6 +109,7 @@ export default function App() {
   // Authentication State
   // Always start logged out so the app requires login on every launch.
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -130,6 +132,7 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     clearSessionUser();
+    setAuthView('landing');
     toast.info('تم تسجيل الخروج.');
   };
 
@@ -570,9 +573,25 @@ export default function App() {
   };
 
   if (!currentUser) {
+    if (authView === 'landing') {
+      return (
+        <>
+          <LandingPage
+            onOpenLogin={() => setAuthView('login')}
+            centerName={settings?.centerName || 'Small Genious'}
+          />
+          <CloseConfirmDialog />
+        </>
+      );
+    }
+
     return (
       <>
-        <LoginScreen onLogin={handleLogin} centerName={settings?.centerName} />
+        <LoginScreen
+          onLogin={handleLogin}
+          centerName={settings?.centerName}
+          onBackToLanding={() => setAuthView('landing')}
+        />
         <CloseConfirmDialog />
       </>
     );

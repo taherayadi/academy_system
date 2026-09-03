@@ -8,9 +8,10 @@ import logo from '../assets/logo.png';
 interface LoginScreenProps {
   onLogin: (user: UserAccount) => void;
   centerName?: string;
+  onBackToLanding?: () => void;
 }
 
-export default function LoginScreen({ onLogin, centerName }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, centerName, onBackToLanding }: LoginScreenProps) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -61,6 +62,15 @@ export default function LoginScreen({ onLogin, centerName }: LoginScreenProps) {
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0e3036] via-[#17555f] to-[#2b6b4f] text-white p-8 text-center relative">
+          {onBackToLanding && (
+            <button
+              onClick={onBackToLanding}
+              className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition cursor-pointer backdrop-blur-xs"
+              title="العودة إلى الموقع التعريفي"
+            >
+              <span>← الموقع التعريفي</span>
+            </button>
+          )}
           <div className="w-20 h-20 mx-auto mb-3 overflow-hidden rounded-2xl bg-white p-1.5 ring-1 ring-white/40 shadow-lg">
             <img src={logo} alt={centerName || 'المركز'} className="w-full h-full object-cover rounded-xl" />
           </div>
@@ -70,7 +80,7 @@ export default function LoginScreen({ onLogin, centerName }: LoginScreenProps) {
 
         <div className="p-8 space-y-6">
           
-          {/* Login Form ONLY */}
+          {/* Login Form */}
           <form onSubmit={handleFormSubmit} className="space-y-4">
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
