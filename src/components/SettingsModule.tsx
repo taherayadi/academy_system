@@ -15,7 +15,9 @@ import {
   KeyRound,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Utensils,
+  Coffee
 } from 'lucide-react';
 import { CenterSettings, CenterFeeSet, getFeesForYear, initialStudentFeeSet, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear } from '../types';
 import { changeAccountPassword } from '../auth';import { useToast } from './Toast';
@@ -327,61 +329,178 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
               </div>
             </div>
 
-            {/* Repas / Restaurant */}
+            {/* Repas / Restaurant & Cantine Adaptative */}
             {!hideRestrictedModules && (
-              <div className="bg-orange-50/40 p-4 rounded-2xl border border-orange-200/60 space-y-3">
-                <span className="text-xs font-extrabold text-orange-900 block border-b border-orange-200/60 pb-1">
-                  الوجبات والمطعم
-                </span>
-                
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    اشتراك الوجبات الشهري
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={currentYearFees.fraisAbonnementRepas}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => updateFee('fraisAbonnementRepas', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
-                    />
-                    <span className="text-xs font-black text-slate-500">د.ت</span>
+              <div className="bg-orange-50/40 p-4 rounded-2xl border border-orange-200/60 space-y-4 md:col-span-2 lg:col-span-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-orange-200/60 pb-2">
+                  <span className="text-xs font-extrabold text-orange-900 flex items-center gap-2">
+                    <Utensils className="h-4 w-4 text-orange-600" />
+                    المطعم والوجبات (Cantine Adaptative)
+                  </span>
+                  {/* Mode Selector */}
+                  <div className="flex items-center gap-1 bg-white/80 p-1 rounded-xl border border-orange-200 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'external_traiteur' }))}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                    >
+                      🤝 متعاقد مع Traiteur خارجي
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, mealOperatingMode: 'in_house_kitchen' }));
+                        updateFee('prixPlatTraiteur', 0);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                    >
+                      👨‍🍳 مطبخ داخلي (طباخ قار)
+                    </button>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    سعر الوجبة الفردية
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={currentYearFees.fraisParRepas}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => updateFee('fraisParRepas', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
-                    />
-                    <span className="text-xs font-black text-slate-500">د.ت</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      اشتراك الوجبات الشهري (Déjeuner)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={currentYearFees.fraisAbonnementRepas}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => updateFee('fraisAbonnementRepas', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                      />
+                      <span className="text-xs font-black text-slate-500">د.ت</span>
+                    </div>
                   </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      سعر الوجبة الفردية (Déjeuner unitaire)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={currentYearFees.fraisParRepas}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => updateFee('fraisParRepas', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                      />
+                      <span className="text-xs font-black text-slate-500">د.ت</span>
+                    </div>
+                  </div>
+
+                  {(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? (
+                    <div>
+                      <label className="text-[11px] font-bold text-orange-950 block mb-1">
+                        سعر الوجبة للـ Traiteur (حصة المتعهد)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.prixPlatTraiteur}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('prixPlatTraiteur', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-3 py-1.5 bg-white border border-orange-300 rounded-xl text-xs font-bold font-mono text-orange-900"
+                        />
+                        <span className="text-xs font-black text-slate-500">د.ت</span>
+                      </div>
+                      <span className="text-[10px] text-orange-600 font-bold block mt-1">تخصم كدين للـ Traiteur في وحدة المالية</span>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-col justify-center">
+                      <span className="text-[11px] font-black text-emerald-800 flex items-center gap-1">
+                        ✓ نظام المطبخ الداخلي مفعّل
+                      </span>
+                      <span className="text-[10px] text-emerald-700 mt-0.5">
+                        حصة الـ Traiteur معطلة (0 د.ت). 100% من مداخيل الوجبات تسجل كأرباح للمركز.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    سعر الوجبة للـ Traiteur
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={currentYearFees.prixPlatTraiteur}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => updateFee('prixPlatTraiteur', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
-                    />
-                    <span className="text-xs font-black text-slate-500">د.ت</span>
+                {/* Sub-section: Goûter Service */}
+                <div className="mt-4 pt-3 border-t border-orange-200/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Coffee className="h-4 w-4 text-amber-700" />
+                    <span className="text-xs font-black text-amber-900">
+                      تسعيرة خدمة اللمجة (Goûter)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-amber-50/50 p-3 rounded-2xl border border-amber-200/60">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        لمجة الصباح — اشتراك شهري
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.fraisGouterMatinMensuel || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('fraisGouterMatinMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                        />
+                        <span className="text-[11px] font-black text-slate-500">د.ت</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        لمجة الصباح — سعر بالوحدة
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.fraisGouterMatinUnitaire || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('fraisGouterMatinUnitaire', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                        />
+                        <span className="text-[11px] font-black text-slate-500">د.ت</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        لمجة المساء — اشتراك شهري
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.fraisGouterSoirMensuel || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('fraisGouterSoirMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                        />
+                        <span className="text-[11px] font-black text-slate-500">د.ت</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        لمجة المساء — سعر بالوحدة
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.fraisGouterSoirUnitaire || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('fraisGouterSoirUnitaire', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                        />
+                        <span className="text-[11px] font-black text-slate-500">د.ت</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

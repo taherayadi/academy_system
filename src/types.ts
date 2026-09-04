@@ -16,13 +16,20 @@ export interface CenterFeeSet {
   fraisAnnuelEtude: number;
   fraisMensuelEtude: number;
   fraisAssuranceCoursExternes: number;
+  fraisGouterMatinMensuel?: number;
+  fraisGouterMatinUnitaire?: number;
+  fraisGouterSoirMensuel?: number;
+  fraisGouterSoirUnitaire?: number;
 }
+
+export type MealOperatingMode = 'external_traiteur' | 'in_house_kitchen';
 
 export interface CenterSettings {
   centerName: string;
   phoneNumber: string;
   locationCity: string;
   geminiApiKey?: string;
+  mealOperatingMode?: MealOperatingMode;
   fees: CenterFeeSet;
   // Per-school-year fee overrides: key = "2025/2026" ...
   feesByYear: Record<string, CenterFeeSet>;
@@ -42,7 +49,11 @@ export const initialCenterFeeSet: CenterFeeSet = {
   prixPlatTraiteur: 6,
   fraisAnnuelEtude: 100,
   fraisMensuelEtude: 180,
-  fraisAssuranceCoursExternes: 50
+  fraisAssuranceCoursExternes: 50,
+  fraisGouterMatinMensuel: 0,
+  fraisGouterMatinUnitaire: 0,
+  fraisGouterSoirMensuel: 0,
+  fraisGouterSoirUnitaire: 0
 };
 
 // Default fees applied at student creation time
@@ -56,7 +67,11 @@ export const initialStudentFeeSet: CenterFeeSet = {
   prixPlatTraiteur: 6,
   fraisAnnuelEtude: 100,
   fraisMensuelEtude: 180,
-  fraisAssuranceCoursExternes: 50
+  fraisAssuranceCoursExternes: 50,
+  fraisGouterMatinMensuel: 0,
+  fraisGouterMatinUnitaire: 0,
+  fraisGouterSoirMensuel: 0,
+  fraisGouterSoirUnitaire: 0
 };
 
 // Shared default list of matières used across the whole app (Suivi notes devoirs, staff enseignant, cours)
@@ -77,6 +92,7 @@ export const initialCenterSettings: CenterSettings = {
   centerName: 'المركز',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
+  mealOperatingMode: 'external_traiteur',
   fees: initialStudentFeeSet,
   feesByYear: {
     '2022/2023': initialStudentFeeSet,
@@ -108,7 +124,11 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
       prixPlatTraiteur: fb.prixPlatTraiteur != null ? Number(fb.prixPlatTraiteur) : 6,
       fraisAnnuelEtude: Number(fb.fraisAnnuelEtude) || 0,
       fraisMensuelEtude: Number(fb.fraisMensuelEtude) || 0,
-      fraisAssuranceCoursExternes: Number(fb.fraisAssuranceCoursExternes) || 0
+      fraisAssuranceCoursExternes: Number(fb.fraisAssuranceCoursExternes) || 0,
+      fraisGouterMatinMensuel: Number(fb.fraisGouterMatinMensuel) || 0,
+      fraisGouterMatinUnitaire: Number(fb.fraisGouterMatinUnitaire) || 0,
+      fraisGouterSoirMensuel: Number(fb.fraisGouterSoirMensuel) || 0,
+      fraisGouterSoirUnitaire: Number(fb.fraisGouterSoirUnitaire) || 0
     };
   }
 
@@ -129,7 +149,11 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
     prixPlatTraiteur: raw.prixPlatTraiteur != null ? Number(raw.prixPlatTraiteur) : (raw.prix_plat_traiteur != null ? Number(raw.prix_plat_traiteur) : (fb.prixPlatTraiteur != null ? Number(fb.prixPlatTraiteur) : 6)),
     fraisAnnuelEtude: getNum('fraisAnnuelEtude', 'frais_annuel_etude', undefined, Number(fb.fraisAnnuelEtude) || 0),
     fraisMensuelEtude: getNum('fraisMensuelEtude', 'frais_mensuel_etude', undefined, Number(fb.fraisMensuelEtude) || 0),
-    fraisAssuranceCoursExternes: getNum('fraisAssuranceCoursExternes', 'frais_assurance_cours_externes', 'assuranceFee', Number(fb.fraisAssuranceCoursExternes) || 0)
+    fraisAssuranceCoursExternes: getNum('fraisAssuranceCoursExternes', 'frais_assurance_cours_externes', 'assuranceFee', Number(fb.fraisAssuranceCoursExternes) || 0),
+    fraisGouterMatinMensuel: getNum('fraisGouterMatinMensuel', 'frais_gouter_matin_mensuel', undefined, Number(fb.fraisGouterMatinMensuel) || 0),
+    fraisGouterMatinUnitaire: getNum('fraisGouterMatinUnitaire', 'frais_gouter_matin_unitaire', undefined, Number(fb.fraisGouterMatinUnitaire) || 0),
+    fraisGouterSoirMensuel: getNum('fraisGouterSoirMensuel', 'frais_gouter_soir_mensuel', undefined, Number(fb.fraisGouterSoirMensuel) || 0),
+    fraisGouterSoirUnitaire: getNum('fraisGouterSoirUnitaire', 'frais_gouter_soir_unitaire', undefined, Number(fb.fraisGouterSoirUnitaire) || 0)
   };
 }
 
@@ -170,10 +194,11 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-centerName: src.centerName || src.center_name || 'المركز',
+    centerName: src.centerName || src.center_name || 'المركز',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     geminiApiKey: src.geminiApiKey || src.gemini_api_key || '',
+    mealOperatingMode: src.mealOperatingMode || src.meal_operating_mode || 'external_traiteur',
     fees: baseFees,
     feesByYear,
     subjects
@@ -304,7 +329,7 @@ export interface PaymentRecord {
   amountPaid: number;
   totalRequired: number;
   remainingBalance: number;
-  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Assurance' | 'Autres';
+  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Autres';
   month: string; // e.g. "Octobre"
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
   method: 'Espèces' | 'Chèque' | 'Virement';
@@ -336,9 +361,12 @@ export interface MealSubscription {
   active: boolean;
 }
 
-/** One meal served to a student on a specific date. */
+export type MealServiceType = 'lunch' | 'gouter_matin' | 'gouter_apres_midi';
+
+/** One meal or snack served to a student on a specific date. */
 export interface MealAttendance {
   date: string;
+  service?: MealServiceType;
   /** A monthly subscriber or a student paying for a single dish. */
   type: 'subscription' | 'unit';
   paid: boolean;

@@ -66,7 +66,8 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
   { value: 'Formation', label: 'تكوينات' },
   { value: 'Bibliothèque', label: 'مكتبة' },
   { value: 'Inscription Bibliothèque', label: 'تسجيل المكتبة' },
-  { value: 'Repas', label: 'وجبات' },
+  { value: 'Repas', label: 'وجبات (Déjeuner)' },
+  { value: 'Goûter', label: 'اللمجة (Goûter)' },
   { value: 'Assurance', label: 'تأمين' },
   { value: 'Autres', label: 'أخرى' }
 ];
@@ -285,14 +286,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   };
   const grandRepasPayments = allPaymentsMerged.filter(p => p.service === 'Repas');
 
-  // Calculate traiteur share from actual meal consumption across all students
+  const isInHouseKitchen = settings?.mealOperatingMode === 'in_house_kitchen';
+
+  // Calculate traiteur share from actual meal consumption across all students (0 in in-house kitchen mode)
   const calcRepasTraiteurTotal = () => {
-    if (!settings) return 0;
+    if (!settings || isInHouseKitchen) return 0;
     let total = 0;
     for (const s of students) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = s.mealAttendances || [];
-      const consumed = attendances.filter(a => a.type === 'subscription').length;
+      const consumed = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch')).length;
       total += consumed * f.prixPlatTraiteur;
     }
     return total;
@@ -378,7 +381,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const repasCenterTotal = repasPayments.reduce((s, p) => s + p.amountPaid, 0);
   // Traiteur total for filtered period: count consumed plates from filtered students
   const calcFilteredRepasTraiteurTotal = () => {
-    if (!settings) return 0;
+    if (!settings || isInHouseKitchen) return 0;
     let total = 0;
     for (const s of filteredStudents) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
@@ -386,7 +389,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         if (monthFilter === 'all') return true;
         return a.date.startsWith(monthFilter);
       });
-      const consumed = attendances.filter(a => a.type === 'subscription').length;
+      const consumed = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch')).length;
       total += consumed * f.prixPlatTraiteur;
     }
     return total;
@@ -415,8 +418,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       );
       totalSubscriptions += subPayments.reduce((sum, p) => sum + p.amountPaid, 0);
     }
-    const traiteurShare = totalPlatesConsumed * (settings.fees?.prixPlatTraiteur ?? 6);
-    const centerBenefice = totalSubscriptions - traiteurShare;
+    const traiteurShare = isInHouseKitchen ? 0 : totalPlatesConsumed * (settings.fees?.prixPlatTraiteur ?? 6);
+    const centerBenefice = isInHouseKitchen ? totalSubscriptions : totalSubscriptions - traiteurShare;
     return { totalSubscriptions, totalPlatesConsumed, traiteurShare, centerBenefice };
   };
   const restoStats = calcRestoStats();
@@ -500,6 +503,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     Revision: revisionCenterTotal,
     Formation: filteredPayments.filter(p => p.service === 'Formation').reduce((s, p) => s + (p.refund ? -p.amountPaid : p.amountPaid), 0),
     Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
+    Gouter: filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0),
     Assurance: filteredPayments.filter(p => p.service === 'Assurance').reduce((s, p) => s + p.amountPaid, 0),
     Autres: filteredPayments.filter(p => p.service === 'Autres').reduce((s, p) => s + p.amountPaid, 0),
     Refunds: filteredPayments.filter(p => p.refund).reduce((s, p) => s + p.amountPaid, 0)
@@ -819,6 +823,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-slate-700">4. اشتراكات المكتبة:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
+              {!hideRestrictedModules && revenueByService.Gouter > 0 && (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 flex justify-between font-bold">
+                  <span className="text-amber-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
+                  <span className="font-mono text-amber-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
+                </div>
+              )}
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">5. رسوم التأمين المدرسي (Assurance):</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Assurance)} د.ت</span>
@@ -1659,10 +1669,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalSubMeals = restoStudents.reduce((sum, s) => sum + s.subscriptionMeals, 0);
         const totalUnitMeals = restoStudents.reduce((sum, s) => sum + s.unitMeals, 0);
         const prixPlat = settings?.fees?.fraisParRepas ?? 8;
-        const prixTraiteur = settings?.fees?.prixPlatTraiteur ?? 6;
-        const centerMarginPerPlate = prixPlat - prixTraiteur;
-        const traiteurCost = totalPlatesConsumed * prixTraiteur;
-        const centerBenefit = totalPlatesConsumed * centerMarginPerPlate;
+        const prixTraiteur = isInHouseKitchen ? 0 : (settings?.fees?.prixPlatTraiteur ?? 6);
+        const centerMarginPerPlate = isInHouseKitchen ? prixPlat : (prixPlat - prixTraiteur);
+        const traiteurCost = isInHouseKitchen ? 0 : totalPlatesConsumed * prixTraiteur;
+        const centerBenefit = isInHouseKitchen ? totalSubscriptions : totalPlatesConsumed * centerMarginPerPlate;
 
         const totalRestoPages = Math.ceil(restoStudents.length / pageSize) || 1;
         const currentRestoPage = Math.min(Math.max(1, restoPage), totalRestoPages);
@@ -1686,8 +1696,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
-                <div className="font-mono text-lg font-black text-red-900">{fmt(traiteurCost)} د.ت</div>
-                <div className="text-[9px] text-red-600 mt-1">{totalPlatesConsumed} × {fmt(prixTraiteur)} د.ت</div>
+                <div className="font-mono text-lg font-black text-red-900">{isInHouseKitchen ? '0.000 د.ت' : `${fmt(traiteurCost)} د.ت`}</div>
+                <div className="text-[9px] text-red-600 mt-1">{isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : `${totalPlatesConsumed} × ${fmt(prixTraiteur)} د.ت`}</div>
               </div>
               <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
                 <div className="text-[10px] font-bold text-emerald-700 mb-1">ربح السنتر من الوجبات</div>

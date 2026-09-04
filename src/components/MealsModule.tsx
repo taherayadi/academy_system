@@ -20,9 +20,11 @@ import {
   CreditCard,
   Undo2,
   CalendarDays,
-  ChevronDown
+  ChevronDown,
+  Coffee,
+  Cookie
 } from 'lucide-react';
-import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear } from '../types';
+import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -154,7 +156,126 @@ export default function MealsModule({
     const net = payments.reduce((sum, p) => sum + p.amountPaid, 0);
     return hasRefundRecord && net <= 0;
   };
+  const getServiceAttendance = (st: Student, service: MealServiceType = 'lunch') =>
+    (st.mealAttendances || []).find(a => a.date === selectedDate && (a.service || 'lunch') === service);
+
+  const getTodayAttendances = (st: Student) =>
+    (st.mealAttendances || []).filter(a => a.date === selectedDate);
+
   const getAttendance = (st: Student) => (st.mealAttendances || []).find(a => a.date === selectedDate);
+
+  const handleToggleMealService = (st: Student, service: MealServiceType) => {
+    const existing = getServiceAttendance(st, service);
+    const serviceLabel = service === 'lunch' ? 'الغداء' : service === 'gouter_matin' ? 'لمجة الصباح' : 'لمجة المساء';
+    if (existing) {
+      const newAttendances = (st.mealAttendances || []).filter(
+        a => !(a.date === selectedDate && (a.service || 'lunch') === service)
+      );
+      let updatedStudent: Student = {
+        ...st,
+        mealAttendances: newAttendances,
+        mealSubscription: (service === 'lunch' && existing.type === 'subscription' && st.mealSubscription)
+          ? {
+              ...st.mealSubscription,
+              consumedMealsCount: Math.max(0, (st.mealSubscription.consumedMealsCount || 0) - 1)
+            }
+          : st.mealSubscription
+      };
+      if (existing.type === 'unit' && existing.paid) {
+        const fees = settings ? getFeesForYear(settings, schoolYear) : null;
+        const refundedAmount = service === 'lunch'
+          ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 8))
+          : service === 'gouter_matin'
+            ? (fees?.fraisGouterMatinUnitaire ?? 0)
+            : (fees?.fraisGouterSoirUnitaire ?? 0);
+        if (refundedAmount > 0) {
+          updatedStudent = {
+            ...updatedStudent,
+            payments: [...(st.payments || []), {
+              id: `ref_meal_unit_${crypto.randomUUID()}`,
+              date: new Date().toISOString().split('T')[0],
+              amountPaid: -refundedAmount,
+              totalRequired: refundedAmount,
+              remainingBalance: 0,
+              service: service === 'lunch' ? 'Repas' : 'Goûter',
+              month: `${serviceLabel} unitaire (${selectedDate})`,
+              paymentType: 'balance',
+              method: 'Espèces',
+              receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
+              notes: `استرجاع ثمن ${serviceLabel} - ${selectedDate}`,
+              refund: true
+            }]
+          };
+        }
+      }
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+      toast.info(`تم إلغاء تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
+    } else {
+      const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
+      const monthMap: Record<number, AcademicMonth> = {
+        8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
+        0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
+      };
+      const academicMonth = monthMap[dateMonth];
+      const hasPaid = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
+      const hasRefund = academicMonth ? hasUncoveredRefund(st, academicMonth) : false;
+      const isSubscribedSys = st.mealSubscription?.active === true;
+      const isLunchSubscribed = service === 'lunch' && isSubscribedSys && !hasRefund;
+
+      const mealType: 'subscription' | 'unit' = isLunchSubscribed ? 'subscription' : 'unit';
+
+      const updatedStudent: Student = {
+        ...st,
+        mealSubscription: (service === 'lunch' && isLunchSubscribed && st.mealSubscription)
+          ? {
+              ...st.mealSubscription,
+              consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + 1
+            }
+          : st.mealSubscription,
+        mealAttendances: [
+          ...(st.mealAttendances || []),
+          { date: selectedDate, service, type: mealType, paid: mealType === 'subscription' ? hasPaid : false }
+        ]
+      };
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+      toast.success(`تم تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
+    }
+  };
+
+  const handlePayUnitService = (st: Student, service: MealServiceType = 'lunch') => {
+    const attendance = getServiceAttendance(st, service);
+    if (!attendance || attendance.type !== 'unit' || attendance.paid) return;
+    const fees = settings ? getFeesForYear(settings, schoolYear) : null;
+    const unitPrice = service === 'lunch'
+      ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 8))
+      : service === 'gouter_matin'
+        ? (fees?.fraisGouterMatinUnitaire ?? 0)
+        : (fees?.fraisGouterSoirUnitaire ?? 0);
+    const serviceLabel = service === 'lunch' ? 'الغداء' : service === 'gouter_matin' ? 'لمجة الصباح' : 'لمجة المساء';
+    const updatedStudent: Student = {
+      ...st,
+      mealAttendances: (st.mealAttendances || []).map(a =>
+        (a.date === selectedDate && (a.service || 'lunch') === service)
+          ? { ...a, paid: true, paidAt: new Date().toISOString() }
+          : a
+      ),
+      payments: [...(st.payments || []), {
+        id: `pay_unit_${service}_${crypto.randomUUID()}`,
+        date: selectedDate,
+        amountPaid: unitPrice,
+        totalRequired: unitPrice,
+        remainingBalance: 0,
+        service: service === 'lunch' ? 'Repas' : 'Goûter',
+        month: `${serviceLabel} unitaire (${selectedDate})`,
+        paymentType: 'full',
+        method: 'Espèces',
+        receiptNumber: generateReceiptNumber(students, service === 'lunch' ? 'REC-REP-' : 'REC-GOUT-'),
+        notes: `${serviceLabel}: ${service === 'lunch' ? activePlan.dishName : 'استهلاك بالوحدة'}`
+      }]
+    };
+    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    toast.success(`تم تسجيل خلاص ${serviceLabel} (${unitPrice} د.ت).`);
+  };
 
   const getConsumedInMonth = (st: Student, month: AcademicMonth): number => {
     const [startYear, endYear] = schoolYear.split('/');
@@ -699,11 +820,20 @@ export default function MealsModule({
       {/* Module Banner */}
       <div className="bg-white border border-[#E0EFF1] p-6 rounded-3xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 bg-[#F2F8F9] text-[#14464E] text-xs font-bold rounded-lg border border-[#C3E0E4]/60">
-              المطعم المدرسي (الوجبات)
+              المطعم المدرسي (الوجبات واللمجة)
             </span>
-            <span className="text-xs text-slate-400 font-bold">اشتراك المطعم والتغذية بالسنتر</span>
+            {settings?.mealOperatingMode === 'in_house_kitchen' ? (
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-800 text-xs font-black rounded-lg border border-emerald-200 flex items-center gap-1">
+                👨‍🍳 نظام المطبخ الداخلي (طباخ قار)
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-orange-50 text-orange-800 text-xs font-black rounded-lg border border-orange-200 flex items-center gap-1">
+                🤝 متعاقد مع Traiteur خارجي
+              </span>
+            )}
+            <span className="text-xs text-slate-400 font-bold">تسجيل الحضور والوجبات السريع</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
             <Utensils className="h-6 w-6 text-[#257C86]" />
@@ -1347,59 +1477,207 @@ export default function MealsModule({
         )}
       </div>
 
-      {/* DATED DAILY MEAL LIST */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs no-print">
-        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-          <div>
-            <h3 className="font-extrabold text-slate-900">قائمة وجبات {selectedDateLabel}</h3>
-            <p className="text-xs text-slate-500 mt-1">التلاميذ الذين تسلموا وجبة في هذا التاريخ مع حالة دفع الوجبة المنفردة.</p>
-          </div>
+      {/* DATED DAILY MEAL & GOUTER LIST */}
+      {(() => {
+        const dailyLunchCount = yearStudents.reduce((sum, st) => sum + ((st.mealAttendances || []).filter(a => a.date === selectedDate && (!a.service || a.service === 'lunch')).length), 0);
+        const dailyGouterMatinCount = yearStudents.reduce((sum, st) => sum + ((st.mealAttendances || []).filter(a => a.date === selectedDate && a.service === 'gouter_matin').length), 0);
+        const dailyGouterSoirCount = yearStudents.reduce((sum, st) => sum + ((st.mealAttendances || []).filter(a => a.date === selectedDate && a.service === 'gouter_apres_midi').length), 0);
+        const dailyAttendingStudents = yearStudents.filter(st => (st.mealAttendances || []).some(a => a.date === selectedDate));
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-            <label className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 cursor-pointer">
-              <CalendarDays className="h-4 w-4 text-slate-400" />
-              <span className="hidden sm:inline">تاريخ الوجبة:</span>
-              <DateField
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-slate-700 font-bold text-xs"
-              />
-            </label>
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs no-print space-y-4">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Pointage اليوم — {selectedDateLabel}</h3>
+                <p className="text-xs text-slate-500 mt-1">تسجيل سريع للوجبات ولمجة الصباح ولمجة المساء لكل تلميذ.</p>
+              </div>
 
-            {/* Quick add one-time meal student */}
-            <button
-              onClick={() => { setIsAddUnitMealModalOpen(true); setUnitMealSearch(''); }}
-              className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0"
-            >
-              <UserPlus className="h-4 w-4" />
-              إضافة تلميذ وجبة منفردة ({settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 8} د.ت)...
-            </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <label className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 cursor-pointer shadow-xs">
+                  <CalendarDays className="h-4 w-4 text-slate-400" />
+                  <span className="hidden sm:inline">تاريخ اليوم:</span>
+                  <DateField
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="bg-transparent text-slate-700 font-bold text-xs"
+                  />
+                </label>
+
+                <button
+                  onClick={() => { setIsAddUnitMealModalOpen(true); setUnitMealSearch(''); }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  إضافة تلميذ بالوحدة...
+                </button>
+              </div>
+            </div>
+
+            {/* Daily KPI Badges */}
+            <div className="px-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-blue-700 block">🍽️ وجبات الغداء</span>
+                  <span className="text-lg font-black text-blue-900 font-mono">{dailyLunchCount}</span>
+                </div>
+                <span className="text-xs text-blue-500 font-bold">وجبة</span>
+              </div>
+
+              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 block">🥐 لمجة الصباح</span>
+                  <span className="text-lg font-black text-amber-900 font-mono">{dailyGouterMatinCount}</span>
+                </div>
+                <span className="text-xs text-amber-500 font-bold">حصة</span>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-purple-700 block">🍪 لمجة المساء</span>
+                  <span className="text-lg font-black text-purple-900 font-mono">{dailyGouterSoirCount}</span>
+                </div>
+                <span className="text-xs text-purple-500 font-bold">حصة</span>
+              </div>
+
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-700 block">👥 التلاميذ الحاضرين</span>
+                  <span className="text-lg font-black text-emerald-900 font-mono">{dailyAttendingStudents.length}</span>
+                </div>
+                <span className="text-xs text-emerald-500 font-bold">تلميذ</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-100/80 text-slate-700 font-bold border-y border-slate-200">
+                  <tr>
+                    <th className="p-3.5">التلميذ</th>
+                    <th className="p-3.5 text-center">🍽️ الغداء (Déjeuner)</th>
+                    <th className="p-3.5 text-center">🥐 لمجة الصباح</th>
+                    <th className="p-3.5 text-center">🍪 لمجة المساء</th>
+                    <th className="p-3.5 text-center">حالة الدفع والإجراء</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {dailyAttendingStudents.map(st => {
+                    const lunchAtt = getServiceAttendance(st, 'lunch');
+                    const gouterMatinAtt = getServiceAttendance(st, 'gouter_matin');
+                    const gouterSoirAtt = getServiceAttendance(st, 'gouter_apres_midi');
+
+                    return (
+                      <tr key={st.id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-3.5 font-bold">
+                          <span className="text-slate-900 block">{st.firstName} {st.lastName}</span>
+                          <span className="text-[10px] text-slate-400">{st.grade}</span>
+                        </td>
+
+                        {/* Lunch Column */}
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMealService(st, 'lunch')}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
+                              lunchAtt
+                                ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-emerald-300 hover:text-slate-600'
+                            }`}
+                          >
+                            {lunchAtt ? '✓ غداء مسجل' : '+ غداء'}
+                          </button>
+                        </td>
+
+                        {/* Gouter Matin Column */}
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMealService(st, 'gouter_matin')}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
+                              gouterMatinAtt
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-amber-300 hover:text-slate-600'
+                            }`}
+                          >
+                            {gouterMatinAtt ? '✓ لمجة صباح' : '+ لمجة صباح'}
+                          </button>
+                        </td>
+
+                        {/* Gouter Apres-midi Column */}
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMealService(st, 'gouter_apres_midi')}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
+                              gouterSoirAtt
+                                ? 'bg-purple-500 text-white border-purple-600 shadow-xs'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-purple-300 hover:text-slate-600'
+                            }`}
+                          >
+                            {gouterSoirAtt ? '✓ لمجة مساء' : '+ لمجة مساء'}
+                          </button>
+                        </td>
+
+                        {/* Payment & Actions */}
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {/* Unpaid Unit Lunch */}
+                            {lunchAtt && lunchAtt.type === 'unit' && !lunchAtt.paid && (
+                              <button
+                                onClick={() => handlePayUnitService(st, 'lunch')}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-xs"
+                                title="خلاص الغداء المنفرد"
+                              >
+                                خلاص الغداء ({settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 8} د.ت)
+                              </button>
+                            )}
+                            {/* Unpaid Unit Gouter Matin */}
+                            {gouterMatinAtt && gouterMatinAtt.type === 'unit' && !gouterMatinAtt.paid && (
+                              <button
+                                onClick={() => handlePayUnitService(st, 'gouter_matin')}
+                                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-xs"
+                                title="خلاص لمجة الصباح"
+                              >
+                                خلاص الصباح ({settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinUnitaire : 0} د.ت)
+                              </button>
+                            )}
+                            {/* Unpaid Unit Gouter Soir */}
+                            {gouterSoirAtt && gouterSoirAtt.type === 'unit' && !gouterSoirAtt.paid && (
+                              <button
+                                onClick={() => handlePayUnitService(st, 'gouter_apres_midi')}
+                                className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-xs"
+                                title="خلاص لمجة المساء"
+                              >
+                                خلاص المساء ({settings ? getFeesForYear(settings, schoolYear).fraisGouterSoirUnitaire : 0} د.ت)
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => setRemoveAttendanceStudent(st)}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1"
+                              title="إزالة جميع تسجيلات اليوم"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              إزالة الكل
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {dailyAttendingStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
+                        لا توجد وجبات أو لمجات مسجلة لهذا التاريخ. استخدم زر "إضافة تلميذ بالوحدة" أو سجّل من جدول الاشتراكات أعلاه.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-slate-100/80 text-slate-700 font-bold"><tr><th className="p-4">التلميذ</th><th className="p-4">نوع الوجبة</th><th className="p-4">حالة الدفع</th><th className="p-4">إجراء</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {yearStudents.filter(st => getAttendance(st)).map(st => {
-                const attendance = getAttendance(st)!;
-                // For subscription type, compute actual payment status from current data
-                let displayPaid = attendance.paid;
-                if (attendance.type === 'subscription') {
-                  const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
-                  const monthMap: Record<number, AcademicMonth> = {
-                    8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
-                    0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
-                  };
-                  const academicMonth = monthMap[dateMonth];
-                  if (academicMonth) displayPaid = getMealStatus(st, academicMonth).status !== 'unpaid';
-                }
-                return <tr key={st.id} className="hover:bg-slate-50/80"><td className="p-4 font-bold">{st.firstName} {st.lastName} ({st.grade})</td><td className="p-4">{attendance.type === 'subscription' ? 'اشتراك شهري' : 'وجبة منفردة'}</td><td className="p-4 font-bold">{displayPaid ? 'مدفوع' : attendance.type === 'subscription' ? 'لم يدفع الإشتراك' : 'غير مدفوع'}</td><td className="p-4"><div className="flex items-center justify-end gap-2">{attendance.type === 'unit' && !attendance.paid && <button onClick={() => handlePayUnitMeal(st)} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold cursor-pointer">تسجيل الدفع</button>}<button onClick={() => setRemoveAttendanceStudent(st)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold cursor-pointer flex items-center gap-1" title={attendance.paid ? 'إزالة مع استرجاع الثمن' : 'إزالة من القائمة'}><Trash2 className="h-3.5 w-3.5" />إزالة</button></div></td></tr>;
-              })}
-              {yearStudents.filter(st => getAttendance(st)).length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-400">لا توجد وجبات مسجلة لهذا التاريخ.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* NEW PAYMENT MODAL */}
       <AnimatePresence>

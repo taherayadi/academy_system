@@ -28,6 +28,7 @@ import {
   getSessionToken,
   setSessionToken,
 } from './api';
+import { normalizeSettings, normalizeFeeSet, initialCenterSettings } from './types';
 
 // ---------------------------------------------------------------------------
 // Mock fetch globally
@@ -310,3 +311,52 @@ describe('Atomic Entity Mutators', () => {
     expect(opts.method).toBe('DELETE');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Step 3: Adaptive Cantine (Traiteur vs In-house Kitchen) & Goûter
+// ---------------------------------------------------------------------------
+describe('Step 3: Adaptive Cantine & Goûter', () => {
+  it('normalizes settings with in_house_kitchen mealOperatingMode', () => {
+    const raw = {
+      centerName: 'Al-Najah',
+      mealOperatingMode: 'in_house_kitchen',
+      fees: {
+        fraisAbonnementRepas: 180,
+        fraisParRepas: 9,
+        fraisGouterMatinMensuel: 30,
+        fraisGouterMatinUnitaire: 2,
+        fraisGouterSoirMensuel: 30,
+        fraisGouterSoirUnitaire: 2
+      }
+    };
+    const normalized = normalizeSettings(raw);
+    expect(normalized.mealOperatingMode).toBe('in_house_kitchen');
+    expect(normalized.fees.fraisAbonnementRepas).toBe(180);
+    expect(normalized.fees.fraisParRepas).toBe(9);
+    expect(normalized.fees.fraisGouterMatinMensuel).toBe(30);
+    expect(normalized.fees.fraisGouterMatinUnitaire).toBe(2);
+    expect(normalized.fees.fraisGouterSoirMensuel).toBe(30);
+    expect(normalized.fees.fraisGouterSoirUnitaire).toBe(2);
+  });
+
+  it('normalizes settings with external_traiteur mode as default', () => {
+    const raw = { centerName: 'Test Academy' };
+    const normalized = normalizeSettings(raw);
+    expect(normalized.mealOperatingMode).toBe('external_traiteur');
+  });
+
+  it('normalizes snake_case fees for Goûter from API/DB', () => {
+    const rawFees = {
+      frais_gouter_matin_mensuel: 25,
+      frais_gouter_matin_unitaire: 1.5,
+      frais_gouter_soir_mensuel: 35,
+      frais_gouter_soir_unitaire: 2.5,
+    };
+    const feeSet = normalizeFeeSet(rawFees);
+    expect(feeSet.fraisGouterMatinMensuel).toBe(25);
+    expect(feeSet.fraisGouterMatinUnitaire).toBe(1.5);
+    expect(feeSet.fraisGouterSoirMensuel).toBe(35);
+    expect(feeSet.fraisGouterSoirUnitaire).toBe(2.5);
+  });
+});
+
