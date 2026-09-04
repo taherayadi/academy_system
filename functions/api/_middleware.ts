@@ -9,7 +9,7 @@
 import { Env, validateSession, json } from './_lib';
 
 /** Paths that do NOT require an authenticated session. */
-const PUBLIC_PATHS: string[] = ['/api/auth/login', '/api/auth/logout'];
+const PUBLIC_PATHS: string[] = ['/api/auth/login', '/api/auth/logout', '/api/demo-requests'];
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next } = context;
@@ -26,6 +26,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return json({ error: 'غير مصرح. يرجى تسجيل الدخول أولاً.' }, 401);
   }
 
-  // Session is valid — proceed to the actual handler.
+  // Session is valid — attach to context.data and proceed to the actual handler.
+  (context.data as any).session = session;
   return next();
 };

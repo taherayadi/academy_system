@@ -1,4 +1,4 @@
-import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit } from '../_lib';
+import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -26,7 +26,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     const user = await env.DB
-      .prepare('SELECT email, name, role, description, password_hash FROM users WHERE email = ?')
+      .prepare('SELECT email, name, role, description, password_hash, center_id FROM users WHERE email = ?')
       .bind(cleanEmail)
       .first<any>();
 
@@ -43,11 +43,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     // Reset rate limits for this client IP on successful login.
     resetAuthRateLimit(env.DB, request).catch(() => {});
 
+    const centerId = user.center_id || DEFAULT_CENTER_ID;
+
     // Create a server-side session and return it as an HttpOnly cookie.
-    const token = await createSession(env.DB, cleanEmail);
+    const token = await createSession(env.DB, cleanEmail, centerId);
 
     // Opportunistically clean up expired sessions (fire-and-forget).
     purgeExpiredSessions(env.DB).catch(() => {});
+
+    let center = null;
+    if (centerId) {
+      center = await env.DB
+        .prepare('SELECT id, name, slug, logo_url, plan, enabled_modules, status, max_students, subscription_end FROM centers WHERE id = ?')
+        .bind(centerId)
+        .first<any>();
+      if (center && center.enabled_modules && typeof center.enabled_modules === 'string') {
+        try {
+          center.enabled_modules = JSON.parse(center.enabled_modules);
+        } catch {
+          center.enabled_modules = [];
+        }
+      }
+    }
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -60,8 +77,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          description: user.description
-        }
+          description: user.description,
+          centerId
+        },
+        center
       }),
       {
         status: 200,

@@ -177,13 +177,15 @@ export async function resetAuthRateLimit(db: D1Database, request: Request): Prom
 // Session management
 // ---------------------------------------------------------------------------
 
+export const DEFAULT_CENTER_ID = 'e1000000-0000-4000-8000-000000000001';
 const SESSION_COOKIE = 'tc_session';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 let sessionsTableReady = false;
 export async function ensureSessionsTable(db: D1Database): Promise<void> {
   if (sessionsTableReady) return;
-  await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, center_id TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
+  try { await db.prepare('ALTER TABLE sessions ADD COLUMN center_id TEXT').run(); } catch {}
   sessionsTableReady = true;
 }
 
@@ -206,21 +208,28 @@ export function getSessionToken(request: Request): string | null {
   return null;
 }
 
-export async function createSession(db: D1Database, email: string): Promise<string> {
+export async function createSession(db: D1Database, email: string, centerId: string = DEFAULT_CENTER_ID): Promise<string> {
   await ensureSessionsTable(db);
   const token = crypto.randomUUID();
   const now = Date.now();
-  await db.prepare('INSERT INTO sessions (token, email, expires_at, created_at) VALUES (?, ?, ?, ?)').bind(token, email, now + SESSION_DURATION_MS, now).run();
+  await db.prepare('INSERT INTO sessions (token, email, center_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').bind(token, email, centerId, now + SESSION_DURATION_MS, now).run();
   return token;
 }
 
-export async function validateSession(db: D1Database, request: Request): Promise<{ email: string; token: string } | null> {
+export async function validateSession(db: D1Database, request: Request): Promise<{ email: string; token: string; centerId: string; role?: string } | null> {
   const token = getSessionToken(request);
   if (!token) return null;
   await ensureSessionsTable(db);
-  const row = await db.prepare('SELECT email FROM sessions WHERE token = ? AND expires_at > ?').bind(token, Date.now()).first<{ email: string }>();
+  const row = await db.prepare('SELECT s.email, s.token, COALESCE(s.center_id, u.center_id, ?) as center_id, u.role FROM sessions s LEFT JOIN users u ON s.email = u.email WHERE s.token = ? AND s.expires_at > ?')
+    .bind(DEFAULT_CENTER_ID, token, Date.now())
+    .first<{ email: string; token: string; center_id: string; role?: string }>();
   if (!row) return null;
-  return { email: row.email, token };
+  return { email: row.email, token: row.token, centerId: row.center_id || DEFAULT_CENTER_ID, role: row.role };
+}
+
+export function getContextCenterId(context: any): string {
+  const session = context?.data?.session;
+  return session?.centerId || DEFAULT_CENTER_ID;
 }
 
 export async function deleteSession(db: D1Database, token: string): Promise<void> {
@@ -277,9 +286,15 @@ export interface AppState {
 // SETTINGS
 // ===========================================================================
 
-export async function readSettings(db: D1Database): Promise<any> {
-  const settingsRow = await db.prepare('SELECT * FROM settings WHERE id = 1').first<any>();
-  const feeRows = (await db.prepare('SELECT * FROM fee_sets').all()).results;
+export async function readSettings(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any> {
+  let settingsRow = await db.prepare('SELECT * FROM center_settings WHERE center_id = ?').bind(centerId).first<any>();
+  if (!settingsRow && centerId === DEFAULT_CENTER_ID) {
+    settingsRow = await db.prepare('SELECT * FROM settings WHERE id = 1').first<any>();
+  }
+  let feeRows = (await db.prepare('SELECT * FROM center_fee_sets WHERE center_id = ?').bind(centerId).all()).results;
+  if ((!feeRows || feeRows.length === 0) && centerId === DEFAULT_CENTER_ID) {
+    feeRows = (await db.prepare('SELECT * FROM fee_sets').all()).results;
+  }
   const subjectRows = (await db.prepare('SELECT name FROM subjects').all()).results;
   const etablissementRows = (await db.prepare('SELECT name FROM etablissements').all()).results;
 
@@ -296,7 +311,11 @@ export async function readSettings(db: D1Database): Promise<any> {
       prixPlatTraiteur: row.prix_plat_traiteur == null ? 6 : num(row.prix_plat_traiteur),
       fraisAnnuelEtude: num(row.frais_annuel_etude),
       fraisMensuelEtude: num(row.frais_mensuel_etude),
-      fraisAssuranceCoursExternes: num(row.frais_assurance_cours_externes)
+      fraisAssuranceCoursExternes: num(row.frais_assurance_cours_externes),
+      fraisGouterMatinMensuel: num(row.frais_gouter_matin_mensuel || 0),
+      fraisGouterMatinUnitaire: num(row.frais_gouter_matin_unitaire || 0),
+      fraisGouterSoirMensuel: num(row.frais_gouter_soir_mensuel || 0),
+      fraisGouterSoirUnitaire: num(row.frais_gouter_soir_unitaire || 0)
     };
     if (row.year === 'DEFAULT') defaultFees = fees;
     else feesByYear[row.year] = fees;
@@ -312,8 +331,12 @@ export async function readSettings(db: D1Database): Promise<any> {
     prixPlatTraiteur: (feeRows[0] as any).prix_plat_traiteur == null ? 6 : num((feeRows[0] as any).prix_plat_traiteur),
     fraisAnnuelEtude: num((feeRows[0] as any).frais_annuel_etude),
     fraisMensuelEtude: num((feeRows[0] as any).frais_mensuel_etude),
-    fraisAssuranceCoursExternes: num((feeRows[0] as any).frais_assurance_cours_externes)
-  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0 });
+    fraisAssuranceCoursExternes: num((feeRows[0] as any).frais_assurance_cours_externes),
+    fraisGouterMatinMensuel: num((feeRows[0] as any).frais_gouter_matin_mensuel || 0),
+    fraisGouterMatinUnitaire: num((feeRows[0] as any).frais_gouter_matin_unitaire || 0),
+    fraisGouterSoirMensuel: num((feeRows[0] as any).frais_gouter_soir_mensuel || 0),
+    fraisGouterSoirUnitaire: num((feeRows[0] as any).frais_gouter_soir_unitaire || 0)
+  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0, fraisGouterMatinMensuel: 0, fraisGouterMatinUnitaire: 0, fraisGouterSoirMensuel: 0, fraisGouterSoirUnitaire: 0 });
 
   DEFAULT_ACADEMIC_YEARS.forEach(yr => { if (!feesByYear[yr]) feesByYear[yr] = { ...baseFees }; });
 
@@ -330,23 +353,49 @@ export async function readSettings(db: D1Database): Promise<any> {
     phoneNumber: settingsRow?.phone_number || '',
     locationCity: settingsRow?.location_city || '',
     geminiApiKey: settingsRow?.gemini_api_key || '',
+    mealOperatingMode: settingsRow?.meal_operating_mode || 'external_traiteur',
     fees: baseFees, feesByYear, subjects, etablissements
   };
 }
 
-export async function writeSettings(db: D1Database, settings: any): Promise<void> {
+export async function writeSettings(db: D1Database, settings: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   if (!settings || typeof settings !== 'object') return;
   const stmts: D1PreparedStatement[] = [];
   stmts.push(db.prepare(
-    'INSERT INTO settings (id, center_name, phone_number, location_city, gemini_api_key) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key'
-  ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
-  stmts.push(db.prepare('DELETE FROM fee_sets'));
+    'INSERT INTO center_settings (center_id, center_name, phone_number, location_city, gemini_api_key, meal_operating_mode) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(center_id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key, meal_operating_mode = excluded.meal_operating_mode'
+  ).bind(
+    centerId,
+    str(settings.centerName || settings.center_name || 'المركز'),
+    str(settings.phoneNumber || settings.phone_number || ''),
+    str(settings.locationCity || settings.location_city || ''),
+    str(settings.geminiApiKey || settings.gemini_api_key || ''),
+    str(settings.mealOperatingMode || settings.meal_operating_mode || 'external_traiteur')
+  ));
+
+  if (centerId === DEFAULT_CENTER_ID) {
+    stmts.push(db.prepare(
+      'INSERT INTO settings (id, center_name, phone_number, location_city, gemini_api_key) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key'
+    ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
+  }
+
+  stmts.push(db.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(centerId));
+  if (centerId === DEFAULT_CENTER_ID) {
+    stmts.push(db.prepare('DELETE FROM fee_sets'));
+  }
   stmts.push(db.prepare('DELETE FROM subjects'));
   stmts.push(db.prepare('DELETE FROM etablissements'));
+
   const addFee = (yearKey: string, rawFeeObj: any) => {
     const fee = extractFeeValues(rawFeeObj);
-    stmts.push(db.prepare('INSERT OR REPLACE INTO fee_sets (year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes));
+    stmts.push(db.prepare('INSERT OR REPLACE INTO center_fee_sets (center_id, year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes, frais_gouter_matin_mensuel, frais_gouter_matin_unitaire, frais_gouter_soir_mensuel, frais_gouter_soir_unitaire) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+      centerId, yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes,
+      num((rawFeeObj as any)?.fraisGouterMatinMensuel || 0), num((rawFeeObj as any)?.fraisGouterMatinUnitaire || 0), num((rawFeeObj as any)?.fraisGouterSoirMensuel || 0), num((rawFeeObj as any)?.fraisGouterSoirUnitaire || 0)
+    ));
+    if (centerId === DEFAULT_CENTER_ID) {
+      stmts.push(db.prepare('INSERT OR REPLACE INTO fee_sets (year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes));
+    }
   };
+
   let baseFeeObj = settings.fees;
   if (!baseFeeObj || typeof baseFeeObj !== 'object') { if (settings.fraisAnnuelSuivi != null || settings.frais_annuel_suivi != null) baseFeeObj = settings; }
   if (baseFeeObj) addFee('DEFAULT', baseFeeObj);
@@ -375,16 +424,16 @@ function buildSuiviNotes(rows: any[]): any[] {
   return Object.values(byYear);
 }
 
-export async function readStudents(db: D1Database): Promise<any[]> {
+export async function readStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [studentsRows, parentsRows, siblingsRows, authRows, histRows, paymentRows, mealRows, notesRows] = await Promise.all([
-    db.prepare('SELECT * FROM students').all(),
-    db.prepare('SELECT * FROM student_parents').all(),
-    db.prepare('SELECT * FROM siblings').all(),
-    db.prepare('SELECT * FROM authorized_persons').all(),
-    db.prepare('SELECT * FROM academic_history').all(),
-    db.prepare('SELECT * FROM payments').all(),
-    db.prepare('SELECT * FROM meal_attendances').all(),
-    db.prepare('SELECT * FROM suivi_notes').all()
+    db.prepare('SELECT * FROM students WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT p.* FROM student_parents p JOIN students s ON p.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT sib.* FROM siblings sib JOIN students s ON sib.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT a.* FROM authorized_persons a JOIN students s ON a.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT h.* FROM academic_history h JOIN students s ON h.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT pay.* FROM payments pay JOIN students s ON pay.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT m.* FROM meal_attendances m JOIN students s ON m.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT n.* FROM suivi_notes n JOIN students s ON n.student_id = s.id WHERE s.center_id = ?').bind(centerId).all()
   ]);
   const parentsByStudent: Record<string, any> = {};
   parentsRows.results.forEach((r: any) => { const key = str(r.student_id); if (!parentsByStudent[key]) parentsByStudent[key] = {}; parentsByStudent[key][r.role] = { name: str(r.name), birthDate: str(r.birth_date), profession: str(r.profession), address: str(r.address), phoneFixed: str(r.phone_fixed), phoneMobile: str(r.phone_mobile), email: str(r.email), extraPhones: parseJson(r.extra_phones, undefined) }; });
@@ -424,10 +473,10 @@ export async function readStudents(db: D1Database): Promise<any[]> {
   });
 }
 
-function buildStudentsStmts(db: D1Database, students: any[]): D1PreparedStatement[] {
+function buildStudentsStmts(db: D1Database, students: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of students || []) {
-    stmts.push(db.prepare('INSERT INTO students (id, first_name, last_name, birth_date, birth_place, grade, etablissement, academic_year, parental_situation, parental_comments, allergies, registration_date, registration_location, registration_signed_electronically, registration_signature_name, enrolled_suivi, enrolled_etude, enrolled_library, enrolled_meals, suivi_annual_fee, suivi_monthly_fee, etude_annual_fee, etude_monthly_fee, library_annual_fee, library_monthly_fee, meal_mode, meal_monthly_price, meal_unit_price, meal_prepaid, meal_consumed, meal_active, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.birthDate, s.birthPlace, s.grade, s.etablissement ?? null, s.academicYear ?? null, s.parentalSituation, s.parentalComments ?? null, s.allergies, s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null, s.enrolledServices?.suivi ? 1 : 0, s.enrolledServices?.etude ? 1 : 0, s.enrolledServices?.library ? 1 : 0, s.enrolledServices?.meals ? 1 : 0, num(s.suiviFees?.annualRegistrationFee), num(s.suiviFees?.monthlyFee), num(s.etudeFees?.annualRegistrationFee), num(s.etudeFees?.monthlyFee), num(s.libraryFees?.annualRegistrationFee), num(s.libraryFees?.monthlyFee), s.mealSubscription?.mode === 'subscription' ? 'subscription' : 'unit', num(s.mealSubscription?.monthlyPrice), num(s.mealSubscription?.unitPrice), num(s.mealSubscription?.prepaidMeals), num(s.mealSubscription?.consumedMealsCount), s.mealSubscription?.active ? 1 : 0, s.timeSheetId ?? null));
+    stmts.push(db.prepare('INSERT INTO students (id, first_name, last_name, birth_date, birth_place, grade, etablissement, academic_year, parental_situation, parental_comments, allergies, registration_date, registration_location, registration_signed_electronically, registration_signature_name, enrolled_suivi, enrolled_etude, enrolled_library, enrolled_meals, suivi_annual_fee, suivi_monthly_fee, etude_annual_fee, etude_monthly_fee, library_annual_fee, library_monthly_fee, meal_mode, meal_monthly_price, meal_unit_price, meal_prepaid, meal_consumed, meal_active, time_sheet_id, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.birthDate, s.birthPlace, s.grade, s.etablissement ?? null, s.academicYear ?? null, s.parentalSituation, s.parentalComments ?? null, s.allergies, s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null, s.enrolledServices?.suivi ? 1 : 0, s.enrolledServices?.etude ? 1 : 0, s.enrolledServices?.library ? 1 : 0, s.enrolledServices?.meals ? 1 : 0, num(s.suiviFees?.annualRegistrationFee), num(s.suiviFees?.monthlyFee), num(s.etudeFees?.annualRegistrationFee), num(s.etudeFees?.monthlyFee), num(s.libraryFees?.annualRegistrationFee), num(s.libraryFees?.monthlyFee), s.mealSubscription?.mode === 'subscription' ? 'subscription' : 'unit', num(s.mealSubscription?.monthlyPrice), num(s.mealSubscription?.unitPrice), num(s.mealSubscription?.prepaidMeals), num(s.mealSubscription?.consumedMealsCount), s.mealSubscription?.active ? 1 : 0, s.timeSheetId ?? null, centerId));
     if (s.etablissement && String(s.etablissement).trim()) {
       stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (name) VALUES (?)').bind(String(s.etablissement).trim()));
     }
@@ -445,13 +494,17 @@ function buildStudentsStmts(db: D1Database, students: any[]): D1PreparedStatemen
   return stmts;
 }
 
-export async function writeStudents(db: D1Database, students: any[]): Promise<void> {
+export async function writeStudents(db: D1Database, students: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const stmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM payments'), db.prepare('DELETE FROM meal_attendances'), db.prepare('DELETE FROM suivi_notes'),
-    db.prepare('DELETE FROM academic_history'),
-    db.prepare('DELETE FROM authorized_persons'), db.prepare('DELETE FROM siblings'),
-    db.prepare('DELETE FROM student_parents'), db.prepare('DELETE FROM students'),
-    ...buildStudentsStmts(db, students)
+    db.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM students WHERE center_id = ?').bind(centerId),
+    ...buildStudentsStmts(db, students, centerId)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
@@ -460,12 +513,15 @@ export async function writeStudents(db: D1Database, students: any[]): Promise<vo
 // STAFF
 // ===========================================================================
 
-export async function readStaff(db: D1Database): Promise<any[]> {
+export async function readStaff(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [staffRows, subjectsRows, scheduleRows, paymentRows, payslipRows, leaveRows, advanceRows] = await Promise.all([
-    db.prepare('SELECT * FROM staff').all(), db.prepare('SELECT * FROM staff_subjects').all(),
-    db.prepare('SELECT * FROM staff_schedule').all(), db.prepare('SELECT * FROM staff_payments').all(),
-    db.prepare('SELECT * FROM staff_payslips').all(), db.prepare('SELECT * FROM staff_leave_requests').all(),
-    db.prepare('SELECT * FROM staff_advances').all()
+    db.prepare('SELECT * FROM staff WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT sub.* FROM staff_subjects sub JOIN staff st ON sub.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT sc.* FROM staff_schedule sc JOIN staff st ON sc.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT p.* FROM staff_payments p JOIN staff st ON p.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT ps.* FROM staff_payslips ps JOIN staff st ON ps.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT l.* FROM staff_leave_requests l JOIN staff st ON l.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT a.* FROM staff_advances a JOIN staff st ON a.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all()
   ]);
   const subjectsByStaff: Record<string, string[]> = {};
   subjectsRows.results.forEach((r: any) => { (subjectsByStaff[str(r.staff_id)] = subjectsByStaff[str(r.staff_id)] || []).push(str(r.subject)); });
@@ -510,16 +566,16 @@ export async function writeStaff(db: D1Database, staff: any[]): Promise<void> {
 // TIMESHEETS
 // ===========================================================================
 
-export async function readTimesheets(db: D1Database): Promise<any[]> {
-  return (await db.prepare('SELECT * FROM timesheets').all()).results.map((r: any) => ({ id: str(r.id), staffId: str(r.staff_id), date: str(r.date), slotTime: r.slot_time == null ? undefined : str(r.slot_time), status: str(r.status), leaveReason: r.leave_reason == null ? undefined : str(r.leave_reason), leaveStatus: r.leave_status == null ? undefined : str(r.leave_status), notes: r.notes == null ? undefined : str(r.notes), hoursWorked: r.hours_worked == null ? undefined : num(r.hours_worked), extraHours: r.extra_hours == null ? undefined : num(r.extra_hours) }));
+export async function readTimesheets(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  return (await db.prepare('SELECT * FROM timesheets WHERE center_id = ?').bind(centerId).all()).results.map((r: any) => ({ id: str(r.id), staffId: str(r.staff_id), date: str(r.date), slotTime: r.slot_time == null ? undefined : str(r.slot_time), status: str(r.status), leaveReason: r.leave_reason == null ? undefined : str(r.leave_reason), leaveStatus: r.leave_status == null ? undefined : str(r.leave_status), notes: r.notes == null ? undefined : str(r.notes), hoursWorked: r.hours_worked == null ? undefined : num(r.hours_worked), extraHours: r.extra_hours == null ? undefined : num(r.extra_hours) }));
 }
 
-function buildTimesheetsStmts(db: D1Database, timesheets: any[]): D1PreparedStatement[] {
-  return (timesheets || []).map((t: any) => db.prepare('INSERT INTO timesheets (id, staff_id, date, slot_time, status, leave_reason, leave_status, notes, hours_worked, extra_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(t.id, t.staffId, t.date, t.slotTime ?? null, t.status, t.leaveReason ?? null, t.leaveStatus ?? null, t.notes ?? null, t.hoursWorked ?? null, t.extraHours ?? null));
+function buildTimesheetsStmts(db: D1Database, timesheets: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  return (timesheets || []).map((t: any) => db.prepare('INSERT INTO timesheets (id, staff_id, date, slot_time, status, leave_reason, leave_status, notes, hours_worked, extra_hours, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(t.id, t.staffId, t.date, t.slotTime ?? null, t.status, t.leaveReason ?? null, t.leaveStatus ?? null, t.notes ?? null, t.hoursWorked ?? null, t.extraHours ?? null, centerId));
 }
 
-export async function writeTimesheets(db: D1Database, timesheets: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM timesheets'), ...buildTimesheetsStmts(db, timesheets)];
+export async function writeTimesheets(db: D1Database, timesheets: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [db.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(centerId), ...buildTimesheetsStmts(db, timesheets, centerId)];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -527,24 +583,31 @@ export async function writeTimesheets(db: D1Database, timesheets: any[]): Promis
 // ÉTUDE SLOTS
 // ===========================================================================
 
-export async function readSlots(db: D1Database): Promise<any[]> {
-  const [slotRows, enrollRows] = await Promise.all([db.prepare('SELECT * FROM etude_slots').all(), db.prepare('SELECT * FROM slot_enrollments').all()]);
+export async function readSlots(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [slotRows, enrollRows] = await Promise.all([
+    db.prepare('SELECT * FROM etude_slots WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT e.* FROM slot_enrollments e JOIN etude_slots s ON e.slot_id = s.id WHERE s.center_id = ?').bind(centerId).all()
+  ]);
   const enrollBySlot: Record<string, string[]> = {};
   enrollRows.results.forEach((r: any) => { (enrollBySlot[str(r.slot_id)] = enrollBySlot[str(r.slot_id)] || []).push(str(r.student_id)); });
   return slotRows.results.map((r: any) => ({ id: str(r.id), day: str(r.day), startTime: str(r.start_time), endTime: str(r.end_time), gradeLevel: str(r.grade_level), teacherId: str(r.teacher_id), enrolledStudentIds: enrollBySlot[str(r.id)] || [], isExtra: r.is_extra ? true : undefined }));
 }
 
-function buildSlotsStmts(db: D1Database, slots: any[]): D1PreparedStatement[] {
+function buildSlotsStmts(db: D1Database, slots: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of slots || []) {
-    stmts.push(db.prepare('INSERT INTO etude_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.day, s.startTime, s.endTime, s.gradeLevel, s.teacherId, s.isExtra ? 1 : 0));
+    stmts.push(db.prepare('INSERT INTO etude_slots (id, day, start_time, end_time, grade_level, teacher_id, is_extra, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.day, s.startTime, s.endTime, s.gradeLevel, s.teacherId, s.isExtra ? 1 : 0, centerId));
     for (const sid of s.enrolledStudentIds || []) stmts.push(db.prepare('INSERT INTO slot_enrollments (slot_id, student_id) VALUES (?, ?)').bind(s.id, sid));
   }
   return stmts;
 }
 
-export async function writeSlots(db: D1Database, slots: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM slot_enrollments'), db.prepare('DELETE FROM etude_slots'), ...buildSlotsStmts(db, slots)];
+export async function writeSlots(db: D1Database, slots: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM slot_enrollments WHERE slot_id IN (SELECT id FROM etude_slots WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM etude_slots WHERE center_id = ?').bind(centerId),
+    ...buildSlotsStmts(db, slots, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -552,24 +615,31 @@ export async function writeSlots(db: D1Database, slots: any[]): Promise<void> {
 // EXTERNAL COURSES
 // ===========================================================================
 
-export async function readCourses(db: D1Database): Promise<any[]> {
-  const [courseRows, enrollRows] = await Promise.all([db.prepare('SELECT * FROM external_courses').all(), db.prepare('SELECT * FROM course_enrolled_students').all()]);
+export async function readCourses(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [courseRows, enrollRows] = await Promise.all([
+    db.prepare('SELECT * FROM external_courses WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT e.* FROM course_enrolled_students e JOIN external_courses c ON e.course_id = c.id WHERE c.center_id = ?').bind(centerId).all()
+  ]);
   const enrollByCourse: Record<string, any[]> = {};
   enrollRows.results.forEach((r: any) => { (enrollByCourse[str(r.course_id)] = enrollByCourse[str(r.course_id)] || []).push({ studentId: str(r.student_id), studentName: str(r.student_name), parentPhone: str(r.parent_phone), isExternal: r.is_external ? true : undefined, assurancePaid: r.assurance_paid ? true : undefined, assuranceAmount: r.assurance_amount == null ? undefined : num(r.assurance_amount), assuranceDate: r.assurance_date == null ? undefined : str(r.assurance_date), enrolledAt: r.enrolled_at == null ? undefined : str(r.enrolled_at) }); });
   return courseRows.results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject), teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone), monthlyFee: num(r.monthly_fee), teacherShare: num(r.teacher_share), centerShare: num(r.center_share), enrolledStudents: enrollByCourse[str(r.id)] || [] }));
 }
 
-function buildCoursesStmts(db: D1Database, courses: any[]): D1PreparedStatement[] {
+function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const c of courses || []) {
-    stmts.push(db.prepare('INSERT INTO external_courses (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, monthly_fee, teacher_share, center_share) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, c.schoolYear, c.trimester, c.gradeLevel, c.subject, c.teacherName, c.teacherPhone, num(c.monthlyFee), num(c.teacherShare), num(c.centerShare)));
+    stmts.push(db.prepare('INSERT INTO external_courses (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, monthly_fee, teacher_share, center_share, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, c.schoolYear, c.trimester, c.gradeLevel, c.subject, c.teacherName, c.teacherPhone, num(c.monthlyFee), num(c.teacherShare), num(c.centerShare), centerId));
     for (const es of c.enrolledStudents || []) { const studentId = str(es.studentId || es.id); if (studentId) stmts.push(db.prepare('INSERT INTO course_enrolled_students (course_id, student_id, student_name, parent_phone, is_external, assurance_paid, assurance_amount, assurance_date, enrolled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, studentId, str(es.studentName || es.name || ''), str(es.parentPhone || ''), es.isExternal ? 1 : 0, es.assurancePaid ? 1 : 0, es.assuranceAmount ?? null, es.assuranceDate ?? null, es.enrolledAt ?? null)); }
   }
   return stmts;
 }
 
-export async function writeCourses(db: D1Database, courses: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM course_enrolled_students'), db.prepare('DELETE FROM external_courses'), ...buildCoursesStmts(db, courses)];
+export async function writeCourses(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM course_enrolled_students WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(centerId),
+    ...buildCoursesStmts(db, courses, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -577,11 +647,14 @@ export async function writeCourses(db: D1Database, courses: any[]): Promise<void
 // EXTERNAL COURSE SESSIONS
 // ===========================================================================
 
-export async function readSessions(db: D1Database): Promise<any[]> {
+export async function readSessions(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [sessionRows, presentRows, oneTimeRows, monthPaidRows, statusRows, amountRows] = await Promise.all([
-    db.prepare('SELECT * FROM external_course_sessions').all(), db.prepare('SELECT * FROM session_present_students').all(),
-    db.prepare('SELECT * FROM session_one_time_students').all(), db.prepare('SELECT * FROM session_month_paid').all(),
-    db.prepare('SELECT * FROM session_seance_status').all(), db.prepare('SELECT * FROM session_seance_amount').all()
+    db.prepare('SELECT * FROM external_course_sessions WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT p.* FROM session_present_students p JOIN external_course_sessions s ON p.session_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT o.* FROM session_one_time_students o JOIN external_course_sessions s ON o.session_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT m.* FROM session_month_paid m JOIN external_course_sessions s ON m.session_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT st.* FROM session_seance_status st JOIN external_course_sessions s ON st.session_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT a.* FROM session_seance_amount a JOIN external_course_sessions s ON a.session_id = s.id WHERE s.center_id = ?').bind(centerId).all()
   ]);
   const presentBySession: Record<string, string[]> = {};
   presentRows.results.forEach((r: any) => { (presentBySession[str(r.session_id)] = presentBySession[str(r.session_id)] || []).push(str(r.student_id)); });
@@ -599,10 +672,10 @@ export async function readSessions(db: D1Database): Promise<any[]> {
   });
 }
 
-function buildSessionsStmts(db: D1Database, sessions: any[]): D1PreparedStatement[] {
+function buildSessionsStmts(db: D1Database, sessions: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of sessions || []) {
-    stmts.push(db.prepare('INSERT INTO external_course_sessions (id, course_id, date, period_name) VALUES (?, ?, ?, ?)').bind(s.id, s.courseId, s.date, s.periodName ?? null));
+    stmts.push(db.prepare('INSERT INTO external_course_sessions (id, course_id, date, period_name, center_id) VALUES (?, ?, ?, ?, ?)').bind(s.id, s.courseId, s.date, s.periodName ?? null, centerId));
     for (const sid of s.presentStudentIds || []) stmts.push(db.prepare('INSERT INTO session_present_students (session_id, student_id) VALUES (?, ?)').bind(s.id, sid));
     for (const ot of s.oneTimeStudents || []) stmts.push(db.prepare('INSERT INTO session_one_time_students (session_id, id, name, parent_phone, paid_unit) VALUES (?, ?, ?, ?, ?)').bind(s.id, ot.id, ot.name, ot.parentPhone, ot.paidUnit ? 1 : 0));
     for (const [sid, paid] of Object.entries(s.monthPaidMap || {})) stmts.push(db.prepare('INSERT INTO session_month_paid (session_id, student_id, paid) VALUES (?, ?, ?)').bind(s.id, sid, paid ? 1 : 0));
@@ -823,41 +896,92 @@ export async function writeFormations(db: D1Database, formations: any[]): Promis
 // FULL STATE
 // ===========================================================================
 
-export async function readState(db: D1Database): Promise<AppState> {
+export async function readState(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<AppState> {
   const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations] = await Promise.all([
-    readSettings(db), readStudents(db), readStaff(db), readSlots(db), readCourses(db),
-    readSessions(db), readMealPlans(db), readExpenses(db), readTimesheets(db),
-    readExternalStudents(db), readRevisionSeances(db), readStudentTimeSheets(db), readFormations(db)
+    readSettings(db, centerId), readStudents(db, centerId), readStaff(db, centerId), readSlots(db, centerId), readCourses(db, centerId),
+    readSessions(db, centerId), readMealPlans(db, centerId), readExpenses(db, centerId), readTimesheets(db, centerId),
+    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId)
   ]);
   return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations };
 }
 
-export async function writeState(db: D1Database, state: AppState): Promise<void> {
+export async function writeState(db: D1Database, state: AppState, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const dedupe = (rows: any[] | null | undefined): any[] => {
     if (!rows) return [];
     const seen = new Set<string>(); const out: any[] = [];
     for (const r of rows) { if (!r || r.id == null) continue; if (seen.has(String(r.id))) continue; seen.add(String(r.id)); out.push(r); }
     return out;
   };
-  const tables = ['payments','meal_attendances','suivi_notes','academic_history','authorized_persons','siblings','student_parents','students','staff_payslips','staff_payments','staff_advances','staff_leave_requests','staff_schedule','staff_subjects','staff','timesheets','slot_enrollments','etude_slots','course_enrolled_students','external_courses','session_seance_amount','session_seance_status','session_month_paid','session_one_time_students','session_present_students','external_course_sessions','external_attendance','external_payments','external_students','meal_plan_attendees','meal_plan_days','expenses','revision_seance_students','revision_seances','student_time_sheets','formation_student_matieres','formation_students','formation_matieres','formations'];
-  const deleteStmts = tables.map(t => db.prepare('DELETE FROM ' + t));
-  const settingsDeleteStmts = state.settings && typeof state.settings === 'object' ? [db.prepare('DELETE FROM fee_sets'), db.prepare('DELETE FROM subjects'), db.prepare('DELETE FROM etablissements')] : [];
-  const allDataStmts = [
-    ...buildStudentsStmts(db, dedupe(state.students)),
-    ...buildStaffStmts(db, dedupe(state.staff)),
-    ...buildSlotsStmts(db, dedupe(state.slots)),
-    ...buildCoursesStmts(db, dedupe(state.courses)),
-    ...buildSessionsStmts(db, dedupe(state.sessions)),
-    ...buildMealPlansStmts(db, dedupe(state.mealPlans)),
-    ...buildExpensesStmts(db, dedupe(state.expenses)),
-    ...buildTimesheetsStmts(db, dedupe(state.timesheets)),
-    ...buildExternalStudentsStmts(db, dedupe(state.externalStudents)),
-    ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances)),
-    ...buildStudentTimeSheetsStmts(db, dedupe(state.studentTimeSheets)),
-    ...buildFormationsStmts(db, dedupe(state.formations))
+
+  const deleteStmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM students WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_advances WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_leave_requests WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM slot_enrollments WHERE slot_id IN (SELECT id FROM etude_slots WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM etude_slots WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM course_enrolled_students WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM session_seance_amount WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_seance_status WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_month_paid WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_one_time_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_present_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_course_sessions WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM external_attendance WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_payments WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_students WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM meal_plan_attendees WHERE meal_plan_id IN (SELECT id FROM meal_plan_days WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_plan_days WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM expenses WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM formation_student_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId)
   ];
-  const phase1 = [...deleteStmts, ...settingsDeleteStmts];
-  for (let i = 0; i < phase1.length; i += 500) await db.batch(phase1.slice(i, i + 500));
+
+  const allDataStmts = [
+    ...buildStudentsStmts(db, dedupe(state.students), centerId),
+    ...buildStaffStmts(db, dedupe(state.staff), centerId),
+    ...buildSlotsStmts(db, dedupe(state.slots), centerId),
+    ...buildCoursesStmts(db, dedupe(state.courses), centerId),
+    ...buildSessionsStmts(db, dedupe(state.sessions), centerId),
+    ...buildMealPlansStmts(db, dedupe(state.mealPlans), centerId),
+    ...buildExpensesStmts(db, dedupe(state.expenses), centerId),
+    ...buildTimesheetsStmts(db, dedupe(state.timesheets), centerId),
+    ...buildExternalStudentsStmts(db, dedupe(state.externalStudents), centerId),
+    ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances), centerId),
+    ...buildStudentTimeSheetsStmts(db, dedupe(state.studentTimeSheets), centerId),
+    ...buildFormationsStmts(db, dedupe(state.formations), centerId)
+  ];
+
+  for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
   for (let i = 0; i < allDataStmts.length; i += 500) await db.batch(allDataStmts.slice(i, i + 500));
-  if (state.settings && typeof state.settings === 'object') await writeSettings(db, state.settings);
+  if (state.settings && typeof state.settings === 'object') await writeSettings(db, state.settings, centerId);
 }
