@@ -1,8 +1,8 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PaymentRecord, Student, generateReceiptNumber } from './types';
 
 describe('Payments & Discount Business Logic', () => {
-  const baseStudent: Student = {
+  const baseStudent = {
     id: 'st_test_1',
     firstName: 'Ahmed',
     lastName: 'Ben Ali',
@@ -10,12 +10,12 @@ describe('Payments & Discount Business Logic', () => {
     birthPlace: 'Sfax',
     grade: 'Collège 8ème',
     academicYear: '2026/2027',
-    parentalSituation: 'Ensemble',
+    parentalSituation: 'mariés',
     allergies: 'Aucune',
     enrolledServices: { suivi: true, etude: false, library: false, meals: false },
     suiviFees: { annualRegistrationFee: 150, monthlyFee: 250 },
     payments: []
-  };
+  } as unknown as Student;
 
   describe('Discount Rules (discount strictly less than totalRequired)', () => {
     it('allows valid discount strictly less than required fee', () => {

@@ -416,6 +416,26 @@ export default function App() {
     commitDomain(() => saveFormations(updated));
   };
 
+  const handleUpdateSlots = (updated: EtudeSlot[]) => {
+    setSlots(updated);
+    commitDomain(() => saveSlots(updated));
+  };
+
+  const handleUpdateCourses = (updated: ExternalCourse[]) => {
+    setCourses(updated);
+    commitDomain(() => saveCourses(updated));
+  };
+
+  const handleUpdateSessions = (updated: ExternalCourseSession[]) => {
+    setSessions(updated);
+    commitDomain(() => saveSessions(updated));
+  };
+
+  const handleUpdateMealPlans = (updated: MealPlanDay[]) => {
+    setMealPlans(updated);
+    commitDomain(() => saveMealPlans(updated));
+  };
+
   // Build a filesystem-safe filename prefix from the center name
   const backupFilePrefix = (name: string): string =>
     (name || 'center').trim().replace(/[^\w\u0600-\u06FF-]+/g, '_').replace(/^_+|_+$/g, '') || 'center';

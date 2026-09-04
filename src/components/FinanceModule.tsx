@@ -289,14 +289,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const isInHouseKitchen = settings?.mealOperatingMode === 'in_house_kitchen';
 
   // Calculate traiteur share from actual meal consumption across all students (0 in in-house kitchen mode)
+  // Option C: respects each attendance's snapshotted traiteurPrice so mid-year fee changes don't distort past costs
   const calcRepasTraiteurTotal = () => {
     if (!settings || isInHouseKitchen) return 0;
     let total = 0;
     for (const s of students) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = s.mealAttendances || [];
-      const consumed = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch')).length;
-      total += consumed * f.prixPlatTraiteur;
+      const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
+      for (const a of lunchAttendances) {
+        total += a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur;
+      }
     }
     return total;
   };
@@ -380,6 +383,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const repasPayments = filteredPayments.filter(p => p.service === 'Repas');
   const repasCenterTotal = repasPayments.reduce((s, p) => s + p.amountPaid, 0);
   // Traiteur total for filtered period: count consumed plates from filtered students
+  // Option C: respects snapshotted traiteurPrice per meal attendance
   const calcFilteredRepasTraiteurTotal = () => {
     if (!settings || isInHouseKitchen) return 0;
     let total = 0;
@@ -389,8 +393,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         if (monthFilter === 'all') return true;
         return a.date.startsWith(monthFilter);
       });
-      const consumed = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch')).length;
-      total += consumed * f.prixPlatTraiteur;
+      const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
+      for (const a of lunchAttendances) {
+        total += a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur;
+      }
     }
     return total;
   };
@@ -401,14 +407,20 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     if (!settings) return { totalSubscriptions: 0, totalPlatesConsumed: 0, traiteurShare: 0, centerBenefice: 0 };
     let totalSubscriptions = 0;
     let totalPlatesConsumed = 0;
+    let traiteurShare = 0;
     for (const s of filteredStudents) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = (s.mealAttendances || []).filter(a => {
         if (monthFilter === 'all') return true;
         return a.date.startsWith(monthFilter);
       });
-      const consumed = attendances.filter(a => a.type === 'subscription').length;
-      totalPlatesConsumed += consumed;
+      const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
+      totalPlatesConsumed += lunchAttendances.length;
+      if (!isInHouseKitchen) {
+        for (const a of lunchAttendances) {
+          traiteurShare += a.traiteurPrice != null ? a.traiteurPrice : (f.prixPlatTraiteur ?? 6);
+        }
+      }
       // Count subscription payments for this student in the filtered period
       const subPayments = (s.payments || []).filter(p =>
         p.service === 'Repas' &&
@@ -418,7 +430,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       );
       totalSubscriptions += subPayments.reduce((sum, p) => sum + p.amountPaid, 0);
     }
-    const traiteurShare = isInHouseKitchen ? 0 : totalPlatesConsumed * (settings.fees?.prixPlatTraiteur ?? 6);
     const centerBenefice = isInHouseKitchen ? totalSubscriptions : totalSubscriptions - traiteurShare;
     return { totalSubscriptions, totalPlatesConsumed, traiteurShare, centerBenefice };
   };
@@ -756,7 +767,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('restaurant')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'restaurant' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-amber-50 hover:text-amber-800'
+              activeTab === 'restaurant' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#F2F8F9] hover:text-[#103840]'
             }`}
           >
             🍽️ إدارة المطعم
@@ -824,9 +835,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
               {!hideRestrictedModules && revenueByService.Gouter > 0 && (
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 flex justify-between font-bold">
-                  <span className="text-amber-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
-                  <span className="font-mono text-amber-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
+                <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 flex justify-between font-bold">
+                  <span className="text-purple-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
+                  <span className="font-mono text-purple-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
                 </div>
               )}
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
@@ -1644,6 +1655,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             (isCurrentlyActive && grossPaid > totalRefunded)
           );
 
+          const allLunchMeals = [...subscriptionMeals, ...unitMeals];
+          const studentTraiteurPart = isInHouseKitchen
+            ? 0
+            : allLunchMeals.reduce((sum, a) => sum + (a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur), 0);
+          const studentCenterPart = (totalMeals * f.fraisParRepas) - studentTraiteurPart;
+
           return {
             id: s.id,
             name: `${s.firstName} ${s.lastName}`,
@@ -1658,8 +1675,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             subscriptionMeals: subscriptionMeals.length,
             unitMeals: unitMeals.length,
             totalMeals,
-            centerPart: totalMeals * centerMargin,
-            traiteurPart: totalMeals * f.prixPlatTraiteur
+            centerPart: studentCenterPart,
+            traiteurPart: studentTraiteurPart
           };
         }).filter(s => s.totalMeals > 0 || s.grossPaid > 0);
 
@@ -1671,8 +1688,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const prixPlat = settings?.fees?.fraisParRepas ?? 8;
         const prixTraiteur = isInHouseKitchen ? 0 : (settings?.fees?.prixPlatTraiteur ?? 6);
         const centerMarginPerPlate = isInHouseKitchen ? prixPlat : (prixPlat - prixTraiteur);
-        const traiteurCost = isInHouseKitchen ? 0 : totalPlatesConsumed * prixTraiteur;
-        const centerBenefit = isInHouseKitchen ? totalSubscriptions : totalPlatesConsumed * centerMarginPerPlate;
+        const traiteurCost = isInHouseKitchen ? 0 : restoStudents.reduce((sum, s) => sum + s.traiteurPart, 0);
+        const centerBenefit = isInHouseKitchen ? totalSubscriptions : (totalSubscriptions - traiteurCost);
 
         const totalRestoPages = Math.ceil(restoStudents.length / pageSize) || 1;
         const currentRestoPage = Math.min(Math.max(1, restoPage), totalRestoPages);
@@ -1689,15 +1706,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalRefundedAll)} د.ت</div>
                 )}
               </div>
-              <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
-                <div className="text-[10px] font-bold text-amber-700 mb-1">إجمالي الوجبات المستهلكة</div>
-                <div className="font-mono text-lg font-black text-amber-900">{totalPlatesConsumed}</div>
-                <div className="text-[9px] text-amber-600 mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
+              <div className="p-5 bg-sky-50/50 rounded-2xl border border-sky-100 text-center">
+                <div className="text-[10px] font-bold text-sky-700 mb-1">إجمالي الوجبات المستهلكة</div>
+                <div className="font-mono text-lg font-black text-sky-900">{totalPlatesConsumed}</div>
+                <div className="text-[9px] text-sky-600 mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
               </div>
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
                 <div className="font-mono text-lg font-black text-red-900">{isInHouseKitchen ? '0.000 د.ت' : `${fmt(traiteurCost)} د.ت`}</div>
-                <div className="text-[9px] text-red-600 mt-1">{isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : `${totalPlatesConsumed} × ${fmt(prixTraiteur)} د.ت`}</div>
+                <div className="text-[9px] text-red-600 mt-1">{isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : `${totalPlatesConsumed} وجبة`}</div>
               </div>
               <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
                 <div className="text-[10px] font-bold text-emerald-700 mb-1">ربح السنتر من الوجبات</div>
@@ -1755,13 +1772,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-slate-600">{s.grade}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              s.isRefunded ? 'bg-orange-100 text-orange-700' : s.isSubscribed ? 'bg-blue-100 text-blue-700' : s.isEnrolled ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'
+                              s.isRefunded ? 'bg-orange-100 text-orange-700' : s.isSubscribed ? 'bg-blue-100 text-blue-700' : s.isEnrolled ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-700'
                             }`}>
                               {s.isRefunded ? 'مسترجع' : s.isSubscribed ? 'مشترك' : s.isEnrolled ? 'لم يدفع الإشتراك' : 'وجبة منفردة'}
                             </span>
                           </td>
                           <td className="p-3 text-center font-mono font-bold text-blue-700">{s.subscriptionMeals}</td>
-                          <td className="p-3 text-center font-mono font-bold text-amber-700">{s.unitMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-sky-700">{s.unitMeals}</td>
                           <td className="p-3 text-center font-mono font-black text-slate-900">{s.totalMeals}</td>
                           <td className="p-3 text-center font-mono font-bold text-blue-700">{fmt(s.grossPaid)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-600">{s.totalRefunded > 0 ? `-${fmt(s.totalRefunded)} د.ت` : '—'}</td>
@@ -2090,7 +2107,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">الحالة</p>
-                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-emerald-700' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
+                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-emerald-700' : 'text-slate-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">المبلغ الإجمالي</p>

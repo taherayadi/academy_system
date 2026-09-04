@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { MealSubscription, MealAttendance, Student } from './types';
 
 describe('Meals Module Business Logic', () => {
@@ -66,14 +66,14 @@ describe('Meals Module Business Logic', () => {
     });
 
     it('updates consumed count when pointage is recorded', () => {
-      const student: Student = {
+      const student = {
         id: 'st_meal_1',
         firstName: 'Youssef',
         lastName: 'Trabelsi',
         birthDate: '2012-03-20',
         birthPlace: 'Sfax',
         grade: 'Collège 7ème',
-        parentalSituation: 'Ensemble',
+        parentalSituation: 'mariés',
         allergies: 'Aucune',
         mealSubscription: {
           mode: 'unit',
@@ -84,7 +84,7 @@ describe('Meals Module Business Logic', () => {
           active: true
         },
         mealAttendances: []
-      };
+      } as unknown as Student;
 
       // Add a new consumed meal
       const newAttendance: MealAttendance = {

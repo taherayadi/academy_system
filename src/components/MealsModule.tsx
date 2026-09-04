@@ -224,6 +224,12 @@ export default function MealsModule({
 
       const mealType: 'subscription' | 'unit' = isLunchSubscribed ? 'subscription' : 'unit';
 
+      // Option C: snapshot current traiteur price on lunch attendance so past records
+      // are never retroactively changed when settings.prixPlatTraiteur changes later.
+      const snapshotTraiteurPrice = (service === 'lunch' && settings)
+        ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
+        : undefined;
+
       const updatedStudent: Student = {
         ...st,
         mealSubscription: (service === 'lunch' && isLunchSubscribed && st.mealSubscription)
@@ -234,13 +240,14 @@ export default function MealsModule({
           : st.mealSubscription,
         mealAttendances: [
           ...(st.mealAttendances || []),
-          { date: selectedDate, service, type: mealType, paid: mealType === 'subscription' ? hasPaid : false }
+          { date: selectedDate, service, type: mealType, paid: mealType === 'subscription' ? hasPaid : false, ...(snapshotTraiteurPrice != null ? { traiteurPrice: snapshotTraiteurPrice } : {}) }
         ]
       };
       onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
       toast.success(`تم تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
     }
   };
+
 
   const handlePayUnitService = (st: Student, service: MealServiceType = 'lunch') => {
     const attendance = getServiceAttendance(st, service);
@@ -364,6 +371,10 @@ export default function MealsModule({
 
     const mealType = (!isSubscribedSys || hasRefund) ? 'unit' : 'subscription';
 
+    const snapshotTraiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
+      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
+      : 0;
+
     const updatedStudent: Student = {
       ...st,
       mealSubscription: st.mealSubscription
@@ -372,7 +383,10 @@ export default function MealsModule({
             consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + (mealType === 'subscription' ? 1 : 0)
           }
         : undefined,
-      mealAttendances: [...(st.mealAttendances || []), { date: selectedDate, type: mealType, paid: mealType === 'unit' ? false : hasPaid }]
+      mealAttendances: [
+        ...(st.mealAttendances || []),
+        { date: selectedDate, service: 'lunch', type: mealType, paid: mealType === 'unit' ? false : hasPaid, traiteurPrice: snapshotTraiteurPrice }
+      ]
     };
 
     onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
@@ -390,9 +404,17 @@ export default function MealsModule({
       toast.info('هذا التلميذ مسجل بالفعل في قائمة وجبات هذا التاريخ.');
       return;
     }
+
+    const snapshotTraiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
+      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
+      : 0;
+
     const updatedStudent: Student = {
       ...stObj,
-      mealAttendances: [...(stObj.mealAttendances || []), { date: selectedDate, type: 'unit', paid: false }]
+      mealAttendances: [
+        ...(stObj.mealAttendances || []),
+        { date: selectedDate, service: 'lunch', type: 'unit', paid: false, traiteurPrice: snapshotTraiteurPrice }
+      ]
     };
     onUpdateStudents(students.map(s => s.id === stId ? updatedStudent : s));
     toast.success('تمت إضافة التلميذ إلى قائمة وجبات اليوم — سجّل الدفع عند الاستلام.');
@@ -648,10 +670,10 @@ export default function MealsModule({
     const updatedStudent: Student = {
       ...selectedStudentForPayment,
       enrolledServices: {
-        ...(selectedStudentForPayment.enrolledServices || {}),
-        meals: true,
+        suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true,
         etude: selectedStudentForPayment.enrolledServices?.etude ?? true,
-        suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true
+        library: selectedStudentForPayment.enrolledServices?.library ?? false,
+        meals: true
       },
       mealSubscription: selectedStudentForPayment.mealSubscription
         ? { ...selectedStudentForPayment.mealSubscription, mode: 'subscription' as const, active: true }
@@ -794,8 +816,8 @@ export default function MealsModule({
 
     const updatedStudent: Student = {
       ...refundingStudent,
-      enrolledServices: shutsDownService
-        ? { ...(refundingStudent.enrolledServices || {}), meals: false }
+      enrolledServices: shutsDownService && refundingStudent.enrolledServices
+        ? { ...refundingStudent.enrolledServices, meals: false }
         : refundingStudent.enrolledServices,
       mealSubscription: refundingStudent.mealSubscription
         ? { ...refundingStudent.mealSubscription, active: !shutsDownService }
@@ -957,7 +979,7 @@ export default function MealsModule({
                             {hasRefund ? (
                               <button
                                 onClick={() => handlePayMonthlySubscription(st, m)}
-                                className="w-full py-1.5 px-2 bg-amber-50 text-amber-600 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-amber-100 transition cursor-pointer"
+                                className="w-full py-1.5 px-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-slate-200 transition cursor-pointer"
                                 title="مسترجع — اضغط لخلاص هذا الشهر من جديد"
                               >
                                 <Undo2 className="h-3 w-3" />
@@ -1388,7 +1410,7 @@ export default function MealsModule({
                           monthStatus?.status === 'paid'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : monthStatus?.status === 'advance'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              ? 'bg-sky-50 text-sky-700 border-sky-200'
                               : hasRefundThisMonth
                                 ? 'bg-orange-50 text-orange-700 border-orange-200'
                                 : 'bg-red-50 text-red-600 border-red-200'
@@ -1409,7 +1431,7 @@ export default function MealsModule({
                       </span>
                       {monthRefund && afterRefundCount > 0 && (
                         <div className="text-[10px] font-bold mt-1 flex flex-wrap items-center gap-1">
-                          <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                          <span className="text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                             {beforeRefundCount} قبل الاسترجاع
                           </span>
                           <span className="text-slate-400">+</span>
@@ -1419,8 +1441,8 @@ export default function MealsModule({
                         </div>
                       )}
                       {monthRefund && afterRefundCount === 0 && beforeRefundCount > 0 && (
-                        <div className="text-[10px] text-amber-700 font-bold mt-1">
-                          <span className="bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-block">
+                        <div className="text-[10px] text-slate-600 font-bold mt-1">
+                          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200 inline-block">
                             ({beforeRefundCount} قبل الاسترجاع)
                           </span>
                         </div>
@@ -1431,7 +1453,7 @@ export default function MealsModule({
                         onClick={() => handleMarkConsumption(st)}
                         className={`px-3 py-1.5 rounded-xl font-bold text-[11px] shadow-xs cursor-pointer flex items-center justify-center gap-1 mx-auto ${
                           hasRefundThisMonth
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            ? 'bg-slate-700 hover:bg-slate-800 text-white'
                             : 'bg-emerald-500 hover:bg-emerald-600 text-white'
                         }`}
                         title={hasRefundThisMonth ? 'عند الاسترجاع يُسجَّل كوجبة منفردة يُدفع عند الاستلام' : 'تسجيل وجبة ضمن الاشتراك'}
@@ -1523,12 +1545,12 @@ export default function MealsModule({
                 <span className="text-xs text-blue-500 font-bold">وجبة</span>
               </div>
 
-              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center justify-between">
+              <div className="p-3 bg-sky-50/60 border border-sky-200 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-amber-700 block">🥐 لمجة الصباح</span>
-                  <span className="text-lg font-black text-amber-900 font-mono">{dailyGouterMatinCount}</span>
+                  <span className="text-[10px] font-bold text-sky-700 block">🥐 لمجة الصباح</span>
+                  <span className="text-lg font-black text-sky-900 font-mono">{dailyGouterMatinCount}</span>
                 </div>
-                <span className="text-xs text-amber-500 font-bold">حصة</span>
+                <span className="text-xs text-sky-500 font-bold">حصة</span>
               </div>
 
               <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-2xl flex items-center justify-between">
@@ -1594,8 +1616,8 @@ export default function MealsModule({
                             onClick={() => handleToggleMealService(st, 'gouter_matin')}
                             className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
                               gouterMatinAtt
-                                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-amber-300 hover:text-slate-600'
+                                ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-sky-300 hover:text-slate-600'
                             }`}
                           >
                             {gouterMatinAtt ? '✓ لمجة صباح' : '+ لمجة صباح'}
@@ -1634,7 +1656,7 @@ export default function MealsModule({
                             {gouterMatinAtt && gouterMatinAtt.type === 'unit' && !gouterMatinAtt.paid && (
                               <button
                                 onClick={() => handlePayUnitService(st, 'gouter_matin')}
-                                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-xs"
+                                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-xs"
                                 title="خلاص لمجة الصباح"
                               >
                                 خلاص الصباح ({settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinUnitaire : 0} د.ت)
@@ -1801,7 +1823,7 @@ export default function MealsModule({
                       {!isAdvanceStatus && (
                         <div>
                           <label className="text-xs font-bold text-slate-600 block mb-1">
-                            التخفيض / Remise (د.ت) <span className="text-[10px] text-amber-600 font-semibold">(مثال: خصم الأيام غير المستهلكة أو التحاق متأخر)</span>
+                            التخفيض / Remise (د.ت) <span className="text-[10px] text-slate-500 font-semibold">(مثال: خصم الأيام غير المستهلكة أو التحاق متأخر)</span>
                           </label>
                           <input 
                             type="number" min="0" max={Math.max(0, standardFee - 1)}
@@ -2229,7 +2251,7 @@ export default function MealsModule({
                                 <p className="text-[10px] text-slate-500">
                                   الوجبات المستهلكة (الاشتراك الحالي): <span className="font-mono font-bold text-[#17555F]">{consumedThisMonth}</span>
                                   {settledDates.length > 0 && (
-                                    <span className="text-amber-700 mr-1.5 font-bold">
+                                    <span className="text-slate-600 mr-1.5 font-bold">
                                       ({settledDates.length} وجبة تمت تسويتها بالاسترجاع السابق)
                                     </span>
                                   )}

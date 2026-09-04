@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { StaffMember, StaffPayslip, StaffAdvance } from './types';
 
 describe('Staff Payroll & Salary Calculation Business Logic', () => {
@@ -9,9 +9,9 @@ describe('Staff Payroll & Salary Calculation Business Logic', () => {
     cin: '09876543',
     cnssNumber: '12345678-90',
     salary: 1200,
-    type: 'enseignant',
     phone: '98123456',
-    role: 'Professeur de Mathématiques',
+    role: 'enseignant',
+    subjects: ['Mathématiques'],
     contractStartDate: '2026-09-01',
     baseSalary: 1200,
     cnssAmount: 110.16, // 9.18% employee CNSS rate in Tunisia
@@ -72,6 +72,7 @@ describe('Staff Payroll & Salary Calculation Business Logic', () => {
   it('creates a complete payslip record structure accurately', () => {
     const payslip: StaffPayslip = {
       id: 'slip_2026_09_staff_1',
+      staffId: 'staff_1',
       month: 'Septembre 2026',
       baseSalary: 1200,
       bonus: 50,
@@ -97,13 +98,14 @@ describe('Staff Payroll & Salary Calculation Business Logic', () => {
   it('tracks advance approval state', () => {
     const advance: StaffAdvance = {
       id: 'adv_1',
+      staffId: 'staff_1',
       amount: 200,
       date: '2026-09-10',
       reason: 'Urgence familiale',
-      status: 'approved'
+      status: 'approuve'
     };
 
-    expect(advance.status).toBe('approved');
+    expect(advance.status).toBe('approuve');
     expect(advance.amount).toBe(200);
   });
 });

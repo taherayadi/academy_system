@@ -315,7 +315,8 @@ export async function readSettings(db: D1Database, centerId: string = DEFAULT_CE
       fraisGouterMatinMensuel: num(row.frais_gouter_matin_mensuel || 0),
       fraisGouterMatinUnitaire: num(row.frais_gouter_matin_unitaire || 0),
       fraisGouterSoirMensuel: num(row.frais_gouter_soir_mensuel || 0),
-      fraisGouterSoirUnitaire: num(row.frais_gouter_soir_unitaire || 0)
+      fraisGouterSoirUnitaire: num(row.frais_gouter_soir_unitaire || 0),
+      fraisDeuxGoutersMensuel: num(row.frais_deux_gouters_mensuel || 0)
     };
     if (row.year === 'DEFAULT') defaultFees = fees;
     else feesByYear[row.year] = fees;
@@ -335,8 +336,9 @@ export async function readSettings(db: D1Database, centerId: string = DEFAULT_CE
     fraisGouterMatinMensuel: num((feeRows[0] as any).frais_gouter_matin_mensuel || 0),
     fraisGouterMatinUnitaire: num((feeRows[0] as any).frais_gouter_matin_unitaire || 0),
     fraisGouterSoirMensuel: num((feeRows[0] as any).frais_gouter_soir_mensuel || 0),
-    fraisGouterSoirUnitaire: num((feeRows[0] as any).frais_gouter_soir_unitaire || 0)
-  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0, fraisGouterMatinMensuel: 0, fraisGouterMatinUnitaire: 0, fraisGouterSoirMensuel: 0, fraisGouterSoirUnitaire: 0 });
+    fraisGouterSoirUnitaire: num((feeRows[0] as any).frais_gouter_soir_unitaire || 0),
+    fraisDeuxGoutersMensuel: num((feeRows[0] as any).frais_deux_gouters_mensuel || 0)
+  } : { fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0, fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0, fraisAbonnementRepas: 0, fraisParRepas: 0, prixPlatTraiteur: 6, fraisAnnuelEtude: 0, fraisMensuelEtude: 0, fraisAssuranceCoursExternes: 0, fraisGouterMatinMensuel: 0, fraisGouterMatinUnitaire: 0, fraisGouterSoirMensuel: 0, fraisGouterSoirUnitaire: 0, fraisDeuxGoutersMensuel: 0 });
 
   DEFAULT_ACADEMIC_YEARS.forEach(yr => { if (!feesByYear[yr]) feesByYear[yr] = { ...baseFees }; });
 
@@ -387,9 +389,9 @@ export async function writeSettings(db: D1Database, settings: any, centerId: str
 
   const addFee = (yearKey: string, rawFeeObj: any) => {
     const fee = extractFeeValues(rawFeeObj);
-    stmts.push(db.prepare('INSERT OR REPLACE INTO center_fee_sets (center_id, year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes, frais_gouter_matin_mensuel, frais_gouter_matin_unitaire, frais_gouter_soir_mensuel, frais_gouter_soir_unitaire) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+    stmts.push(db.prepare('INSERT OR REPLACE INTO center_fee_sets (center_id, year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes, frais_gouter_matin_mensuel, frais_gouter_matin_unitaire, frais_gouter_soir_mensuel, frais_gouter_soir_unitaire, frais_deux_gouters_mensuel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
       centerId, yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes,
-      num((rawFeeObj as any)?.fraisGouterMatinMensuel || 0), num((rawFeeObj as any)?.fraisGouterMatinUnitaire || 0), num((rawFeeObj as any)?.fraisGouterSoirMensuel || 0), num((rawFeeObj as any)?.fraisGouterSoirUnitaire || 0)
+      num((rawFeeObj as any)?.fraisGouterMatinMensuel || 0), num((rawFeeObj as any)?.fraisGouterMatinUnitaire || 0), num((rawFeeObj as any)?.fraisGouterSoirMensuel || 0), num((rawFeeObj as any)?.fraisGouterSoirUnitaire || 0), num((rawFeeObj as any)?.fraisDeuxGoutersMensuel || 0)
     ));
     if (centerId === DEFAULT_CENTER_ID) {
       stmts.push(db.prepare('INSERT OR REPLACE INTO fee_sets (year, frais_annuel_suivi, frais_mensuel_suivi, frais_annuel_bibliotheque, frais_mensuel_bibliotheque, frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur, frais_par_repas_traiteur, prix_plat_traiteur, frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(yearKey, fee.fraisAnnuelSuivi, fee.fraisMensuelSuivi, fee.fraisAnnuelBibliotheque, fee.fraisMensuelBibliotheque, fee.fraisAbonnementRepas, fee.fraisParRepas, null, null, fee.prixPlatTraiteur, fee.fraisAnnuelEtude, fee.fraisMensuelEtude, fee.fraisAssuranceCoursExternes));
@@ -446,7 +448,7 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
   const paymentsByStudent: Record<string, any[]> = {};
   paymentRows.results.forEach((r: any) => { const key = str(r.student_id); const month = str(r.month); (paymentsByStudent[key] = paymentsByStudent[key] || []).push({ id: str(r.id), date: str(r.date), amountPaid: num(r.amount_paid), totalRequired: num(r.total_required), remainingBalance: num(r.remaining_balance), service: normalizePaymentService(r.service, month), month, paymentType: str(r.payment_type), method: str(r.method), receiptNumber: str(r.receipt_number), notes: r.notes == null ? undefined : str(r.notes), discount: r.discount == null ? undefined : num(r.discount), refund: bool(r.refund), refundOf: r.refund_of == null ? undefined : str(r.refund_of), chequeNumber: r.cheque_number == null ? undefined : str(r.cheque_number), chequeDate: r.cheque_date == null ? undefined : str(r.cheque_date), chequePaid: r.cheque_paid ? true : undefined }); });
   const mealsByStudent: Record<string, any[]> = {};
-  mealRows.results.forEach((r: any) => { (mealsByStudent[str(r.student_id)] = mealsByStudent[str(r.student_id)] || []).push({ date: str(r.date), service: r.service ? str(r.service) : 'lunch', type: str(r.type), paid: bool(r.paid), paidAt: r.paid_at == null ? undefined : str(r.paid_at) }); });
+  mealRows.results.forEach((r: any) => { (mealsByStudent[str(r.student_id)] = mealsByStudent[str(r.student_id)] || []).push({ date: str(r.date), service: r.service ? str(r.service) : 'lunch', type: str(r.type), paid: bool(r.paid), paidAt: r.paid_at == null ? undefined : str(r.paid_at), traiteurPrice: r.traiteur_price != null ? num(r.traiteur_price) : undefined }); });
   const notesByStudent: Record<string, any[]> = {};
   notesRows.results.forEach((r: any) => { (notesByStudent[str(r.student_id)] = notesByStudent[str(r.student_id)] || []).push({ schoolYear: str(r.school_year), trimester: num(r.trimester), subject: str(r.subject), devoir1: r.devoir1 == null ? undefined : num(r.devoir1), devoir2: r.devoir2 == null ? undefined : num(r.devoir2), synthese: r.synthese == null ? undefined : num(r.synthese) }); });
 
@@ -488,7 +490,7 @@ function buildStudentsStmts(db: D1Database, students: any[], centerId: string = 
     const hist = s.academicHistory || {};
     [['nMinus1', 1], ['nMinus2', 2], ['nMinus3', 3]].forEach(([key, n]) => { const h = hist[key]; stmts.push(db.prepare('INSERT INTO academic_history (student_id, n_minus, school, grade) VALUES (?, ?, ?, ?)').bind(s.id, n, h?.school ?? '', h?.grade ?? '')); });
     for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO payments (id, student_id, date, amount_paid, total_required, remaining_balance, service, month, payment_type, method, receipt_number, notes, discount, refund, refund_of, cheque_number, cheque_date, cheque_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, s.id, p.date, num(p.amountPaid), num(p.totalRequired), num(p.remainingBalance), normalizePaymentService(p.service, p.month), p.month, p.paymentType, p.method, p.receiptNumber, p.notes ?? null, p.discount ?? null, p.refund ? 1 : 0, p.refundOf ?? null, p.chequeNumber ?? null, p.chequeDate ?? null, p.chequePaid ? 1 : 0));
-    for (const m of s.mealAttendances || []) stmts.push(db.prepare('INSERT INTO meal_attendances (student_id, date, service, type, paid, paid_at) VALUES (?, ?, ?, ?, ?, ?)').bind(s.id, m.date, m.service || 'lunch', m.type, m.paid ? 1 : 0, m.paidAt ?? null));
+    for (const m of s.mealAttendances || []) stmts.push(db.prepare('INSERT INTO meal_attendances (student_id, date, service, type, paid, paid_at, traiteur_price) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, m.date, m.service || 'lunch', m.type, m.paid ? 1 : 0, m.paidAt ?? null, m.traiteurPrice != null ? num(m.traiteurPrice) : null));
     for (const yr of s.suiviNotes || []) for (const tr of yr.trimesters || []) for (const [subject, grades] of Object.entries(tr.subjects || {})) { const g = grades as any; stmts.push(db.prepare('INSERT INTO suivi_notes (student_id, school_year, trimester, subject, devoir1, devoir2, synthese) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, yr.schoolYear, tr.trimester, subject, g?.devoir1 ?? null, g?.devoir2 ?? null, g?.synthese ?? null)); }
   }
   return stmts;
@@ -574,10 +576,10 @@ export async function readStaff(db: D1Database, centerId: string = DEFAULT_CENTE
   return staffRows.results.map((r: any) => ({ id: str(r.id), firstName: str(r.first_name), lastName: str(r.last_name), cin: str(r.cin), cnssNumber: str(r.cnss_number), subjects: subjectsByStaff[str(r.id)] || [], salary: num(r.salary), phone: str(r.phone), role: str(r.role), contractStartDate: str(r.contract_start_date), contractType: r.contract_type == null ? undefined : str(r.contract_type), email: r.email == null ? undefined : str(r.email), address: r.address == null ? undefined : str(r.address), baseSalary: r.base_salary == null ? undefined : num(r.base_salary), cnssAmount: r.cnss_amount == null ? undefined : num(r.cnss_amount), hourlyRate: r.hourly_rate == null ? undefined : num(r.hourly_rate), hireDate: r.hire_date == null ? undefined : str(r.hire_date), leaveRequests: leaveByStaff[str(r.id)] || [], advances: advanceByStaff[str(r.id)] || [], payments: paymentsByStaff[str(r.id)] || [], payslips: payslipsByStaff[str(r.id)] || [], schedule: scheduleByStaff[str(r.id)] || [] }));
 }
 
-function buildStaffStmts(db: D1Database, staff: any[]): D1PreparedStatement[] {
+function buildStaffStmts(db: D1Database, staff: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of staff || []) {
-    stmts.push(db.prepare('INSERT INTO staff (id, first_name, last_name, cin, cnss_number, salary, phone, role, contract_start_date, contract_type, email, address, base_salary, cnss_amount, hourly_rate, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.cin, s.cnssNumber, num(s.salary), s.phone, s.role, s.contractStartDate, s.contractType ?? null, s.email ?? null, s.address ?? null, s.baseSalary ?? null, s.cnssAmount ?? null, s.hourlyRate ?? null, s.hireDate ?? null));
+    stmts.push(db.prepare('INSERT INTO staff (id, first_name, last_name, cin, cnss_number, salary, phone, role, contract_start_date, contract_type, email, address, base_salary, cnss_amount, hourly_rate, hire_date, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.firstName, s.lastName, s.cin, s.cnssNumber, num(s.salary), s.phone, s.role, s.contractStartDate, s.contractType ?? null, s.email ?? null, s.address ?? null, s.baseSalary ?? null, s.cnssAmount ?? null, s.hourlyRate ?? null, s.hireDate ?? null, centerId));
     for (const sub of s.subjects || []) stmts.push(db.prepare('INSERT INTO staff_subjects (staff_id, subject) VALUES (?, ?)').bind(s.id, sub));
     for (const slot of s.schedule || []) stmts.push(db.prepare('INSERT INTO staff_schedule (staff_id, day, slots) VALUES (?, ?, ?)').bind(s.id, slot.day, JSON.stringify(slot.slots || [])));
     for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO staff_payments (id, staff_id, month, amount_paid, bonus, deduction, net_salary, date, receipt_number, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, s.id, p.month, num(p.amountPaid), p.bonus ?? null, p.deduction ?? null, num(p.netSalary), p.date, p.receiptNumber, p.notes ?? null));
@@ -588,12 +590,16 @@ function buildStaffStmts(db: D1Database, staff: any[]): D1PreparedStatement[] {
   return stmts;
 }
 
-export async function writeStaff(db: D1Database, staff: any[]): Promise<void> {
+export async function writeStaff(db: D1Database, staff: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const stmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM staff_payslips'), db.prepare('DELETE FROM staff_payments'), db.prepare('DELETE FROM staff_advances'),
-    db.prepare('DELETE FROM staff_leave_requests'), db.prepare('DELETE FROM staff_schedule'),
-    db.prepare('DELETE FROM staff_subjects'), db.prepare('DELETE FROM staff'),
-    ...buildStaffStmts(db, staff)
+    db.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_advances WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_leave_requests WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM staff WHERE center_id = ?').bind(centerId),
+    ...buildStaffStmts(db, staff, centerId)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }

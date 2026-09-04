@@ -1896,7 +1896,10 @@ export default function FormationModule({
       {/* Schedule print overlay (A4 landscape) */}
       {printingSchedule && (() => {
         const f = printingSchedule;
-        const matiereNameById = (id: string) => (f.matieres || []).find(m => m.id === id)?.name;
+        const matiereNameById = (id: string) => {
+          const found = (f.matieres || []).find(m => m.id === id);
+          return found?.subject || (found as any)?.name;
+        };
         const allStudents = f.students || [];
         const studentsForSeance = (matiere: string) => {
           const matched = allStudents.filter(st =>

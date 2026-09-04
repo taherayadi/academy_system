@@ -331,18 +331,18 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
             {/* Repas / Restaurant & Cantine Adaptative */}
             {!hideRestrictedModules && (
-              <div className="bg-orange-50/40 p-4 rounded-2xl border border-orange-200/60 space-y-4 md:col-span-2 lg:col-span-3">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-orange-200/60 pb-2">
-                  <span className="text-xs font-extrabold text-orange-900 flex items-center gap-2">
-                    <Utensils className="h-4 w-4 text-orange-600" />
+              <div className="bg-[#F2F8F9]/60 p-4 rounded-2xl border border-[#C3E0E4] space-y-4 md:col-span-2 lg:col-span-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[#C3E0E4] pb-2">
+                  <span className="text-xs font-extrabold text-[#103840] flex items-center gap-2">
+                    <Utensils className="h-4 w-4 text-[#257C86]" />
                     المطعم والوجبات (Cantine Adaptative)
                   </span>
                   {/* Mode Selector */}
-                  <div className="flex items-center gap-1 bg-white/80 p-1 rounded-xl border border-orange-200 text-[11px] font-bold">
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#C3E0E4] text-[11px] font-bold">
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'external_traiteur' }))}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-[#257C86] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                     >
                       🤝 متعاقد مع Traiteur خارجي
                     </button>
@@ -396,7 +396,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
                   {(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? (
                     <div>
-                      <label className="text-[11px] font-bold text-orange-950 block mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
                         سعر الوجبة للـ Traiteur (حصة المتعهد)
                       </label>
                       <div className="flex items-center gap-2">
@@ -406,11 +406,11 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                           value={currentYearFees.prixPlatTraiteur}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => updateFee('prixPlatTraiteur', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                          className="w-full px-3 py-1.5 bg-white border border-orange-300 rounded-xl text-xs font-bold font-mono text-orange-900"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-800"
                         />
                         <span className="text-xs font-black text-slate-500">د.ت</span>
                       </div>
-                      <span className="text-[10px] text-orange-600 font-bold block mt-1">تخصم كدين للـ Traiteur في وحدة المالية</span>
+                      <span className="text-[10px] text-slate-500 font-medium block mt-1">تخصم كدين للـ Traiteur في وحدة المالية</span>
                     </div>
                   ) : (
                     <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-col justify-center">
@@ -425,15 +425,15 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                 </div>
 
                 {/* Sub-section: Goûter Service */}
-                <div className="mt-4 pt-3 border-t border-orange-200/50">
+                <div className="mt-4 pt-3 border-t border-[#C3E0E4]">
                   <div className="flex items-center gap-2 mb-3">
-                    <Coffee className="h-4 w-4 text-amber-700" />
-                    <span className="text-xs font-black text-amber-900">
+                    <Coffee className="h-4 w-4 text-[#257C86]" />
+                    <span className="text-xs font-black text-[#103840]">
                       تسعيرة خدمة اللمجة (Goûter)
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-amber-50/50 p-3 rounded-2xl border border-amber-200/60">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-3.5 rounded-2xl border border-[#C3E0E4]">
                     <div>
                       <label className="text-[10px] font-bold text-slate-700 block mb-1">
                         لمجة الصباح — اشتراك شهري
@@ -499,6 +499,23 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                         />
                         <span className="text-[11px] font-black text-slate-500">د.ت</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-[#103840] block mb-1">
+                        اللمجتان معاً — اشتراك شهري
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={currentYearFees.fraisDeuxGoutersMensuel || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => updateFee('fraisDeuxGoutersMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          className="w-full px-2.5 py-1.5 bg-[#F2F8F9] border border-[#C3E0E4] rounded-xl text-xs font-bold font-mono text-[#103840]"
+                        />
+                        <span className="text-[11px] font-black text-[#257C86]">د.ت</span>
                       </div>
                     </div>
                   </div>

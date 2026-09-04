@@ -20,6 +20,7 @@ export interface CenterFeeSet {
   fraisGouterMatinUnitaire?: number;
   fraisGouterSoirMensuel?: number;
   fraisGouterSoirUnitaire?: number;
+  fraisDeuxGoutersMensuel?: number;
 }
 
 export type MealOperatingMode = 'external_traiteur' | 'in_house_kitchen';
@@ -53,7 +54,8 @@ export const initialCenterFeeSet: CenterFeeSet = {
   fraisGouterMatinMensuel: 0,
   fraisGouterMatinUnitaire: 0,
   fraisGouterSoirMensuel: 0,
-  fraisGouterSoirUnitaire: 0
+  fraisGouterSoirUnitaire: 0,
+  fraisDeuxGoutersMensuel: 0
 };
 
 // Default fees applied at student creation time
@@ -71,7 +73,8 @@ export const initialStudentFeeSet: CenterFeeSet = {
   fraisGouterMatinMensuel: 0,
   fraisGouterMatinUnitaire: 0,
   fraisGouterSoirMensuel: 0,
-  fraisGouterSoirUnitaire: 0
+  fraisGouterSoirUnitaire: 0,
+  fraisDeuxGoutersMensuel: 0
 };
 
 // Shared default list of matières used across the whole app (Suivi notes devoirs, staff enseignant, cours)
@@ -128,7 +131,8 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
       fraisGouterMatinMensuel: Number(fb.fraisGouterMatinMensuel) || 0,
       fraisGouterMatinUnitaire: Number(fb.fraisGouterMatinUnitaire) || 0,
       fraisGouterSoirMensuel: Number(fb.fraisGouterSoirMensuel) || 0,
-      fraisGouterSoirUnitaire: Number(fb.fraisGouterSoirUnitaire) || 0
+      fraisGouterSoirUnitaire: Number(fb.fraisGouterSoirUnitaire) || 0,
+      fraisDeuxGoutersMensuel: Number(fb.fraisDeuxGoutersMensuel) || 0
     };
   }
 
@@ -153,7 +157,8 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
     fraisGouterMatinMensuel: getNum('fraisGouterMatinMensuel', 'frais_gouter_matin_mensuel', undefined, Number(fb.fraisGouterMatinMensuel) || 0),
     fraisGouterMatinUnitaire: getNum('fraisGouterMatinUnitaire', 'frais_gouter_matin_unitaire', undefined, Number(fb.fraisGouterMatinUnitaire) || 0),
     fraisGouterSoirMensuel: getNum('fraisGouterSoirMensuel', 'frais_gouter_soir_mensuel', undefined, Number(fb.fraisGouterSoirMensuel) || 0),
-    fraisGouterSoirUnitaire: getNum('fraisGouterSoirUnitaire', 'frais_gouter_soir_unitaire', undefined, Number(fb.fraisGouterSoirUnitaire) || 0)
+    fraisGouterSoirUnitaire: getNum('fraisGouterSoirUnitaire', 'frais_gouter_soir_unitaire', undefined, Number(fb.fraisGouterSoirUnitaire) || 0),
+    fraisDeuxGoutersMensuel: getNum('fraisDeuxGoutersMensuel', 'frais_deux_gouters_mensuel', undefined, Number(fb.fraisDeuxGoutersMensuel) || 0)
   };
 }
 
@@ -371,6 +376,7 @@ export interface MealAttendance {
   type: 'subscription' | 'unit';
   paid: boolean;
   paidAt?: string;
+  traiteurPrice?: number;
 }
 
 export interface StudentRegistration {

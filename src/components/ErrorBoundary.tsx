@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { Component, type ReactNode, type ErrorInfo } from 'react';
 import { clientLogger } from '../utils/logger';
 
 interface Props {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 interface State {
@@ -10,7 +10,7 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends React.Component<Props, State> {
+export class ErrorBoundary extends Component<Props, State> {
   public override state: State = { hasError: false, error: null };
 
   constructor(props: Props) {
