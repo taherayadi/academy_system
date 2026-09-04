@@ -2,7 +2,7 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, Formation
+  StudentTimeSheet, Formation, CenterTenant, DemoRequest
 } from './types';
 
 const API_BASE = '/api';
@@ -261,19 +261,19 @@ export async function saveDatabase(state: DatabaseState): Promise<void> {
 
 // ------------------- Authentication -------------------
 
-export async function loginRequest(email: string, password: string): Promise<UserAccount> {
+export async function loginRequest(email: string, password: string): Promise<{ user: UserAccount; center?: CenterTenant | null }> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ email, password })
   });
-  const data: { error?: string; user?: UserAccount; token?: string } = await res.json().catch(() => ({}));
+  const data: { error?: string; user?: UserAccount; token?: string; center?: CenterTenant | null } = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.error || 'خطأ في تسجيل الدخول.');
   }
   if (data.token) setSessionToken(data.token);
-  return data.user!;
+  return { user: data.user!, center: data.center ?? null };
 }
 
 export async function logoutRequest(): Promise<void> {
@@ -301,3 +301,142 @@ export async function changePasswordRequest(
     throw new Error(data.error || 'خطأ في تغيير كلمة السر.');
   }
 }
+
+// ========================================================================
+// SaaS Platform API – Demo Requests
+// ========================================================================
+
+/** Submit a trial / demo / info request from the landing page (public). */
+export async function submitDemoRequestApi(data: {
+  requestType: 'trial' | 'demo' | 'info';
+  fullName: string;
+  academyName: string;
+  email: string;
+  phone: string;
+  estimatedSize?: string;
+  message?: string;
+  requestedModules?: string[];
+}): Promise<void> {
+  const res = await fetch(`${API_BASE}/demo-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const json: { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Erreur lors de l\'envoi de la demande.');
+}
+
+/** Fetch all demo/trial requests (super-admin only). */
+export async function fetchDemoRequestsApi(): Promise<DemoRequest[]> {
+  const res = await fetch(`${API_BASE}/demo-requests`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { requests?: DemoRequest[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la récupération des demandes.');
+  return data.requests || [];
+}
+
+/** Update status / notes of a demo request (super-admin). */
+export async function updateDemoRequestApi(
+  id: string,
+  payload: { status?: string; notes?: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/demo-requests`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour.');
+}
+
+/** Delete a demo request (super-admin). */
+export async function deleteDemoRequestApi(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/demo-requests?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new Error('Erreur lors de la suppression.');
+}
+
+// ========================================================================
+// SaaS Platform API – Centers
+// ========================================================================
+
+/** Fetch all centers (super-admin) or the current center (tenant). */
+export async function fetchCentersApi(): Promise<CenterTenant[]> {
+  const res = await fetch(`${API_BASE}/centers`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { centers?: CenterTenant[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la récupération des centres.');
+  return data.centers || [];
+}
+
+/** Create a new center with its director account (super-admin). */
+export async function createCenterApi(payload: {
+  name: string;
+  slug?: string;
+  phoneNumber?: string;
+  locationCity?: string;
+  plan: string;
+  enabledModules: string[];
+  directorName: string;
+  directorEmail: string;
+  directorPassword: string;
+  convertFromRequestId?: string;
+}): Promise<{ centerId: string }> {
+  const res = await fetch(`${API_BASE}/centers`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { centerId?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la création du centre.');
+  return { centerId: data.centerId! };
+}
+
+/** Update center properties (super-admin): status, plan, modules, trial dates, etc. */
+export async function updateCenterApi(
+  id: string,
+  payload: {
+    status?: string;
+    plan?: string;
+    enabledModules?: string[];
+    trialEndsAt?: number | null;
+    subscriptionEndsAt?: number | null;
+    extendTrialDays?: number;
+  }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/centers`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du centre.');
+}
+
+/** Delete a center (super-admin). Cannot delete the default center. */
+export async function deleteCenterApi(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/centers?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new Error('Erreur lors de la suppression du centre.');
+}
+

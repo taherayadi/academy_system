@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { submitDemoRequestApi } from '../api';
 import { motion } from 'motion/react';
 import { 
   GraduationCap, 
@@ -58,32 +59,37 @@ export default function LandingPage({ onOpenLogin, centerName = 'Small Genious' 
     return 'custom';
   }, [studentCount]);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const newRequest = {
-      id: `REQ-${Date.now()}`,
-      requestType,
-      fullName,
-      academyName,
-      email,
-      phone,
-      estimatedSize,
-      message,
-      submittedAt: new Date().toISOString()
-    };
-
     try {
-      const existing = JSON.parse(localStorage.getItem('academy_demo_requests') || '[]');
-      existing.unshift(newRequest);
-      localStorage.setItem('academy_demo_requests', JSON.stringify(existing));
-    } catch {}
-
-    setTimeout(() => {
-      setIsSubmitting(false);
+      await submitDemoRequestApi({
+        requestType,
+        fullName,
+        academyName,
+        email,
+        phone,
+        estimatedSize,
+        message
+      });
       setFormSubmitted(true);
-    }, 600);
+    } catch {
+      // Fallback: save to localStorage so the prospect info isn't lost
+      try {
+        const newRequest = {
+          id: `REQ-${Date.now()}`,
+          requestType, fullName, academyName, email, phone, estimatedSize, message,
+          submittedAt: new Date().toISOString()
+        };
+        const existing = JSON.parse(localStorage.getItem('academy_demo_requests') || '[]');
+        existing.unshift(newRequest);
+        localStorage.setItem('academy_demo_requests', JSON.stringify(existing));
+      } catch { /* ignore */ }
+      setFormSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const scrollToSection = (id: string) => {

@@ -1,4 +1,4 @@
-import { UserAccount } from './types';
+import { UserAccount, CenterTenant } from './types';
 import { loginRequest, logoutRequest, changePasswordRequest, setSessionToken } from './api';
 
 const SESSION_KEY = 'tc_user';
@@ -32,7 +32,7 @@ export function clearSessionUser(): void {
   });
 }
 
-export async function verifyPassword(email: string, password: string): Promise<UserAccount> {
+export async function verifyPassword(email: string, password: string): Promise<{ user: UserAccount; center?: CenterTenant | null }> {
   return loginRequest(email, password);
 }
 

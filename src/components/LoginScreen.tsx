@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { UserAccount } from '../types';
+import { UserAccount, CenterTenant } from '../types';
 import { verifyPassword } from '../auth';
 import logo from '../assets/logo.png';
 
 interface LoginScreenProps {
-  onLogin: (user: UserAccount) => void;
+  onLogin: (user: UserAccount, center?: CenterTenant | null) => void;
   centerName?: string;
   onBackToLanding?: () => void;
 }
@@ -38,8 +38,8 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
     }
 
     try {
-      const user = await verifyPassword(cleanEmail, password.trim());
-      onLogin(user);
+      const { user, center } = await verifyPassword(cleanEmail, password.trim());
+      onLogin(user, center);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'كلمة السر غير صحيحة');
     } finally {

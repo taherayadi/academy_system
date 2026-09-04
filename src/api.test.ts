@@ -27,6 +27,14 @@ import {
   loginRequest,
   getSessionToken,
   setSessionToken,
+  submitDemoRequestApi,
+  fetchDemoRequestsApi,
+  updateDemoRequestApi,
+  deleteDemoRequestApi,
+  fetchCentersApi,
+  createCenterApi,
+  updateCenterApi,
+  deleteCenterApi,
 } from './api';
 import { normalizeSettings, normalizeFeeSet, initialCenterSettings } from './types';
 
@@ -177,7 +185,7 @@ describe('session token', () => {
     const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
     mockFetch.mockResolvedValue(jsonResponse({ user, token: 'tok123' }));
     const result = await loginRequest('a@b.com', 'pass');
-    expect(result).toEqual(user);
+    expect(result.user).toEqual(user);
     expect(getSessionToken()).toBe('tok123');
   });
 
@@ -185,7 +193,7 @@ describe('session token', () => {
     const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
     mockFetch.mockResolvedValue(jsonResponse({ user }));
     const result = await loginRequest('a@b.com', 'pass');
-    expect(result).toEqual(user);
+    expect(result.user).toEqual(user);
     expect(getSessionToken()).toBeNull();
   });
 
@@ -214,7 +222,7 @@ describe('loginRequest', () => {
     const result = await loginRequest('a@b.com', 'pass');
     expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
     expect(mockFetch.mock.calls[0][1].method).toBe('POST');
-    expect(result).toEqual(user);
+    expect(result.user).toEqual(user);
   });
 
   it('throws on server error', async () => {
@@ -359,4 +367,83 @@ describe('Step 3: Adaptive Cantine & Goûter', () => {
     expect(feeSet.fraisGouterSoirUnitaire).toBe(2.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SaaS Platform & Demo Requests
+// ---------------------------------------------------------------------------
+describe('SaaS Platform API', () => {
+  it('submitDemoRequestApi sends POST to /api/demo-requests', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true, id: 'req_1' }));
+    await submitDemoRequestApi({
+      requestType: 'trial',
+      fullName: 'Directeur Test',
+      academyName: 'Academie Test',
+      email: 'test@academy.tn',
+      phone: '98000000',
+    });
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
+    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.academyName).toBe('Academie Test');
+  });
+
+  it('fetchDemoRequestsApi calls GET /api/demo-requests', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ requests: [{ id: 'r1', fullName: 'Prospect' }] }));
+    const list = await fetchDemoRequestsApi();
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe('r1');
+  });
+
+  it('updateDemoRequestApi calls PATCH /api/demo-requests', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+    await updateDemoRequestApi('r1', { status: 'contacted' });
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
+    expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+  });
+
+  it('deleteDemoRequestApi calls DELETE /api/demo-requests', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+    await deleteDemoRequestApi('r1');
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests?id=r1');
+    expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+  });
+
+  it('fetchCentersApi calls GET /api/centers', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ centers: [{ id: 'c1', name: 'Centre 1' }] }));
+    const centers = await fetchCentersApi();
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
+    expect(centers[0].name).toBe('Centre 1');
+  });
+
+  it('createCenterApi calls POST /api/centers', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ centerId: 'c_new' }));
+    const res = await createCenterApi({
+      name: 'Nouveau Centre',
+      plan: 'trial',
+      enabledModules: ['scolaire', 'finance'],
+      directorName: 'Directeur',
+      directorEmail: 'dir@test.tn',
+      directorPassword: 'password123'
+    });
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
+    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    expect(res.centerId).toBe('c_new');
+  });
+
+  it('updateCenterApi calls PATCH /api/centers', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+    await updateCenterApi('c1', { extendTrialDays: 14 });
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
+    expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+  });
+
+  it('deleteCenterApi calls DELETE /api/centers', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+    await deleteCenterApi('c1');
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers?id=c1');
+    expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+  });
+});
+
 

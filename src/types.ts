@@ -1,8 +1,59 @@
+export type SaaSPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
+export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
+
+export type ModuleKey = 
+  | 'scolaire' 
+  | 'finance' 
+  | 'etude' 
+  | 'coursParticuliers' 
+  | 'revision' 
+  | 'formations' 
+  | 'cantine' 
+  | 'transport' 
+  | 'events' 
+  | 'bibliotheque' 
+  | 'studentTimeSheets' 
+  | 'staff';
+
+export interface CenterTenant {
+  id: string;
+  name: string;
+  slug?: string;
+  phoneNumber?: string;
+  locationCity?: string;
+  plan: SaaSPlan;
+  enabledModules: ModuleKey[] | string[];
+  mealOperatingMode?: 'external_traiteur' | 'in_house_kitchen';
+  status: CenterStatus;
+  trialEndsAt?: number | null;
+  subscriptionEndsAt?: number | null;
+  createdAt: number;
+  studentCount?: number;
+  adminEmail?: string;
+}
+
+export interface DemoRequest {
+  id: string;
+  requestType: 'trial' | 'demo' | 'info';
+  fullName: string;
+  academyName: string;
+  email: string;
+  phone: string;
+  estimatedSize?: string;
+  requestedModules?: string[] | string;
+  message?: string;
+  status: 'new' | 'contacted' | 'converted' | 'archived';
+  notes?: string;
+  createdAt: number;
+}
+
 export interface UserAccount {
   email: string;
   name: string;
-  role: 'super_admin' | 'restricted_admin';
+  role: 'super_admin' | 'restricted_admin' | 'platform_super_admin' | 'admin';
   description: string;
+  centerId?: string;
+  isPlatformAdmin?: boolean;
 }
 
 export interface CenterFeeSet {

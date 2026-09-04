@@ -39,6 +39,7 @@ interface FinanceModuleProps {
   slots?: EtudeSlot[];
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
+  enabledModules?: string[];
 }
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
@@ -77,11 +78,21 @@ const RESTRICTED_SERVICES = ['Cours Particuliers', 'Revision', 'Formation', 'Rep
 
 const fmt = (n: number) => n.toFixed(3);
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules }: FinanceModuleProps) {
+
   const toast = useToast();
   const centerName = settings?.centerName || 'المركز';
   const serviceOptions = getServiceOptions(centerName);
+
+  // enabledModules: undefined = all enabled (backward compat). Otherwise filter by list.
+  const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
+  const canteenEnabled = hasModule('cantine');
+  const coursPartEnabled = hasModule('coursParticuliers');
+  const revisionsEnabled = hasModule('revision');
+  const formationsEnabled = hasModule('formations');
+
   const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
+
   const [searchTerm, setSearchTerm] = useState('');
   
   // Year and Month Filters
@@ -749,7 +760,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         >
           🧾 سجل الخلاص الكامل
         </button>
-        {!hideRestrictedModules && (
+        {!hideRestrictedModules && coursPartEnabled && (
           <button
             onClick={() => setActiveTab('externalCours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
@@ -764,7 +775,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             )}
           </button>
         )}
-        {!hideRestrictedModules && (
+        {!hideRestrictedModules && canteenEnabled && (
           <button
             onClick={() => setActiveTab('restaurant')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
@@ -813,19 +824,19 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-slate-700">2. دراسات {centerName}:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
-              {!hideRestrictedModules && (
+              {!hideRestrictedModules && coursPartEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3. مناب السنتر من الكورسات الخاصة:</span>
                   <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
                 </div>
               )}
-              {!hideRestrictedModules && (
+              {!hideRestrictedModules && revisionsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ب. مناب السنتر من حصص المراجعة:</span>
                   <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Revision)} د.ت</span>
                 </div>
               )}
-              {!hideRestrictedModules && (
+              {!hideRestrictedModules && formationsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ج. مداخيل التكوينات والدورات:</span>
                   <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Formation)} د.ت</span>
@@ -835,7 +846,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-slate-700">4. اشتراكات المكتبة:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
-              {!hideRestrictedModules && revenueByService.Gouter > 0 && (
+              {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
                 <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 flex justify-between font-bold">
                   <span className="text-purple-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
                   <span className="font-mono text-purple-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
@@ -858,7 +869,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             <h3 className="font-extrabold text-slate-900 text-sm">ملخص المصاريف التشغيلية</h3>
             
             <div className="space-y-3 text-xs">
-              {!hideRestrictedModules && repasTraiteurTotal !== 0 && (
+              {!hideRestrictedModules && canteenEnabled && repasTraiteurTotal !== 0 && (
+
                 <div className="p-3 bg-red-50/50 rounded-2xl border border-red-100 flex justify-between font-bold">
                   <span className="text-red-900">• حصة المطعم الخارجي من الوجبات:</span>
                   <span className="font-mono text-red-700 font-black">{fmt(repasTraiteurTotal)} د.ت</span>

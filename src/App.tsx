@@ -23,7 +23,8 @@ import {
   RefreshCw,
   BarChart3,
   Award,
-  CalendarCheck
+  CalendarCheck,
+  ShieldCheck
 } from 'lucide-react';
 
 import { 
@@ -41,6 +42,7 @@ import {
   UserAccount,
   StudentTimeSheet,
   Formation,
+  CenterTenant,
   initialCenterSettings,
   initialStudentFeeSet,
   APP_SUBJECTS,
@@ -95,6 +97,7 @@ import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
+import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
@@ -117,6 +120,7 @@ export default function App() {
   // Authentication State
   // Always start logged out so the app requires login on every launch.
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
   const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
   const [isBootLoading, setIsBootLoading] = useState(true);
@@ -128,8 +132,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogin = (user: UserAccount) => {
+  const handleLogin = (user: UserAccount, center?: CenterTenant | null) => {
     setCurrentUser(user);
+    if (center) setCurrentCenter(center);
     saveSessionUser(user);
     // Always land on the dashboard after login, not the last visited module.
     setActiveTab('dashboard');
@@ -139,6 +144,7 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setCurrentCenter(null);
     clearSessionUser();
     setAuthView('landing');
     toast.info('تم تسجيل الخروج.');
@@ -744,6 +750,8 @@ export default function App() {
     );
   }
 
+  const isPlatformAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'platform_super_admin';
+
   const menuItems = [
     { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
     { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
@@ -760,7 +768,9 @@ export default function App() {
     { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
     { id: 'dataAnalysis', label: 'تحليل البيانات', icon: BarChart3 },
     { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
+    isPlatformAdmin && { id: 'platformAdmin', label: 'إدارة المنصة (SaaS)', icon: ShieldCheck },
   ].filter(Boolean) as { id: string; label: string; icon: any }[];
+
 
   return (
     <div className="min-h-screen bg-[#FCFAF6] flex flex-col md:flex-row font-sans text-slate-800" style={{ direction: 'rtl' }}>
@@ -1076,6 +1086,7 @@ export default function App() {
                   slots={slots}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
+                  enabledModules={currentCenter?.enabledModules as string[] | undefined}
                 />
               )}
 
@@ -1121,8 +1132,13 @@ export default function App() {
                   onImportDatabase={handleImportDatabase}
                 />
               )}
+
+              {activeTab === 'platformAdmin' && isPlatformAdmin && (
+                <PlatformAdminDashboard />
+              )}
             </motion.div>
           </AnimatePresence>
+
 
           {/* Import confirmation dialog */}
           <ConfirmDialog
