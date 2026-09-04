@@ -933,7 +933,7 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
     db.prepare('SELECT * FROM formations WHERE center_id = ?').bind(centerId).all(),
     db.prepare('SELECT m.* FROM formation_matieres m JOIN formations f ON m.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT s.* FROM formation_students s JOIN formations f ON s.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
-    db.prepare('SELECT sm.* FROM formation_student_matieres sm JOIN formations f ON sm.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all()
+    db.prepare('SELECT sm.* FROM formation_student_matieres sm JOIN formation_students fs ON sm.formation_student_id = fs.id JOIN formations f ON fs.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all()
   ]);
   const matieresByFormation: Record<string, any[]> = {};
   matiereRows.results.forEach((m: any) => {
@@ -1004,7 +1004,7 @@ function buildFormationsStmts(db: D1Database, formations: any[], centerId: strin
 
 export async function writeFormations(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const stmts = [
-    db.prepare('DELETE FROM formation_student_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_student_matieres WHERE formation_student_id IN (SELECT id FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
     db.prepare('DELETE FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId),
@@ -1081,7 +1081,7 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
 
     db.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(centerId),
 
-    db.prepare('DELETE FROM formation_student_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_student_matieres WHERE formation_student_id IN (SELECT id FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
     db.prepare('DELETE FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId)
