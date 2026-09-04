@@ -65,6 +65,14 @@ import {
   saveStudentTimeSheets,
   saveFormations,
   saveSettings, 
+  createStudentApi,
+  updateStudentApi,
+  deleteStudentApi,
+  createStaffApi,
+  updateStaffApi,
+  deleteStaffApi,
+  createExpenseApi,
+  deleteExpenseApi,
   UnauthorizedError 
 } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
@@ -265,44 +273,120 @@ export default function App() {
     commitDomain(() => saveSettings(normalized));
   };
 
-  // Granular domain setters with server sync
+  // Atomic student operations (anti-overwrite for concurrent multi-users)
+  const handleAddStudent = (newStudent: Student) => {
+    setStudents(prev => [...prev, newStudent]);
+    commitDomain(() => createStudentApi(newStudent));
+  };
+
+  const handleUpdateSingleStudent = (updatedStudent: Student) => {
+    setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+    commitDomain(() => updateStudentApi(updatedStudent));
+  };
+
+  const handleDeleteStudent = (id: string) => {
+    setStudents(prev => prev.filter(s => s.id !== id));
+    commitDomain(() => deleteStudentApi(id));
+  };
+
   const handleUpdateStudents = (updated: Student[]) => {
+    if (updated.length === students.length + 1) {
+      const added = updated[updated.length - 1];
+      if (added && !students.some(s => s.id === added.id)) {
+        setStudents(updated);
+        commitDomain(() => createStudentApi(added));
+        return;
+      }
+    }
+    if (updated.length === students.length - 1) {
+      const remainingIds = new Set(updated.map(s => s.id));
+      const deleted = students.find(s => !remainingIds.has(s.id));
+      if (deleted) {
+        setStudents(updated);
+        commitDomain(() => deleteStudentApi(deleted.id));
+        return;
+      }
+    }
     setStudents(updated);
     commitDomain(() => saveStudents(updated));
   };
 
-  const handleUpdateSingleStudent = (updatedStudent: Student) => {
-    const updatedList = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
-    setStudents(updatedList);
-    commitDomain(() => saveStudents(updatedList));
+  const handleAddStaff = (newStaff: StaffMember) => {
+    setStaff(prev => [...prev, newStaff]);
+    commitDomain(() => createStaffApi(newStaff));
+  };
+
+  const handleUpdateSingleStaff = (updatedStaff: StaffMember) => {
+    setStaff(prev => prev.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+    commitDomain(() => updateStaffApi(updatedStaff));
+  };
+
+  const handleDeleteStaff = (id: string) => {
+    setStaff(prev => prev.filter(s => s.id !== id));
+    commitDomain(() => deleteStaffApi(id));
   };
 
   const handleUpdateStaff = (updated: StaffMember[]) => {
+    if (updated.length === staff.length + 1) {
+      const added = updated[updated.length - 1];
+      if (added && !staff.some(s => s.id === added.id)) {
+        setStaff(updated);
+        commitDomain(() => createStaffApi(added));
+        return;
+      }
+    }
+    if (updated.length === staff.length - 1) {
+      const remainingIds = new Set(updated.map(s => s.id));
+      const deleted = staff.find(s => !remainingIds.has(s.id));
+      if (deleted) {
+        setStaff(updated);
+        commitDomain(() => deleteStaffApi(deleted.id));
+        return;
+      }
+    }
+    if (updated.length === staff.length) {
+      const changed = updated.find(u => {
+        const old = staff.find(s => s.id === u.id);
+        return old && JSON.stringify(old) !== JSON.stringify(u);
+      });
+      if (changed) {
+        setStaff(updated);
+        commitDomain(() => updateStaffApi(changed));
+        return;
+      }
+    }
     setStaff(updated);
     commitDomain(() => saveStaff(updated));
   };
 
-  const handleUpdateSlots = (updated: EtudeSlot[]) => {
-    setSlots(updated);
-    commitDomain(() => saveSlots(updated));
+  const handleAddExpense = (newExpense: CenterExpense) => {
+    setExpenses(prev => [...prev, newExpense]);
+    commitDomain(() => createExpenseApi(newExpense));
   };
 
-  const handleUpdateCourses = (updated: ExternalCourse[]) => {
-    setCourses(updated);
-    commitDomain(() => saveCourses(updated));
-  };
-
-  const handleUpdateSessions = (updated: ExternalCourseSession[]) => {
-    setSessions(updated);
-    commitDomain(() => saveSessions(updated));
-  };
-
-  const handleUpdateMealPlans = (updated: MealPlanDay[]) => {
-    setMealPlans(updated);
-    commitDomain(() => saveMealPlans(updated));
+  const handleDeleteExpense = (id: string) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    commitDomain(() => deleteExpenseApi(id));
   };
 
   const handleUpdateExpenses = (updated: CenterExpense[]) => {
+    if (updated.length === expenses.length + 1) {
+      const added = updated[updated.length - 1];
+      if (added && !expenses.some(e => e.id === added.id)) {
+        setExpenses(updated);
+        commitDomain(() => createExpenseApi(added));
+        return;
+      }
+    }
+    if (updated.length === expenses.length - 1) {
+      const remainingIds = new Set(updated.map(e => e.id));
+      const deleted = expenses.find(e => !remainingIds.has(e.id));
+      if (deleted) {
+        setExpenses(updated);
+        commitDomain(() => deleteExpenseApi(deleted.id));
+        return;
+      }
+    }
     setExpenses(updated);
     commitDomain(() => saveExpenses(updated));
   };
@@ -849,10 +933,10 @@ export default function App() {
                       ...newStData,
                       id: 'st_' + crypto.randomUUID()
                     };
-                    handleUpdateStudents([...students, newSt]);
+                    handleAddStudent(newSt);
                   }}
                   onUpdateStudent={handleUpdateSingleStudent}
-                  onDeleteStudent={(id) => handleUpdateStudents(students.filter(s => s.id !== id))}
+                  onDeleteStudent={handleDeleteStudent}
                   hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
                 />

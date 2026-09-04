@@ -509,6 +509,42 @@ export async function writeStudents(db: D1Database, students: any[], centerId: s
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
+export async function createSingleStudent(db: D1Database, student: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = buildStudentsStmts(db, [student], centerId);
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+export async function updateSingleStudent(db: D1Database, student: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const deleteStmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM payments WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM meal_attendances WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM suivi_notes WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM academic_history WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM authorized_persons WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM siblings WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM student_parents WHERE student_id = ?').bind(student.id),
+    db.prepare('DELETE FROM students WHERE id = ? AND center_id = ?').bind(student.id, centerId)
+  ];
+  const insertStmts = buildStudentsStmts(db, [student], centerId);
+  const all = [...deleteStmts, ...insertStmts];
+  for (let i = 0; i < all.length; i += 500) await db.batch(all.slice(i, i + 500));
+}
+
+export async function deleteSingleStudent(db: D1Database, studentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM payments WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM meal_attendances WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM suivi_notes WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM academic_history WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM authorized_persons WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM siblings WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM student_parents WHERE student_id = ?').bind(studentId),
+    db.prepare('DELETE FROM students WHERE id = ? AND center_id = ?').bind(studentId, centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+
 // ===========================================================================
 // STAFF
 // ===========================================================================
@@ -561,6 +597,40 @@ export async function writeStaff(db: D1Database, staff: any[]): Promise<void> {
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
+
+export async function createSingleStaff(db: D1Database, staffMember: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = buildStaffStmts(db, [staffMember], centerId);
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+export async function updateSingleStaff(db: D1Database, staffMember: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const deleteStmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM staff_payslips WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff_payments WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff_advances WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff_leave_requests WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff_schedule WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff_subjects WHERE staff_id = ?').bind(staffMember.id),
+    db.prepare('DELETE FROM staff WHERE id = ? AND center_id = ?').bind(staffMember.id, centerId)
+  ];
+  const insertStmts = buildStaffStmts(db, [staffMember], centerId);
+  const all = [...deleteStmts, ...insertStmts];
+  for (let i = 0; i < all.length; i += 500) await db.batch(all.slice(i, i + 500));
+}
+
+export async function deleteSingleStaff(db: D1Database, staffId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM staff_payslips WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff_payments WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff_advances WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff_leave_requests WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff_schedule WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff_subjects WHERE staff_id = ?').bind(staffId),
+    db.prepare('DELETE FROM staff WHERE id = ? AND center_id = ?').bind(staffId, centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
 
 // ===========================================================================
 // TIMESHEETS
@@ -684,8 +754,16 @@ function buildSessionsStmts(db: D1Database, sessions: any[], centerId: string = 
   return stmts;
 }
 
-export async function writeSessions(db: D1Database, sessions: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM session_seance_amount'), db.prepare('DELETE FROM session_seance_status'), db.prepare('DELETE FROM session_month_paid'), db.prepare('DELETE FROM session_one_time_students'), db.prepare('DELETE FROM session_present_students'), db.prepare('DELETE FROM external_course_sessions'), ...buildSessionsStmts(db, sessions)];
+export async function writeSessions(db: D1Database, sessions: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM session_seance_amount WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_seance_status WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_month_paid WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_one_time_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM session_present_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_course_sessions WHERE center_id = ?').bind(centerId),
+    ...buildSessionsStmts(db, sessions, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -693,8 +771,12 @@ export async function writeSessions(db: D1Database, sessions: any[]): Promise<vo
 // EXTERNAL STUDENTS
 // ===========================================================================
 
-export async function readExternalStudents(db: D1Database): Promise<any[]> {
-  const [studentRows, paymentRows, attendanceRows] = await Promise.all([db.prepare('SELECT * FROM external_students').all(), db.prepare('SELECT * FROM external_payments').all(), db.prepare('SELECT * FROM external_attendance').all()]);
+export async function readExternalStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [studentRows, paymentRows, attendanceRows] = await Promise.all([
+    db.prepare('SELECT * FROM external_students WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT p.* FROM external_payments p JOIN external_students s ON p.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT a.* FROM external_attendance a JOIN external_students s ON a.student_id = s.id WHERE s.center_id = ?').bind(centerId).all()
+  ]);
   const paymentsByStudent: Record<string, any[]> = {};
   paymentRows.results.forEach((r: any) => { (paymentsByStudent[str(r.student_id)] = paymentsByStudent[str(r.student_id)] || []).push({ id: str(r.id), studentId: str(r.student_id), courseId: r.course_id == null ? undefined : str(r.course_id), courseName: str(r.course_name), schoolYear: str(r.school_year), amountPaid: num(r.amount_paid), date: str(r.date), method: str(r.method), notes: r.notes == null ? undefined : str(r.notes) }); });
   const attendanceByStudent: Record<string, any[]> = {};
@@ -702,18 +784,23 @@ export async function readExternalStudents(db: D1Database): Promise<any[]> {
   return studentRows.results.map((r: any) => ({ id: str(r.id), name: str(r.name), parentPhone: str(r.parent_phone), grade: str(r.grade), schoolYear: r.school_year == null ? undefined : str(r.school_year), assurancePaid: !!r.assurance_paid, assuranceAmount: num(r.assurance_amount), assuranceDate: r.assurance_date == null ? undefined : str(r.assurance_date), payments: paymentsByStudent[str(r.id)] || [], attendance: attendanceByStudent[str(r.id)] || [], createdAt: str(r.created_at) }));
 }
 
-function buildExternalStudentsStmts(db: D1Database, externalStudents: any[]): D1PreparedStatement[] {
+function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of externalStudents || []) {
-    stmts.push(db.prepare('INSERT INTO external_students (id, name, parent_phone, grade, school_year, assurance_paid, assurance_amount, assurance_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.name, s.parentPhone, s.grade, s.schoolYear ?? null, s.assurancePaid ? 1 : 0, num(s.assuranceAmount), s.assuranceDate ?? null, s.createdAt));
+    stmts.push(db.prepare('INSERT INTO external_students (id, name, parent_phone, grade, school_year, assurance_paid, assurance_amount, assurance_date, created_at, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.name, s.parentPhone, s.grade, s.schoolYear ?? null, s.assurancePaid ? 1 : 0, num(s.assuranceAmount), s.assuranceDate ?? null, s.createdAt, centerId));
     for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO external_payments (id, student_id, course_id, course_name, school_year, amount_paid, date, method, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, s.id, p.courseId ?? null, p.courseName, p.schoolYear, num(p.amountPaid), p.date, p.method, p.notes ?? null));
     for (const a of s.attendance || []) stmts.push(db.prepare('INSERT INTO external_attendance (id, student_id, course_id, course_name, date, status) VALUES (?, ?, ?, ?, ?, ?)').bind(a.id, s.id, a.courseId ?? null, a.courseName, a.date, a.status));
   }
   return stmts;
 }
 
-export async function writeExternalStudents(db: D1Database, externalStudents: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM external_attendance'), db.prepare('DELETE FROM external_payments'), db.prepare('DELETE FROM external_students'), ...buildExternalStudentsStmts(db, externalStudents)];
+export async function writeExternalStudents(db: D1Database, externalStudents: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM external_attendance WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_payments WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM external_students WHERE center_id = ?').bind(centerId),
+    ...buildExternalStudentsStmts(db, externalStudents, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -721,24 +808,31 @@ export async function writeExternalStudents(db: D1Database, externalStudents: an
 // MEAL PLANS
 // ===========================================================================
 
-export async function readMealPlans(db: D1Database): Promise<any[]> {
-  const [planRows, attendeeRows] = await Promise.all([db.prepare('SELECT * FROM meal_plan_days').all(), db.prepare('SELECT * FROM meal_plan_attendees').all()]);
+export async function readMealPlans(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [planRows, attendeeRows] = await Promise.all([
+    db.prepare('SELECT * FROM meal_plan_days WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT a.* FROM meal_plan_attendees a JOIN meal_plan_days d ON a.meal_plan_id = d.id WHERE d.center_id = ?').bind(centerId).all()
+  ]);
   const attendeesByPlan: Record<string, any[]> = {};
   attendeeRows.results.forEach((r: any) => { (attendeesByPlan[str(r.meal_plan_id)] = attendeesByPlan[str(r.meal_plan_id)] || []).push({ studentId: str(r.student_id), isOneTime: !!r.is_one_time, paidUnit: !!r.paid_unit }); });
   return planRows.results.map((r: any) => ({ id: str(r.id), day: str(r.day), date: str(r.date), dishName: str(r.dish_name), description: str(r.description), attendees: attendeesByPlan[str(r.id)] || [] }));
 }
 
-function buildMealPlansStmts(db: D1Database, mealPlans: any[]): D1PreparedStatement[] {
+function buildMealPlansStmts(db: D1Database, mealPlans: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const p of mealPlans || []) {
-    stmts.push(db.prepare('INSERT INTO meal_plan_days (id, day, date, dish_name, description) VALUES (?, ?, ?, ?, ?)').bind(p.id, p.day, p.date, p.dishName, p.description));
+    stmts.push(db.prepare('INSERT INTO meal_plan_days (id, day, date, dish_name, description, center_id) VALUES (?, ?, ?, ?, ?, ?)').bind(p.id, p.day, p.date, p.dishName, p.description, centerId));
     for (const a of p.attendees || []) stmts.push(db.prepare('INSERT INTO meal_plan_attendees (meal_plan_id, student_id, is_one_time, paid_unit) VALUES (?, ?, ?, ?)').bind(p.id, a.studentId, a.isOneTime ? 1 : 0, a.paidUnit ? 1 : 0));
   }
   return stmts;
 }
 
-export async function writeMealPlans(db: D1Database, mealPlans: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM meal_plan_attendees'), db.prepare('DELETE FROM meal_plan_days'), ...buildMealPlansStmts(db, mealPlans)];
+export async function writeMealPlans(db: D1Database, mealPlans: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM meal_plan_attendees WHERE meal_plan_id IN (SELECT id FROM meal_plan_days WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_plan_days WHERE center_id = ?').bind(centerId),
+    ...buildMealPlansStmts(db, mealPlans, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -746,41 +840,59 @@ export async function writeMealPlans(db: D1Database, mealPlans: any[]): Promise<
 // EXPENSES
 // ===========================================================================
 
-export async function readExpenses(db: D1Database): Promise<any[]> {
-  return (await db.prepare('SELECT * FROM expenses').all()).results.map((r: any) => ({ id: str(r.id), date: str(r.date), category: str(r.category), amount: num(r.amount), description: str(r.description), receiptRef: str(r.receipt_ref) }));
+export async function readExpenses(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  return (await db.prepare('SELECT * FROM expenses WHERE center_id = ?').bind(centerId).all()).results.map((r: any) => ({ id: str(r.id), date: str(r.date), category: str(r.category), amount: num(r.amount), description: str(r.description), receiptRef: str(r.receipt_ref) }));
 }
 
-function buildExpensesStmts(db: D1Database, expenses: any[]): D1PreparedStatement[] {
-  return (expenses || []).map((e: any) => db.prepare('INSERT INTO expenses (id, date, category, amount, description, receipt_ref) VALUES (?, ?, ?, ?, ?, ?)').bind(e.id, e.date, e.category, num(e.amount), e.description, e.receiptRef));
+function buildExpensesStmts(db: D1Database, expenses: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  return (expenses || []).map((e: any) => db.prepare('INSERT INTO expenses (id, date, category, amount, description, receipt_ref, center_id) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(e.id, e.date, e.category, num(e.amount), e.description, e.receiptRef, centerId));
 }
 
-export async function writeExpenses(db: D1Database, expenses: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM expenses'), ...buildExpensesStmts(db, expenses)];
+export async function writeExpenses(db: D1Database, expenses: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [db.prepare('DELETE FROM expenses WHERE center_id = ?').bind(centerId), ...buildExpensesStmts(db, expenses, centerId)];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
+
+export async function createSingleExpense(db: D1Database, expense: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await db.prepare('INSERT INTO expenses (id, date, category, amount, description, receipt_ref, center_id) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
+    expense.id, expense.date, expense.category, num(expense.amount), expense.description, expense.receiptRef ?? null, centerId
+  ).run();
+}
+
+export async function deleteSingleExpense(db: D1Database, expenseId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await db.prepare('DELETE FROM expenses WHERE id = ? AND center_id = ?').bind(expenseId, centerId).run();
+}
+
 
 // ===========================================================================
 // REVISION SEANCES
 // ===========================================================================
 
-export async function readRevisionSeances(db: D1Database): Promise<any[]> {
-  const [seanceRows, studentRows] = await Promise.all([db.prepare('SELECT * FROM revision_seances').all(), db.prepare('SELECT * FROM revision_seance_students').all()]);
+export async function readRevisionSeances(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [seanceRows, studentRows] = await Promise.all([
+    db.prepare('SELECT * FROM revision_seances WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT st.* FROM revision_seance_students st JOIN revision_seances s ON st.seance_id = s.id WHERE s.center_id = ?').bind(centerId).all()
+  ]);
   const studentsBySeance: Record<string, any[]> = {};
   studentRows.results.forEach((r: any) => { (studentsBySeance[str(r.seance_id)] = studentsBySeance[str(r.seance_id)] || []).push({ id: str(r.student_id), studentId: str(r.student_id), name: str(r.student_name), studentName: str(r.student_name), parentPhone: str(r.parent_phone), paidSeance: !!r.paid_seance, present: !!r.present }); });
   return seanceRows.results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject), teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone), date: str(r.date), teacherShare: num(r.teacher_share), centerShare: num(r.center_share), students: studentsBySeance[str(r.id)] || [] }));
 }
 
-function buildRevisionSeancesStmts(db: D1Database, seances: any[]): D1PreparedStatement[] {
+function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of seances || []) {
-    stmts.push(db.prepare('INSERT INTO revision_seances (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, date, teacher_share, center_share) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.trimester, s.gradeLevel, s.subject, s.teacherName, s.teacherPhone, s.date, num(s.teacherShare), num(s.centerShare)));
+    stmts.push(db.prepare('INSERT INTO revision_seances (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, date, teacher_share, center_share, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.trimester, s.gradeLevel, s.subject, s.teacherName, s.teacherPhone, s.date, num(s.teacherShare), num(s.centerShare), centerId));
     for (const st of s.students || []) { const studentId = str(st.studentId || st.id); if (studentId) stmts.push(db.prepare('INSERT INTO revision_seance_students (seance_id, student_id, student_name, parent_phone, paid_seance, present) VALUES (?, ?, ?, ?, ?, ?)').bind(s.id, studentId, str(st.studentName || st.name || ''), str(st.parentPhone || ''), st.paidSeance ? 1 : 0, st.present ? 1 : 0)); }
   }
   return stmts;
 }
 
-export async function writeRevisionSeances(db: D1Database, seances: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM revision_seance_students'), db.prepare('DELETE FROM revision_seances'), ...buildRevisionSeancesStmts(db, seances)];
+export async function writeRevisionSeances(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(centerId),
+    ...buildRevisionSeancesStmts(db, seances, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -788,15 +900,15 @@ export async function writeRevisionSeances(db: D1Database, seances: any[]): Prom
 // STUDENT TIME SHEETS
 // ===========================================================================
 
-export async function readStudentTimeSheets(db: D1Database): Promise<any[]> {
-  return (await db.prepare('SELECT * FROM student_time_sheets').all()).results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), establishmentName: str(r.establishment_name), gradeLevel: str(r.grade_level), branch: r.branch == null ? undefined : str(r.branch), className: r.class_name == null ? undefined : str(r.class_name), weeklySchedule: parseJson(r.weekly_schedule, []), createdAt: str(r.created_at), updatedAt: str(r.updated_at) }));
+export async function readStudentTimeSheets(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  return (await db.prepare('SELECT * FROM student_time_sheets WHERE center_id = ?').bind(centerId).all()).results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), establishmentName: str(r.establishment_name), gradeLevel: str(r.grade_level), branch: r.branch == null ? undefined : str(r.branch), className: r.class_name == null ? undefined : str(r.class_name), weeklySchedule: parseJson(r.weekly_schedule, []), createdAt: str(r.created_at), updatedAt: str(r.updated_at) }));
 }
 
-function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[]): D1PreparedStatement[] {
+function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const s of sheets || []) {
     const name = s.establishmentName + ' - ' + s.schoolYear;
-    stmts.push(db.prepare('INSERT INTO student_time_sheets (id, school_year, establishment_name, grade_level, branch, class_name, weekly_schedule, created_at, updated_at, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.establishmentName, s.gradeLevel, s.branch ?? null, s.className ?? null, JSON.stringify(s.weeklySchedule || []), s.createdAt, s.updatedAt, name));
+    stmts.push(db.prepare('INSERT INTO student_time_sheets (id, school_year, establishment_name, grade_level, branch, class_name, weekly_schedule, created_at, updated_at, name, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.establishmentName, s.gradeLevel, s.branch ?? null, s.className ?? null, JSON.stringify(s.weeklySchedule || []), s.createdAt, s.updatedAt, name, centerId));
     if (s.establishmentName && String(s.establishmentName).trim()) {
       stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (name) VALUES (?)').bind(String(s.establishmentName).trim()));
     }
@@ -804,8 +916,11 @@ function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[]): D1PreparedS
   return stmts;
 }
 
-export async function writeStudentTimeSheets(db: D1Database, sheets: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM student_time_sheets'), ...buildStudentTimeSheetsStmts(db, sheets)];
+export async function writeStudentTimeSheets(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(centerId),
+    ...buildStudentTimeSheetsStmts(db, sheets, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -813,12 +928,12 @@ export async function writeStudentTimeSheets(db: D1Database, sheets: any[]): Pro
 // FORMATIONS
 // ===========================================================================
 
-export async function readFormations(db: D1Database): Promise<any[]> {
+export async function readFormations(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [formationRows, matiereRows, studentRows, studentMatiereRows] = await Promise.all([
-    db.prepare('SELECT * FROM formations').all(),
-    db.prepare('SELECT * FROM formation_matieres').all(),
-    db.prepare('SELECT * FROM formation_students').all(),
-    db.prepare('SELECT * FROM formation_student_matieres').all()
+    db.prepare('SELECT * FROM formations WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT m.* FROM formation_matieres m JOIN formations f ON m.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT s.* FROM formation_students s JOIN formations f ON s.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT sm.* FROM formation_student_matieres sm JOIN formations f ON sm.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all()
   ]);
   const matieresByFormation: Record<string, any[]> = {};
   matiereRows.results.forEach((m: any) => {
@@ -871,10 +986,10 @@ export async function readFormations(db: D1Database): Promise<any[]> {
   });
 }
 
-function buildFormationsStmts(db: D1Database, formations: any[]): D1PreparedStatement[] {
+function buildFormationsStmts(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (const f of formations || []) {
-    stmts.push(db.prepare('INSERT INTO formations (id, name, school_year, start_date, end_date, pack_price, schedule, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(f.id, f.name, f.schoolYear, f.startDate, f.endDate, num(f.packPrice), JSON.stringify(f.schedule || []), f.createdAt));
+    stmts.push(db.prepare('INSERT INTO formations (id, name, school_year, start_date, end_date, pack_price, schedule, created_at, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(f.id, f.name, f.schoolYear, f.startDate, f.endDate, num(f.packPrice), JSON.stringify(f.schedule || []), f.createdAt, centerId));
     for (const m of f.matieres || []) stmts.push(db.prepare('INSERT INTO formation_matieres (id, formation_id, subject) VALUES (?, ?, ?)').bind(m.id, f.id, m.subject));
     const validMatIds = new Set((f.matieres || []).map((m: any) => m.id));
     for (const st of f.students || []) {
@@ -887,8 +1002,14 @@ function buildFormationsStmts(db: D1Database, formations: any[]): D1PreparedStat
   return stmts;
 }
 
-export async function writeFormations(db: D1Database, formations: any[]): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM formation_student_matieres'), db.prepare('DELETE FROM formation_students'), db.prepare('DELETE FROM formation_matieres'), db.prepare('DELETE FROM formations'), ...buildFormationsStmts(db, formations)];
+export async function writeFormations(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    db.prepare('DELETE FROM formation_student_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId),
+    ...buildFormationsStmts(db, formations, centerId)
+  ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -984,4 +1105,18 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
   for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
   for (let i = 0; i < allDataStmts.length; i += 500) await db.batch(allDataStmts.slice(i, i + 500));
   if (state.settings && typeof state.settings === 'object') await writeSettings(db, state.settings, centerId);
+}
+
+
+export async function createSinglePayment(db: D1Database, payment: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const service = normalizePaymentService(payment.service, payment.month);
+  await db.prepare('INSERT OR REPLACE INTO payments (id, student_id, date, amount_paid, total_required, remaining_balance, service, month, payment_type, method, receipt_number, notes, discount, refund, refund_of, cheque_number, cheque_date, cheque_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+    payment.id, payment.studentId, payment.date, num(payment.amountPaid), num(payment.totalRequired), num(payment.remainingBalance),
+    service, payment.month, payment.paymentType, payment.method, payment.receiptNumber, payment.notes ?? null, payment.discount ?? null,
+    payment.refund ? 1 : 0, payment.refundOf ?? null, payment.chequeNumber ?? null, payment.chequeDate ?? null, payment.chequePaid ? 1 : 0
+  ).run();
+}
+
+export async function deleteSinglePayment(db: D1Database, paymentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await db.prepare('DELETE FROM payments WHERE id = ?').bind(paymentId).run();
 }

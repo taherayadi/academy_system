@@ -74,6 +74,69 @@ async function putDomain(path: string, body: unknown, defaultErrMsg: string): Pr
   }
 }
 
+/** Generic POST helper for granular domain endpoints. */
+async function postDomain(path: string, body: unknown, defaultErrMsg: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(body)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const data: { error?: string } = await res.json().catch(() => ({}));
+    throw new Error(data.error || defaultErrMsg);
+  }
+}
+
+/** Generic DELETE helper for granular domain endpoints. */
+async function deleteDomain(path: string, defaultErrMsg: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const data: { error?: string } = await res.json().catch(() => ({}));
+    throw new Error(data.error || defaultErrMsg);
+  }
+}
+
+// ------------------- Atomic Entity Mutators (Concurrent-safe) -------------------
+
+export async function createStudentApi(student: Student): Promise<void> {
+  return postDomain('/students', student, 'تعذر إضافة التلميذ.');
+}
+
+export async function updateStudentApi(student: Student): Promise<void> {
+  return putDomain('/students', student, 'تعذر تعديل بيانات التلميذ.');
+}
+
+export async function deleteStudentApi(studentId: string): Promise<void> {
+  return deleteDomain(`/students?id=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ.');
+}
+
+export async function createStaffApi(staff: StaffMember): Promise<void> {
+  return postDomain('/staff', staff, 'تعذر إضافة عضو الإطار.');
+}
+
+export async function updateStaffApi(staff: StaffMember): Promise<void> {
+  return putDomain('/staff', staff, 'تعذر تعديل بيانات عضو الإطار.');
+}
+
+export async function deleteStaffApi(staffId: string): Promise<void> {
+  return deleteDomain(`/staff?id=${encodeURIComponent(staffId)}`, 'تعذر حذف عضو الإطار.');
+}
+
+export async function createExpenseApi(expense: CenterExpense): Promise<void> {
+  return postDomain('/expenses', expense, 'تعذر إضافة المصروف.');
+}
+
+export async function deleteExpenseApi(expenseId: string): Promise<void> {
+  return deleteDomain(`/expenses?id=${encodeURIComponent(expenseId)}`, 'تعذر حذف المصروف.');
+}
+
 // ------------------- Granular Domain Mutators -------------------
 
 export async function saveStudents(students: Student[]): Promise<void> {

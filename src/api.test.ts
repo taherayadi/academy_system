@@ -16,6 +16,14 @@ import {
   saveSettings,
   saveDatabase,
   fetchDatabase,
+  createStudentApi,
+  updateStudentApi,
+  deleteStudentApi,
+  createStaffApi,
+  updateStaffApi,
+  deleteStaffApi,
+  createExpenseApi,
+  deleteExpenseApi,
   loginRequest,
   getSessionToken,
   setSessionToken,
@@ -216,5 +224,89 @@ describe('loginRequest', () => {
   it('throws generic error when server returns no error message', async () => {
     mockFetch.mockResolvedValue(jsonResponse({}, 500));
     await expect(loginRequest('x', 'y')).rejects.toThrow('خطأ في تسجيل الدخول');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Atomic Entity Mutators (Concurrent-safe)
+// ---------------------------------------------------------------------------
+describe('Atomic Entity Mutators', () => {
+  it('createStudentApi sends POST with student payload', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const student = { id: 'st_123', firstName: 'Yassine' };
+    await createStudentApi(student as any);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/students');
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBe(JSON.stringify(student));
+  });
+
+  it('updateStudentApi sends PUT with single student payload', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const student = { id: 'st_123', firstName: 'Mariem' };
+    await updateStudentApi(student as any);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/students');
+    expect(opts.method).toBe('PUT');
+    expect(opts.body).toBe(JSON.stringify(student));
+  });
+
+  it('deleteStudentApi sends DELETE with query param id', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    await deleteStudentApi('st_123');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/students?id=st_123');
+    expect(opts.method).toBe('DELETE');
+  });
+
+  it('createStaffApi sends POST with staff payload', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const staff = { id: 'stf_1', firstName: 'Ahmed' };
+    await createStaffApi(staff as any);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/staff');
+    expect(opts.method).toBe('POST');
+  });
+
+  it('updateStaffApi sends PUT with staff payload', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const staff = { id: 'stf_1', firstName: 'Ahmed Updated' };
+    await updateStaffApi(staff as any);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/staff');
+    expect(opts.method).toBe('PUT');
+  });
+
+  it('deleteStaffApi sends DELETE with query param id', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    await deleteStaffApi('stf_1');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/staff?id=stf_1');
+    expect(opts.method).toBe('DELETE');
+  });
+
+  it('createExpenseApi sends POST with expense payload', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const exp = { id: 'exp_1', amount: 150 };
+    await createExpenseApi(exp as any);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/expenses');
+    expect(opts.method).toBe('POST');
+  });
+
+  it('deleteExpenseApi sends DELETE with query param id', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    await deleteExpenseApi('exp_1');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/expenses?id=exp_1');
+    expect(opts.method).toBe('DELETE');
   });
 });
