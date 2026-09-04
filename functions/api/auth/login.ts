@@ -54,7 +54,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     let center = null;
     if (centerId) {
       center = await env.DB
-        .prepare('SELECT id, name, slug, logo_url, plan, enabled_modules, status, max_students, subscription_end FROM centers WHERE id = ?')
+        .prepare('SELECT * FROM centers WHERE id = ?')
         .bind(centerId)
         .first<any>();
       if (center && center.enabled_modules && typeof center.enabled_modules === 'string') {
