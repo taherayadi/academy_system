@@ -424,6 +424,9 @@ export interface Student {
     etude: boolean;
     library: boolean;
     meals: boolean;
+    gouterMatin?: boolean;
+    gouterSoir?: boolean;
+    gouterBoth?: boolean;
   };
   
   // MODULE 2: Suivi Fees

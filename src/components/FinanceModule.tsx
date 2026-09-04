@@ -21,7 +21,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, EtudeSlot, Formation } from '../types';
+import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, EtudeSlot, Formation, MealServiceType } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -288,17 +288,18 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
   const isInHouseKitchen = settings?.mealOperatingMode === 'in_house_kitchen';
 
-  // Calculate traiteur share from actual meal consumption across all students (0 in in-house kitchen mode)
-  // Option C: respects each attendance's snapshotted traiteurPrice so mid-year fee changes don't distort past costs
+  // Calculate traiteur share from actual meal consumption across all students
+  // Respects each attendance's snapshotted traiteurPrice so switching modes or fees never distorts past costs
   const calcRepasTraiteurTotal = () => {
-    if (!settings || isInHouseKitchen) return 0;
+    if (!settings) return 0;
     let total = 0;
     for (const s of students) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = s.mealAttendances || [];
       const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
       for (const a of lunchAttendances) {
-        total += a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur;
+        const cost = a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
+        total += cost;
       }
     }
     return total;
@@ -381,11 +382,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const filteredStudents = students.filter(st => schoolYearFilter === 'all' || (st.academicYear || getCurrentAcademicYear()) === schoolYearFilter);
 
   const repasPayments = filteredPayments.filter(p => p.service === 'Repas');
-  const repasCenterTotal = repasPayments.reduce((s, p) => s + p.amountPaid, 0);
+  
   // Traiteur total for filtered period: count consumed plates from filtered students
-  // Option C: respects snapshotted traiteurPrice per meal attendance
+  // Respects snapshotted traiteurPrice per meal attendance
   const calcFilteredRepasTraiteurTotal = () => {
-    if (!settings || isInHouseKitchen) return 0;
+    if (!settings) return 0;
     let total = 0;
     for (const s of filteredStudents) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
@@ -395,7 +396,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       });
       const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
       for (const a of lunchAttendances) {
-        total += a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur;
+        const cost = a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
+        total += cost;
       }
     }
     return total;
@@ -416,10 +418,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       });
       const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
       totalPlatesConsumed += lunchAttendances.length;
-      if (!isInHouseKitchen) {
-        for (const a of lunchAttendances) {
-          traiteurShare += a.traiteurPrice != null ? a.traiteurPrice : (f.prixPlatTraiteur ?? 6);
-        }
+      for (const a of lunchAttendances) {
+        const cost = a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : (f.prixPlatTraiteur ?? 6));
+        traiteurShare += cost;
       }
       // Count subscription payments for this student in the filtered period
       const subPayments = (s.payments || []).filter(p =>
@@ -430,7 +431,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       );
       totalSubscriptions += subPayments.reduce((sum, p) => sum + p.amountPaid, 0);
     }
-    const centerBenefice = isInHouseKitchen ? totalSubscriptions : totalSubscriptions - traiteurShare;
+    const centerBenefice = totalSubscriptions - traiteurShare;
     return { totalSubscriptions, totalPlatesConsumed, traiteurShare, centerBenefice };
   };
   const restoStats = calcRestoStats();
@@ -1655,11 +1656,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             (isCurrentlyActive && grossPaid > totalRefunded)
           );
 
-          const allLunchMeals = [...subscriptionMeals, ...unitMeals];
-          const studentTraiteurPart = isInHouseKitchen
-            ? 0
-            : allLunchMeals.reduce((sum, a) => sum + (a.traiteurPrice != null ? a.traiteurPrice : f.prixPlatTraiteur), 0);
-          const studentCenterPart = (totalMeals * f.fraisParRepas) - studentTraiteurPart;
+          const allLunchMeals = attendances.filter(a => (!a.service || a.service === 'lunch'));
+          const studentTraiteurPart = allLunchMeals.reduce((sum, a) => {
+            const price = a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
+            return sum + price;
+          }, 0);
+          const studentCenterPart = (allLunchMeals.length * f.fraisParRepas) - studentTraiteurPart;
 
           return {
             id: s.id,
@@ -1688,8 +1690,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const prixPlat = settings?.fees?.fraisParRepas ?? 8;
         const prixTraiteur = isInHouseKitchen ? 0 : (settings?.fees?.prixPlatTraiteur ?? 6);
         const centerMarginPerPlate = isInHouseKitchen ? prixPlat : (prixPlat - prixTraiteur);
-        const traiteurCost = isInHouseKitchen ? 0 : restoStudents.reduce((sum, s) => sum + s.traiteurPart, 0);
-        const centerBenefit = isInHouseKitchen ? totalSubscriptions : (totalSubscriptions - traiteurCost);
+        const traiteurCost = restoStudents.reduce((sum, s) => sum + s.traiteurPart, 0);
+        const centerBenefit = totalSubscriptions - traiteurCost;
 
         const totalRestoPages = Math.ceil(restoStudents.length / pageSize) || 1;
         const currentRestoPage = Math.min(Math.max(1, restoPage), totalRestoPages);
@@ -1713,8 +1715,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
-                <div className="font-mono text-lg font-black text-red-900">{isInHouseKitchen ? '0.000 د.ت' : `${fmt(traiteurCost)} د.ت`}</div>
-                <div className="text-[9px] text-red-600 mt-1">{isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : `${totalPlatesConsumed} وجبة`}</div>
+                <div className="font-mono text-lg font-black text-red-900">{traiteurCost > 0 ? `${fmt(traiteurCost)} د.ت` : '0.000 د.ت'}</div>
+                <div className="text-[9px] text-red-600 mt-1">{traiteurCost > 0 ? `${totalPlatesConsumed} وجبة` : (isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : 'لا توجد مصاريف traiteur')}</div>
               </div>
               <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
                 <div className="text-[10px] font-bold text-emerald-700 mb-1">ربح السنتر من الوجبات</div>
@@ -1734,6 +1736,46 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <span className="text-slate-500">ربح السنتر للوجبة:</span>
               <span className="font-mono text-emerald-700">{fmt(centerMarginPerPlate)} د.ت</span>
             </div>
+
+            {/* Goûter Summary in Tab 6 */}
+            {(() => {
+              const gouterPaymentsTotal = filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0);
+              const gouterMatinCount = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a => {
+                if (monthFilter !== 'all' && !a.date.startsWith(monthFilter)) return false;
+                return a.service === 'gouter_matin';
+              }).length, 0);
+              const gouterSoirCount = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a => {
+                if (monthFilter !== 'all' && !a.date.startsWith(monthFilter)) return false;
+                return a.service === 'gouter_apres_midi';
+              }).length, 0);
+              const gouterSubscribersCount = filteredStudents.filter(s => s.enrolledServices?.gouterMatin || s.enrolledServices?.gouterSoir || s.enrolledServices?.gouterBoth).length;
+
+              return (
+                <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-white p-4 rounded-2xl border border-purple-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🍪</span>
+                    <div>
+                      <h4 className="font-extrabold text-purple-950">مداخيل واستهلاك خدمة اللمجة (Goûter)</h4>
+                      <p className="text-[11px] text-purple-700 font-medium">مجموع التلاميذ المشتركين في اللمجة: <strong>{gouterSubscribersCount}</strong> تلميذ</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-purple-200 text-center">
+                      <span className="text-[10px] text-purple-600 block font-bold">مداخيل اللمجة</span>
+                      <span className="font-mono font-black text-purple-900 text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
+                    </div>
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-sky-200 text-center">
+                      <span className="text-[10px] text-sky-600 block font-bold">لمجة الصباح 🥐</span>
+                      <span className="font-mono font-black text-sky-900 text-sm">{gouterMatinCount}</span>
+                    </div>
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-indigo-200 text-center">
+                      <span className="text-[10px] text-indigo-600 block font-bold">لمجة المساء 🍪</span>
+                      <span className="font-mono font-black text-indigo-900 text-sm">{gouterSoirCount}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Students Table */}
             <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs">
@@ -1844,15 +1886,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   const num = mNum[consumedDetailMonth] ?? 9;
                   const year = num >= 9 ? startYear : endYear;
                   const prefix = `${year}-${String(num).padStart(2, '0')}`;
-                  const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; paid: boolean }> = [];
+                  const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; service: MealServiceType; paid: boolean }> = [];
                   filteredStudents.forEach(st => {
                     (st.mealAttendances || []).forEach(a => {
                       if (a.date.startsWith(prefix)) {
-                        rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, paid: !!a.paid });
+                        rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, service: a.service || 'lunch', paid: !!a.paid });
                       }
                     });
                   });
-                  const sorted = rows.sort((a, b) => a.date.localeCompare(b.date));
+                  const sorted = rows.sort((a, b) => b.date.localeCompare(a.date));
 
                   return (
                     <div className="mt-5 border-t border-slate-100 pt-4">
@@ -1861,7 +1903,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           تفاصيل الوجبات المستهلكة في شهر {ARABIC_ACADEMIC_MONTHS[consumedDetailMonth]} ({consumedDetailMonth})
                         </h4>
                         <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">{sorted.length} وجبة</span>
+                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
                           <button
                             type="button"
                             onClick={() => setConsumedDetailMonth(null)}
@@ -1878,7 +1920,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               <th className="p-3">التاريخ</th>
                               <th className="p-3">التلميذ</th>
                               <th className="p-3">المستوى</th>
-                              <th className="p-3">نوع الوجبة</th>
+                              <th className="p-3">النوع والتصنيف</th>
                               <th className="p-3">الحالة</th>
                             </tr>
                           </thead>
@@ -1893,9 +1935,19 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                 <td className="p-3 font-black text-slate-900">{row.studentName}</td>
                                 <td className="p-3 text-slate-500">{row.grade}</td>
                                 <td className="p-3">
-                                  {row.type === 'subscription'
-                                    ? <span className="px-2 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-lg text-[10px] font-bold">اشتراك شهري</span>
-                                    : <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-bold">وجبة منفردة</span>}
+                                  {row.service === 'gouter_matin' ? (
+                                    <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-bold">
+                                      {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
+                                    </span>
+                                  ) : row.service === 'gouter_apres_midi' ? (
+                                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-lg text-[10px] font-bold">
+                                      {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-lg text-[10px] font-bold">
+                                      {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="p-3 font-bold">
                                   {row.paid ? <span className="text-emerald-700">مدفوع</span> : <span className="text-red-600">غير مدفوع</span>}

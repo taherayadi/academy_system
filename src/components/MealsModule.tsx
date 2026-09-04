@@ -79,6 +79,15 @@ export default function MealsModule({
   const [printingReceipt, setPrintingReceipt] = useState<{ student: Student; payment: PaymentRecord } | null>(null);
   // Payment grid collapsed (default: open)
   const [payGridCollapsed, setPayGridCollapsed] = useState(false);
+
+  // Goûter subscriber & payment grid states
+  const [gouterGridCollapsed, setGouterGridCollapsed] = useState(false);
+  const [gouterPage, setGouterPage] = useState<number>(1);
+  const [isEnrollGouterModalOpen, setIsEnrollGouterModalOpen] = useState(false);
+  const [enrollGouterSearch, setEnrollGouterSearch] = useState('');
+  const [enrollGouterType, setEnrollGouterType] = useState<'matin' | 'soir' | 'both'>('both');
+  const [selectedStudentForGouterEnroll, setSelectedStudentForGouterEnroll] = useState<Student | null>(null);
+  const [paymentService, setPaymentService] = useState<'Repas' | 'Goûter'>('Repas');
   
   // Menu form
   const [dishName, setDishName] = useState('');
@@ -156,6 +165,53 @@ export default function MealsModule({
     const net = payments.reduce((sum, p) => sum + p.amountPaid, 0);
     return hasRefundRecord && net <= 0;
   };
+
+  const getGouterStatus = (st: Student, month: AcademicMonth) => {
+    const fees = settings ? getFeesForYear(settings, schoolYear) : null;
+    const isBoth = st.enrolledServices?.gouterBoth || (!!st.enrolledServices?.gouterMatin && !!st.enrolledServices?.gouterSoir);
+    const isMatin = st.enrolledServices?.gouterMatin;
+    const isSoir = st.enrolledServices?.gouterSoir;
+
+    let total = 0;
+    let typeLabel = 'غير محدد';
+    if (isBoth) {
+      total = fees?.fraisDeuxGoutersMensuel || ((fees?.fraisGouterMatinMensuel || 0) + (fees?.fraisGouterSoirMensuel || 0));
+      typeLabel = 'اللمجتان معاً';
+    } else if (isMatin) {
+      total = fees?.fraisGouterMatinMensuel || 0;
+      typeLabel = 'لمجة الصباح';
+    } else if (isSoir) {
+      total = fees?.fraisGouterSoirMensuel || 0;
+      typeLabel = 'لمجة المساء';
+    }
+    if (total === 0) total = 30;
+
+    const payments = (st.payments || []).filter(p => p.service === 'Goûter' && p.month === `${month} (${schoolYear})`);
+    const paidAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    const discount = payments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
+    const effectiveRequired = Math.max(0, total - discount);
+    return {
+      status: paidAmount >= effectiveRequired && effectiveRequired > 0 ? ('paid' as const) : paidAmount > 0 ? ('advance' as const) : ('unpaid' as const),
+      paidAmount,
+      remaining: Math.max(0, effectiveRequired - paidAmount),
+      total,
+      discount,
+      effectiveRequired,
+      isBoth,
+      isMatin,
+      isSoir,
+      typeLabel
+    };
+  };
+
+  const hasGouterSubscription = (st: Student) => {
+    return (
+      st.enrolledServices?.gouterMatin === true ||
+      st.enrolledServices?.gouterSoir === true ||
+      st.enrolledServices?.gouterBoth === true ||
+      (st.payments || []).some(p => p.service === 'Goûter' && !p.month.includes('unitaire'))
+    );
+  };
   const getServiceAttendance = (st: Student, service: MealServiceType = 'lunch') =>
     (st.mealAttendances || []).find(a => a.date === selectedDate && (a.service || 'lunch') === service);
 
@@ -217,12 +273,18 @@ export default function MealsModule({
         0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
       };
       const academicMonth = monthMap[dateMonth];
-      const hasPaid = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
+      const hasPaidLunch = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
       const hasRefund = academicMonth ? hasUncoveredRefund(st, academicMonth) : false;
       const isSubscribedSys = st.mealSubscription?.active === true;
       const isLunchSubscribed = service === 'lunch' && isSubscribedSys && !hasRefund;
 
-      const mealType: 'subscription' | 'unit' = isLunchSubscribed ? 'subscription' : 'unit';
+      const isGouterMatinSubscribed = service === 'gouter_matin' && (st.enrolledServices?.gouterMatin === true || st.enrolledServices?.gouterBoth === true);
+      const isGouterSoirSubscribed = service === 'gouter_apres_midi' && (st.enrolledServices?.gouterSoir === true || st.enrolledServices?.gouterBoth === true);
+      const isSubscribedForService = service === 'lunch' ? isLunchSubscribed : (isGouterMatinSubscribed || isGouterSoirSubscribed);
+
+      const hasPaidGouter = academicMonth ? getGouterStatus(st, academicMonth).status !== 'unpaid' : false;
+      const mealType: 'subscription' | 'unit' = isSubscribedForService ? 'subscription' : 'unit';
+      const hasPaid = service === 'lunch' ? hasPaidLunch : hasPaidGouter;
 
       // Option C: snapshot current traiteur price on lunch attendance so past records
       // are never retroactively changed when settings.prixPlatTraiteur changes later.
@@ -505,6 +567,7 @@ export default function MealsModule({
     const wasRefunded = (st.payments || []).some(
       p => p.service === 'Repas' && p.refund && p.month === `${month} (${schoolYear})`
     );
+    setPaymentService('Repas');
     setSelectedStudentForPayment(st);
     setPaymentMonth(month);
     setTotalRequired(fullFee);
@@ -528,6 +591,64 @@ export default function MealsModule({
         ? `خلاص اشتراك المطعم لشهر ${month} (${schoolYear}) بعد الاسترجاع`
         : `خلاص اشتراك المطعم لشهر ${month} (${schoolYear})`);
     }
+  };
+
+  const handleOpenMonthlyGouterPayment = (st: Student, month: AcademicMonth) => {
+    const status = getGouterStatus(st, month);
+    if (status.status === 'paid') return;
+    const fullFee = status.total;
+    setPaymentService('Goûter');
+    setSelectedStudentForPayment(st);
+    setPaymentMonth(month);
+    setTotalRequired(fullFee);
+    const storedDiscount = status.discount || 0;
+    setDiscount(storedDiscount);
+
+    if (status.status === 'advance') {
+      setAmountPaid(status.remaining);
+      setPaymentType('balance');
+      setPaymentMethod('Espèces');
+      setChequeNumber('');
+      setChequeDate(new Date().toISOString().split('T')[0]);
+      setNotes(`تكملة خلاص اشتراك اللمجة (${status.typeLabel}) لشهر ${month} (${schoolYear})`);
+    } else {
+      setAmountPaid(Math.max(0, fullFee - storedDiscount));
+      setPaymentType('full');
+      setPaymentMethod('Espèces');
+      setChequeNumber('');
+      setChequeDate(new Date().toISOString().split('T')[0]);
+      setNotes(`خلاص اشتراك اللمجة (${status.typeLabel}) لشهر ${month} (${schoolYear})`);
+    }
+  };
+
+  const handleEnrollStudentInGouter = (st: Student, type: 'matin' | 'soir' | 'both') => {
+    const updatedStudent: Student = {
+      ...st,
+      enrolledServices: {
+        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
+        gouterMatin: type === 'matin' || type === 'both',
+        gouterSoir: type === 'soir' || type === 'both',
+        gouterBoth: type === 'both'
+      }
+    };
+    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    setIsEnrollGouterModalOpen(false);
+    const typeLabel = type === 'both' ? 'اللمجتان معاً (صباح ومساء)' : type === 'matin' ? 'لمجة الصباح' : 'لمجة المساء';
+    toast.success(`تم إلحاق التلميذ (${st.firstName} ${st.lastName}) بخدمة اللمجة: ${typeLabel}.`);
+  };
+
+  const handleUnenrollGouter = (st: Student) => {
+    const updatedStudent: Student = {
+      ...st,
+      enrolledServices: {
+        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
+        gouterMatin: false,
+        gouterSoir: false,
+        gouterBoth: false
+      }
+    };
+    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    toast.info(`تم إلغاء اشتراك اللمجة للتلميذ (${st.firstName} ${st.lastName}).`);
   };
 
   const handleEnrollStudent = (st: Student) => {
@@ -614,6 +735,28 @@ export default function MealsModule({
     return isNotEnrolled && matchesYear;
   });
 
+  // Goûter subscribers list & counts
+  const gouterStudents = students.filter(st => {
+    const studentYear = st.academicYear || getCurrentAcademicYear();
+    const matchesYear = schoolYear === 'all' || studentYear === schoolYear;
+    const name = `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase();
+    return hasGouterSubscription(st) && matchesYear && name.includes(searchTerm.toLowerCase());
+  });
+  const gouterTotalPages = Math.ceil(gouterStudents.length / pageSize) || 1;
+  const gouterCurrentPage = Math.min(Math.max(1, gouterPage), gouterTotalPages);
+  const paginatedGouter = gouterStudents.slice((gouterCurrentPage - 1) * pageSize, gouterCurrentPage * pageSize);
+
+  const gouterMatinCount = gouterStudents.filter(st => st.enrolledServices?.gouterMatin && !st.enrolledServices?.gouterBoth && !st.enrolledServices?.gouterSoir).length;
+  const gouterSoirCount = gouterStudents.filter(st => st.enrolledServices?.gouterSoir && !st.enrolledServices?.gouterBoth && !st.enrolledServices?.gouterMatin).length;
+  const gouterBothCount = gouterStudents.filter(st => st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir)).length;
+
+  const nonGouterStudents = students.filter(st => {
+    const studentYear = st.academicYear || getCurrentAcademicYear();
+    const matchesYear = schoolYear === 'all' || studentYear === schoolYear;
+    const isEnrolledInGouter = st.enrolledServices?.gouterMatin || st.enrolledServices?.gouterSoir || st.enrolledServices?.gouterBoth;
+    return !isEnrolledInGouter && matchesYear;
+  });
+
   const handleSubmitMonthlyPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentForPayment || isSubmitting) return;
@@ -625,19 +768,23 @@ export default function MealsModule({
       return;
     }
 
+    const isGouter = paymentService === 'Goûter';
     const monthKey = `${paymentMonth} (${schoolYear})`;
+    const currentService = isGouter ? 'Goûter' : 'Repas';
     // Compute the current net (including refund records) to know how much is still payable.
-    const priorRefundAmount = Math.abs((selectedStudentForPayment.payments || [])
+    const priorRefundAmount = isGouter ? 0 : Math.abs((selectedStudentForPayment.payments || [])
       .filter(p => p.service === 'Repas' && p.month === monthKey && p.refund)
       .reduce((a, b) => a + b.amountPaid, 0));
     const wasRefunded = priorRefundAmount > 0;
 
     const numDiscount = Math.max(0, Number(discount) || 0);
-    const standardFee = Number(totalRequired) || (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150);
+    const standardFee = Number(totalRequired) || (isGouter
+      ? getGouterStatus(selectedStudentForPayment, paymentMonth).total
+      : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150));
     const effectiveRequired = Math.max(0, standardFee - numDiscount);
 
     const status = (selectedStudentForPayment.payments || [])
-      ?.filter(p => p.service === 'Repas' && p.month === monthKey && !p.refund)
+      ?.filter(p => p.service === currentService && p.month === monthKey && !p.refund)
       ?.reduce((acc, p) => acc + p.amountPaid, 0) || 0;
     const paid = Math.max(0, Number(amountPaid) || 0);
     const maxPayable = Math.max(0, effectiveRequired - status);
@@ -649,25 +796,28 @@ export default function MealsModule({
     const paidAfterThis = status + paid;
     const remainingAfterThis = Math.max(0, effectiveRequired - paidAfterThis);
     const newPayment: PaymentRecord = {
-      id: `pay_meal_${crypto.randomUUID()}`,
+      id: `pay_${isGouter ? 'gouter' : 'meal'}_${crypto.randomUUID()}`,
       date: new Date().toISOString().split('T')[0],
       amountPaid: paid,
       totalRequired: standardFee,
       remainingBalance: remainingAfterThis,
-      service: 'Repas',
+      service: currentService,
       month: monthKey,
       paymentType: paidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
       method: paymentMethod,
       chequeNumber: paymentMethod === 'Chèque' ? chequeNumber : undefined,
       chequeDate: paymentMethod === 'Chèque' ? chequeDate : undefined,
-      receiptNumber: generateReceiptNumber(students, 'REC-MEAL-'),
+      receiptNumber: generateReceiptNumber(students, isGouter ? 'REC-GOUT-' : 'REC-MEAL-'),
       notes: notes || (numDiscount > 0
-        ? `خلاص اشتراك المطعم لشهر ${paymentMonth} (${schoolYear}) - تخفيض: ${numDiscount} د.ت`
-        : `خلاص اشتراك المطعم لشهر ${paymentMonth} (${schoolYear})`),
+        ? `خلاص اشتراك ${isGouter ? 'اللمجة' : 'المطعم'} لشهر ${paymentMonth} (${schoolYear}) - تخفيض: ${numDiscount} د.ت`
+        : `خلاص اشتراك ${isGouter ? 'اللمجة' : 'المطعم'} لشهر ${paymentMonth} (${schoolYear})`),
       discount: numDiscount > 0 ? numDiscount : undefined
     };
-    // Re-activate the repas service and keep ALL payment/refund records (history preserved).
-    const updatedStudent: Student = {
+    // Update student
+    const updatedStudent: Student = isGouter ? {
+      ...selectedStudentForPayment,
+      payments: [...(selectedStudentForPayment.payments || []), newPayment]
+    } : {
       ...selectedStudentForPayment,
       enrolledServices: {
         suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true,
@@ -683,9 +833,11 @@ export default function MealsModule({
     onUpdateStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
-    toast.success(wasRefunded
-      ? `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك وتغطية الاسترجاع السابق (${priorRefundAmount} د.ت).`
-      : `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك.`);
+    toast.success(isGouter
+      ? `تم تسجيل خلاص اشتراك اللمجة (${paid} د.ت) بنجاح.`
+      : wasRefunded
+        ? `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك وتغطية الاسترجاع السابق (${priorRefundAmount} د.ت).`
+        : `تم تسجيل خلاص اشتراك المطعم (${paid} د.ت) وتفعيل الاشتراك.`);
     setIsSubmitting(false);
   };
 
@@ -1040,6 +1192,213 @@ export default function MealsModule({
         </>)}
       </div>
 
+      {/* GOUTER SUBSCRIBERS & PAYMENT GRID */}
+      <div className="bg-white rounded-3xl border border-purple-200/80 overflow-hidden shadow-xs no-print">
+        <div className="p-5 border-b border-purple-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-purple-50/50 via-pink-50/30 to-white">
+          <button
+            type="button"
+            onClick={() => setGouterGridCollapsed(c => !c)}
+            className="flex items-center gap-2 flex-row-reverse text-right hover:text-purple-800 cursor-pointer"
+          >
+            <ChevronDown className={`h-5 w-5 text-purple-600 transition-transform ${gouterGridCollapsed ? '' : 'rotate-180'}`} />
+            <div>
+              <div className="flex items-center gap-2">
+                <Cookie className="h-5 w-5 text-purple-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">جدول المشتركين في خدمة اللمجة - Goûter ({schoolYear})</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">متابعة اشتراكات التلاميذ في لمجة الصباح أو المساء أو اللمجتين معاً وخلاصاتهم الشهرية.</p>
+            </div>
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => { setIsEnrollGouterModalOpen(true); setEnrollGouterSearch(''); }}
+              className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              إلحاق تلميذ باللمجة
+            </button>
+          </div>
+        </div>
+
+        {/* Goûter KPI mini-cards */}
+        {!gouterGridCollapsed && (
+          <div className="p-4 bg-purple-50/30 border-b border-purple-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div className="p-3 bg-white rounded-2xl border border-purple-100">
+              <span className="text-[10px] font-bold text-purple-700 block">🥐 لمجة الصباح فقط</span>
+              <span className="text-base font-black text-purple-900 font-mono">{gouterMatinCount}</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">
+                {settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel : 0} د.ت/شهر
+              </span>
+            </div>
+            <div className="p-3 bg-white rounded-2xl border border-indigo-100">
+              <span className="text-[10px] font-bold text-indigo-700 block">🍪 لمجة المساء فقط</span>
+              <span className="text-base font-black text-indigo-900 font-mono">{gouterSoirCount}</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">
+                {settings ? getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel : 0} د.ت/شهر
+              </span>
+            </div>
+            <div className="p-3 bg-white rounded-2xl border border-pink-100">
+              <span className="text-[10px] font-bold text-pink-700 block">🥐🍪 اللمجتان معاً</span>
+              <span className="text-base font-black text-pink-900 font-mono">{gouterBothCount}</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">
+                {settings ? (getFeesForYear(settings, schoolYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/شهر
+              </span>
+            </div>
+            <div className="p-3 bg-white rounded-2xl border border-emerald-100">
+              <span className="text-[10px] font-bold text-emerald-700 block">👥 مجموع المشتركين</span>
+              <span className="text-base font-black text-emerald-900 font-mono">{gouterStudents.length}</span>
+              <span className="text-[10px] text-slate-400 block font-semibold">تلميذ مسجل</span>
+            </div>
+          </div>
+        )}
+
+        {!gouterGridCollapsed && (<>
+          <div className="overflow-x-auto overscroll-x-contain">
+            <table className="w-full min-w-[1100px] text-right text-xs">
+              <thead className="bg-purple-50/70 text-slate-700 font-bold border-b border-purple-100">
+                <tr>
+                  <th className="p-4">التلميذ</th>
+                  <th className="p-3 text-center">نوع اللمجة</th>
+                  <th className="p-3 text-center">المعلوم الشهري</th>
+                  {ACADEMIC_MONTHS.map(m => (
+                    <th key={m} className="p-3 text-center">
+                      {ARABIC_ACADEMIC_MONTHS[m]}
+                    </th>
+                  ))}
+                  <th className="p-3 text-center">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {gouterStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="p-8 text-center text-slate-400 font-bold">
+                      لا يوجد مشتركون في خدمة اللمجة حتى الآن. اضغط "إلحاق تلميذ باللمجة" لإضافة تلاميذ.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedGouter.map(st => {
+                    const isBoth = st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir);
+                    const isMatin = st.enrolledServices?.gouterMatin;
+                    const isSoir = st.enrolledServices?.gouterSoir;
+                    const fees = settings ? getFeesForYear(settings, schoolYear) : null;
+                    const monthlyFee = isBoth
+                      ? (fees?.fraisDeuxGoutersMensuel || ((fees?.fraisGouterMatinMensuel || 0) + (fees?.fraisGouterSoirMensuel || 0)))
+                      : isMatin
+                        ? (fees?.fraisGouterMatinMensuel || 0)
+                        : (fees?.fraisGouterSoirMensuel || 0);
+
+                    return (
+                      <tr key={st.id} className="hover:bg-purple-50/20 transition">
+                        <td className="p-4 font-extrabold text-slate-900">
+                          <div>
+                            <span className="block font-black text-slate-900">{st.firstName} {st.lastName}</span>
+                            <span className="text-[10px] text-slate-400">{st.grade}</span>
+                          </div>
+                        </td>
+
+                        <td className="p-3 text-center">
+                          {isBoth ? (
+                            <span className="px-2.5 py-1 bg-pink-100 text-pink-800 border border-pink-200 rounded-lg text-[10px] font-black">
+                              🥐🍪 اللمجتان معاً
+                            </span>
+                          ) : isMatin ? (
+                            <span className="px-2.5 py-1 bg-sky-100 text-sky-800 border border-sky-200 rounded-lg text-[10px] font-black">
+                              🥐 لمجة الصباح
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg text-[10px] font-black">
+                              🍪 لمجة المساء
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 text-center font-mono font-bold text-slate-700">
+                          {monthlyFee} د.ت
+                        </td>
+
+                        {/* 9 Months Cells */}
+                        {ACADEMIC_MONTHS.map(m => {
+                          const gStatus = getGouterStatus(st, m);
+                          return (
+                            <td key={m} className="p-2.5 text-center">
+                              {gStatus.status === 'paid' && (
+                                <button
+                                  onClick={() => {
+                                    const payment = (st.payments || []).find(p => p.service === 'Goûter' && p.month === `${m} (${schoolYear})`);
+                                    if (payment) setPrintingReceipt({ student: st, payment });
+                                    else handleOpenMonthlyGouterPayment(st, m);
+                                  }}
+                                  className="w-full py-1.5 px-2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-emerald-200 transition cursor-pointer"
+                                  title="طباعة وصل اللمجة"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Payé ({gStatus.paidAmount} د.ت) 🖨️
+                                </button>
+                              )}
+
+                              {gStatus.status === 'advance' && (
+                                <button
+                                  onClick={() => handleOpenMonthlyGouterPayment(st, m)}
+                                  className="w-full py-1.5 px-2 bg-purple-100 text-purple-900 border border-purple-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-purple-200 transition cursor-pointer"
+                                >
+                                  <Clock className="h-3 w-3" />
+                                  Avance ({gStatus.paidAmount} د.ت)
+                                  <span className="block text-[9px] font-normal">باقي {gStatus.remaining}د.ت</span>
+                                </button>
+                              )}
+
+                              {gStatus.status === 'unpaid' && (
+                                <button
+                                  onClick={() => handleOpenMonthlyGouterPayment(st, m)}
+                                  className="w-full py-1.5 px-2 bg-slate-50 hover:bg-purple-50 text-slate-400 hover:text-purple-700 border border-slate-200 hover:border-purple-200 rounded-xl font-bold text-[10px] transition cursor-pointer"
+                                >
+                                  Non payé
+                                </button>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedStudentForGouterEnroll(st);
+                                setEnrollGouterType(isBoth ? 'both' : isMatin ? 'matin' : 'soir');
+                              }}
+                              className="p-1.5 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold cursor-pointer"
+                              title="تعديل نوع الاشتراك"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleUnenrollGouter(st)}
+                              className="p-1.5 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold cursor-pointer"
+                              title="إلغاء الاشتراك في اللمجة"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {gouterStudents.length > pageSize && (
+            <div className="flex items-center justify-center gap-2 p-3 border-t border-purple-100 bg-purple-50/30">
+              <button onClick={() => setGouterPage(p => Math.max(1, p - 1))} disabled={gouterCurrentPage <= 1} className="px-3 py-1.5 bg-white border border-purple-200 text-purple-700 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">◀ السابق</button>
+              <span className="text-[10px] font-bold text-slate-500 mx-2">صفحة {gouterCurrentPage} من {gouterTotalPages}</span>
+              <button onClick={() => setGouterPage(p => Math.min(gouterTotalPages, p + 1))} disabled={gouterCurrentPage >= gouterTotalPages} className="px-3 py-1.5 bg-white border border-purple-200 text-purple-700 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">التالي ▶</button>
+            </div>
+          )}
+        </>)}
+      </div>
+
       {/* Enroll Student Modal */}
       <AnimatePresence>
         {isEnrollModalOpen && (
@@ -1124,6 +1483,168 @@ export default function MealsModule({
         )}
       </AnimatePresence>
 
+      {/* Enroll Student in Gouter Modal */}
+      <AnimatePresence>
+        {(isEnrollGouterModalOpen || selectedStudentForGouterEnroll) && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
+            >
+              <div className="p-6 bg-purple-950 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Cookie className="h-5 w-5 text-pink-400" />
+                  <h3 className="text-lg font-black">
+                    {selectedStudentForGouterEnroll ? 'تعديل اشتراك اللمجة' : 'إلحاق تلميذ بخدمة اللمجة (Goûter)'}
+                  </h3>
+                </div>
+
+                <button 
+                  onClick={() => { setIsEnrollGouterModalOpen(false); setSelectedStudentForGouterEnroll(null); }}
+                  className="p-2 hover:bg-purple-900 rounded-xl text-purple-300 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {selectedStudentForGouterEnroll ? (
+                  <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200">
+                    <p className="font-extrabold text-sm text-purple-900">
+                      {selectedStudentForGouterEnroll.firstName} {selectedStudentForGouterEnroll.lastName}
+                    </p>
+                    <p className="text-xs text-purple-600 font-bold">{selectedStudentForGouterEnroll.grade}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-500 font-medium">
+                      اختر تلميذاً لإلحاقه باشتراك خدمة اللمجة
+                    </p>
+
+                    <div className="relative">
+                      <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={enrollGouterSearch}
+                        onChange={(e) => setEnrollGouterSearch(e.target.value)}
+                        placeholder="بحث باسم التلميذ..."
+                        className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Goûter Type Selection */}
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs font-black text-slate-700 block">اختر نوع الاشتراك في اللمجة :</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEnrollGouterType('matin')}
+                      className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
+                        enrollGouterType === 'matin'
+                          ? 'bg-sky-50 border-sky-400 ring-2 ring-sky-300 text-sky-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="text-lg block">🥐</span>
+                      <span className="text-xs font-black block mt-1">لمجة الصباح</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel : 0} د.ت/ش
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEnrollGouterType('soir')}
+                      className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
+                        enrollGouterType === 'soir'
+                          ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-300 text-indigo-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="text-lg block">🍪</span>
+                      <span className="text-xs font-black block mt-1">لمجة المساء</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {settings ? getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel : 0} د.ت/ش
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEnrollGouterType('both')}
+                      className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
+                        enrollGouterType === 'both'
+                          ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-300 text-purple-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="text-lg block">🥐🍪</span>
+                      <span className="text-xs font-black block mt-1">اللمجتان معاً</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {settings ? (getFeesForYear(settings, schoolYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/ش
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {selectedStudentForGouterEnroll ? (
+                  <div className="pt-3 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentForGouterEnroll(null)}
+                      className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleEnrollStudentInGouter(selectedStudentForGouterEnroll, enrollGouterType);
+                        setSelectedStudentForGouterEnroll(null);
+                      }}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                    >
+                      حفظ التعديل
+                    </button>
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
+                    {nonGouterStudents.filter(st => {
+                      if (!enrollGouterSearch.trim()) return true;
+                      const full = `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase();
+                      return full.includes(enrollGouterSearch.toLowerCase());
+                    }).map(st => (
+                      <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
+                          <p className="text-[10px] text-slate-400">{st.grade}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleEnrollStudentInGouter(st, enrollGouterType)}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          إلحاق باللمجة
+                        </button>
+                      </div>
+                    ))}
+                    {nonGouterStudents.length === 0 && (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        جميع التلاميذ مشتركون حالياً في خدمة اللمجة!
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* PRINT RECEIPT MODAL */}
       <AnimatePresence>
         {printingReceipt && (
@@ -1135,7 +1656,7 @@ export default function MealsModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
               <div className="p-4 bg-slate-900 text-white flex justify-between items-center no-print">
-                <span className="font-bold text-sm">وصل خلاص رسمي للمطعم</span>
+                <span className="font-bold text-sm">{printingReceipt.payment.service === 'Goûter' ? 'وصل خلاص رسمي لخدمة اللمجة (Goûter)' : 'وصل خلاص رسمي للمطعم'}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => window.print()}
@@ -1156,8 +1677,9 @@ export default function MealsModule({
               <div className="min-h-0 overflow-y-auto">
               {/* RECEIPT PRINT TEMPLATE */}
               {(() => {
+                const isGouterReceipt = printingReceipt.payment.service === 'Goûter';
                 const allMonthPayments = (printingReceipt.student.payments || []).filter(p => 
-                  (p.service === 'Repas') && p.month.includes(printingReceipt.payment.month)
+                  (p.service === printingReceipt.payment.service) && p.month.includes(printingReceipt.payment.month)
                 );
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
@@ -1168,12 +1690,12 @@ export default function MealsModule({
                   <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-950">{centerName} — المطعم المدرسي (وصل مدفوعات)</h2>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — {isGouterReceipt ? 'خدمة اللمجة (Goûter)' : 'المطعم المدرسي'} (وصل مدفوعات)</h2>
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
                       <div className="text-left font-mono font-bold text-xs bg-[#F2F8F9] p-2 rounded border border-[#A0CBCF]">
-                        <p>الخدمة: <strong>المطعم</strong></p>
+                        <p>الخدمة: <strong>{isGouterReceipt ? 'اللمجة (Goûter)' : 'المطعم'}</strong></p>
                         <p className="text-[11px] text-[#103840] mt-0.5">الشهر: {printingReceipt.payment.month}</p>
                       </div>
                     </div>
@@ -1192,7 +1714,7 @@ export default function MealsModule({
                       {/* Payment History Table for this month */}
                       <div className="space-y-1.5 pt-2">
                         <h4 className="font-extrabold text-xs text-slate-900 flex justify-between items-center">
-                          <span>سجل دفعات هذا الشهر بالمطعم:</span>
+                          <span>سجل دفعات هذا الشهر {isGouterReceipt ? 'باللمجة' : 'بالمطعم'}:</span>
                           <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: {allMonthPayments.length}</span>
                         </h4>
 
@@ -1714,8 +2236,14 @@ export default function MealsModule({
               <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <CreditCard className="h-5 w-5 text-[#3A93A0]" />
-                    {`خلاص اشتراك المطعم — ${paymentMonth} (${schoolYear})`}
+                    {paymentService === 'Goûter' ? (
+                      <Cookie className="h-5 w-5 text-pink-400" />
+                    ) : (
+                      <CreditCard className="h-5 w-5 text-[#3A93A0]" />
+                    )}
+                    {paymentService === 'Goûter'
+                      ? `خلاص اشتراك اللمجة — ${paymentMonth} (${schoolYear})`
+                      : `خلاص اشتراك المطعم — ${paymentMonth} (${schoolYear})`}
                   </h3>
                   <p className="text-xs text-slate-300 mt-1 font-bold">
                     التلميذ(ة): {selectedStudentForPayment.firstName} {selectedStudentForPayment.lastName} ({selectedStudentForPayment.grade})
@@ -1732,14 +2260,15 @@ export default function MealsModule({
 
               <form onSubmit={handleSubmitMonthlyPayment} className="p-6 space-y-4">
                 {(() => {
+                  const isGouter = paymentService === 'Goûter';
                   const activeMonthStatus = selectedStudentForPayment
-                    ? getMealStatus(selectedStudentForPayment, paymentMonth)
+                    ? (isGouter ? getGouterStatus(selectedStudentForPayment, paymentMonth) : getMealStatus(selectedStudentForPayment, paymentMonth))
                     : null;
                   const isAdvanceStatus = activeMonthStatus?.status === 'advance';
-                  const hasRefund = selectedStudentForPayment
+                  const hasRefund = (!isGouter && selectedStudentForPayment)
                     ? hasUncoveredRefund(selectedStudentForPayment, paymentMonth)
                     : false;
-                  const standardFee = activeMonthStatus?.total || (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150);
+                  const standardFee = activeMonthStatus?.total || (isGouter ? 30 : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150));
 
                   return (
                     <>

@@ -23,17 +23,13 @@ import {
   Sparkles,
   HeartPulse,
   Lock,
-  Upload,
-  Loader2,
-  WifiOff
+  Cookie
 } from 'lucide-react';
 import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { capitalizeFirst } from '../utils/format';
 import DateField from './DateField';
-import { renderPDFPages } from '../utils/pdfExtract';
-import { extractStudentFromPages, type ExtractedStudentData } from '../utils/aiExtract';
 
 interface StudentRegistrationModuleProps {
   students: Student[];
@@ -112,22 +108,6 @@ export default function StudentRegistrationModule({
   const [selectedStudentToImport, setSelectedStudentToImport] = useState<string>('');
   const [importTargetYear, setImportTargetYear] = useState<string>(getCurrentAcademicYear());
 
-  // PDF import state
-  const [pdfImporting, setPdfImporting] = useState(false);
-  const [pdfImportOffline, setPdfImportOffline] = useState(false);
-  const pdfFileInputRef = React.useRef<HTMLInputElement>(null);
-  const pdfImportActiveRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!pdfImporting) return;
-    const onOffline = () => {
-      pdfImportActiveRef.current = false;
-      setPdfImportOffline(true);
-    };
-    window.addEventListener('offline', onOffline);
-    return () => window.removeEventListener('offline', onOffline);
-  }, [pdfImporting]);
-
   // Filter & Pagination states
   const [academicYearFilter, setAcademicYearFilter] = useState<string>(getCurrentAcademicYear());
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -200,6 +180,9 @@ export default function StudentRegistrationModule({
   const [etudeEnrolled, setEtudeEnrolled] = useState(false);
   const [libraryEnrolled, setLibraryEnrolled] = useState(false);
   const [mealsEnrolled, setMealsEnrolled] = useState(false);
+  const [gouterMatinEnrolled, setGouterMatinEnrolled] = useState(false);
+  const [gouterSoirEnrolled, setGouterSoirEnrolled] = useState(false);
+  const [gouterBothEnrolled, setGouterBothEnrolled] = useState(false);
 
   // Sync open trigger
   React.useEffect(() => {
@@ -231,7 +214,7 @@ export default function StudentRegistrationModule({
     setNMinus2Grade('');
     setNMinus3School('');
     setNMinus3Grade('');
-    setRegLocation('صفاقس');
+    setRegLocation(settings?.locationCity || 'صفاقس');
     setRegDate(new Date().toISOString().split('T')[0]);
     setSignatureName('');
     setSignedElectronically(true);
@@ -239,118 +222,10 @@ export default function StudentRegistrationModule({
     setEtudeEnrolled(false);
     setLibraryEnrolled(false);
     setMealsEnrolled(false);
+    setGouterMatinEnrolled(false);
+    setGouterSoirEnrolled(false);
+    setGouterBothEnrolled(false);
     setEditingStudentId(null);
-  };
-
-  const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (pdfFileInputRef.current) pdfFileInputRef.current.value = '';
-
-    pdfImportActiveRef.current = true;
-    setPdfImporting(true);
-    setPdfImportOffline(false);
-    let offlineDetected = false;
-
-    try {
-      if (!navigator.onLine) {
-        offlineDetected = true;
-        setPdfImportOffline(true);
-        return;
-      }
-
-      const pages = await renderPDFPages(file);
-      if (!pdfImportActiveRef.current) return;
-      if (pages.length === 0) throw new Error('الملف فارغ.');
-
-      if (!navigator.onLine) {
-        offlineDetected = true;
-        setPdfImportOffline(true);
-        return;
-      }
-
-      const data = await extractStudentFromPages(pages, settings?.geminiApiKey, centerName);
-      if (!pdfImportActiveRef.current) return;
-
-      resetForm();
-      applyExtractedData(data);
-      setIsFormOpen(true);
-      toast.success('تم استخراج البيانات بنجاح — راجع الحقول قبل الحفظ');
-    } catch (err: unknown) {
-      if (!pdfImportActiveRef.current) {
-        offlineDetected = true;
-        setPdfImportOffline(true);
-        return;
-      }
-
-      if (!navigator.onLine || isNetworkError(err)) {
-        offlineDetected = true;
-        setPdfImportOffline(true);
-      } else {
-        const msg = err instanceof Error ? err.message : 'خطأ غير معروف';
-        toast.error(`فشل الاستخراج: ${msg}`);
-      }
-    } finally {
-      if (offlineDetected) {
-        await new Promise(resolve => setTimeout(resolve, 2500));
-      }
-      pdfImportActiveRef.current = false;
-      setPdfImporting(false);
-      setPdfImportOffline(false);
-    }
-  };
-
-  const applyExtractedData = (d: ExtractedStudentData) => {
-    setFirstName(d.firstName || '');
-    setLastName(d.lastName || '');
-    setBirthDate(d.birthDate || '');
-    setBirthPlace(d.birthPlace || '');
-    setGrade(d.grade || 'Lycée 1ère Année');
-    setEtablissement((d as any).etablissement || '');
-    setMother({
-      name: d.mother?.name || '',
-      birthDate: d.mother?.birthDate || '',
-      profession: d.mother?.profession || '',
-      address: d.mother?.address || '',
-      phoneFixed: d.mother?.phoneFixed || '',
-      phoneMobile: d.mother?.phoneMobile || '',
-      email: d.mother?.email || '',
-    });
-    setFather({
-      name: d.father?.name || '',
-      birthDate: d.father?.birthDate || '',
-      profession: d.father?.profession || '',
-      address: d.father?.address || '',
-      phoneFixed: d.father?.phoneFixed || '',
-      phoneMobile: d.father?.phoneMobile || '',
-      email: d.father?.email || '',
-    });
-    setParentalSituation((d.parentalSituation as Student['parentalSituation']) || 'mariés');
-    setParentalComments(d.parentalComments || '');
-    setSiblings(
-      (d.siblings || []).map(s => ({ id: crypto.randomUUID(), name: s.name, age: s.age || 0, grade: s.grade || '' }))
-    );
-    setAuthorizedPersons(
-      (d.authorizedPersons || []).map(ap => ({
-        id: crypto.randomUUID(),
-        name: ap.name || '',
-        phone: ap.phone || '',
-        relation: ap.relation || '',
-      }))
-    );
-    setAllergies(d.allergies || '');
-    setNMinus1School(d.academicHistory?.nMinus1?.school || '');
-    setNMinus1Grade(d.academicHistory?.nMinus1?.grade || '');
-    setNMinus2School(d.academicHistory?.nMinus2?.school || '');
-    setNMinus2Grade(d.academicHistory?.nMinus2?.grade || '');
-    setNMinus3School(d.academicHistory?.nMinus3?.school || '');
-    setNMinus3Grade(d.academicHistory?.nMinus3?.grade || '');
-    if (d.enrolledServices) {
-      setSuiviEnrolled(d.enrolledServices.suivi ?? false);
-      setEtudeEnrolled(d.enrolledServices.etude ?? false);
-      setLibraryEnrolled(d.enrolledServices.library ?? false);
-      setMealsEnrolled(d.enrolledServices.meals ?? false);
-    }
   };
 
   const openEdit = (st: Student) => {
@@ -385,6 +260,9 @@ export default function StudentRegistrationModule({
     setSuiviEnrolled(st.enrolledServices?.suivi ?? true);
     setEtudeEnrolled(st.enrolledServices?.etude ?? true);
     setLibraryEnrolled(st.enrolledServices?.library ?? false);
+    setGouterMatinEnrolled(st.enrolledServices?.gouterMatin ?? false);
+    setGouterSoirEnrolled(st.enrolledServices?.gouterSoir ?? false);
+    setGouterBothEnrolled(st.enrolledServices?.gouterBoth ?? (!!st.enrolledServices?.gouterMatin && !!st.enrolledServices?.gouterSoir));
 
     // Repas is active only if explicitly enrolled and not terminated/refunded
     const currentIdx = getCurrentAcademicIndex();
@@ -436,6 +314,7 @@ export default function StudentRegistrationModule({
   const lockedEtude = hasPaidService('Étude', 'Inscription Étude');
   const lockedLibrary = hasPaidService('Bibliothèque', 'Inscription Bibliothèque');
   const lockedMeals = hasPaidService('Repas');
+  const lockedGouter = hasPaidService('Goûter');
 
   // Import/Copy student file from previous academic year
   const handleImportStudent = (stId: string) => {
@@ -490,6 +369,9 @@ export default function StudentRegistrationModule({
     setEtudeEnrolled(sourceSt.enrolledServices?.etude ?? true);
     setLibraryEnrolled(sourceSt.enrolledServices?.library ?? false);
     setMealsEnrolled(sourceSt.enrolledServices?.meals ?? false);
+    setGouterMatinEnrolled(sourceSt.enrolledServices?.gouterMatin ?? false);
+    setGouterSoirEnrolled(sourceSt.enrolledServices?.gouterSoir ?? false);
+    setGouterBothEnrolled(sourceSt.enrolledServices?.gouterBoth ?? (!!sourceSt.enrolledServices?.gouterMatin && !!sourceSt.enrolledServices?.gouterSoir));
 
     setIsImportModalOpen(false);
     setIsFormOpen(true);
@@ -557,7 +439,10 @@ export default function StudentRegistrationModule({
         suivi: lockedSuivi ? true : suiviEnrolled,
         etude: lockedEtude ? true : etudeEnrolled,
         library: lockedLibrary ? true : libraryEnrolled,
-        meals: lockedMeals ? true : mealsEnrolled
+        meals: lockedMeals ? true : mealsEnrolled,
+        gouterMatin: lockedGouter ? (existing?.enrolledServices?.gouterMatin ?? gouterMatinEnrolled) : gouterMatinEnrolled,
+        gouterSoir: lockedGouter ? (existing?.enrolledServices?.gouterSoir ?? gouterSoirEnrolled) : gouterSoirEnrolled,
+        gouterBoth: lockedGouter ? (existing?.enrolledServices?.gouterBoth ?? gouterBothEnrolled) : gouterBothEnrolled
       },
       suiviFees: {
         annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelSuivi : 150,
@@ -653,27 +538,6 @@ export default function StudentRegistrationModule({
           >
             <Sparkles className="h-4 w-4 text-[#257C86]" />
             استيراد ملف من سنة سابقة
-          </button>
-
-          <input
-            ref={pdfFileInputRef}
-            type="file"
-            accept=".pdf"
-            className="hidden"
-            onChange={handlePdfImport}
-          />
-          <button
-            onClick={() => pdfFileInputRef.current?.click()}
-            disabled={pdfImporting}
-            className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs rounded-2xl transition border border-slate-300 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            title="استيراد بطاقة تسجيل من ملف PDF"
-          >
-            {pdfImporting ? (
-              <span className="animate-spin h-4 w-4 border-2 border-[#257C86] border-t-transparent rounded-full" />
-            ) : (
-              <Upload className="h-4 w-4 text-[#257C86]" />
-            )}
-            {pdfImporting ? 'جاري الاستخراج...' : 'استيراد من PDF'}
           </button>
 
           <button
@@ -837,6 +701,23 @@ export default function StudentRegistrationModule({
                   <span className="text-[10px] font-bold bg-[#F2F8F9] text-[#14464E] px-2 py-0.5 rounded-md border border-[#C3E0E4]/50">
                     Repas (مطعم)
                   </span>
+                )}
+                {!hideRestrictedModules && (
+                  <>
+                    {(st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir)) ? (
+                      <span className="text-[10px] font-bold bg-sky-50 text-sky-900 px-2 py-0.5 rounded-md border border-sky-200/50">
+                        اللمجتان معاً
+                      </span>
+                    ) : st.enrolledServices?.gouterMatin ? (
+                      <span className="text-[10px] font-bold bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md border border-sky-200/50">
+                        لمجة الصباح
+                      </span>
+                    ) : st.enrolledServices?.gouterSoir ? (
+                      <span className="text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-200/50">
+                        لمجة المساء
+                      </span>
+                    ) : null}
+                  </>
                 )}
               </div>
             </div>
@@ -1521,6 +1402,102 @@ export default function StudentRegistrationModule({
                         </div>
                       </label>
                     )}
+
+                    {!hideRestrictedModules && (
+                      <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-sky-200/80 bg-sky-50/40 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-sky-950 flex items-center gap-1.5">
+                            <Cookie className="h-4 w-4 text-sky-600" />
+                            اشتراكات اللمجة (Goûter)
+                          </span>
+                          {gouterBothEnrolled && (
+                            <span className="text-[10px] font-black bg-sky-600 text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                              اللمجتان معاً (عرض مدمج)
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterMatinEnrolled && !gouterBothEnrolled ? 'bg-sky-100 border-sky-400 text-sky-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-sky-300'}`}>
+                            <input
+                              type="checkbox"
+                              checked={gouterMatinEnrolled && !gouterBothEnrolled}
+                              disabled={lockedGouter}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGouterMatinEnrolled(true);
+                                  setGouterSoirEnrolled(false);
+                                  setGouterBothEnrolled(false);
+                                } else {
+                                  setGouterMatinEnrolled(false);
+                                }
+                              }}
+                              className="h-4 w-4 rounded text-sky-600 focus:ring-sky-500"
+                            />
+                            <div>
+                              <span className="font-bold text-xs block">لمجة الصباح فقط</span>
+                              <span className="text-[10px] text-slate-500 font-mono font-bold">
+                                {settings ? getFeesForYear(settings, academicYear).fraisGouterMatinMensuel || 0 : 0} د.ت/شهر
+                              </span>
+                            </div>
+                          </label>
+
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterSoirEnrolled && !gouterBothEnrolled ? 'bg-purple-100 border-purple-400 text-purple-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-purple-300'}`}>
+                            <input
+                              type="checkbox"
+                              checked={gouterSoirEnrolled && !gouterBothEnrolled}
+                              disabled={lockedGouter}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGouterSoirEnrolled(true);
+                                  setGouterMatinEnrolled(false);
+                                  setGouterBothEnrolled(false);
+                                } else {
+                                  setGouterSoirEnrolled(false);
+                                }
+                              }}
+                              className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500"
+                            />
+                            <div>
+                              <span className="font-bold text-xs block">لمجة المساء فقط</span>
+                              <span className="text-[10px] text-slate-500 font-mono font-bold">
+                                {settings ? getFeesForYear(settings, academicYear).fraisGouterSoirMensuel || 0 : 0} د.ت/شهر
+                              </span>
+                            </div>
+                          </label>
+
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterBothEnrolled ? 'bg-emerald-100 border-emerald-400 text-emerald-950 cursor-pointer shadow-xs' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-emerald-300'}`}>
+                            <input
+                              type="checkbox"
+                              checked={gouterBothEnrolled}
+                              disabled={lockedGouter}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGouterBothEnrolled(true);
+                                  setGouterMatinEnrolled(true);
+                                  setGouterSoirEnrolled(true);
+                                } else {
+                                  setGouterBothEnrolled(false);
+                                  setGouterMatinEnrolled(false);
+                                  setGouterSoirEnrolled(false);
+                                }
+                              }}
+                              className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <div>
+                              <span className="font-bold text-xs block text-emerald-900">اللمجتان معاً (صباح + مساء)</span>
+                              <span className="text-[10px] text-emerald-700 font-mono font-bold">
+                                {settings ? (getFeesForYear(settings, academicYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, academicYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, academicYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/شهر
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+                        {lockedGouter && (
+                          <p className="flex items-center gap-1 text-[10px] font-bold text-slate-600">
+                            <Lock className="h-3 w-3 shrink-0" /> اشتراك اللمجة مدفوع لهذه السنة — الاسترجاع مطلوب لتغيير الاشتراك.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1871,6 +1848,15 @@ export default function StudentRegistrationModule({
                       {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-purple-100 text-purple-900 rounded font-bold">✓ Étude {centerName}</span>}
                       {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Bibliothèque</span>}
                       {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-[#E0EFF1] text-[#103840] rounded font-bold">✓ Repas</span>}
+                      {!hideRestrictedModules && (
+                        (printingRegistrationStudent.enrolledServices?.gouterBoth || (printingRegistrationStudent.enrolledServices?.gouterMatin && printingRegistrationStudent.enrolledServices?.gouterSoir)) ? (
+                          <span className="px-2 py-1 bg-sky-100 text-sky-950 rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
+                        ) : printingRegistrationStudent.enrolledServices?.gouterMatin ? (
+                          <span className="px-2 py-1 bg-sky-100 text-sky-900 rounded font-bold">✓ لمجة الصباح</span>
+                        ) : printingRegistrationStudent.enrolledServices?.gouterSoir ? (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-900 rounded font-bold">✓ لمجة المساء</span>
+                        ) : null
+                      )}
                     </div>
                   </div>
 
@@ -2017,40 +2003,7 @@ export default function StudentRegistrationModule({
         )}
       </AnimatePresence>
 
-      {/* GENERIC DELETE CONFIRMATION DIALOG */}
-      <AnimatePresence>
-        {pdfImporting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[90] bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 no-print"
-            aria-busy="true"
-            aria-live="polite"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center space-y-4 pointer-events-auto"
-            >
-              {pdfImportOffline ? (
-                <>
-                  <WifiOff className="h-12 w-12 text-red-500 mx-auto" />
-                  <h3 className="text-lg font-black text-slate-900">لا يوجد اتصال بالإنترنت</h3>
-                  <p className="text-sm text-slate-500">تحقق من اتصالك بالشبكة ثم حاول مرة أخرى</p>
-                </>
-              ) : (
-                <>
-                  <Loader2 className="h-12 w-12 text-[#257C86] mx-auto animate-spin" />
-                  <h3 className="text-lg font-black text-slate-900">جاري استخراج البيانات</h3>
-                  <p className="text-sm text-slate-500">يتم تحليل ملف PDF عبر الذكاء الاصطناعي، يرجى الانتظار...</p>
-                </>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       <ConfirmDialog
         open={!!deleteConfirm}
