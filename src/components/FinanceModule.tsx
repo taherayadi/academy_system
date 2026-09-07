@@ -136,7 +136,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const revisionsEnabled = hasModule('revision');
   const formationsEnabled = hasModule('formations');
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'annualInscriptions' | 'formations' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
 
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -955,6 +955,34 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         >
           🧾 سجل الخلاص الكامل
         </button>
+        <button
+          onClick={() => setActiveTab('annualInscriptions')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === 'annualInscriptions' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#E0EFF1] hover:text-[#14464E]'
+          }`}
+        >
+          📌 سجل الخلاص السنوي
+          {annualInscriptionPayments.length > 0 && (
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              activeTab === 'annualInscriptions' ? 'bg-white/20 text-white' : 'bg-[#E0EFF1] text-[#257C86]'
+            }`}>{annualInscriptionPayments.length}</span>
+          )}
+        </button>
+        {!hideRestrictedModules && formationsEnabled && (
+          <button
+            onClick={() => setActiveTab('formations')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+              activeTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-800'
+            }`}
+          >
+            🎓 سجل التكوينات
+            {formationPayments.length > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                activeTab === 'formations' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
+              }`}>{formationPayments.length}</span>
+            )}
+          </button>
+        )}
         {!hideRestrictedModules && coursPartEnabled && (
           <button
             onClick={() => setActiveTab('externalCours')}
@@ -1363,7 +1391,248 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         );
       })()}
 
-      {/* TAB 4: EXTERNAL COURSES */}
+      {/* TAB 3bis: ANNUAL INSCRIPTION HISTORY (SUIVI / ÉTUDE / LIBRARY) */}
+      {activeTab === 'annualInscriptions' && (() => {
+        const annTotalPages = Math.ceil(annualInscriptionPayments.length / pageSize) || 1;
+        const annCurrentPage = Math.min(Math.max(1, historyPage), annTotalPages);
+        const paginatedAnn = annualInscriptionPayments.slice((annCurrentPage - 1) * pageSize, annCurrentPage * pageSize);
+
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs no-print">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm">سجل الخلاص السنوي (الاشتراكات والتسجيلات) ({annualInscriptionPayments.length})</h3>
+                <p className="text-[11px] text-slate-400">التسجيلات السنوية للسنة الدراسية {schoolYearFilter === 'all' ? '(كل السنوات)' : schoolYearFilter} — لا يتأثر بفيلتر الشهر</p>
+              </div>
+              <div className="text-left">
+                <p className="text-[11px] text-slate-500 font-bold">المجموع السنوي</p>
+                <p className="text-xl font-black text-[#257C86] font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">رقم الوصل</th>
+                    <th className="p-4">التاريخ</th>
+                    <th className="p-4">التلميذ</th>
+                    <th className="p-4">الخدمة المعنية</th>
+                    <th className="p-4">الفترة</th>
+                    <th className="p-4">التخفيض</th>
+                    <th className="p-4">المبلغ المقبوض</th>
+                    <th className="p-4">طريقة الخلاص</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedAnn.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">لا توجد تسجيلات سنوية موافقة للسنة الدراسية المختارة.</td>
+                    </tr>
+                  ) : (
+                    paginatedAnn.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
+                        <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
+                        <td className="p-4 font-black text-slate-900">{p.studentName}</td>
+                        <td className="p-4 font-bold text-[#14464E]">{paymentServiceLabel(p)}</td>
+                        <td className="p-4 font-bold text-slate-700">{monthToArabic(p.month)}</td>
+                        <td className="p-4">
+                          {p.discount ? (
+                            <span className="text-[#17555F] font-black font-mono">{fmt(p.discount)} د.ت</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-mono font-black">
+                          {p.refund ? (
+                            <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
+                          ) : (
+                            <span className="text-emerald-700">{fmt(p.amountPaid)} د.ت</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {p.method === 'Chèque' ? (
+                            <div className="flex items-center gap-1">
+                              {p.chequePaid === true ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  شيك محصل
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#E0EFF1] text-[#14464E] rounded-lg font-bold text-[10px]">
+                                  <AlertCircle className="h-3 w-3" />
+                                  شيك معلق
+                                </span>
+                              )}
+                              <button
+                                onClick={() => setChequeDetailModal({ chequeNumber: p.chequeNumber, chequeDate: p.chequeDate, payments: [{ ...p, studentName: p.studentName || '' }], totalAmount: p.amountPaid, paid: p.chequePaid === true })}
+                                className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 cursor-pointer"
+                                title="تفاصيل الشيك"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-600 font-bold">{p.method}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {annTotalPages > 1 && (
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
+                <button
+                  disabled={annCurrentPage <= 1}
+                  onClick={() => setHistoryPage(annCurrentPage - 1)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
+                >
+                  ◀ السابق
+                </button>
+                <span className="text-slate-600">صفحة {annCurrentPage} من {annTotalPages} (20 وصل / صفحة)</span>
+                <button
+                  disabled={annCurrentPage >= annTotalPages}
+                  onClick={() => setHistoryPage(annCurrentPage + 1)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
+                >
+                  التالي ▶
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* TAB 4: FORMATIONS */}
+      {activeTab === 'formations' && (() => {
+        const formationRecords = formationPayments.filter(p => {
+          const yMatch = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
+          const mMatch = monthFilter === 'all' || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr'));
+          return yMatch && mMatch;
+        });
+        const formTotal = formationRecords.reduce((s, p) => {
+          const rec = p as any;
+          return s + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
+        }, 0);
+        const formTotalPages = Math.ceil(formationRecords.length / pageSize) || 1;
+        const formCurrentPage = Math.min(Math.max(1, historyPage), formTotalPages);
+        const paginatedForm = formationRecords.slice((formCurrentPage - 1) * pageSize, formCurrentPage * pageSize);
+
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs no-print">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm">سجل الخلاص للتكوينات والدورات ({formationRecords.length})</h3>
+                <p className="text-[11px] text-slate-400">مدفوعات التكوينات حسب السنة الدراسية {schoolYearFilter === 'all' ? '(كل السنوات)' : schoolYearFilter} — حسب الشهر {monthFilter === 'all' ? '(كل الأشهر)' : monthFilter}</p>
+              </div>
+              <div className="text-left">
+                <p className="text-[11px] text-slate-500 font-bold">المجموع</p>
+                <p className="text-xl font-black text-indigo-600 font-mono">{fmt(formTotal)} د.ت</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">رقم الوصل</th>
+                    <th className="p-4">التاريخ</th>
+                    <th className="p-4">التلميذ</th>
+                    <th className="p-4">التكوين</th>
+                    <th className="p-4">التخفيض</th>
+                    <th className="p-4">المبلغ المقبوض</th>
+                    <th className="p-4">طريقة الخلاص</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedForm.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400">لا توجد مدفوعات تكوينات موافقة للفترة المختارة.</td>
+                    </tr>
+                  ) : (
+                    paginatedForm.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
+                        <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
+                        <td className="p-4 font-black text-slate-900">{p.studentName}</td>
+                        <td className="p-4 font-bold text-indigo-700">{p.formationName || p.notes || monthToArabic(p.month)}</td>
+                        <td className="p-4">
+                          {p.discount ? (
+                            <span className="text-[#17555F] font-black font-mono">{fmt(p.discount)} د.ت</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-mono font-black">
+                          {p.refund ? (
+                            <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
+                          ) : (
+                            <span className="text-emerald-700">{fmt(p.amountPaid)} د.ت</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {p.method === 'Chèque' ? (
+                            <div className="flex items-center gap-1">
+                              {p.chequePaid === true ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  شيك محصل
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#E0EFF1] text-[#14464E] rounded-lg font-bold text-[10px]">
+                                  <AlertCircle className="h-3 w-3" />
+                                  شيك معلق
+                                </span>
+                              )}
+                              <button
+                                onClick={() => setChequeDetailModal({ chequeNumber: p.chequeNumber, chequeDate: p.chequeDate, payments: [{ ...p, studentName: p.studentName || '' }], totalAmount: p.amountPaid, paid: p.chequePaid === true })}
+                                className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 cursor-pointer"
+                                title="تفاصيل الشيك"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-600 font-bold">{p.method}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {formTotalPages > 1 && (
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
+                <button
+                  disabled={formCurrentPage <= 1}
+                  onClick={() => setHistoryPage(formCurrentPage - 1)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
+                >
+                  ◀ السابق
+                </button>
+                <span className="text-slate-600">صفحة {formCurrentPage} من {formTotalPages} (20 وصل / صفحة)</span>
+                <button
+                  disabled={formCurrentPage >= formTotalPages}
+                  onClick={() => setHistoryPage(formCurrentPage + 1)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
+                >
+                  التالي ▶
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* TAB 5: EXTERNAL COURSES */}
       {activeTab === 'externalCours' && (() => {
         // Filter external students by year
         const filteredExtStudents = externalStudents.filter(reg => {
@@ -2320,7 +2589,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 7: CHEQUE PAYMENT VALIDATION */}
       {activeTab === 'cheques' && (() => {
-        const pendingCheques = filteredPendingChequePayments.map(p => {
+        const pendingCheques = allPendingChequePayments.map(p => {
           const student = students.find(s => 
             s.payments?.some(sp => sp.id === p.id)
           );
