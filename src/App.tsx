@@ -126,6 +126,8 @@ export default function App() {
   const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
   const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
+  const isPlatformSuperAdmin = currentUser?.role === 'platform_super_admin';
+
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
 
@@ -139,8 +141,8 @@ export default function App() {
     setCurrentUser(user);
     if (center) setCurrentCenter(center);
     saveSessionUser(user);
-    // Always land on the dashboard after login, not the last visited module.
-    setActiveTab('dashboard');
+    // Platform super admin lands on the platform admin dashboard, center admins land on the center dashboard.
+    setActiveTab(user.role === 'platform_super_admin' ? 'platformAdmin' : 'dashboard');
     setReloadKey(prev => prev + 1);
     toast.success(`مرحباً ${user.name}`);
   };
@@ -161,6 +163,15 @@ export default function App() {
     }
   }, [hideRestrictedModules, activeTab]);
 
+  // Keep active tab in sync with user role
+  useEffect(() => {
+    if (isPlatformSuperAdmin && activeTab !== 'platformAdmin') {
+      setActiveTab('platformAdmin');
+    } else if (!isPlatformSuperAdmin && activeTab === 'platformAdmin') {
+      setActiveTab('dashboard');
+    }
+  }, [isPlatformSuperAdmin, activeTab]);
+
   // Server-backed state (data lives in local SQLite via Express)
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -180,8 +191,12 @@ export default function App() {
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
 
   useEffect(() => {
-    document.title = settings?.centerName || 'المركز';
-  }, [settings?.centerName]);
+    if (isPlatformSuperAdmin) {
+      document.title = 'إدارة المنصة | System Academy SaaS';
+    } else {
+      document.title = settings?.centerName || 'المركز';
+    }
+  }, [settings?.centerName, isPlatformSuperAdmin]);
 
   // Import confirmation state
   const [importPendingData, setImportPendingData] = useState<Record<string, unknown> | null>(null);
@@ -205,6 +220,12 @@ export default function App() {
   // Load full state from the local API on mount or when logged in
   useEffect(() => {
     if (!currentUser) {
+      setIsBootLoading(false);
+      return;
+    }
+
+    // Platform super admin does not manage a specific center's domain data
+    if (currentUser.role === 'platform_super_admin') {
       setIsBootLoading(false);
       return;
     }
@@ -727,13 +748,13 @@ export default function App() {
     );
   }
 
-  if (isBootLoading || !settings) {
+  if (isBootLoading || (!isPlatformSuperAdmin && !settings)) {
     return (
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
             <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
-<img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
+              <img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
@@ -770,8 +791,6 @@ export default function App() {
     );
   }
 
-  const isPlatformSuperAdmin = currentUser?.role === 'platform_super_admin';
-
   // Platform super admin sees ONLY the SaaS platform management interface.
   // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
   const menuItems = isPlatformSuperAdmin
@@ -802,10 +821,10 @@ export default function App() {
       <header className="md:hidden bg-white border-b border-[#257C86]/20 text-slate-900 p-4 flex justify-between items-center shadow-xs no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-lg object-cover" />
+            <img src={logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">{settings?.centerName || 'المركز'}</h1>
+            <h1 className="font-black text-sm text-slate-900">{isPlatformSuperAdmin ? 'إدارة المنصة (SaaS)' : (settings?.centerName || 'المركز')}</h1>
             <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
           </div>
         </div>
@@ -866,12 +885,12 @@ export default function App() {
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/15 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-<img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
+                <img src={logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
-                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{settings?.centerName || 'المركز'}</h1>
-                  <span className="text-[11px] text-[#257C86] font-bold block truncate">الإدارة والتأطير</span>
+                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{isPlatformSuperAdmin ? 'إدارة المنصة' : (settings?.centerName || 'المركز')}</h1>
+                  <span className="text-[11px] text-[#257C86] font-bold block truncate">{isPlatformSuperAdmin ? 'لوحة تحكم SaaS' : 'الإدارة والتأطير'}</span>
                 </div>
               )}
             </div>
@@ -932,7 +951,9 @@ export default function App() {
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
               <span className="w-2 h-2 rounded-full bg-[#8DC760] shadow-sm shadow-[#8DC760]/60 shrink-0 animate-pulse"></span>
-              <span className="text-xs font-bold text-slate-700">Administrateur</span>
+              <span className="text-xs font-bold text-slate-700">
+                {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
+              </span>
             </div>
           )}
 
@@ -948,7 +969,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{settings?.centerName || 'المركز'} © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} © 2026</p>
           )}
         </div>
       </aside>
@@ -1158,7 +1179,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'platformAdmin' && isPlatformSuperAdmin && (
+              {(activeTab === 'platformAdmin' || isPlatformSuperAdmin) && (
                 <PlatformAdminDashboard />
               )}
             </motion.div>

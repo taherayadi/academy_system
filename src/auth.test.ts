@@ -62,4 +62,19 @@ describe('auth session management', () => {
       expect(() => clearLocalSession()).not.toThrow();
     });
   });
+
+  describe('platform_super_admin user role', () => {
+    it('supports saving and loading a platform_super_admin user', () => {
+      const platformAdminUser = {
+        email: 'platform@systemacademy.tn',
+        name: 'مدير المنصة الرئيسي',
+        role: 'platform_super_admin' as const,
+        description: 'إدارة المنصة SaaS فقط',
+      };
+      saveSessionUser(platformAdminUser);
+      const loaded = loadSessionUser();
+      expect(loaded).toEqual(platformAdminUser);
+      expect(loaded?.role).toBe('platform_super_admin');
+    });
+  });
 });
