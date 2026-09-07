@@ -850,6 +850,26 @@ export interface MealPlanDay {
   }[];
 }
 
+// "Forfait ferme" (Case C): when the admin closes a month (end of month), the paid
+// subscription balance not consumed by the student becomes center profit. The amounts
+// are snapshotted at closure time so they stay frozen even if payments change later.
+export interface MealForfaitClosureItem {
+  studentId: string;
+  studentName: string;
+  netPaid: number;
+  consumedSubscriptionMeals: number;
+  fraisParRepas: number;
+  amount: number;
+}
+
+export interface MealForfaitClosure {
+  id: string;
+  month: string;          // ex: 'Septembre'
+  schoolYear: string;     // ex: '2026/2027'
+  createdAt: string;      // ISO timestamp
+  items: (MealForfaitClosureItem | null)[];
+}
+
 // A single "seance de revision" (one-time revision session with an external teacher).
 // Unlike a course, it has no monthly fee / cycles / assurance — just 1 session.
 export interface RevisionSeanceStudent {

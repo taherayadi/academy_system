@@ -280,6 +280,7 @@ export interface AppState {
   revisionSeances: any[];
   studentTimeSheets: any[];
   formations: any[];
+  mealForfaitClosures: any[];
 }
 
 // ===========================================================================
@@ -877,6 +878,73 @@ export async function deleteSingleExpense(db: D1Database, expenseId: string, cen
   await db.prepare('DELETE FROM expenses WHERE id = ? AND center_id = ?').bind(expenseId, centerId).run();
 }
 
+// ===========================================================================
+// MEAL FORFAIT CLOSURES (Case C - "forfait ferme")
+// ===========================================================================
+
+export async function readMealForfaitClosures(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [closureRows, itemRows] = await Promise.all([
+    db.prepare('SELECT * FROM meal_forfait_closures WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT i.* FROM meal_forfait_closure_items i JOIN meal_forfait_closures c ON i.closure_id = c.id WHERE c.center_id = ?').bind(centerId).all()
+  ]);
+  const itemsByClosure: Record<string, any[]> = {};
+  itemRows.results.forEach((r: any) => {
+    (itemsByClosure[str(r.closure_id)] = itemsByClosure[str(r.closure_id)] || []).push({
+      studentId: str(r.student_id),
+      studentName: str(r.student_name),
+      netPaid: num(r.net_paid),
+      consumedSubscriptionMeals: num(r.consumed_subscription_meals),
+      fraisParRepas: num(r.frais_par_repas),
+      amount: num(r.amount)
+    });
+  });
+  return closureRows.results.map((r: any) => ({
+    id: str(r.id),
+    month: str(r.month),
+    schoolYear: str(r.school_year),
+    createdAt: str(r.created_at),
+    items: itemsByClosure[str(r.id)] || []
+  }));
+}
+
+export async function createMealForfaitClosure(db: D1Database, closure: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('INSERT INTO meal_forfait_closures (id, center_id, month, school_year, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(closure.id, centerId, closure.month, closure.schoolYear, closure.createdAt)
+  ];
+  for (const item of closure.items || []) {
+    if (item) {
+      stmts.push(
+        db.prepare('INSERT INTO meal_forfait_closure_items (id, closure_id, student_id, student_name, net_paid, consumed_subscription_meals, frais_par_repas, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(crypto.randomUUID(), closure.id, item.studentId, item.studentName, num(item.netPaid), num(item.consumedSubscriptionMeals), num(item.fraisParRepas), num(item.amount))
+      );
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+export async function writeMealForfaitClosures(db: D1Database, closures: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM meal_forfait_closure_items WHERE closure_id IN (SELECT id FROM meal_forfait_closures WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_forfait_closures WHERE center_id = ?').bind(centerId)
+  ];
+  for (const closure of closures || []) {
+    stmts.push(
+      db.prepare('INSERT INTO meal_forfait_closures (id, center_id, month, school_year, created_at) VALUES (?, ?, ?, ?, ?)')
+        .bind(closure.id, centerId, closure.month, closure.schoolYear, closure.createdAt)
+    );
+    for (const item of closure.items || []) {
+      if (item) {
+        stmts.push(
+          db.prepare('INSERT INTO meal_forfait_closure_items (id, closure_id, student_id, student_name, net_paid, consumed_subscription_meals, frais_par_repas, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .bind(crypto.randomUUID(), closure.id, item.studentId, item.studentName, num(item.netPaid), num(item.consumedSubscriptionMeals), num(item.fraisParRepas), num(item.amount))
+        );
+      }
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
 
 // ===========================================================================
 // REVISION SEANCES
@@ -1032,12 +1100,12 @@ export async function writeFormations(db: D1Database, formations: any[], centerI
 // ===========================================================================
 
 export async function readState(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<AppState> {
-  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations] = await Promise.all([
+  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures] = await Promise.all([
     readSettings(db, centerId), readStudents(db, centerId), readStaff(db, centerId), readSlots(db, centerId), readCourses(db, centerId),
     readSessions(db, centerId), readMealPlans(db, centerId), readExpenses(db, centerId), readTimesheets(db, centerId),
-    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId)
+    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId), readMealForfaitClosures(db, centerId)
   ]);
-  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations };
+  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures };
 }
 
 export async function writeState(db: D1Database, state: AppState, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
@@ -1098,8 +1166,30 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
     db.prepare('DELETE FROM formation_student_matieres WHERE formation_student_id IN (SELECT id FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
     db.prepare('DELETE FROM formation_students WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId)
+    db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId),
+
+    db.prepare('DELETE FROM meal_forfait_closure_items WHERE closure_id IN (SELECT id FROM meal_forfait_closures WHERE center_id = ?)').bind(centerId),
+    db.prepare('DELETE FROM meal_forfait_closures WHERE center_id = ?').bind(centerId)
   ];
+
+  const buildMealForfaitClosuresStmts = (closures: any[]): D1PreparedStatement[] => {
+    const stmts: D1PreparedStatement[] = [];
+    for (const closure of closures || []) {
+      stmts.push(
+        db.prepare('INSERT INTO meal_forfait_closures (id, center_id, month, school_year, created_at) VALUES (?, ?, ?, ?, ?)')
+          .bind(closure.id, centerId, closure.month, closure.schoolYear, closure.createdAt)
+      );
+      for (const item of closure.items || []) {
+        if (item) {
+          stmts.push(
+            db.prepare('INSERT INTO meal_forfait_closure_items (id, closure_id, student_id, student_name, net_paid, consumed_subscription_meals, frais_par_repas, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+              .bind(crypto.randomUUID(), closure.id, item.studentId, item.studentName, num(item.netPaid), num(item.consumedSubscriptionMeals), num(item.fraisParRepas), num(item.amount))
+          );
+        }
+      }
+    }
+    return stmts;
+  };
 
   const allDataStmts = [
     ...buildStudentsStmts(db, dedupe(state.students), centerId),
@@ -1113,7 +1203,8 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
     ...buildExternalStudentsStmts(db, dedupe(state.externalStudents), centerId),
     ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances), centerId),
     ...buildStudentTimeSheetsStmts(db, dedupe(state.studentTimeSheets), centerId),
-    ...buildFormationsStmts(db, dedupe(state.formations), centerId)
+    ...buildFormationsStmts(db, dedupe(state.formations), centerId),
+    ...buildMealForfaitClosuresStmts(dedupe(state.mealForfaitClosures))
   ];
 
   for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));

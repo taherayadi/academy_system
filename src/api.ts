@@ -2,7 +2,7 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, Formation, CenterTenant, DemoRequest
+  StudentTimeSheet, Formation, CenterTenant, DemoRequest, MealForfaitClosure
 } from './types';
 
 const API_BASE = '/api';
@@ -185,6 +185,24 @@ export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void>
 
 export async function saveFormations(formations: Formation[]): Promise<void> {
   return putDomain('/formations', formations, 'تعذر حفظ بيانات التكوينات.');
+}
+
+export async function saveMealForfaitClosures(closures: MealForfaitClosure[]): Promise<void> {
+  return putDomain('/meal-forfait-closures', closures, 'تعذر حفظ بيانات إغلاقات الوجبات.');
+}
+
+export async function fetchMealForfaitClosures(): Promise<MealForfaitClosure[]> {
+  const res = await fetch(`${API_BASE}/meal-forfait-closures`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const data: { error?: string } = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'تعذر قراءة بيانات إغلاقات الوجبات.');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function saveSettings(settings: CenterSettings): Promise<void> {

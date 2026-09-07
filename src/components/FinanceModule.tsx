@@ -21,7 +21,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, EtudeSlot, Formation, MealServiceType } from '../types';
+import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -40,6 +40,8 @@ interface FinanceModuleProps {
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
   enabledModules?: string[];
+  mealForfaitClosures?: MealForfaitClosure[];
+  onUpdateMealForfaitClosures?: (closures: MealForfaitClosure[]) => void;
 }
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
@@ -78,7 +80,50 @@ const RESTRICTED_SERVICES = ['Cours Particuliers', 'Revision', 'Formation', 'Rep
 
 const fmt = (n: number) => n.toFixed(3);
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules }: FinanceModuleProps) {
+const MONTH_TO_NUM: Record<string, number> = {
+  'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12,
+  'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5,
+  'Juin': 6, 'Juillet': 7, 'Août': 8
+};
+
+// Meal attendances are stored as YYYY-MM-DD, so a French month name has to be
+// translated into a date prefix before it can be matched against them.
+// Septembre..Décembre belong to the start year, Janvier..Août to the end year.
+function monthFilterToDatePrefix(monthName: string, schoolYear: string): string | null {
+  const num = MONTH_TO_NUM[monthName];
+  if (!num) return null;
+  const [startYear, endYear] = schoolYear.split('/');
+  const year = num >= 9 ? startYear : endYear;
+  if (!year) return null;
+  return `${year}-${String(num).padStart(2, '0')}`;
+}
+
+// The "Clôturer le mois" action is usable only once the displayed academic month is over.
+function isAcademicMonthFinished(monthName: string, schoolYear: string): boolean {
+  const num = MONTH_TO_NUM[monthName];
+  if (!num) return false;
+  const [startYear, endYear] = schoolYear.split('/').map(Number);
+  if (!startYear || !endYear) return false;
+  const calYear = num >= 9 ? startYear : endYear;
+  // Month is finished when now is at/after the first day of the following month.
+  return new Date() >= new Date(calYear, num, 1);
+}
+
+// A school year runs Septembre (start year) → Mai (end year). A date (YYYY-MM-DD)
+// matches a school year only when its month falls inside that academic calendar:
+//   Janvier..Mai (01-05) belong to the END year, Septembre..Décembre (09-12) to the START year.
+// Juin/Juillet/Août (06-08) come after the school year finished in Mai — they belong to no
+// school year, so they only appear when the year filter is 'all'.
+function expenseInSchoolYear(date: string, schoolYear: string): boolean {
+  if (!date || schoolYear === 'all') return true;
+  const [y, m] = date.split('-').map(Number);
+  const [startYear, endYear] = schoolYear.split('/').map(Number);
+  if (!y || !m || !startYear || !endYear) return false;
+  if (m >= 6 && m <= 8) return false;
+  return (m >= 9 && m <= 12) ? y === startYear : y === endYear;
+}
+
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'المركز';
@@ -97,7 +142,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   
   // Year and Month Filters
   const [schoolYearFilter, setSchoolYearFilter] = useState<string>(getCurrentAcademicYear());
-  const [monthFilter, setMonthFilter] = useState<string>('all'); // 'all' or specific month name
+  const [monthFilter, setMonthFilter] = useState<string>(() => {
+    const idx = getCurrentAcademicIndex();
+    return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'all';
+  });
   const [serviceFilter, setServiceFilter] = useState<string>('all');
 
   // Custom Academic Years list
@@ -324,19 +372,52 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // External course (كورسات خصوصية): the center keeps only its share; the prof share is an expense.
   const grandExternalPayments = allPaymentsMerged.filter((p): p is ExternalPaymentRec => p.service === 'Cours Particuliers');
 
-  // Grand totals across all time/records
-  const grandTotalRevenue = allPaymentsMerged.reduce((sum, p) => {
-    const rec = p as any;
-    return sum + (rec.centerShare ?? p.amountPaid);
-  }, 0);
-  const grandTotalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0) + grandRepasTraiteurTotal;
-  
+  // Case C — "forfait ferme": the center acquires the unconsumed prepaid subscription balance
+  // at month closure ONLY (button «Clôturer le mois»), so the amount comes from the persisted
+  // closure snapshot — NOT from a live computation anymore. A month that is not closed yet
+  // contributes 0. Refunds recorded before the closure net out of the snapshot.
+  const calcForfaitAcquis = (opts: { monthFilter: string; schoolYear?: string }) => {
+    let total = 0;
+    for (const c of mealForfaitClosures || []) {
+      if (opts.monthFilter !== 'all' && c.month !== opts.monthFilter) continue;
+      if (opts.schoolYear && opts.schoolYear !== 'all' && c.schoolYear !== opts.schoolYear) continue;
+      total += (c.items || []).reduce((sum, it) => sum + (it?.amount ?? 0), 0);
+    }
+    return total;
+  };
+
+  // Grand totals across all time/records.
+  // Repas payments are NOT counted here: the center only earns its margin
+  // (fraisParRepas − prixPlatTraiteur per plate consumed), the rest belongs to the traiteur.
+  // The traiteur share is therefore never added to expenses — it is already netted out.
+  const repasBenefitAllTime = (() => {
+    if (!settings) return 0;
+    let totalPlates = 0;
+    for (const s of students) {
+      totalPlates += (s.mealAttendances || []).filter(a => a.paid).length;
+    }
+    const f = getFeesForYear(settings, getCurrentAcademicYear());
+    return totalPlates * (f.fraisParRepas - f.prixPlatTraiteur) + calcForfaitAcquis({ monthFilter: 'all', schoolYear: 'all' });
+  })();
+  const grandTotalRevenue = allPaymentsMerged
+    .filter(p => p.service !== 'Repas')
+    .reduce((sum, p) => {
+      const rec = p as any;
+      return sum + (rec.centerShare ?? p.amountPaid);
+    }, 0) + repasBenefitAllTime;
+  const grandTotalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
   // Pending cheque amounts (not yet cashed - should NOT count in revenue until validated)
   const grandPendingChequePayments = allPaymentsMerged.filter(p => p.method === 'Chèque' && p.chequePaid !== true);
   const grandPendingChequeTotal = grandPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
-  
+  // Repas cheques are excluded from the revenue deduction: repas revenue is the fixed
+  // center margin (benefit), so the subscription cheque never hits the total revenue.
+  const grandPendingChequeRevenueTotal = grandPendingChequePayments
+    .filter(p => p.service !== 'Repas' && !p.refund)
+    .reduce((sum, p) => sum + p.amountPaid, 0);
+
   // Revenue excluding pending cheques (only cashed cheques and cash count)
-  const grandTotalRevenueNet = grandTotalRevenue - grandPendingChequeTotal;
+  const grandTotalRevenueNet = grandTotalRevenue - grandPendingChequeRevenueTotal;
   const grandTotalNet = grandTotalRevenueNet - grandTotalExpenses;
 
   // Full 12 calendar months list with Arabic labels
@@ -365,13 +446,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
   // Filtered Expenses by Year & Month & Search
   const filteredExpenses = expenses.filter(e => {
-    const startYear = schoolYearFilter === 'all' ? '' : schoolYearFilter.split('/')[0];
-    const endYear = schoolYearFilter === 'all' ? '' : schoolYearFilter.split('/')[1];
-    
-    let matchesYear = schoolYearFilter === 'all';
-    if (!matchesYear && e.date) {
-      matchesYear = e.date.includes(startYear) || e.date.includes(endYear);
-    }
+    let matchesYear = schoolYearFilter === 'all' || expenseInSchoolYear(e.date, schoolYearFilter);
 
     let matchesMonth = true;
     if (monthFilter !== 'all') {
@@ -399,11 +474,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const calcFilteredRepasTraiteurTotal = () => {
     if (!settings) return 0;
     let total = 0;
+    const datePrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
     for (const s of filteredStudents) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = (s.mealAttendances || []).filter(a => {
-        if (monthFilter === 'all') return true;
-        return a.date.startsWith(monthFilter);
+        if (!datePrefix) return true;
+        return a.date.startsWith(datePrefix);
       });
       const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
       for (const a of lunchAttendances) {
@@ -421,11 +497,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     let totalSubscriptions = 0;
     let totalPlatesConsumed = 0;
     let traiteurShare = 0;
+    const datePrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
     for (const s of filteredStudents) {
       const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
       const attendances = (s.mealAttendances || []).filter(a => {
-        if (monthFilter === 'all') return true;
-        return a.date.startsWith(monthFilter);
+        if (!datePrefix) return true;
+        return a.date.startsWith(datePrefix);
       });
       const lunchAttendances = attendances.filter(a => a.type === 'subscription' && (!a.service || a.service === 'lunch'));
       totalPlatesConsumed += lunchAttendances.length;
@@ -483,6 +560,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Pending cheque amounts for filtered period (not yet cashed)
   const filteredPendingChequePayments = filteredPayments.filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund);
   const filteredPendingChequeTotal = filteredPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
+
+  // Pending cheques across ALL periods. The cheque tab must always list every unpaid cheque,
+  // regardless of the month/school-year filter applied to the rest of the finance module.
+  const allPendingChequePayments = allPaymentsMerged.filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund);
+  // One cheque may cover several services (several payment records sharing one chequeNumber).
+  // Count distinct cheques, not payment records.
+  const pendingChequeCount = new Set(allPendingChequePayments.map(p => p.chequeNumber || p.id)).size;
+  // Total amount of ALL unpaid cheques, regardless of the current month/school-year filter.
+  const allPendingChequeTotal = allPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
   
   // Revenue excluding pending cheques (only cashed cheques and cash count)
   const totalRevenueExclCheques = totalRevenue - filteredPendingChequePayments.filter(p => p.service !== 'Repas' && !p.refund).reduce((sum, p) => {
@@ -490,24 +576,105 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return sum + (rec.centerShare ?? p.amountPaid);
   }, 0);
   
-  // Add center benefit from meals ( plates consumed × center margin per plate )
+  // Add center benefit from meals: plates consumed × center margin per plate + forfait acquired
   const filteredRestoCenterBenefit = (() => {
     if (!settings) return 0;
     let totalPlates = 0;
+    const datePrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
     for (const s of filteredStudents) {
       const attendances = (s.mealAttendances || []).filter(a => {
-        if (monthFilter === 'all') return true;
-        return a.date.startsWith(monthFilter);
+        if (!datePrefix) return true;
+        return a.date.startsWith(datePrefix);
       });
-      totalPlates += attendances.length;
+      totalPlates += attendances.filter(a => a.paid).length;
     }
     const f = getFeesForYear(settings, getCurrentAcademicYear());
     const margin = f.fraisParRepas - f.prixPlatTraiteur;
-    return totalPlates * margin;
+    return totalPlates * margin + calcForfaitAcquis({ monthFilter, schoolYear: schoolYearFilter });
   })();
   const totalRevenueWithResto = totalRevenueExclCheques + filteredRestoCenterBenefit;
-  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0) + repasTraiteurTotal;
+  // The traiteur share is NOT added here: filteredRestoCenterBenefit is already the center
+  // margin (fraisParRepas − prixPlatTraiteur), so the traiteur cost is netted out once.
+  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const netProfit = totalRevenueWithResto - totalExpensesAmount;
+
+  // --- Metric cards ---
+  // Card: Total revenue for the school year (NOT affected by the month filter).
+  // Repas contributes only its CENTER share (margin), not the traiteur part.
+  const repasBenefitYear = (() => {
+    if (!settings) return 0;
+    let totalPlates = 0;
+    const yearStudents = students.filter(st => schoolYearFilter === 'all' || (st.academicYear || getCurrentAcademicYear()) === schoolYearFilter);
+    for (const s of yearStudents) {
+      totalPlates += (s.mealAttendances || []).filter(a => a.paid).length;
+    }
+    const f = getFeesForYear(settings, getCurrentAcademicYear());
+    return totalPlates * (f.fraisParRepas - f.prixPlatTraiteur) + calcForfaitAcquis({ monthFilter: 'all', schoolYear: schoolYearFilter });
+  })();
+  const yearNonRepasPayments = allPaymentsMerged.filter(p =>
+    (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter) && p.service !== 'Repas'
+  );
+  const yearPendingChequeTotal = yearNonRepasPayments
+    .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
+    .reduce((sum, p) => {
+      const rec = p as any;
+      return sum + (rec.centerShare ?? p.amountPaid);
+    }, 0);
+  const yearTotalRevenue = yearNonRepasPayments.reduce((sum, p) => {
+    const rec = p as any;
+    return sum + (rec.centerShare ?? p.amountPaid);
+  }, 0) + repasBenefitYear - yearPendingChequeTotal;
+
+  // Annual inscription/subscription payments. Selected only by school year — never by month:
+  // the total stays the same whatever the month filter.
+  const annualInscriptionPayments = allPaymentsMerged.filter(p => {
+    const isAnnual = p.month.startsWith('Annuel');
+    if (!isAnnual) return false;
+    const matchesYear = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
+    const matchesSearch = !searchTerm || p.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || p.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesYear && matchesSearch;
+  });
+  const annualInscriptionTotal = (() => {
+    const gross = annualInscriptionPayments.reduce((sum, p) => {
+      const rec = p as any;
+      return sum + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
+    }, 0);
+    const pendingCheque = annualInscriptionPayments
+      .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
+      .reduce((sum, p) => {
+        const rec = p as any;
+        return sum + (rec.centerShare ?? p.amountPaid);
+      }, 0);
+    return gross - pendingCheque;
+  })();
+
+  // Card: Revenue without repas, without annual inscriptions, without formations,
+  // without pending cheques — filtered by the selected month.
+  const revenueSansRepas = (() => {
+    const rows = filteredPayments.filter(p =>
+      p.service !== 'Repas' && p.service !== 'Formation' && !String(p.month).startsWith('Annuel')
+    );
+    const gross = rows.reduce((s, p) => {
+      const rec = p as any;
+      return s + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
+    }, 0);
+    const pending = rows
+      .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
+      .reduce((s, p) => {
+        const rec = p as any;
+        return s + (rec.centerShare ?? p.amountPaid);
+      }, 0);
+    return gross - pending;
+  })();
+  // Card: Repas revenue for the selected period — only the CENTER share (margin).
+  const repasRevenueFiltered = filteredRestoCenterBenefit;
+  // Card: Formation revenue for the selected period.
+  const formationRevenueFiltered = filteredPayments
+    .filter(p => p.service === 'Formation')
+    .reduce((s, p) => {
+      const rec = p as any;
+      return s + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
+    }, 0);
 
   // Synthetic traiteur-share expense row, shown in the expenses list (قائمة الفواتير ومصاريف السنتر)
   const traiteurShareExpense: CenterExpense | null = repasTraiteurTotal > 0 ? {
@@ -709,10 +876,44 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* FILTERED METRIC CARDS (ACCORDING TO SELECTED FILTERS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+        <div className="bg-[#103840] p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
+          <span className="text-xs font-bold text-[#BFE8EE] block">الإيرادات الكلية (السنة)</span>
+          <p className="text-2xl font-black text-white font-mono">{fmt(yearTotalRevenue)} د.ت</p>
+          <span className="text-[10px] text-[#9FD6DF] font-bold">كل الإيرادات دون فيلتر الشهر</span>
+        </div>
+
+        <div className="bg-[#F2F8F9]/60 p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
+          <span className="text-xs font-bold text-[#14464E] block">التسجيلات السنوية (كل الفترات)</span>
+          <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
+          <span className="text-[10px] text-[#17555F] font-bold">تسجيلات سنوية — لا يتأثر بفيلتر الشهر</span>
+        </div>
+
         <div className="bg-emerald-50/60 p-5 rounded-3xl border border-emerald-200/80 shadow-xs space-y-1">
-          <span className="text-xs font-bold text-emerald-800 block">{hideRestrictedModules ? 'مقبوضات' : 'مقبوضات  (بدون المطعم)'}</span>
-          <p className="text-2xl font-black text-emerald-700 font-mono">{fmt(totalRevenueWithResto)} د.ت</p>
-          <span className="text-[10px] text-emerald-600 font-bold">نقداً {hideRestrictedModules ? 'فقط' : '(باستثناء إيرادات المطعم)'}</span>
+          <span className="text-xs font-bold text-emerald-800 block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
+          <p className="text-2xl font-black text-emerald-700 font-mono">{fmt(revenueSansRepas)} د.ت</p>
+          <span className="text-[10px] text-emerald-600 font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
+        </div>
+
+        {canteenEnabled && !hideRestrictedModules && (
+          <div className="bg-orange-50/60 p-5 rounded-3xl border border-orange-200/80 shadow-xs space-y-1">
+            <span className="text-xs font-bold text-orange-800 block">إيرادات المطعم</span>
+            <p className="text-2xl font-black text-orange-600 font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-orange-600 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
+          </div>
+        )}
+
+        {formationsEnabled && !hideRestrictedModules && (
+          <div className="bg-indigo-50/60 p-5 rounded-3xl border border-indigo-200/80 shadow-xs space-y-1">
+            <span className="text-xs font-bold text-indigo-800 block">التكوينات والدورات</span>
+            <p className="text-2xl font-black text-indigo-600 font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-indigo-600 font-bold">حسب الشهر</span>
+          </div>
+        )}
+
+        <div className="bg-[#E0EFF1]/60 p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
+          <span className="text-xs font-bold text-[#14464E] block">مبالغ الشيكات القادمة</span>
+          <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(allPendingChequeTotal)} د.ت</p>
+          <span className="text-[10px] text-[#17555F] font-bold">كل الشيكات غير المحصلة (كل الفترات)</span>
         </div>
 
         <div className="bg-red-50/60 p-5 rounded-3xl border border-red-200/80 shadow-xs space-y-1">
@@ -721,16 +922,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <span className="text-[10px] text-red-500 font-bold">فواتير الفترة المختارة</span>
         </div>
 
-        <div className="bg-[#F2F8F9]/60 p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
-          <span className="text-xs font-bold text-[#103840] block">الصافي المالي للفترة</span>
-          <p className="text-2xl font-black text-[#103840] font-mono">{fmt(netProfit)} د.ت</p>
-          <span className="text-[10px] text-[#17555F] font-bold">فارق الميزانية للفترة المحددة</span>
-        </div>
-
-        <div className="bg-[#E0EFF1]/60 p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
-          <span className="text-xs font-bold text-[#14464E] block">مبالغ الشيكات القادمة</span>
-          <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(filteredPendingChequeTotal)} د.ت</p>
-          <span className="text-[10px] text-[#17555F] font-bold">شيكات لم يتم تحصيلها بعد</span>
+        <div className="bg-[#103840] p-5 rounded-3xl border border-[#C3E0E4]/80 shadow-xs space-y-1">
+          <span className="text-xs font-bold text-[#BFE8EE] block">الصافي المالي للفترة</span>
+          <p className="text-2xl font-black text-white font-mono">{fmt(netProfit)} د.ت</p>
+          <span className="text-[10px] text-[#9FD6DF] font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
         </div>
       </div>
 
@@ -800,10 +995,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           }`}
         >
           📋 التحصيل بالشيكات
-          {filteredPendingChequePayments.length > 0 && (
+          {pendingChequeCount > 0 && (
             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
               activeTab === 'cheques' ? 'bg-white/20 text-white' : 'bg-[#E0EFF1] text-[#257C86]'
-            }`}>{filteredPendingChequePayments.length}</span>
+            }`}>{pendingChequeCount}</span>
           )}
         </button>
       </div>
@@ -1632,24 +1827,44 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 6: RESTAURANT MANAGEMENT */}
       {activeTab === 'restaurant' && (() => {
+        // Persisted "forfait ferme" closures. A month contributes a forfait only after it
+        // was closed via the «Clôturer le mois» button (end of month) — the amounts below
+        // are snapshots, not live computations.
+        const closures = mealForfaitClosures || [];
+        const activeClosure = (monthFilter !== 'all' && schoolYearFilter !== 'all')
+          ? closures.find(c => c.month === monthFilter && c.schoolYear === schoolYearFilter)
+          : null;
+        const closureAmountForStudent = (studentId: string): number => {
+          let total = 0;
+          for (const c of closures) {
+            if (monthFilter !== 'all' && c.month !== monthFilter) continue;
+            if (schoolYearFilter !== 'all' && c.schoolYear !== schoolYearFilter) continue;
+            const it = (c.items || []).find(i => i?.studentId === studentId);
+            total += it?.amount ?? 0;
+          }
+          return total;
+        };
         // Calculate detailed restaurant stats
         const restoStudents = filteredStudents.map(s => {
           const f = getFeesForYear(settings, s.academicYear || getCurrentAcademicYear());
+          const datePrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
           const attendances = (s.mealAttendances || []).filter(a => {
-            if (monthFilter === 'all') return true;
-            return a.date.startsWith(monthFilter);
+            if (!datePrefix) return true;
+            return a.date.startsWith(datePrefix);
           });
           const subscriptionMeals = attendances.filter(a => a.type === 'subscription');
           const unitMeals = attendances.filter(a => a.type === 'unit');
-          const subPayments = (s.payments || []).filter(p =>
-            p.service === 'Repas' &&
-            (monthFilter === 'all' || p.month.includes(monthFilter)) &&
-            (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || s.academicYear === schoolYearFilter)
-          );
+          const subPayments = (s.payments || []).filter(p => {
+            if (p.service !== 'Repas') return false;
+            if (schoolYearFilter !== 'all' && !p.month.includes(schoolYearFilter) && s.academicYear !== schoolYearFilter) return false;
+            if (monthFilter === 'all') return true;
+            if (p.month.includes(monthFilter)) return true;
+            if (datePrefix && p.month.startsWith(`Repas unitaire (${datePrefix}`)) return true;
+            return false;
+          });
           const grossPaid = subPayments.filter(p => !p.refund).reduce((sum, p) => sum + p.amountPaid, 0);
           const totalRefunded = Math.abs(subPayments.filter(p => p.refund).reduce((sum, p) => sum + p.amountPaid, 0));
           const totalMeals = subscriptionMeals.length + unitMeals.length;
-          const centerMargin = f.fraisParRepas - f.prixPlatTraiteur;
           const isEnrolled = s.mealSubscription?.active === true || s.enrolledServices?.meals === true;
           const monthlySubPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
           const latestMonthlyPayment = monthlySubPayments.length > 0
@@ -1669,11 +1884,27 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           );
 
           const allLunchMeals = attendances.filter(a => (!a.service || a.service === 'lunch'));
-          const studentTraiteurPart = allLunchMeals.reduce((sum, a) => {
-            const price = a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
-            return sum + price;
-          }, 0);
-          const studentCenterPart = (allLunchMeals.length * f.fraisParRepas) - studentTraiteurPart;
+          const traiteurPriceOf = (a: typeof allLunchMeals[number]) =>
+            a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
+          // Real cost owed to the traiteur: every plate served, paid or not.
+          const studentTraiteurPart = allLunchMeals.reduce((sum, a) => sum + traiteurPriceOf(a), 0);
+          // Margin is only earned on plates the student actually paid for.
+          const paidLunchMeals = allLunchMeals.filter(a => a.paid);
+          const studentPaidMargin = paidLunchMeals.reduce(
+            (sum, a) => sum + (f.fraisParRepas - traiteurPriceOf(a)), 0);
+
+          // Case C — prepaid subscription balance the student never consumed. The center only
+          // acquires it when the admin clicks «Clôturer le mois»; until then this is an estimate.
+          const paidMeals = attendances.filter(a => a.paid).length;
+          const unpaidMeals = attendances.length - paidMeals;
+          const unpaidSubscriptionMeals = subscriptionMeals.filter(a => !a.paid).length;
+          const unpaidUnitMeals = unitMeals.filter(a => !a.paid).length;
+          const subForfaitPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
+          const subGrossPaid = subForfaitPayments.filter(p => !p.refund).reduce((sum, p) => sum + p.amountPaid, 0);
+          const subRefunded = Math.abs(subForfaitPayments.filter(p => p.refund).reduce((sum, p) => sum + p.amountPaid, 0));
+          const forfaitEstimate = Math.max(0, (subGrossPaid - subRefunded) - subscriptionMeals.length * f.fraisParRepas);
+          // Amount actually acquired: comes from the persisted closure snapshot only.
+          const forfaitUnused = closureAmountForStudent(s.id);
 
           return {
             id: s.id,
@@ -1689,7 +1920,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             subscriptionMeals: subscriptionMeals.length,
             unitMeals: unitMeals.length,
             totalMeals,
-            centerPart: studentCenterPart,
+            paidMeals,
+            unpaidMeals,
+            unpaidSubscriptionMeals,
+            unpaidUnitMeals,
+            forfaitEstimate,
+            forfaitUnused,
+            subNetPaid: Math.max(0, subGrossPaid - subRefunded),
+            paidMargin: studentPaidMargin,
+            centerPart: studentPaidMargin + forfaitUnused,
             traiteurPart: studentTraiteurPart
           };
         }).filter(s => s.totalMeals > 0 || s.grossPaid > 0);
@@ -1699,11 +1938,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalPlatesConsumed = restoStudents.reduce((sum, s) => sum + s.totalMeals, 0);
         const totalSubMeals = restoStudents.reduce((sum, s) => sum + s.subscriptionMeals, 0);
         const totalUnitMeals = restoStudents.reduce((sum, s) => sum + s.unitMeals, 0);
+        const totalPaidMeals = restoStudents.reduce((sum, s) => sum + s.paidMeals, 0);
+        const totalUnpaidMeals = restoStudents.reduce((sum, s) => sum + s.unpaidMeals, 0);
+        const totalUnpaidSubMeals = restoStudents.reduce((sum, s) => sum + s.unpaidSubscriptionMeals, 0);
+        const totalUnpaidUnitMeals = restoStudents.reduce((sum, s) => sum + s.unpaidUnitMeals, 0);
+        // Estimated forfait if the month were closed right now (preview before closing).
+        const totalForfaitEstimate = restoStudents.reduce((sum, s) => sum + s.forfaitEstimate, 0);
+        // Forfait actually acquired — snapshot from closed months only.
+        const totalForfaitUnused = restoStudents.reduce((sum, s) => sum + s.forfaitUnused, 0);
         const prixPlat = settings?.fees?.fraisParRepas ?? 8;
         const prixTraiteur = isInHouseKitchen ? 0 : (settings?.fees?.prixPlatTraiteur ?? 6);
         const centerMarginPerPlate = isInHouseKitchen ? prixPlat : (prixPlat - prixTraiteur);
         const traiteurCost = restoStudents.reduce((sum, s) => sum + s.traiteurPart, 0);
-        const centerBenefit = totalSubscriptions - traiteurCost;
+        // Margin on paid plates + forfait acquired from closed months. Unpaid plates earn nothing.
+        const totalPaidMargin = restoStudents.reduce((sum, s) => sum + s.paidMargin, 0);
+        const centerBenefit = totalPaidMargin + totalForfaitUnused;
 
         const totalRestoPages = Math.ceil(restoStudents.length / pageSize) || 1;
         const currentRestoPage = Math.min(Math.max(1, restoPage), totalRestoPages);
@@ -1712,7 +1961,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         return (
           <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 text-center">
                 <div className="text-[10px] font-bold text-blue-700 mb-1">إجمالي الاشتراكات</div>
                 <div className="font-mono text-lg font-black text-blue-900">{fmt(totalSubscriptions)} د.ت</div>
@@ -1725,6 +1974,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <div className="font-mono text-lg font-black text-sky-900">{totalPlatesConsumed}</div>
                 <div className="text-[9px] text-sky-600 mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
               </div>
+              <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
+                <div className="text-[10px] font-bold text-amber-700 mb-1">وجبات غير مدفوعة</div>
+                <div className="font-mono text-lg font-black text-amber-900">{totalUnpaidMeals}</div>
+                <div className="text-[9px] text-amber-600 mt-1">
+                  {totalUnpaidMeals > 0
+                    ? `اشتراكي: ${totalUnpaidSubMeals} | وحدات: ${totalUnpaidUnitMeals}`
+                    : 'كل الوجبات مدفوعة'}
+                </div>
+              </div>
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
                 <div className="font-mono text-lg font-black text-red-900">{traiteurCost > 0 ? `${fmt(traiteurCost)} د.ت` : '0.000 د.ت'}</div>
@@ -1733,7 +1991,77 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
                 <div className="text-[10px] font-bold text-emerald-700 mb-1">ربح السنتر من الوجبات</div>
                 <div className="font-mono text-lg font-black text-emerald-900">{fmt(centerBenefit)} د.ت</div>
-                <div className="text-[9px] text-emerald-600 mt-1">{totalPlatesConsumed} × {fmt(centerMarginPerPlate)} د.ت</div>
+                <div className="text-[9px] text-emerald-600 mt-1">
+                  {totalPaidMeals} وجبة مدفوعة = {fmt(totalPaidMargin)} د.ت
+                  {totalForfaitUnused > 0 && ` + فرفي ${fmt(totalForfaitUnused)} د.ت`}
+                </div>
+              </div>
+            </div>
+
+            {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure */}
+            <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">🔒</span>
+                <div>
+                  <h4 className="font-extrabold text-amber-950 text-sm">الفرفي المكتسب (Forfait ferme)</h4>
+                  <p className="text-[11px] text-amber-700 font-medium max-w-xl">
+                    الرصيد المدفوع مسبقاً ولم يُستهلك يصبح ربحاً للسنتر <strong>فقط</strong> بعد إغلاق الشهر.
+                    الإغلاق يُسجّل لقطة ثابتة لا تتغيّر بعد ذلك.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-500 block font-bold">تقدير غير مكتسب</span>
+                  <span className="font-mono font-black text-slate-800 text-sm">{fmt(totalForfaitEstimate)} د.ت</span>
+                </div>
+                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-emerald-200 text-center">
+                  <span className="text-[10px] text-emerald-600 block font-bold">مكتسب فعلياً</span>
+                  <span className="font-mono font-black text-emerald-900 text-sm">{fmt(totalForfaitUnused)} د.ت</span>
+                </div>
+                {monthFilter !== 'all' && schoolYearFilter !== 'all' && (
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={!!activeClosure || !isAcademicMonthFinished(monthFilter, schoolYearFilter) || !onUpdateMealForfaitClosures}
+                      onClick={() => {
+                        if (!onUpdateMealForfaitClosures) return;
+                        const items = restoStudents
+                          .filter(s => s.forfaitEstimate > 0)
+                          .map(s => ({
+                            studentId: s.id,
+                            studentName: s.name,
+                            netPaid: s.subNetPaid,
+                            consumedSubscriptionMeals: s.subscriptionMeals,
+                            fraisParRepas: s.unitPrice,
+                            amount: s.forfaitEstimate
+                          }));
+                        const next: MealForfaitClosure = {
+                          id: `mfc_${crypto.randomUUID()}`,
+                          month: monthFilter,
+                          schoolYear: schoolYearFilter,
+                          createdAt: new Date().toISOString(),
+                          items
+                        };
+                        // Replace any prior closure for the same month/year rather than stacking.
+                        const existing = closures.filter(c => !(c.month === monthFilter && c.schoolYear === schoolYearFilter));
+                        onUpdateMealForfaitClosures([...existing, next]);
+                        toast.success(`تم إغلاق شهر ${monthFilter} — الفرفي المكتسب: ${fmt(items.reduce((sum, i) => sum + i.amount, 0))} د.ت`);
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {activeClosure ? 'الشهر مقفل ✓' : `إغلاق شهر ${monthFilter}`}
+                    </button>
+                    {!activeClosure && !isAcademicMonthFinished(monthFilter, schoolYearFilter) && (
+                      <span className="text-[9px] text-amber-600 font-bold">الزر يتفعّل عند نهاية الشهر</span>
+                    )}
+                    {activeClosure && (
+                      <span className="text-[9px] text-slate-500 font-bold">
+                        {new Date(activeClosure.createdAt).toLocaleDateString('fr-FR')} — {activeClosure.items?.length ?? 0} تلميذ
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1751,15 +2079,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
             {/* Goûter Summary in Tab 6 */}
             {(() => {
+              // Attendance dates are ISO (YYYY-MM-DD); monthFilter is a French month name,
+              // so it must be resolved to a calendar prefix before comparing.
+              const gouterPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
+              const countGouter = (service: MealServiceType) => filteredStudents.reduce(
+                (sum, s) => sum + (s.mealAttendances || []).filter(a => {
+                  if (gouterPrefix && !a.date.startsWith(gouterPrefix)) return false;
+                  return a.service === service;
+                }).length, 0);
               const gouterPaymentsTotal = filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0);
-              const gouterMatinCount = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a => {
-                if (monthFilter !== 'all' && !a.date.startsWith(monthFilter)) return false;
-                return a.service === 'gouter_matin';
-              }).length, 0);
-              const gouterSoirCount = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a => {
-                if (monthFilter !== 'all' && !a.date.startsWith(monthFilter)) return false;
-                return a.service === 'gouter_apres_midi';
-              }).length, 0);
+              const gouterMatinCount = countGouter('gouter_matin');
+              const gouterSoirCount = countGouter('gouter_apres_midi');
               const gouterSubscribersCount = filteredStudents.filter(s => s.enrolledServices?.gouterMatin || s.enrolledServices?.gouterSoir || s.enrolledServices?.gouterBoth).length;
 
               return (
@@ -1808,8 +2138,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <th className="p-3 text-center">اشتراكي</th>
                       <th className="p-3 text-center">وحدات</th>
                       <th className="p-3 text-center">المجموع</th>
+                      <th className="p-3 text-center text-amber-700">غير مدفوعة</th>
                       <th className="p-3 text-center text-blue-700">المدفوع</th>
                       <th className="p-3 text-center text-red-600">المسترجع</th>
+                      <th className="p-3 text-center text-amber-800">الفرفي</th>
                       <th className="p-3 text-center text-emerald-700">حصة السنتر</th>
                       <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
                     </tr>
@@ -1817,7 +2149,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <tbody className="divide-y divide-slate-100">
                     {paginatedResto.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400 font-bold">لا تلاميذ في هذه الفترة</td>
+                        <td colSpan={12} className="p-8 text-center text-slate-400 font-bold">لا تلاميذ في هذه الفترة</td>
                       </tr>
                     ) : (
                       paginatedResto.map(s => (
@@ -1834,8 +2166,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-center font-mono font-bold text-blue-700">{s.subscriptionMeals}</td>
                           <td className="p-3 text-center font-mono font-bold text-sky-700">{s.unitMeals}</td>
                           <td className="p-3 text-center font-mono font-black text-slate-900">{s.totalMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-amber-700">{s.unpaidMeals > 0 ? s.unpaidMeals : '—'}</td>
                           <td className="p-3 text-center font-mono font-bold text-blue-700">{fmt(s.grossPaid)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-600">{s.totalRefunded > 0 ? `-${fmt(s.totalRefunded)} د.ت` : '—'}</td>
+                          <td className="p-3 text-center font-mono font-bold">
+                            {s.forfaitUnused > 0 ? (
+                              <span className="text-emerald-700">{fmt(s.forfaitUnused)} د.ت</span>
+                            ) : s.forfaitEstimate > 0 ? (
+                              <span className="text-slate-400" title="تقدير — يصبح مكتسباً بعد إغلاق الشهر">({fmt(s.forfaitEstimate)})</span>
+                            ) : '—'}
+                          </td>
                           <td className="p-3 text-center font-mono font-bold text-emerald-700">{fmt(s.centerPart)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
                         </tr>

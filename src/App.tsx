@@ -43,6 +43,7 @@ import {
   StudentTimeSheet,
   Formation,
   CenterTenant,
+  MealForfaitClosure,
   initialCenterSettings,
   initialStudentFeeSet,
   APP_SUBJECTS,
@@ -66,7 +67,9 @@ import {
   saveRevisionSeances, 
   saveStudentTimeSheets,
   saveFormations,
-  saveSettings, 
+  saveMealForfaitClosures,
+  fetchMealForfaitClosures,
+  saveSettings,
   createStudentApi,
   updateStudentApi,
   deleteStudentApi,
@@ -172,6 +175,9 @@ export default function App() {
   const [revisionSeances, setRevisionSeances] = useState<RevisionSeance[]>([]);
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
+  // Meal "forfait ferme" closures — loaded separately from the main DB snapshot because
+  // they live in their own tables and are only read by the finance module.
+  const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
 
   useEffect(() => {
     document.title = settings?.centerName || 'المركز';
@@ -250,6 +256,15 @@ export default function App() {
       })
       .finally(() => {
         if (!cancelled) setIsBootLoading(false);
+      });
+    // Non-blocking: closures are supplementary finance data. A failure here must not
+    // hold up (or fail) the boot, so it is fetched alongside and silently defaults to [].
+    fetchMealForfaitClosures()
+      .then((closures) => {
+        if (!cancelled) setMealForfaitClosures(closures);
+      })
+      .catch(() => {
+        if (!cancelled) setMealForfaitClosures([]);
       });
     return () => {
       cancelled = true;
@@ -410,6 +425,11 @@ export default function App() {
   const handleUpdateRevisionSeances = (updated: RevisionSeance[]) => {
     setRevisionSeances(updated);
     commitDomain(() => saveRevisionSeances(updated));
+  };
+
+  const handleUpdateMealForfaitClosures = (updated: MealForfaitClosure[]) => {
+    setMealForfaitClosures(updated);
+    commitDomain(() => saveMealForfaitClosures(updated));
   };
 
   const handleUpdateStudentTimeSheets = (updated: StudentTimeSheet[]) => {
@@ -750,26 +770,29 @@ export default function App() {
     );
   }
 
-  const isPlatformAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'platform_super_admin';
+  const isPlatformSuperAdmin = currentUser?.role === 'platform_super_admin';
 
-  const menuItems = [
-    { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
-    { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
-    { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-    !hideRestrictedModules && { id: 'studentTimeSheets', label: 'جداول التوقيت', icon: CalendarCheck },
-    { id: 'module3', label: 'تأطير Étude', icon: Clock },
-    !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
-    !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
-    !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
-    { id: 'module5', label: 'المكتبة', icon: BookOpen },
-    !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
-    { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
-    { id: 'module8', label: 'إدارة الموظفين', icon: Users },
-    { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
-    { id: 'dataAnalysis', label: 'تحليل البيانات', icon: BarChart3 },
-    { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
-    isPlatformAdmin && { id: 'platformAdmin', label: 'إدارة المنصة (SaaS)', icon: ShieldCheck },
-  ].filter(Boolean) as { id: string; label: string; icon: any }[];
+  // Platform super admin sees ONLY the SaaS platform management interface.
+  // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
+  const menuItems = isPlatformSuperAdmin
+    ? [{ id: 'platformAdmin', label: 'إدارة المنصة (SaaS)', icon: ShieldCheck }]
+    : [
+        { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
+        { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
+        { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
+        !hideRestrictedModules && { id: 'studentTimeSheets', label: 'جداول التوقيت', icon: CalendarCheck },
+        { id: 'module3', label: 'تأطير Étude', icon: Clock },
+        !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
+        !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
+        !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        { id: 'module5', label: 'المكتبة', icon: BookOpen },
+        !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
+        { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
+        { id: 'module8', label: 'إدارة الموظفين', icon: Users },
+        { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
+        { id: 'dataAnalysis', label: 'تحليل البيانات', icon: BarChart3 },
+        { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
+      ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
 
   return (
@@ -1087,6 +1110,8 @@ export default function App() {
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
                   enabledModules={currentCenter?.enabledModules as string[] | undefined}
+                  mealForfaitClosures={mealForfaitClosures}
+                  onUpdateMealForfaitClosures={handleUpdateMealForfaitClosures}
                 />
               )}
 
@@ -1133,7 +1158,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'platformAdmin' && isPlatformAdmin && (
+              {activeTab === 'platformAdmin' && isPlatformSuperAdmin && (
                 <PlatformAdminDashboard />
               )}
             </motion.div>
