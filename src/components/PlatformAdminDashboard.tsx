@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ShieldCheck, Building2, Users, Clock, AlertTriangle,
-  CheckCircle2, PauseCircle, XCircle, Plus, RefreshCw,
-  ChevronDown, Mail, Phone, FileText, Loader2,
-  CalendarClock, Layers, Trash2, Edit3, Send, Check, X
+  ShieldCheck, Building2, Clock,
+  CheckCircle2, PauseCircle, Plus, RefreshCw,
+  CalendarClock, Layers, Trash2, Check, X, Loader2,
+  Mail, Phone, FileText
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
@@ -394,13 +394,12 @@ export default function PlatformAdminDashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* KPI Cards - Only center metrics, no student/staff counts */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
           { label: 'Total Centres', value: centers.length, icon: Building2, color: 'bg-slate-50 border-slate-200' },
           { label: 'Actifs', value: activeCenters, icon: CheckCircle2, color: 'bg-emerald-50 border-emerald-200' },
           { label: 'En Essai', value: trialCenters, icon: Clock, color: 'bg-amber-50 border-amber-200' },
-          { label: 'Élèves Total', value: totalStudents, icon: Users, color: 'bg-blue-50 border-blue-200' },
         ].map(kpi => (
           <div key={kpi.label} className={`rounded-2xl border p-4 ${kpi.color}`}>
             <kpi.icon className="h-5 w-5 text-slate-400 mb-2" />
@@ -452,11 +451,6 @@ export default function PlatformAdminDashboard() {
                       {STATUS_LABEL[c.status] || c.status}
                     </span>
                     <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 capitalize">{c.plan}</span>
-                    {c.studentCount !== undefined && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                        {c.studentCount} élèves
-                      </span>
-                    )}
                   </div>
                 </div>
 
