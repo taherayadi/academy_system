@@ -1,4 +1,4 @@
-import { Env, json, validateSession, DEFAULT_CENTER_ID } from '../_lib';
+import { Env, json, validateSession, DEFAULT_CENTER_ID, mapCenterRow } from '../_lib';
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -17,17 +17,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const centerId = user.center_id || session.centerId || DEFAULT_CENTER_ID;
     let center = null;
     if (centerId) {
-      center = await env.DB
+      const row = await env.DB
         .prepare('SELECT * FROM centers WHERE id = ?')
         .bind(centerId)
         .first<any>();
-      if (center && center.enabled_modules && typeof center.enabled_modules === 'string') {
-        try {
-          center.enabled_modules = JSON.parse(center.enabled_modules);
-        } catch {
-          center.enabled_modules = [];
-        }
-      }
+      // Same camelCase mapping as /api/centers (client reads enabledModules).
+      if (row) center = mapCenterRow(row);
     }
 
     return json({

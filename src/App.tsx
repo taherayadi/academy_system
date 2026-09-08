@@ -111,6 +111,24 @@ import logo from './assets/logo.png';
 import brandIcon from './assets/icon.png';
 
 
+// Map sidebar tabs to SaaS module keys. A center admin only sees the tabs whose
+// module is enabled for their center (centers.enabled_modules, chosen by the
+// platform admin when creating the center or editing its modules).
+const TAB_MODULE: Record<string, string> = {
+  module1: 'scolaire',            // تسجيل التلاميذ
+  module2: 'scolaire',            // المتابعة الدراسية
+  studentTimeSheets: 'studentTimeSheets', // جداول التوقيت (Jd. Horaires)
+  module3: 'etude',               // تأطير Étude
+  module4: 'coursParticuliers',   // الدروس الخصوصية
+  module4b: 'revision',           // حصة مراجعة
+  formations: 'formations',       // التكوينات والدورات
+  module5: 'bibliotheque',        // المكتبة
+  module6: 'cantine',             // إدارة الوجبات
+  moduleBus: 'transport',         // خطة الحافلة
+  module7: 'finance',             // المنظومة المالية
+  module8: 'staff'                // إدارة الموظفين
+};
+
 export default function App() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -161,11 +179,31 @@ export default function App() {
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
+  // ── SaaS module gating ──
+  // Only the modules enabled for the connected center are visible/accessible.
+  // Without center data (legacy default center, platform super admin) → all.
+  const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
+  const hasCenterModule = (tabId: string): boolean => {
+    const moduleKey = TAB_MODULE[tabId];
+    if (!moduleKey) return true; // dashboard / dataAnalysis / settings — always available
+    if (isPlatformSuperAdmin || centerModuleKeys.length === 0) return true;
+    return centerModuleKeys.includes(moduleKey);
+  };
+
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
       setActiveTab('module1');
     }
   }, [hideRestrictedModules, activeTab]);
+
+  // If the active tab belongs to a module not enabled for this center (e.g. the
+  // platform admin changed the modules after login), fall back to the dashboard
+  // so a disabled module can never be opened.
+  useEffect(() => {
+    if (currentUser && !isPlatformSuperAdmin && !hasCenterModule(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [currentUser, isPlatformSuperAdmin, currentCenter, activeTab]);
 
   // Keep active tab in sync with user role
   useEffect(() => {
@@ -823,12 +861,15 @@ export default function App() {
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
+  // SaaS gating: keep only the tabs allowed for this center's subscription.
+  const visibleMenuItems = menuItems.filter(item => hasCenterModule(item.id));
+
 
   return (
     <div className="min-h-screen bg-[#FCFAF6] flex flex-col md:flex-row font-sans text-slate-800" style={{ direction: 'rtl' }}>
       
       {/* MOBILE HEADER */}
-      <header className="md:hidden bg-white border-b border-[#257C86]/20 text-slate-900 p-4 flex justify-between items-center shadow-xs no-print">
+      <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
             <img src={isPlatformSuperAdmin ? brandIcon : logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
@@ -861,9 +902,9 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="md:hidden absolute top-[72px] right-0 left-0 bg-white border-b border-[#257C86]/20 z-40 p-4 space-y-2 shadow-xl no-print"
+            className="md:hidden absolute top-[72px] right-0 left-0 bg-white border-b border-slate-200/70 z-40 p-4 space-y-2 shadow-xl shadow-slate-900/10 no-print"
           >
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const IconComp = item.icon;
               return (
                 <button
@@ -874,8 +915,8 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-[#257C86] text-white' 
-                      : 'text-slate-600 hover:bg-[#257C86]/10'
+                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' 
+                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
                   <IconComp className="h-4 w-4 shrink-0" />
@@ -888,13 +929,13 @@ export default function App() {
       </AnimatePresence>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className={`hidden md:flex flex-col justify-between bg-white text-slate-800 min-h-screen p-3 xl:p-4 border-l border-[#257C86]/20 shadow-xs shrink-0 no-print transition-all duration-300 ${sidebarCollapsed ? 'w-16 xl:w-20' : 'w-60 xl:w-72'}`}>
+      <aside className={`hidden md:flex flex-col justify-between bg-white text-slate-800 min-h-screen p-3 xl:p-4 border-l border-slate-200/70 shadow-lg shadow-slate-900/[0.04] shrink-0 no-print transition-all duration-300 ${sidebarCollapsed ? 'w-16 xl:w-20' : 'w-60 xl:w-72'}`}>
         <div className="space-y-3">
 
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/15 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
                 <img src={isPlatformSuperAdmin ? brandIcon : logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
@@ -927,7 +968,7 @@ export default function App() {
 
           {/* Navigation Items */}
           <nav className="space-y-1">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const IconComp = item.icon;
               const active = activeTab === item.id;
               return (
@@ -939,8 +980,8 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
-                      : 'text-slate-600 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/30' 
+                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
                   <IconComp className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
@@ -960,7 +1001,7 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-[#8DC760] shadow-sm shadow-[#8DC760]/60 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
                 {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
@@ -1005,6 +1046,7 @@ export default function App() {
                   openAddStaff={() => setActiveTab('module8')}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
+                  isModuleAllowed={hasCenterModule}
                 />
               )}
 

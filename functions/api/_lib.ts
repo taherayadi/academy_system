@@ -1225,3 +1225,35 @@ export async function createSinglePayment(db: D1Database, payment: any, centerId
 export async function deleteSinglePayment(db: D1Database, paymentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   await db.prepare('DELETE FROM payments WHERE id = ?').bind(paymentId).run();
 }
+
+
+// ─── Center tenant row mapping (snake_case DB row → camelCase API shape) ───
+// Used by /api/auth/login and /api/auth/me so the client receives the same
+// CenterTenant shape as /api/centers. Without this mapping the client sees
+// `enabled_modules` (snake_case) and `enabledModules` stays undefined — which
+// made every module visible to center admins regardless of their plan.
+export function mapCenterRow(c: any): any {
+  let modules: string[] = [];
+  try {
+    modules = typeof c.enabled_modules === 'string' ? JSON.parse(c.enabled_modules) : (c.enabled_modules || []);
+  } catch {
+    modules = [];
+  }
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug || '',
+    phoneNumber: c.phone_number || '',
+    locationCity: c.location_city || '',
+    plan: c.plan || 'starter',
+    enabledModules: Array.isArray(modules) ? modules : [],
+    mealOperatingMode: c.meal_operating_mode || 'external_traiteur',
+    status: c.status || 'active',
+    trialEndsAt: c.trial_ends_at || null,
+    subscriptionEndsAt: c.subscription_ends_at || null,
+    billingCycle: c.billing_cycle || 'monthly',
+    monthlyPrice: c.monthly_price !== null && c.monthly_price !== undefined ? Number(c.monthly_price) : 0,
+    centerType: c.center_type || '',
+    createdAt: c.created_at || Date.now()
+  };
+}

@@ -1,4 +1,4 @@
-import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID } from '../_lib';
+import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -53,17 +53,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     let center = null;
     if (centerId) {
-      center = await env.DB
+      const row = await env.DB
         .prepare('SELECT * FROM centers WHERE id = ?')
         .bind(centerId)
         .first<any>();
-      if (center && center.enabled_modules && typeof center.enabled_modules === 'string') {
-        try {
-          center.enabled_modules = JSON.parse(center.enabled_modules);
-        } catch {
-          center.enabled_modules = [];
-        }
-      }
+      // Map the raw DB row (snake_case) to the camelCase CenterTenant shape —
+      // the client reads `enabledModules` to decide which modules a center
+      // admin can see in the menu.
+      if (row) center = mapCenterRow(row);
     }
 
     const headers = new Headers();
