@@ -109,18 +109,18 @@ function isAcademicMonthFinished(monthName: string, schoolYear: string): boolean
   return new Date() >= new Date(calYear, num, 1);
 }
 
-// A school year runs Septembre (start year) → Mai (end year). A date (YYYY-MM-DD)
-// matches a school year only when its month falls inside that academic calendar:
-//   Janvier..Mai (01-05) belong to the END year, Septembre..Décembre (09-12) to the START year.
-// Juin/Juillet/Août (06-08) come after the school year finished in Mai — they belong to no
-// school year, so they only appear when the year filter is 'all'.
+// A school year runs Septembre (start year) → Mai (end year), plus summer June, July, August.
+// Months 9..12 belong to the start year, months 1..7 belong to the end year.
+// Month 8 (August) matches either start year (preparations) or end year (closure).
 function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   if (!date || schoolYear === 'all') return true;
   const [y, m] = date.split('-').map(Number);
   const [startYear, endYear] = schoolYear.split('/').map(Number);
   if (!y || !m || !startYear || !endYear) return false;
-  if (m >= 6 && m <= 8) return false;
-  return (m >= 9 && m <= 12) ? y === startYear : y === endYear;
+  if (m >= 9 && m <= 12) return y === startYear;
+  if (m >= 1 && m <= 7) return y === endYear;
+  if (m === 8) return y === startYear || y === endYear;
+  return false;
 }
 
 export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
@@ -439,10 +439,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Filtered Payments by Year & Month & Search
   const filteredPayments = allPaymentsMerged.filter(p => {
     const matchesYear = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
-    const matchesMonth = monthFilter === 'all' || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr')) || (() => {
-      const datePrefix = monthFilterToDatePrefix(monthFilter, schoolYearFilter);
-      return datePrefix ? p.month.toLowerCase().startsWith(`repas unitaire (${datePrefix}`) : false;
-    })();
+    const matchesMonth = monthFilter === 'all' 
+      || (p.date && monthFromDate(p.date) === monthFilter)
+      || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr')) 
+      || (() => {
+        const datePrefix = monthFilterToDatePrefix(monthFilter, schoolYearFilter);
+        return datePrefix ? p.month.toLowerCase().startsWith(`repas unitaire (${datePrefix}`) : false;
+      })();
     const matchesSearch = !searchTerm || p.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || p.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesYear && matchesMonth && matchesSearch;
   });
@@ -633,7 +636,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Annual inscription/subscription payments. Selected only by school year — never by month:
   // the total stays the same whatever the month filter.
   const annualInscriptionPayments = allPaymentsMerged.filter(p => {
-    const isAnnual = p.month.startsWith('Annuel');
+    const isAnnual = String(p.month || '').startsWith('Annuel') || String(p.service || '').startsWith('Inscription');
     if (!isAnnual) return false;
     const matchesYear = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
     const matchesSearch = !searchTerm || p.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || p.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
@@ -653,11 +656,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return gross - pendingCheque;
   })();
 
-  // Card: Revenue without repas, without annual inscriptions, without formations,
+  // Card: Revenue without repas, without gouter, without annual inscriptions, without formations,
   // without pending cheques — filtered by the selected month.
   const revenueSansRepas = (() => {
     const rows = filteredPayments.filter(p =>
-      p.service !== 'Repas' && p.service !== 'Formation' && !String(p.month).startsWith('Annuel')
+      p.service !== 'Repas' &&
+      p.service !== 'Goûter' &&
+      p.service !== 'Formation' &&
+      !String(p.service || '').startsWith('Inscription') &&
+      !String(p.month || '').startsWith('Annuel')
     );
     const gross = rows.reduce((s, p) => {
       const rec = p as any;
@@ -1219,8 +1226,20 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 3: PAYMENT HISTORY */}
       {activeTab === 'history' && (() => {
+        const historyServiceOptions = (hideRestrictedModules 
+          ? serviceOptions.filter(s => !RESTRICTED_SERVICES.includes(s.value)) 
+          : serviceOptions
+        ).filter(s => s.value !== 'Repas' && s.value !== 'Goûter' && s.value !== 'Formation' && !s.value.startsWith('Inscription'));
+
         const historyPayments = (serviceFilter === 'all' ? filteredPayments : filteredPayments.filter(p => p.service === serviceFilter))
-          .filter(p => !String(p.month || '').startsWith('Annuel') && !String(p.month || '').startsWith('Repas unitaire') && p.service !== 'Formation');
+          .filter(p => 
+            !String(p.month || '').startsWith('Annuel') && 
+            !String(p.month || '').startsWith('Repas unitaire') && 
+            !String(p.service || '').startsWith('Inscription') &&
+            p.service !== 'Formation' &&
+            p.service !== 'Repas' &&
+            p.service !== 'Goûter'
+          );
 
         const chequeGroups: Record<string, { chequeNumber?: string; chequeDate?: string; chequePaid?: boolean; payments: typeof historyPayments; totalAmount: number; receiptNumbers: string[]; studentNames: string[] }> = {};
         const nonChequePayments: typeof historyPayments = [];
@@ -1264,7 +1283,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
                 >
                   <option value="all">جميع الخدمات</option>
-                  {(hideRestrictedModules ? serviceOptions.filter(s => !RESTRICTED_SERVICES.includes(s.value)) : serviceOptions).map(svc => (
+                  {historyServiceOptions.map(svc => (
                     <option key={svc.value} value={svc.value}>{svc.label}</option>
                   ))}
                 </select>
@@ -1524,8 +1543,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       {activeTab === 'formations' && (() => {
         const formationRecords = formationPayments.filter(p => {
           const yMatch = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
-          const mMatch = monthFilter === 'all' || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr'));
-          return yMatch && mMatch;
+          const mMatch = monthFilter === 'all' 
+            || (p.date && monthFromDate(p.date) === monthFilter)
+            || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr'));
+          const sMatch = !searchTerm || p.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || (p.receiptNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
+          return yMatch && mMatch && sMatch;
         });
         const formTotal = formationRecords.reduce((s, p) => {
           const rec = p as any;
