@@ -88,12 +88,12 @@ const MONTH_TO_NUM: Record<string, number> = {
 
 // Meal attendances are stored as YYYY-MM-DD, so a French month name has to be
 // translated into a date prefix before it can be matched against them.
-// Septembre..Décembre belong to the start year, Janvier..Août to the end year.
+// June..December (6..12) belong to the start year, January..May (1..5) to the end year.
 function monthFilterToDatePrefix(monthName: string, schoolYear: string): string | null {
   const num = MONTH_TO_NUM[monthName];
   if (!num) return null;
   const [startYear, endYear] = schoolYear.split('/');
-  const year = num >= 9 ? startYear : endYear;
+  const year = num >= 6 ? startYear : endYear;
   if (!year) return null;
   return `${year}-${String(num).padStart(2, '0')}`;
 }
@@ -104,22 +104,21 @@ function isAcademicMonthFinished(monthName: string, schoolYear: string): boolean
   if (!num) return false;
   const [startYear, endYear] = schoolYear.split('/').map(Number);
   if (!startYear || !endYear) return false;
-  const calYear = num >= 9 ? startYear : endYear;
+  const calYear = num >= 6 ? startYear : endYear;
   // Month is finished when now is at/after the first day of the following month.
   return new Date() >= new Date(calYear, num, 1);
 }
 
-// A school year runs Septembre (start year) → Mai (end year), plus summer June, July, August.
-// Months 9..12 belong to the start year, months 1..7 belong to the end year.
-// Month 8 (August) matches either start year (preparations) or end year (closure).
+// A school year finishes in May (month 5).
+// Months 6..12 (June through December) belong to the upcoming school year (e.g. 06/2026..12/2026 -> 2026/2027).
+// Months 1..5 (January through May) belong to the active school year (e.g. 01/2027..05/2027 -> 2026/2027).
 function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   if (!date || schoolYear === 'all') return true;
   const [y, m] = date.split('-').map(Number);
   const [startYear, endYear] = schoolYear.split('/').map(Number);
   if (!y || !m || !startYear || !endYear) return false;
-  if (m >= 9 && m <= 12) return y === startYear;
-  if (m >= 1 && m <= 7) return y === endYear;
-  if (m === 8) return y === startYear || y === endYear;
+  if (m >= 6 && m <= 12) return y === startYear;
+  if (m >= 1 && m <= 5) return y === endYear;
   return false;
 }
 
