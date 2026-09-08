@@ -139,7 +139,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Revision': 'revision',
     'Formation': 'formations',
     'Bibliothèque': 'bibliotheque', 'Inscription Bibliothèque': 'bibliotheque',
-    'Repas': 'cantine', 'Goûter': 'cantine'
+    'Repas': 'cantine', 'Goûter': 'cantine',
+    'Assurance': 'coursParticuliers' // تأمين الدروس الخصوصية (كراس خارجي)
   };
   const serviceOptions = getServiceOptions(centerName).filter(s => {
     const moduleKey = SERVICE_MODULE[s.value];
@@ -1071,10 +1072,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-slate-700">1. المتابعة الدراسية:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Suivi)} د.ت</span>
               </div>
+            {hasModule('etude') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">2. دراسات {centerName}:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
+              )}
               {!hideRestrictedModules && coursPartEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3. مناب السنتر من الكورسات الخاصة:</span>
@@ -1093,20 +1096,24 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Formation)} د.ت</span>
                 </div>
               )}
+              {hasModule('bibliotheque') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">4. اشتراكات المكتبة:</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
+              )}
               {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
                 <div className="p-3 bg-teal-50 rounded-2xl border border-teal-200 flex justify-between font-bold">
                   <span className="text-teal-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
                   <span className="font-mono text-teal-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
                 </div>
               )}
+              {hasModule('coursParticuliers') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">5. رسوم التأمين المدرسي (Assurance):</span>
                 <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Assurance)} د.ت</span>
               </div>
+              )}
               {revenueByService.Refunds !== 0 && (
                 <div className="p-3 bg-red-50 rounded-2xl border border-red-200 flex justify-between font-bold">
                   <span className="text-red-700">6. استرجاعات / إرجاعات:</span>
