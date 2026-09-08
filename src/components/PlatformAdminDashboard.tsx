@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Building2, Clock,
   CheckCircle2, PauseCircle, Plus, RefreshCw,
-  CalendarClock, Layers, Trash2, Check, X, Loader2,
+  CalendarClock, Layers, Trash2, Check, X, Loader2, Upload,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
   Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
   ChevronLeft, ChevronRight, ImagePlus
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
+  uploadPlatformLogoApi,
   fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
   fetchPlatformBillingApi, fetchInvoicesApi, createInvoiceApi, updateInvoiceApi, deleteInvoiceApi,
   fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary
@@ -242,6 +243,43 @@ interface NewCenterModalProps {
 function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: NewCenterModalProps) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  React.useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const handleLogoSelect = (file?: File) => {
+    setLogoFile(file || null);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const uploadSelectedLogo = async (): Promise<string> => {
+    if (!logoFile) return form.logoUrl;
+    const url = await uploadPlatformLogoApi(logoFile);
+    setForm(current => ({ ...current, logoUrl: url }));
+    setLogoFile(null);
+    setLogoPreview(null);
+    return url;
+  };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setLogoUploading(true);
+    try {
+      await uploadSelectedLogo();
+      toast.success('Logo du centre téléchargé.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors du téléchargement du logo.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const [form, setForm] = useState(() => {
     // Base toujours incluse + modules demandés lors d'une conversion
     const requested = parseModules(initialData?.requestedModules);
@@ -279,7 +317,8 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     }
     setSaving(true);
     try {
-      await createCenterApi({ ...form, convertFromRequestId: convertRequestId });
+      const logoUrl = logoFile ? await uploadSelectedLogo() : form.logoUrl;
+      await createCenterApi({ ...form, logoUrl, convertFromRequestId: convertRequestId });
       toast.success('Centre créé avec succès !');
       onCreated();
       onClose();
@@ -314,17 +353,17 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
           {/* Centre info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Nom du centre *</label>
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
 
             {/* Type d'établissement */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Type d’établissement *</label>
               <div className="grid grid-cols-2 gap-3">
                 {CENTER_TYPES.map(ct => {
@@ -347,27 +386,52 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre (URL de l'image)</label>
-              <div className="flex items-center gap-2">
-                {form.logoUrl ? (
-                  <span className="h-10 w-10 rounded-xl border border-slate-200 bg-white p-0.5 overflow-hidden shrink-0">
-                    <img src={form.logoUrl} alt="" className="w-full h-full rounded-lg object-cover" onError={e => { e.currentTarget.style.display = 'none'; }} />
-                  </span>
-                ) : (
-                  <span className="h-10 w-10 rounded-xl bg-[#257C86]/10 flex items-center justify-center shrink-0">
-                    <ImagePlus className="h-4 w-4 text-[#257C86]" />
-                  </span>
-                )}
-                <input
-                  value={form.logoUrl}
-                  onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
-                  dir="ltr"
-                  placeholder="https://… (lien de l'image — optionnel)"
-                  className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition"
-                />
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+                  <img
+                    src={logoPreview || form.logoUrl || icon}
+                    alt="Logo du centre"
+                    className="w-full h-full rounded-xl object-cover bg-white"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      Choisir une image
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                        className="hidden"
+                        onChange={e => handleLogoSelect(e.target.files?.[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleLogoUpload}
+                      disabled={!logoFile || logoUploading}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/20 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      Télécharger et enregistrer
+                    </button>
+                    {(form.logoUrl || logoFile) && (
+                      <button
+                        type="button"
+                        onClick={() => { setForm(f => ({ ...f, logoUrl: '' })); setLogoFile(null); setLogoPreview(null); }}
+                        disabled={logoUploading}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400">PNG · JPG · WEBP · SVG · GIF — 2 Mo maximum. Le logo est envoyé à ImageKit avant la création du centre.</p>
+                </div>
               </div>
-              <p className="text-[11px] font-semibold text-slate-400 mt-1.5">Vide = logo par défaut. Le centre pourra aussi changer son logo depuis ses paramètres.</p>
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
@@ -404,7 +468,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 <input required type="email" value={form.directorEmail} onChange={e => setForm(f => ({ ...f, directorEmail: e.target.value }))}
                   className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Mot de passe initial *</label>
                 <input required type="password" minLength={6} value={form.directorPassword} onChange={e => setForm(f => ({ ...f, directorPassword: e.target.value }))}
                   className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />

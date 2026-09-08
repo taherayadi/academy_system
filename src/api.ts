@@ -342,6 +342,18 @@ export async function uploadCenterLogoApi(file: File): Promise<string> {
   return data.url;
 }
 
+/** Upload a logo selected by the platform admin before creating a center. */
+export async function uploadPlatformLogoApi(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/platform-upload-logo`, {
+    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
+  });
+  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
+  return data.url;
+}
+
 /** Save (or clear with '') the connected center's logo URL. */
 export async function saveCenterLogoApi(logoUrl: string): Promise<void> {
   const res = await fetch(`${API_BASE}/center-logo`, {
