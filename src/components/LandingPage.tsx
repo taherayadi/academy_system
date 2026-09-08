@@ -999,12 +999,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 <div className="grid sm:grid-cols-2 gap-3">
                   {BASE_MODULES.filter(m => m.price > 0).map(mod => (
                     <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl border border-[#257C86]/30 bg-white shadow-sm">
-                      <div className="p-2.5 rounded-xl bg-[#257C86]/10">
+                      <div className="p-2.5 rounded-xl bg-[#257C86]/10 flex-shrink-0">
                         <mod.icon className="h-5 w-5 text-[#257C86]" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-black text-slate-900 truncate">{mod.label}</div>
-                        <div className="text-[11px] font-semibold text-slate-500 truncate">{mod.description}</div>
+                        <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
+                        <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-base font-black text-[#257C86]">{mod.price}</div>
@@ -1052,8 +1052,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                           <mod.icon className="h-4 w-4 text-[#257C86]" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-black text-slate-900 truncate">{mod.label}</div>
-                          <div className="text-[11px] font-semibold text-slate-500 truncate">{mod.description}</div>
+                          <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
+                          <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
                           <div className={`text-sm font-black ${on ? 'text-[#257C86]' : 'text-slate-900'}`}>+{mod.price}</div>
@@ -1073,7 +1073,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             {/* ── Right : summary ── */}
             <div className="lg:sticky lg:top-24">
               <div className="rounded-3xl bg-white border border-slate-200/70 shadow-xl shadow-slate-900/5 overflow-hidden">
-                <div className="p-7 bg-gradient-to-b from-[#257C86]/[0.06] to-white">
+                <div className="p-5 sm:p-7 bg-gradient-to-b from-[#257C86]/[0.06] to-white">
                   <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-5">Récapitulatif</div>
 
                   {/* base line */}
@@ -1101,7 +1101,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         exit={{ opacity: 0 }}
                         className="text-xs font-semibold text-slate-400 py-2 pl-6"
                       >
-                        Aucun module additionnel — ajoutez-en à gauche pour composer votre offre.
+                        Aucun module additionnel — ajoutez des modules pour composer votre offre.
                       </motion.div>
                     )}
                     {addonKeys.map(key => {
