@@ -1153,6 +1153,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 2: CONSOLIDATED STUDENT LEDGER (ALL SERVICES SEPT -> MAI) */}
       {activeTab === 'studentLedger' && (() => {
+        // Colonnes de services affichées uniquement si le module est au plan
+        const showEtudeCol = hasModule('etude');
+        const showLibraryCol = hasModule('bibliotheque');
+        const showRepasCol = !hideRestrictedModules && hasModule('cantine');
+        const ledgerColCount = 4 + (showEtudeCol ? 1 : 0) + (showLibraryCol ? 1 : 0) + (showRepasCol ? 1 : 0);
+
         const ledgerStudents = filteredStudents.filter(st => {
           if (!searchTerm) return true;
           return `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1179,15 +1185,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     <th className="p-4">السنة الدراسية</th>
                     <th className="p-4">المستوى</th>
                     <th className="p-4">Suivi Scolaire</th>
-                    <th className="p-4">Étude {centerName}</th>
-                    <th className="p-4">Bibliothèque</th>
-                    {!hideRestrictedModules && <th className="p-4">Repas (مطعم)</th>}
+                    {showEtudeCol && <th className="p-4">Étude {centerName}</th>}
+                    {showLibraryCol && <th className="p-4">Bibliothèque</th>}
+                    {showRepasCol && <th className="p-4">Repas (مطعم)</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paginatedLedger.length === 0 ? (
                     <tr>
-                      <td colSpan={hideRestrictedModules ? 6 : 7} className="p-8 text-center text-slate-400">لا توجد بيانات مطابقة لشروط البحث.</td>
+                      <td colSpan={ledgerColCount} className="p-8 text-center text-slate-400">لا توجد بيانات مطابقة لشروط البحث.</td>
                     </tr>
                   ) : (
                     paginatedLedger.map(st => {
@@ -1204,13 +1210,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-4">
                             {hasSuiviPaid ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
                           </td>
-                          <td className="p-4">
-                            {hasTC ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
-                          </td>
-                          <td className="p-4">
-                            {hasLib ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
-                          </td>
-                          {!hideRestrictedModules && (
+                          {showEtudeCol && (
+                            <td className="p-4">
+                              {hasTC ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                            </td>
+                          )}
+                          {showLibraryCol && (
+                            <td className="p-4">
+                              {hasLib ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                            </td>
+                          )}
+                          {showRepasCol && (
                             <td className="p-4">
                               {hasMeal ? <span className="text-emerald-700">✓ مشترك</span> : <span className="text-slate-400">-</span>}
                             </td>
