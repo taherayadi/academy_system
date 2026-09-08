@@ -43,6 +43,7 @@ export interface DemoRequest {
   phone: string;
   estimatedSize?: string;
   requestedModules?: string[] | string;
+  centerType?: string; // 'jardin' | 'formation'
   message?: string;
   status: 'new' | 'contacted' | 'converted' | 'archived';
   notes?: string;

@@ -92,6 +92,21 @@ const REQ_TYPE_LABEL: Record<string, string> = {
   trial: 'Essai gratuit', demo: 'Démo guidée', info: 'Infos'
 };
 
+// The UI now offers Essai / Basic / Custom. "Basic" is stored as 'starter'
+// (the DB CHECK constraint only allows starter/growth/pro/custom).
+const PLAN_LABEL: Record<string, string> = {
+  starter: 'Basic',
+  basic: 'Basic',
+  growth: 'Growth',
+  pro: 'Pro',
+  custom: 'Custom'
+};
+
+const CENTER_TYPE_LABEL: Record<string, string> = {
+  jardin: 'Jardin d’enfant',
+  formation: 'Centre de formation'
+};
+
 function daysLeft(ts?: number | null): number | null {
   if (!ts) return null;
   return Math.ceil((ts - Date.now()) / 86400000);
@@ -207,9 +222,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               <select required value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#257C86]/30 cursor-pointer">
                 <option value="trial">Essai (14 j)</option>
-                <option value="starter">Starter</option>
-                <option value="growth">Growth</option>
-                <option value="pro">Pro</option>
+                <option value="basic">Basic</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
@@ -785,7 +798,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${STATUS_BADGE[c.status] || 'bg-slate-100 text-slate-600'}`}>
                       {STATUS_LABEL[c.status] || c.status}
                     </span>
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 capitalize">{c.plan}</span>
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">{PLAN_LABEL[c.plan] || c.plan}</span>
                   </div>
                 </div>
 
@@ -879,6 +892,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
                       {REQ_TYPE_LABEL[req.requestType] || req.requestType}
                     </span>
+                    {req.centerType && (
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${req.centerType === 'jardin' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                        {CENTER_TYPE_LABEL[req.centerType] || req.centerType}
+                      </span>
+                    )}
                   </div>
                 </div>
 

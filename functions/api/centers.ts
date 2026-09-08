@@ -103,10 +103,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const locationCity = String(body.locationCity || body.city || 'تونس').trim();
     // "trial" is not a valid `plan` value (CHECK constraint only allows starter/growth/pro/custom),
     // so a trial center is stored as plan='starter' with status='trial'.
+    // The UI now offers: Essai / Basic / Custom. "Basic" is stored as 'starter'
+    // (the DB CHECK does not include 'basic'); the admin UI displays 'starter' as "Basic".
     const rawPlan = String(body.plan || 'trial').trim();
     const requestedStatus = String(body.status || '').trim();
     const isTrial = rawPlan === 'trial' || requestedStatus === 'trial';
-    const plan = isTrial ? 'starter' : (rawPlan === '' ? 'starter' : rawPlan);
+    const normalizedPlan = rawPlan === 'basic' ? 'starter' : rawPlan; // basic → starter (storage)
+    const plan = isTrial ? 'starter' : (normalizedPlan === '' ? 'starter' : normalizedPlan);
     const status = requestedStatus || (isTrial ? 'trial' : 'active');
     const mealOperatingMode = String(body.mealOperatingMode || 'external_traiteur').trim();
     const trialDays = Number(body.trialDays) || 14;
@@ -247,7 +250,12 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { updates.push('location_city = ?'); binds.push(String(body.locationCity).trim()); }
-    if (body.plan !== undefined) { updates.push('plan = ?'); binds.push(String(body.plan).trim()); }
+    if (body.plan !== undefined) {
+      // "basic" is stored as 'starter' (DB CHECK only allows starter/growth/pro/custom)
+      const raw = String(body.plan).trim();
+      updates.push('plan = ?');
+      binds.push(raw === 'basic' ? 'starter' : raw);
+    }
     if (body.status !== undefined) { updates.push('status = ?'); binds.push(String(body.status).trim()); }
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.enabledModules !== undefined) {

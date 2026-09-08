@@ -34,29 +34,31 @@ function clickModuleToggle(label: string) {
   fireEvent.click(btn);
 }
 
+function fillForm(phone: string) {
+  fireEvent.change(screen.getByPlaceholderText('Ahmed Ben Ali'), { target: { value: 'Test User' } });
+  fireEvent.change(screen.getByPlaceholderText('Excellence Academy'), { target: { value: 'Test Academy' } });
+  fireEvent.change(screen.getByPlaceholderText('contact@academy.tn'), { target: { value: 'test@test.tn' } });
+  fireEvent.change(screen.getByPlaceholderText('20 123 456'), { target: { value: phone } });
+}
+
 describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)', () => {
   it('renders the hero and emphasises the base plan', () => {
     render(<LandingPage onOpenLogin={() => {}} centerName="Test Academy" />);
 
     expect(screen.getAllByText(/sous contrôle total/i).length).toBeGreaterThan(0);
-    // Base modules are highlighted in several sections
     expect(screen.getAllByText('Scolaire & Notes').length).toBeGreaterThan(1);
     expect(screen.getAllByText('Finance & Paiements').length).toBeGreaterThan(1);
-    // Base price mentioned
     expect(screen.getAllByText(/40 TND/).length).toBeGreaterThan(0);
-    // Nav + login
     expect(screen.getAllByText('Connexion').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Jd. Horaires as bundled (no tarif) and hides Bibliothèque', () => {
     render(<LandingPage onOpenLogin={() => {}} />);
 
-    // Jd. Horaires is on the landing as part of the base, marked as offered/included
     expect(screen.getAllByText(/Jd\. Horaires/i).length).toBeGreaterThan(1);
     expect(screen.getAllByText(/Offert avec la base|offert/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Inclus/i).length).toBeGreaterThan(0);
 
-    // Bibliothèque stays hidden
     expect(screen.queryByText('Bibliothèque')).toBeNull();
     expect(screen.queryByText('Prêts livres, inventaire')).toBeNull();
 
@@ -70,35 +72,52 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
   it('locks the base modules and only allows adding', () => {
     render(<LandingPage onOpenLogin={() => {}} />);
 
-    // Base is flagged as non-removable
     expect(screen.getAllByText(/Non retirable/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Toujours incluse/i).length).toBeGreaterThan(0);
-
-    // Default selection: 3 modules (scolaire + studentTimeSheets + finance)
     expect(screen.getAllByText(/3 modules au total/i).length).toBeGreaterThan(0);
 
-    // Adding an add-on module increases the count
     clickModuleToggle('Étude Surveillée');
     expect(screen.getAllByText(/4 modules au total/i).length).toBeGreaterThan(0);
   });
 
-  it('sends the selected modules (base incl. Jd. Horaires) with the demo request', async () => {
+  it('has no "Démo guidée" tab and offers the two request types', () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+    expect(screen.queryByText('Démo guidée')).toBeNull();
+    expect(screen.getAllByText('Essai gratuit').length).toBeGreaterThan(0);
+    expect(screen.getByText('Plus d’infos')).toBeTruthy();
+  });
+
+  it('requires the establishment type (jardin / formation)', () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+    fillForm('20123456');
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+    expect(screen.getByText(/Sélectionnez le type de votre établissement/i)).toBeTruthy();
+    expect(submitDemoRequestApi).not.toHaveBeenCalled();
+  });
+
+  it('rejects phone numbers that are not exactly 8 digits', () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+    fireEvent.click(screen.getByText('Jardin d’enfant'));
+    fillForm('20123'); // too short
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+    expect(screen.getByText(/exactement 8 chiffres/i)).toBeTruthy();
+    expect(submitDemoRequestApi).not.toHaveBeenCalled();
+  });
+
+  it('sends centerType, cleaned phone and modules with the demo request', async () => {
     render(<LandingPage onOpenLogin={() => {}} />);
 
-    // Add two add-on modules
     clickModuleToggle('Cantine & Repas');
-    clickModuleToggle('Transport Scolaire');
-
-    fireEvent.change(screen.getByPlaceholderText('Ahmed Ben Ali'), { target: { value: 'Test User' } });
-    fireEvent.change(screen.getByPlaceholderText('Excellence Academy'), { target: { value: 'Test Academy' } });
-    fireEvent.change(screen.getByPlaceholderText('contact@academy.tn'), { target: { value: 'test@test.tn' } });
-    fireEvent.change(screen.getByPlaceholderText('+216 XX XXX XXX'), { target: { value: '+216 20 000 000' } });
+    fireEvent.click(screen.getByText('Centre de formation'));
+    fillForm('20 123 456'); // with spaces — must be cleaned to 8 digits
 
     fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
 
     await waitFor(() => {
       expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
-        requestedModules: ['scolaire', 'studentTimeSheets', 'finance', 'cantine', 'transport']
+        phone: '20123456',
+        centerType: 'formation',
+        requestedModules: ['scolaire', 'studentTimeSheets', 'finance', 'cantine']
       }));
     });
   });

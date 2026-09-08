@@ -33,7 +33,7 @@ import {
   CreditCard,
   Clock
 } from 'lucide-react';
-import logo from '../assets/logo.png';
+import icon from '../assets/icon.png';
 
 interface LandingPageProps {
   onOpenLogin: () => void;
@@ -100,11 +100,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
+  const [centerType, setCenterType] = useState<'jardin' | 'formation' | ''>('');
   const [fullName, setFullName] = useState('');
   const [academyName, setAcademyName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
+  const [formError, setFormError] = useState('');
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -152,6 +154,24 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+
+    // Type d'établissement requis : jardin d'enfant ou centre de formation
+    if (!centerType) {
+      setFormError('Sélectionnez le type de votre établissement (jardin d’enfant ou centre de formation).');
+      return;
+    }
+
+    // Téléphone tunisien : exactement 8 chiffres (le préfixe +216 est toléré)
+    let phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.startsWith('216') && phoneDigits.length === 11) {
+      phoneDigits = phoneDigits.slice(3);
+    }
+    if (phoneDigits.length !== 8) {
+      setFormError('Le numéro de téléphone doit contenir exactement 8 chiffres (ex : 20 123 456).');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await submitDemoRequestApi({
@@ -159,9 +179,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         fullName,
         academyName,
         email,
-        phone,
+        phone: phoneDigits,
         estimatedSize: `${selectedModules.length} modules`,
         requestedModules: selectedModules,
+        centerType,
         message
       });
       setFormSubmitted(true);
@@ -218,8 +239,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
   const requestTypes: { key: 'trial' | 'demo' | 'info'; label: string }[] = [
     { key: 'trial', label: 'Essai gratuit' },
-    { key: 'demo', label: 'Démo guidée' },
     { key: 'info', label: 'Plus d’infos' }
+  ];
+
+  const centerTypes: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
+    { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
+    { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
   ];
 
   const testimonials = [
@@ -257,8 +282,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
 
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1.5 shadow-lg shadow-[#257C86]/20 flex items-center justify-center">
-              <img src={logo} alt={centerName} className="w-full h-full object-contain brightness-0 invert" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-[#257C86]/25 flex items-center justify-center bg-gradient-to-br from-[#257C86] to-[#1e626b]">
+              <img src={icon} alt={centerName} className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="text-base font-black tracking-tight text-slate-900">{centerName}</div>
@@ -1391,7 +1416,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               {/* ── Right : form ── */}
               <form onSubmit={handleFormSubmit} className="rounded-3xl bg-white border border-slate-200/70 shadow-2xl shadow-slate-900/10 p-7 sm:p-9">
 
-                <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 mb-7">
+                <div className="grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 mb-7">
                   {requestTypes.map(rt => (
                     <button
                       key={rt.key}
@@ -1407,6 +1432,40 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     </button>
                   ))}
                 </div>
+
+                {/* Type d'établissement */}
+                <div className="mb-5">
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Type d’établissement *</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {centerTypes.map(ct => {
+                      const active = centerType === ct.key;
+                      return (
+                        <button
+                          key={ct.key}
+                          type="button"
+                          onClick={() => { setCenterType(ct.key); setFormError(''); }}
+                          className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                            active
+                              ? 'border-[#257C86] bg-[#257C86]/[0.06] shadow-md shadow-[#257C86]/10'
+                              : 'border-slate-200 bg-white hover:border-[#257C86]/40 hover:bg-slate-50/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 mb-1">
+                            <span className={`h-2.5 w-2.5 rounded-full border-2 transition-colors ${active ? 'border-[#257C86] bg-[#257C86]' : 'border-slate-300'}`} />
+                            <span className={`text-sm font-black ${active ? 'text-[#257C86]' : 'text-slate-800'}`}>{ct.label}</span>
+                          </div>
+                          <span className="block text-[11px] font-semibold text-slate-400 pr-5">{ct.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {formError && (
+                  <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
+                    ⚠️ {formError}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                   <div>
@@ -1437,11 +1496,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Téléphone *</label>
+                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Téléphone * <span className="text-slate-400 font-bold normal-case tracking-normal">(8 chiffres)</span></label>
                     <input
-                      type="tel" required value={phone} onChange={e => setPhone(e.target.value)}
+                      type="tel" required inputMode="numeric" maxLength={13}
+                      value={phone}
+                      onChange={e => { setPhone(e.target.value); setFormError(''); }}
                       className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
-                      placeholder="+216 XX XXX XXX"
+                      placeholder="20 123 456"
                     />
                   </div>
                 </div>
@@ -1485,8 +1546,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1.5 shadow-md shadow-[#257C86]/20 flex items-center justify-center">
-                  <img src={logo} alt={centerName} className="w-full h-full object-contain brightness-0 invert" />
+                <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-[#257C86]/20 flex items-center justify-center bg-gradient-to-br from-[#257C86] to-[#1e626b]">
+                  <img src={icon} alt={centerName} className="w-full h-full object-cover" />
                 </div>
                 <span className="text-base font-black text-slate-900">{centerName}</span>
               </div>

@@ -334,6 +334,7 @@ export async function submitDemoRequestApi(data: {
   estimatedSize?: string;
   message?: string;
   requestedModules?: string[];
+  centerType?: string; // 'jardin' | 'formation'
 }): Promise<void> {
   const res = await fetch(`${API_BASE}/demo-requests`, {
     method: 'POST',
