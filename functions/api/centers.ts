@@ -18,7 +18,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         SELECT
           c.id, c.name, c.slug, c.phone_number, c.location_city, c.plan,
           c.enabled_modules, c.meal_operating_mode, c.status,
-          c.trial_ends_at, c.subscription_ends_at, c.billing_cycle, c.monthly_price, c.created_at,
+          c.trial_ends_at, c.subscription_ends_at, c.billing_cycle, c.monthly_price,
+          c.center_type, c.logo_url, c.created_at,
           (SELECT COUNT(*) FROM students s WHERE s.center_id = c.id) as student_count,
           (SELECT email FROM users u WHERE u.center_id = c.id AND u.role IN ('admin', 'super_admin') LIMIT 1) as admin_email
         FROM centers c
@@ -47,6 +48,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           billingCycle: c.billing_cycle || 'monthly',
           monthlyPrice: c.monthly_price !== null ? Number(c.monthly_price) : 0,
           centerType: c.center_type || '',
+          logoUrl: c.logo_url || '',
           createdAt: c.created_at || Date.now(),
           studentCount: Number(c.student_count) || 0,
           adminEmail: c.admin_email || ''
@@ -81,6 +83,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           subscriptionEndsAt: center.subscription_ends_at || null,
           billingCycle: center.billing_cycle || 'monthly',
           monthlyPrice: center.monthly_price !== null ? Number(center.monthly_price) : 0,
+          centerType: center.center_type || '',
+          logoUrl: center.logo_url || '',
           createdAt: center.created_at || Date.now()
         }]
       });
@@ -180,12 +184,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     stmts.push(env.DB.prepare(`
       INSERT INTO centers (
         id, name, slug, phone_number, location_city, plan, enabled_modules,
-        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, logo_url, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, slug, phoneNumber, locationCity, plan, modulesJson,
       mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
-      String(body.centerType || '').trim(), createdAt
+      String(body.centerType || '').trim(), String(body.logoUrl || '').trim(), createdAt
     ));
 
     // 2. Center Settings
@@ -282,6 +286,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       }
     }
 
+    if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
     if (body.billingCycle !== undefined) { updates.push('billing_cycle = ?'); binds.push(String(body.billingCycle).trim()); }
     if (body.monthlyPrice !== undefined) { updates.push('monthly_price = ?'); binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice)); }
 

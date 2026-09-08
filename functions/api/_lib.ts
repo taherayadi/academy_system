@@ -8,6 +8,8 @@
 
 export interface Env {
   DB: D1Database;
+  /** ImageKit.io private API key — set via Cloudflare Pages env var / secret. */
+  IMAGEKIT_PRIVATE_KEY?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1252,6 +1254,7 @@ export function mapCenterRow(c: any): any {
     billingCycle: c.billing_cycle || 'monthly',
     monthlyPrice: c.monthly_price !== null && c.monthly_price !== undefined ? Number(c.monthly_price) : 0,
     centerType: c.center_type || '',
+    logoUrl: c.logo_url || '',
     createdAt: c.created_at || Date.now()
   };
 }

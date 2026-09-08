@@ -254,6 +254,7 @@ describe('mapCenterRow', () => {
       billing_cycle: 'annual',
       monthly_price: 90,
       center_type: 'jardin',
+      logo_url: 'https://ik.imagekit.io/abc/logo.png',
       created_at: 1700000000000
     };
 
@@ -272,6 +273,7 @@ describe('mapCenterRow', () => {
       billingCycle: 'annual',
       monthlyPrice: 90,
       centerType: 'jardin',
+      logoUrl: 'https://ik.imagekit.io/abc/logo.png',
       createdAt: 1700000000000
     });
   });
@@ -279,6 +281,7 @@ describe('mapCenterRow', () => {
   it('parses enabled_modules and defaults to [] on invalid JSON or missing fields', () => {
     expect(mapCenterRow({ id: 'c1', name: 'X', enabled_modules: 'not-json' }).enabledModules).toEqual([]);
     expect(mapCenterRow({ id: 'c2', name: 'Y' }).enabledModules).toEqual([]);
+    expect(mapCenterRow({ id: 'c2', name: 'Y' }).logoUrl).toBe('');
     expect(mapCenterRow({ id: 'c2', name: 'Y' }).plan).toBe('starter');
     expect(mapCenterRow({ id: 'c2', name: 'Y', monthly_price: null }).monthlyPrice).toBe(0);
   });

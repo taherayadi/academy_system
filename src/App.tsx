@@ -187,10 +187,9 @@ export default function App() {
     return centerModuleKeys.includes(moduleKey);
   };
 
-  // ── Logo du menu ──
-  // Comme sur la page de connexion : si le slug du centre (lien de l'image)
-  // est vide on affiche l'icône de marque ; sinon on affiche l'image du lien.
-  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.slug ? brandIcon : currentCenter.slug;
+  // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
+  // (icône de marque, comme sur la page de connexion).
+  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
 
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
@@ -849,7 +848,7 @@ export default function App() {
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-        !hideRestrictedModules && { id: 'studentTimeSheets', label: 'جداول التوقيت', icon: CalendarCheck },
+        !hideRestrictedModules && { id: 'studentTimeSheets', label: currentCenter?.centerType === 'jardin' ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
         { id: 'module3', label: 'تأطير Étude', icon: Clock },
         !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
@@ -1047,6 +1046,7 @@ export default function App() {
                   openAddStaff={() => setActiveTab('module8')}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
+                  centerType={currentCenter?.centerType}
                   isModuleAllowed={hasCenterModule}
                 />
               )}
@@ -1088,6 +1088,7 @@ export default function App() {
                   onUpdateStudentTimeSheets={handleUpdateStudentTimeSheets}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
+                  centerType={currentCenter?.centerType}
                 />
               )}
 
@@ -1213,6 +1214,8 @@ export default function App() {
                   currentUserEmail={currentUser.email}
                   onExportDatabase={handleExportDatabase}
                   onImportDatabase={handleImportDatabase}
+                  centerLogoUrl={currentCenter?.logoUrl}
+                  onCenterLogoChange={(url) => setCurrentCenter(prev => prev ? { ...prev, logoUrl: url } : prev)}
                   enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}

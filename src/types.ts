@@ -30,6 +30,7 @@ export interface CenterTenant {
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
   centerType?: string; // 'jardin' | 'formation'
+  logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;
