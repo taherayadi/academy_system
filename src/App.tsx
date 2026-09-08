@@ -21,10 +21,12 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
-  BarChart3,
   Award,
   CalendarCheck,
-  ShieldCheck
+  ShieldCheck,
+  Building2,
+  Inbox,
+  Tags
 } from 'lucide-react';
 
 import { 
@@ -95,7 +97,6 @@ import LibraryModule from './components/LibraryModule';
 import MealsModule from './components/MealsModule';
 import FinanceModule from './components/FinanceModule';
 import StaffManagementModule from './components/StaffManagementModule';
-import DataAnalysisModule from './components/DataAnalysisModule';
 import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
@@ -104,8 +105,26 @@ import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
-import logo from './assets/logo.png';
+import brandIcon from './assets/icon.png';
 
+
+// Map sidebar tabs to SaaS module keys. A center admin only sees the tabs whose
+// module is enabled for their center (centers.enabled_modules, chosen by the
+// platform admin when creating the center or editing its modules).
+const TAB_MODULE: Record<string, string> = {
+  module1: 'scolaire',            // تسجيل التلاميذ
+  module2: 'scolaire',            // المتابعة الدراسية
+  studentTimeSheets: 'studentTimeSheets', // جداول التوقيت (Jd. Horaires)
+  module3: 'etude',               // تأطير Étude
+  module4: 'coursParticuliers',   // الدروس الخصوصية
+  module4b: 'revision',           // حصة مراجعة
+  formations: 'formations',       // التكوينات والدورات
+  module5: 'bibliotheque',        // المكتبة
+  module6: 'cantine',             // إدارة الوجبات
+  moduleBus: 'transport',         // خطة الحافلة
+  module7: 'finance',             // المنظومة المالية
+  module8: 'staff'                // إدارة الموظفين
+};
 
 export default function App() {
   const toast = useToast();
@@ -157,17 +176,42 @@ export default function App() {
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
+  // ── SaaS module gating ──
+  // Only the modules enabled for the connected center are visible/accessible.
+  // Without center data (legacy default center, platform super admin) → all.
+  const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
+  const hasCenterModule = (tabId: string): boolean => {
+    const moduleKey = TAB_MODULE[tabId];
+    if (!moduleKey) return true; // dashboard / settings — always available
+    if (isPlatformSuperAdmin || centerModuleKeys.length === 0) return true;
+    return centerModuleKeys.includes(moduleKey);
+  };
+
+  // ── Logo du menu ──
+  // Comme sur la page de connexion : si le slug du centre (lien de l'image)
+  // est vide on affiche l'icône de marque ; sinon on affiche l'image du lien.
+  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.slug ? brandIcon : currentCenter.slug;
+
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
       setActiveTab('module1');
     }
   }, [hideRestrictedModules, activeTab]);
 
+  // If the active tab belongs to a module not enabled for this center (e.g. the
+  // platform admin changed the modules after login), fall back to the dashboard
+  // so a disabled module can never be opened.
+  useEffect(() => {
+    if (currentUser && !isPlatformSuperAdmin && !hasCenterModule(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [currentUser, isPlatformSuperAdmin, currentCenter, activeTab]);
+
   // Keep active tab in sync with user role
   useEffect(() => {
-    if (isPlatformSuperAdmin && activeTab !== 'platformAdmin') {
+    if (isPlatformSuperAdmin && !activeTab.startsWith('platform')) {
       setActiveTab('platformAdmin');
-    } else if (!isPlatformSuperAdmin && activeTab === 'platformAdmin') {
+    } else if (!isPlatformSuperAdmin && activeTab.startsWith('platform')) {
       setActiveTab('dashboard');
     }
   }, [isPlatformSuperAdmin, activeTab]);
@@ -754,7 +798,7 @@ export default function App() {
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
             <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
-              <img src={logo} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
+              <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
@@ -794,7 +838,13 @@ export default function App() {
   // Platform super admin sees ONLY the SaaS platform management interface.
   // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
   const menuItems = isPlatformSuperAdmin
-    ? [{ id: 'platformAdmin', label: 'إدارة المنصة (SaaS)', icon: ShieldCheck }]
+    ? [
+        { id: 'platformAdmin', label: 'الرئيسية · SaaS', icon: LayoutDashboard },
+        { id: 'platformCenters', label: 'المراكز والاشتراكات', icon: Building2 },
+        { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
+        { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
+        { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
+      ]
     : [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
@@ -809,19 +859,21 @@ export default function App() {
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
         { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
-        { id: 'dataAnalysis', label: 'تحليل البيانات', icon: BarChart3 },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
+
+  // SaaS gating: keep only the tabs allowed for this center's subscription.
+  const visibleMenuItems = menuItems.filter(item => hasCenterModule(item.id));
 
 
   return (
     <div className="min-h-screen bg-[#FCFAF6] flex flex-col md:flex-row font-sans text-slate-800" style={{ direction: 'rtl' }}>
       
       {/* MOBILE HEADER */}
-      <header className="md:hidden bg-white border-b border-[#257C86]/20 text-slate-900 p-4 flex justify-between items-center shadow-xs no-print">
+      <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
+            <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
             <h1 className="font-black text-sm text-slate-900">{isPlatformSuperAdmin ? 'إدارة المنصة (SaaS)' : (settings?.centerName || 'المركز')}</h1>
@@ -851,9 +903,9 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="md:hidden absolute top-[72px] right-0 left-0 bg-white border-b border-[#257C86]/20 z-40 p-4 space-y-2 shadow-xl no-print"
+            className="md:hidden absolute top-[72px] right-0 left-0 bg-white border-b border-slate-200/70 z-40 p-4 space-y-2 shadow-xl shadow-slate-900/10 no-print"
           >
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const IconComp = item.icon;
               return (
                 <button
@@ -864,8 +916,8 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-[#257C86] text-white' 
-                      : 'text-slate-600 hover:bg-[#257C86]/10'
+                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' 
+                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
                   <IconComp className="h-4 w-4 shrink-0" />
@@ -878,14 +930,14 @@ export default function App() {
       </AnimatePresence>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className={`hidden md:flex flex-col justify-between bg-white text-slate-800 min-h-screen p-3 xl:p-4 border-l border-[#257C86]/20 shadow-xs shrink-0 no-print transition-all duration-300 ${sidebarCollapsed ? 'w-16 xl:w-20' : 'w-60 xl:w-72'}`}>
+      <aside className={`hidden md:flex flex-col justify-between bg-white text-slate-800 min-h-screen p-3 xl:p-4 border-l border-slate-200/70 shadow-lg shadow-slate-900/[0.04] shrink-0 no-print transition-all duration-300 ${sidebarCollapsed ? 'w-16 xl:w-20' : 'w-60 xl:w-72'}`}>
         <div className="space-y-3">
 
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/15 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={logo} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
+              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+                <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
@@ -917,7 +969,7 @@ export default function App() {
 
           {/* Navigation Items */}
           <nav className="space-y-1">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const IconComp = item.icon;
               const active = activeTab === item.id;
               return (
@@ -929,8 +981,8 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
-                      : 'text-slate-600 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/30' 
+                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
                   <IconComp className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
@@ -950,7 +1002,7 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-[#8DC760] shadow-sm shadow-[#8DC760]/60 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
                 {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
@@ -995,6 +1047,7 @@ export default function App() {
                   openAddStaff={() => setActiveTab('module8')}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
+                  isModuleAllowed={hasCenterModule}
                 />
               )}
 
@@ -1013,6 +1066,7 @@ export default function App() {
                   onDeleteStudent={handleDeleteStudent}
                   hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
+                  enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
 
@@ -1150,23 +1204,6 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'dataAnalysis' && (
-                <DataAnalysisModule
-                  students={students}
-                  staff={staff}
-                  slots={slots}
-                  courses={courses}
-                  sessions={sessions}
-                  mealPlans={mealPlans}
-                  expenses={expenses}
-                  timesheets={timesheets}
-                  revisionSeances={revisionSeances}
-                  externalStudents={externalStudents}
-                  formations={formations}
-                  settings={settings}
-                />
-              )}
-
               {activeTab === 'settings' && (
                 <SettingsModule
                   key={`settings_${reloadKey}_${settings?.centerName || ''}_${JSON.stringify(settings?.fees || {})}`}
@@ -1176,11 +1213,27 @@ export default function App() {
                   currentUserEmail={currentUser.email}
                   onExportDatabase={handleExportDatabase}
                   onImportDatabase={handleImportDatabase}
+                  enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
 
-              {(activeTab === 'platformAdmin' || isPlatformSuperAdmin) && (
-                <PlatformAdminDashboard />
+              {activeTab.startsWith('platform') && (
+                <PlatformAdminDashboard
+                  page={
+                    activeTab === 'platformCenters' ? 'centers'
+                    : activeTab === 'platformRequests' ? 'requests'
+                    : activeTab === 'platformFinance' ? 'finance'
+                    : activeTab === 'platformPricing' ? 'pricing'
+                    : 'overview'
+                  }
+                  onNavigate={(p) => setActiveTab(
+                    p === 'centers' ? 'platformCenters'
+                    : p === 'requests' ? 'platformRequests'
+                    : p === 'finance' ? 'platformFinance'
+                    : p === 'pricing' ? 'platformPricing'
+                    : 'platformAdmin'
+                  )}
+                />
               )}
             </motion.div>
           </AnimatePresence>

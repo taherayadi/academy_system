@@ -6,18 +6,15 @@ import {
   X,
   Plus,
   Trash2,
-  Loader2,
   CalendarRange
 } from 'lucide-react';
 import { Formation, FormationSeance } from '../types';
-import { proposeFormationSchedule, FORMATION_WORK_DAYS } from '../utils/aiFormationSchedule';
+import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
 import { useToast } from './Toast';
 
 interface FormationScheduleModalProps {
   open: boolean;
   formation: Formation | null;
-  apiKey?: string;
-  centerName?: string;
   onClose: () => void;
   onSave: (schedule: FormationSeance[]) => void;
 }
@@ -38,14 +35,11 @@ const toMin = (t: string) => {
 export default function FormationScheduleModal({
   open,
   formation,
-  apiKey,
-  centerName,
   onClose,
   onSave
 }: FormationScheduleModalProps) {
   const toast = useToast();
   const [draft, setDraft] = useState<FormationSeance[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const matieres = useMemo(() => (formation?.matieres || []).map(m => m.subject), [formation]);
@@ -64,21 +58,9 @@ export default function FormationScheduleModal({
     return map;
   }, [formation]);
 
-  const studentsSummary = useMemo(() => {
-    const matiereList = (formation?.matieres || []).map(m => m.subject);
-    const students = formation?.students || [];
-    return matiereList.map(m => {
-      const count = students.filter(s =>
-        s.isPack || (s.enrolledMatiereIds || []).includes(m)
-      ).length;
-      return { matiere: m, count };
-    });
-  }, [formation]);
-
   useEffect(() => {
     if (open) {
       setError(null);
-      setLoading(false);
       setDraft(
         (Array.isArray(formation?.schedule) ? formation.schedule : []).map(s => ({
           ...s,
@@ -89,36 +71,6 @@ export default function FormationScheduleModal({
   }, [open, formation]);
 
   if (!open || !formation) return null;
-
-  const handlePropose = async () => {
-    if (matieres.length === 0) {
-      toast.error('أضف مادة واحدة على الأقل في التكوين قبل طلب الاقتراح.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const proposals = await proposeFormationSchedule(formation, studentsSummary, apiKey, centerName);
-      if (proposals.length === 0) {
-        toast.error('لم يتمكن الذكاء الاصطناعي من إنشاء جدول.');
-      } else {
-        // Seed each seance with the students enrolled in that matiere. A pack
-        // student (takes all matieres) is added to every seance of that matiere.
-        setDraft(
-          proposals.map(p => ({
-            ...p,
-            id: crypto.randomUUID(),
-            students: enrolledStudentIdsForMatiere(p.matiere)
-          }))
-        );
-        toast.success(`تم إنشاء ${proposals.length} حصة بالذكاء الاصطناعي`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر إنشاء الجدول.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Students enrolled in the given matiere (by its subject name)
   const enrolledStudentIdsForMatiere = (matiereName: string): string[] => {
@@ -250,21 +202,6 @@ export default function FormationScheduleModal({
 
         {/* Body */}
         <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
-          {/* Gemini propose button */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePropose}
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1d6169] hover:from-[#1E6A73] hover:to-[#17555F] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {loading ? 'جاري الاقتراح بواسطة Gemini 3.6...' : 'اقتراح الجدول بواسطة Gemini'}
-            </button>
-            <span className="text-[10px] text-slate-400 font-bold">
-              يوزّع الحصص على أيام الأسبوع حسب المواد وعدد التلاميذ
-            </span>
-          </div>
-
           {error && (
             <div className="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-[11px] font-bold">
               {error}
@@ -277,7 +214,7 @@ export default function FormationScheduleModal({
               <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                 <Sparkles className="h-5 w-5 text-[#257C86] mx-auto mb-2" />
                 <p className="text-xs font-bold text-slate-400">
-                  لا توجد حصص بعد. اضغط "اقتراح الجدول بواسطة Gemini" أو أضف حصصاً يدوياً.
+                  لا توجد حصص بعد. أضف حصصاً يدوياً باستخدام الزر أدناه.
                 </p>
               </div>
             ) : (

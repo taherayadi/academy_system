@@ -39,7 +39,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
-import { FORMATION_WORK_DAYS } from '../utils/aiFormationSchedule';
+import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
 
 interface FormationModuleProps {
   formations: Formation[];
@@ -109,7 +109,7 @@ export default function FormationModule({
   const [printingStudent, setPrintingStudent] = useState<{ formation: Formation; student: FormationStudent } | null>(null);
   const [printingSchedule, setPrintingSchedule] = useState<Formation | null>(null);
 
-  // Formation weekly schedule (Gemini aide)
+  // Formation weekly schedule (manual planning)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
 
   // Refund (student quit the formation after paying)
@@ -553,10 +553,10 @@ export default function FormationModule({
     <div className="space-y-6" dir="rtl">
       
       {/* Module Banner (Library-style Top Header) */}
-      <div className="bg-white border border-[#E0EFF1] p-6 rounded-3xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
+      <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#F2F8F9] text-[#14464E] text-xs font-bold rounded-lg border border-[#C3E0E4]/60">
+            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
               التكوينات
             </span>
             <span className="text-xs text-slate-400 font-bold">الدورات والبرامج التكوينية</span>
@@ -574,7 +574,7 @@ export default function FormationModule({
           {/* New Formation Button */}
           <button
             onClick={openCreateFormationModal}
-            className="px-4 py-2.5 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+            className="px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
           >
             <Plus className="h-4 w-4" />
             تكوين جديد
@@ -586,7 +586,7 @@ export default function FormationModule({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         {/* Left Formations List */}
-        <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-4 shadow-xs space-y-3">
+        <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5 space-y-3">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
               <BookOpen className="h-4 w-4 text-[#257C86]" />
@@ -674,7 +674,7 @@ export default function FormationModule({
                     onClick={() => setSelectedId(f.id)}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-right relative ${
                       isSelected
-                        ? 'bg-[#F2F8F9] border-[#257C86] shadow-sm ring-1 ring-[#257C86]/30'
+                        ? 'bg-[#257C86]/[0.06] border-[#257C86] shadow-sm ring-1 ring-[#257C86]/30'
                         : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                     }`}
                   >
@@ -693,7 +693,7 @@ export default function FormationModule({
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-[#F2F8F9] text-[#14464E] border border-[#C3E0E4] rounded-lg">
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-lg">
                         {f.grade || '—'}
                       </span>
                       {f.branch && (
@@ -709,7 +709,7 @@ export default function FormationModule({
                         <span>•</span>
                         <span className="text-[#257C86] font-extrabold">{studentCount} تلميذ</span>
                       </div>
-                      <span className="font-mono font-black text-[#257C86] bg-white px-2 py-0.5 rounded-md border border-[#C3E0E4]">
+                      <span className="font-mono font-black text-[#257C86] bg-white px-2 py-0.5 rounded-md border border-[#257C86]/20">
                         {f.packPrice} د.ت
                       </span>
                     </div>
@@ -725,12 +725,12 @@ export default function FormationModule({
           {selectedFormation ? (
             <>
               {/* Formation Overview Card */}
-              <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+              <div className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-base font-black text-slate-900">{selectedFormation.name}</h2>
-                      <span className="px-2.5 py-0.5 bg-[#F2F8F9] text-[#257C86] border border-[#C3E0E4] rounded-lg text-[10px] font-black">
+                      <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20 rounded-lg text-[10px] font-black">
                         {selectedFormation.schoolYear}
                       </span>
                     </div>
@@ -771,8 +771,8 @@ export default function FormationModule({
                     <span className="text-[11px] font-bold text-slate-400 block mb-1">سعر الباك الكامل</span>
                     <span className="font-mono text-base font-black text-slate-900">{selectedFormation.packPrice} د.ت</span>
                   </div>
-                  <div className="bg-[#F2F8F9] rounded-2xl p-3 border border-[#C3E0E4]">
-                    <span className="text-[11px] font-bold text-[#14464E] block mb-1">عدد التلاميذ</span>
+                  <div className="bg-[#257C86]/[0.06] rounded-2xl p-3 border border-[#257C86]/20">
+                    <span className="text-[11px] font-bold text-[#1e626b] block mb-1">عدد التلاميذ</span>
                     <span className="font-mono text-base font-black text-[#257C86]">{formationStats.count}</span>
                   </div>
                   <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-200/70">
@@ -801,13 +801,13 @@ export default function FormationModule({
                   </div>
                 </div>
 
-                {/* Weekly schedule (Gemini aide) */}
+                {/* Weekly schedule */}
                 <div className="space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-slate-700">جدول الحصص الأسبوعي:</span>
                     <button
                       onClick={() => setIsScheduleModalOpen(true)}
-                      className="text-[11px] font-bold text-[#257C86] hover:text-[#1E6A73] cursor-pointer flex items-center gap-1"
+                      className="text-[11px] font-bold text-[#257C86] hover:text-[#1e626b] cursor-pointer flex items-center gap-1"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                       {selectedFormation.schedule?.length ? 'تعديل بالذكاء الاصطناعي' : 'إنشاء / اقتراح بالذكاء الاصطناعي'}
@@ -815,7 +815,7 @@ export default function FormationModule({
                     <button
                       onClick={() => setPrintingSchedule(selectedFormation)}
                       disabled={!selectedFormation.schedule?.length}
-                      className="text-[11px] font-bold text-[#257C86] hover:text-[#1E6A73] cursor-pointer flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="text-[11px] font-bold text-[#257C86] hover:text-[#1e626b] cursor-pointer flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Printer className="h-3.5 w-3.5" />
                       طباعة (A4 أفقي)
@@ -830,14 +830,14 @@ export default function FormationModule({
                       {FORMATION_WORK_DAYS.map(day => {
                         const daySeances = (Array.isArray(selectedFormation.schedule) ? selectedFormation.schedule : []).filter(s => s.day === day);
                         return (
-                          <div key={day} className="bg-[#F2F8F9] rounded-xl p-2.5 border border-[#C3E0E4]">
-                            <span className="text-[11px] font-black text-[#14464E] block mb-1.5">{day}</span>
+                          <div key={day} className="bg-[#257C86]/[0.06] rounded-xl p-2.5 border border-[#257C86]/20">
+                            <span className="text-[11px] font-black text-[#1e626b] block mb-1.5">{day}</span>
                             {daySeances.length === 0 ? (
                               <span className="text-[10px] text-slate-400 font-bold">—</span>
                             ) : (
                               <div className="space-y-1">
                                 {daySeances.map(se => (
-                                  <div key={se.id} className="bg-white rounded-lg border border-[#C3E0E4] p-2 space-y-1">
+                                  <div key={se.id} className="bg-white rounded-lg border border-[#257C86]/20 p-2 space-y-1">
                                     <div className="flex items-center justify-between text-[11px]">
                                       <span className="font-black text-slate-800">{se.matiere}</span>
                                       <span className="font-mono text-[10px] text-slate-500">{se.startTime} - {se.endTime}</span>
@@ -847,7 +847,7 @@ export default function FormationModule({
                                         {se.students!.map(sid => (
                                           <span
                                             key={sid}
-                                            className="px-1.5 py-0.5 bg-[#F2F8F9] border border-[#C3E0E4] text-[#14464E] rounded-full text-[9px] font-bold"
+                                            className="px-1.5 py-0.5 bg-[#257C86]/[0.06] border border-[#257C86]/20 text-[#1e626b] rounded-full text-[9px] font-bold"
                                           >
                                             {(selectedFormation.students.find(s => s.id === sid)?.studentName) || 'تلميذ'}
                                           </span>
@@ -867,7 +867,7 @@ export default function FormationModule({
               </div>
 
               {/* Students Section */}
-              <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+              <div className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -881,7 +881,7 @@ export default function FormationModule({
 
                   <button
                     onClick={openAddStudentModal}
-                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     <UserPlus className="h-4 w-4" />
                     تسجيل تلميذ جديد
@@ -910,7 +910,7 @@ export default function FormationModule({
                           onClick={() => setStudentStatusFilter(st)}
                           className={`px-3 py-1 text-[11px] font-extrabold rounded-lg transition cursor-pointer flex-1 sm:flex-initial ${
                             studentStatusFilter === st
-                              ? 'bg-white text-slate-900 shadow-xs'
+                              ? 'bg-white text-slate-900 shadow-lg shadow-slate-900/5'
                               : 'text-slate-500 hover:text-slate-700'
                           }`}
                         >
@@ -973,8 +973,8 @@ export default function FormationModule({
                                 <div className="relative group inline-block">
                                   <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-help ${
                                     st.isPack
-                                      ? 'bg-[#F2F8F9] text-[#257C86] border border-[#C3E0E4]'
-                                      : 'bg-purple-50 text-purple-700 border border-purple-200'
+                                      ? 'bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20'
+                                      : 'bg-teal-50 text-teal-700 border border-teal-200'
                                   }`}>
                                     {st.isPack ? 'باك كامل' : `مواد مختارة (${chosenMatieres.length})`}
                                   </span>
@@ -1032,7 +1032,7 @@ export default function FormationModule({
                                     </span>
                                   ) : (
                                     <span className="text-slate-800 flex items-center gap-1">
-                                      <CreditCard className="h-3 w-3 text-blue-600" />
+                                      <CreditCard className="h-3 w-3 text-emerald-600" />
                                       شيك
                                     </span>
                                   )}
@@ -1051,7 +1051,7 @@ export default function FormationModule({
                                   </span>
                                 )}
                                 {!hasRefund && isAdvance && (
-                                  <span className="px-2.5 py-0.5 bg-[#F2F8F9] text-[#14464E] border border-[#C3E0E4] rounded-full text-[10px] font-black inline-block">
+                                  <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-block">
                                     دفعة أولى
                                   </span>
                                 )}
@@ -1068,7 +1068,7 @@ export default function FormationModule({
                                   <button
                                     onClick={() => openRefundModal(st)}
                                     title={hasRefund ? 'تعديل الاسترجاع' : 'استرجاع (الانسحاب من التكوين)'}
-                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#F2F8F9] rounded-lg transition cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
                                   >
                                     <RotateCcw className="h-3.5 w-3.5" />
                                   </button>
@@ -1083,7 +1083,7 @@ export default function FormationModule({
                                     <button
                                       onClick={() => handleAddRestPayment(st)}
                                       title="استكمال الدفع (يدفع المبلغ المتبقي)"
-                                      className="p-1 text-[#257C86] hover:text-[#1E6A73] hover:bg-[#F2F8F9] rounded-lg transition cursor-pointer"
+                                      className="p-1 text-[#257C86] hover:text-[#1e626b] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
                                     >
                                       <DollarSign className="h-3.5 w-3.5" />
                                     </button>
@@ -1139,7 +1139,7 @@ export default function FormationModule({
               </div>
             </>
           ) : (
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center shadow-xs">
+            <div className="bg-white rounded-3xl border border-slate-200/70 p-12 text-center shadow-lg shadow-slate-900/5">
               <GraduationCap className="h-12 w-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-sm font-black text-slate-700">لم يتم اختيار أي تكوين</h3>
               <p className="text-xs font-bold text-slate-400 mt-1">
@@ -1147,7 +1147,7 @@ export default function FormationModule({
               </p>
               <button
                 onClick={openCreateFormationModal}
-                className="mt-4 px-4 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
+                className="mt-4 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
               >
                 <Plus className="h-4 w-4" />
                 إنشاء تكوين جديد
@@ -1170,9 +1170,9 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Modal Header */}
-              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
-                  <GraduationCap className="h-5 w-5 text-[#3A93A0]" />
+                  <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-base font-black">
                     {editingFormationId ? 'تعديل بيانات التكوين' : 'إنشاء دورة تكوينية جديدة'}
                   </h3>
@@ -1282,9 +1282,9 @@ export default function FormationModule({
                 </div>
 
                 {/* Matieres section — EXACT STAFF MODULE CHIPS PATTERN */}
-                <div className="space-y-3 p-4 bg-[#F2F8F9]/60 rounded-2xl border border-[#C3E0E4]">
+                <div className="space-y-3 p-4 bg-[#257C86]/[0.05] rounded-2xl border border-[#257C86]/20">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-[#103840] block flex items-center gap-1.5">
+                    <label className="text-xs font-black text-[#1e626b] block flex items-center gap-1.5">
                       <BookOpen className="h-4 w-4 text-[#257C86]" />
                       المواد المشمولة في التكوين (اختيار مادة أو أكثر):
                     </label>
@@ -1292,7 +1292,7 @@ export default function FormationModule({
                     <button
                       type="button"
                       onClick={() => setIsAddingSubject(!isAddingSubject)}
-                      className="text-[11px] font-bold text-[#17555F] hover:text-[#103840] bg-[#E0EFF1] hover:bg-[#d0e5e8] px-2.5 py-1 rounded-lg transition cursor-pointer"
+                      className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 hover:bg-[#d0e5e8] px-2.5 py-1 rounded-lg transition cursor-pointer"
                     >
                       + إضافة مادة جديدة
                     </button>
@@ -1305,12 +1305,12 @@ export default function FormationModule({
                         value={newSubjectInput}
                         onChange={(e) => setNewSubjectInput(e.target.value)}
                         placeholder="اسم مادة جديدة..."
-                        className="flex-1 px-3 py-1.5 bg-white border border-[#A0CBCF] rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="flex-1 px-3 py-1.5 bg-white border border-[#257C86]/20 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                       />
                       <button
                         type="button"
                         onClick={handleAddNewSubject}
-                        className="px-3.5 py-1.5 bg-[#257C86] hover:bg-[#1E6A73] text-white font-bold text-xs rounded-xl cursor-pointer"
+                        className="px-3.5 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl cursor-pointer"
                       >
                         إضافة
                       </button>
@@ -1327,7 +1327,7 @@ export default function FormationModule({
                           onClick={() => toggleSubjectSelection(sub)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
                             isSelected
-                              ? 'bg-[#257C86] text-white border-[#257C86] shadow-xs'
+                              ? 'bg-[#257C86] text-white border-[#257C86] shadow-lg shadow-slate-900/5'
                               : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
@@ -1351,7 +1351,7 @@ export default function FormationModule({
                 <button
                   type="button"
                   onClick={handleSaveFormation}
-                  className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   حفظ التكوين
@@ -1375,9 +1375,9 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Header */}
-              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
-                  <UserPlus className="h-5 w-5 text-[#3A93A0]" />
+                  <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
                     <h3 className="text-base font-black">
                       {editingStudentId ? 'تعديل تسجيل التلميذ' : 'تسجيل تلميذ جديد في التكوين'}
@@ -1425,8 +1425,8 @@ export default function FormationModule({
                 </div>
 
                 {/* Enrollment Type (Pack vs Selection) */}
-                <div className="bg-[#F2F8F9] p-4 rounded-2xl border border-[#C3E0E4] space-y-3">
-                  <label className="text-xs font-black text-[#14464E] block">نوع التسجيل في التكوين *</label>
+                <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
+                  <label className="text-xs font-black text-[#1e626b] block">نوع التسجيل في التكوين *</label>
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                       <input
@@ -1458,7 +1458,7 @@ export default function FormationModule({
 
                   {/* If custom selection, show checkboxes */}
                   {!stIsPack && (
-                    <div className="pt-2 border-t border-[#C3E0E4]/60 space-y-2">
+                    <div className="pt-2 border-t border-[#257C86]/20 space-y-2">
                       <span className="text-[11px] font-bold text-slate-600 block">حدد المواد التي سيدرسها التلميذ:</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {selectedFormation.matieres.map(m => {
@@ -1468,7 +1468,7 @@ export default function FormationModule({
                               key={m.id}
                               className={`flex items-center gap-2 p-2 rounded-xl border text-xs font-bold cursor-pointer transition ${
                                 isChecked
-                                  ? 'bg-white border-[#257C86] text-[#14464E] shadow-2xs'
+                                  ? 'bg-white border-[#257C86] text-[#1e626b] shadow-2xs'
                                   : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                               }`}
                             >
@@ -1577,7 +1577,7 @@ export default function FormationModule({
                         className="w-4 h-4 accent-[#257C86]"
                       />
                       <span className="flex items-center gap-1">
-                        <CreditCard className="h-3.5 w-3.5 text-blue-600" />
+                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
                         شيك (Chèque)
                       </span>
                     </label>
@@ -1585,7 +1585,7 @@ export default function FormationModule({
 
                   {/* Cheque details */}
                   {stPaymentMethod === 'cheque' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-blue-50/50 rounded-2xl border border-blue-200/70">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-200/70">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">رقم الشيك *</label>
                         <input
@@ -1633,7 +1633,7 @@ export default function FormationModule({
                 <button
                   type="button"
                   onClick={handleSaveStudent}
-                  className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   {editingStudentId ? 'تحديث البيانات' : 'تأكيد التسجيل'}
@@ -1688,7 +1688,7 @@ export default function FormationModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <RotateCcw className="h-5 w-5 text-[#257C86]" />
                 <div>
@@ -1742,7 +1742,7 @@ export default function FormationModule({
 
               <button
                 onClick={handleConfirmRefund}
-                className="w-full px-4 py-2.5 bg-[#257C86] hover:bg-[#1E6A73] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <RotateCcw className="h-4 w-4" />
                 تأكيد الاسترجاع
@@ -1764,12 +1764,12 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden">
-              <div className="p-4 bg-slate-900 text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">وصل تسجيل في تكوين</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5"
                   >
                     <Printer className="h-4 w-4" />
                     طباعة الوصل 🖨️
@@ -1817,7 +1817,7 @@ export default function FormationModule({
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {chosenMatieres.map(m => (
-                        <span key={m.id} className="px-2 py-1 bg-[#F2F8F9] text-[#257C86] border border-[#C3E0E4] rounded-lg text-[10px] font-extrabold">
+                        <span key={m.id} className="px-2 py-1 bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20 rounded-lg text-[10px] font-extrabold">
                           {m.subject}
                         </span>
                       ))}
@@ -1875,7 +1875,7 @@ export default function FormationModule({
                         مسترجع ({student.refundAmount!} د.ت)
                       </span>
                     ) : (
-                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : student.amountPaid > 0 ? 'bg-[#F2F8F9] text-[#14464E] border border-[#C3E0E4]' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : student.amountPaid > 0 ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                         {fullyPaid ? 'خالص ✓' : student.amountPaid > 0 ? 'دفعة أولى' : 'غير خالص'}
                       </span>
                     )}
@@ -1910,12 +1910,12 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden">
-              <div className="p-4 bg-slate-900 text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">طباعة جدول الحصص</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5"
                   >
                     <Printer className="h-4 w-4" />
                     طباعة (A4 أفقي) 🖨️
@@ -1997,12 +1997,10 @@ export default function FormationModule({
         );
       })()}
 
-      {/* Formation Weekly Schedule (Gemini aide) */}
+      {/* Formation Weekly Schedule */}
       <FormationScheduleModal
         open={isScheduleModalOpen}
         formation={selectedFormation}
-        apiKey={settings?.geminiApiKey}
-        centerName={settings?.centerName}
         onClose={() => setIsScheduleModalOpen(false)}
         onSave={handleSaveFormationSchedule}
       />

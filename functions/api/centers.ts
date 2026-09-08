@@ -46,6 +46,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           subscriptionEndsAt: c.subscription_ends_at || null,
           billingCycle: c.billing_cycle || 'monthly',
           monthlyPrice: c.monthly_price !== null ? Number(c.monthly_price) : 0,
+          centerType: c.center_type || '',
           createdAt: c.created_at || Date.now(),
           studentCount: Number(c.student_count) || 0,
           adminEmail: c.admin_email || ''
@@ -103,10 +104,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const locationCity = String(body.locationCity || body.city || 'تونس').trim();
     // "trial" is not a valid `plan` value (CHECK constraint only allows starter/growth/pro/custom),
     // so a trial center is stored as plan='starter' with status='trial'.
+    // The UI now offers: Essai / Basic / Custom. "Basic" is stored as 'starter'
+    // (the DB CHECK does not include 'basic'); the admin UI displays 'starter' as "Basic".
     const rawPlan = String(body.plan || 'trial').trim();
     const requestedStatus = String(body.status || '').trim();
     const isTrial = rawPlan === 'trial' || requestedStatus === 'trial';
-    const plan = isTrial ? 'starter' : (rawPlan === '' ? 'starter' : rawPlan);
+    const normalizedPlan = rawPlan === 'basic' ? 'starter' : rawPlan; // basic → starter (storage)
+    const plan = isTrial ? 'starter' : (normalizedPlan === '' ? 'starter' : normalizedPlan);
     const status = requestedStatus || (isTrial ? 'trial' : 'active');
     const mealOperatingMode = String(body.mealOperatingMode || 'external_traiteur').trim();
     const trialDays = Number(body.trialDays) || 14;
@@ -176,11 +180,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     stmts.push(env.DB.prepare(`
       INSERT INTO centers (
         id, name, slug, phone_number, location_city, plan, enabled_modules,
-        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, slug, phoneNumber, locationCity, plan, modulesJson,
-      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice, createdAt
+      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
+      String(body.centerType || '').trim(), createdAt
     ));
 
     // 2. Center Settings
@@ -247,7 +252,12 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { updates.push('location_city = ?'); binds.push(String(body.locationCity).trim()); }
-    if (body.plan !== undefined) { updates.push('plan = ?'); binds.push(String(body.plan).trim()); }
+    if (body.plan !== undefined) {
+      // "basic" is stored as 'starter' (DB CHECK only allows starter/growth/pro/custom)
+      const raw = String(body.plan).trim();
+      updates.push('plan = ?');
+      binds.push(raw === 'basic' ? 'starter' : raw);
+    }
     if (body.status !== undefined) { updates.push('status = ?'); binds.push(String(body.status).trim()); }
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.enabledModules !== undefined) {
@@ -304,11 +314,72 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
     const id = url.searchParams.get('id');
     if (!id) return json({ error: 'معرف المركز مطلوب.' }, 400);
 
-    if (id === DEFAULT_CENTER_ID) {
-      return json({ error: 'لا يمكن حذف المركز الرئيسي الافتراضي للنظام.' }, 400);
-    }
+    const existing = await env.DB.prepare('SELECT id FROM centers WHERE id = ?').bind(id).first<any>();
+    if (!existing) return json({ error: 'المركز غير موجود.' }, 404);
 
-    await env.DB.prepare('DELETE FROM centers WHERE id = ?').bind(id).run();
+    // Full cleanup of the center's data: users, students, payments, staff…
+    // Child rows are deleted explicitly in dependency order so the cleanup is
+    // complete whether or not FK cascades are enforced by the engine.
+    // Platform super-admins are never deleted (they may reference this center
+    // historically but belong to the platform, not to a center).
+    const stmts = [
+      // ── students & their child rows ──
+      env.DB.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM students WHERE center_id = ?').bind(id),
+      // ── staff & their child rows ──
+      env.DB.prepare('DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff_leave_requests WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff_advances WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM staff WHERE center_id = ?').bind(id),
+      // ── étude slots ──
+      env.DB.prepare('DELETE FROM slot_enrollments WHERE slot_id IN (SELECT id FROM etude_slots WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM etude_slots WHERE center_id = ?').bind(id),
+      // ── external courses ──
+      env.DB.prepare('DELETE FROM course_enrolled_students WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM session_present_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM session_one_time_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM session_month_paid WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM session_seance_status WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM session_seance_amount WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM external_course_sessions WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM external_payments WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM external_attendance WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM external_students WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(id),
+      // ── meals ──
+      env.DB.prepare('DELETE FROM meal_plan_attendees WHERE meal_plan_id IN (SELECT id FROM meal_plan_days WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM meal_plan_days WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM meal_forfait_closure_items WHERE closure_id IN (SELECT id FROM meal_forfait_closures WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM meal_forfait_closures WHERE center_id = ?').bind(id),
+      // ── revision seances ──
+      env.DB.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(id),
+      env.DB.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(id),
+      // ── formations / timesheets / expenses ──
+      env.DB.prepare('DELETE FROM formations WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM expenses WHERE center_id = ?').bind(id),
+      // ── auth: sessions + the center's users (platform admins preserved) ──
+      env.DB.prepare('DELETE FROM sessions WHERE center_id = ?').bind(id),
+      env.DB.prepare("DELETE FROM users WHERE center_id = ? AND role != 'platform_super_admin'").bind(id),
+      // ── center config & billing ──
+      env.DB.prepare('DELETE FROM center_settings WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM center_invoices WHERE center_id = ?').bind(id),
+      // ── finally the center itself ──
+      env.DB.prepare('DELETE FROM centers WHERE id = ?').bind(id)
+    ];
+    await env.DB.batch(stmts);
+
     return json({ success: true, message: 'تم حذف المركز بنجاح.' });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في حذف المركز.' }, 500);

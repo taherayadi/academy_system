@@ -355,7 +355,6 @@ export async function readSettings(db: D1Database, centerId: string = DEFAULT_CE
     centerName: settingsRow?.center_name || 'المركز',
     phoneNumber: settingsRow?.phone_number || '',
     locationCity: settingsRow?.location_city || '',
-    geminiApiKey: settingsRow?.gemini_api_key || '',
     mealOperatingMode: settingsRow?.meal_operating_mode || 'external_traiteur',
     fees: baseFees, feesByYear, subjects, etablissements
   };
@@ -365,20 +364,19 @@ export async function writeSettings(db: D1Database, settings: any, centerId: str
   if (!settings || typeof settings !== 'object') return;
   const stmts: D1PreparedStatement[] = [];
   stmts.push(db.prepare(
-    'INSERT INTO center_settings (center_id, center_name, phone_number, location_city, gemini_api_key, meal_operating_mode) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(center_id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key, meal_operating_mode = excluded.meal_operating_mode'
+    'INSERT INTO center_settings (center_id, center_name, phone_number, location_city, meal_operating_mode) VALUES (?, ?, ?, ?, ?) ON CONFLICT(center_id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, meal_operating_mode = excluded.meal_operating_mode'
   ).bind(
     centerId,
     str(settings.centerName || settings.center_name || 'المركز'),
     str(settings.phoneNumber || settings.phone_number || ''),
     str(settings.locationCity || settings.location_city || ''),
-    str(settings.geminiApiKey || settings.gemini_api_key || ''),
     str(settings.mealOperatingMode || settings.meal_operating_mode || 'external_traiteur')
   ));
 
   if (centerId === DEFAULT_CENTER_ID) {
     stmts.push(db.prepare(
-      'INSERT INTO settings (id, center_name, phone_number, location_city, gemini_api_key) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key'
-    ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
+      'INSERT INTO settings (id, center_name, phone_number, location_city) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city'
+    ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || '')));
   }
 
   stmts.push(db.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(centerId));
@@ -1224,4 +1222,36 @@ export async function createSinglePayment(db: D1Database, payment: any, centerId
 
 export async function deleteSinglePayment(db: D1Database, paymentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   await db.prepare('DELETE FROM payments WHERE id = ?').bind(paymentId).run();
+}
+
+
+// ─── Center tenant row mapping (snake_case DB row → camelCase API shape) ───
+// Used by /api/auth/login and /api/auth/me so the client receives the same
+// CenterTenant shape as /api/centers. Without this mapping the client sees
+// `enabled_modules` (snake_case) and `enabledModules` stays undefined — which
+// made every module visible to center admins regardless of their plan.
+export function mapCenterRow(c: any): any {
+  let modules: string[] = [];
+  try {
+    modules = typeof c.enabled_modules === 'string' ? JSON.parse(c.enabled_modules) : (c.enabled_modules || []);
+  } catch {
+    modules = [];
+  }
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug || '',
+    phoneNumber: c.phone_number || '',
+    locationCity: c.location_city || '',
+    plan: c.plan || 'starter',
+    enabledModules: Array.isArray(modules) ? modules : [],
+    mealOperatingMode: c.meal_operating_mode || 'external_traiteur',
+    status: c.status || 'active',
+    trialEndsAt: c.trial_ends_at || null,
+    subscriptionEndsAt: c.subscription_ends_at || null,
+    billingCycle: c.billing_cycle || 'monthly',
+    monthlyPrice: c.monthly_price !== null && c.monthly_price !== undefined ? Number(c.monthly_price) : 0,
+    centerType: c.center_type || '',
+    createdAt: c.created_at || Date.now()
+  };
 }
