@@ -193,6 +193,7 @@ export default function App() {
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
   const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
+  const hasCustomCenterLogo = !isPlatformSuperAdmin && Boolean(currentCenter?.logoUrl);
 
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
@@ -830,7 +831,7 @@ export default function App() {
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
-            <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
+            <span className={`w-16 h-16 rounded-2xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-md shadow-slate-900/10 overflow-hidden`}>
               <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
@@ -905,7 +906,7 @@ export default function App() {
       {/* MOBILE HEADER */}
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
-          <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
+          <span className={`w-10 h-10 rounded-xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-0.5'} shadow-md shadow-slate-900/10 shrink-0 overflow-hidden`}>
             <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
@@ -969,7 +970,7 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
                 <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
