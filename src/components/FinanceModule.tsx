@@ -185,6 +185,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
   // Meal detail month drill-down
   const [consumedDetailMonth, setConsumedDetailMonth] = useState<AcademicMonth | null>(null);
+  // Expanded days in the monthly consumption detail (closed by default)
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   // Aggregate stats based on filters
   const allPayments = students.flatMap(s => (s.payments || []).map(p => ({ 
@@ -2540,15 +2542,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   const num = mNum[consumedDetailMonth] ?? 9;
                   const year = num >= 9 ? startYear : endYear;
                   const prefix = `${year}-${String(num).padStart(2, '0')}`;
-                  const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; service: MealServiceType; paid: boolean }> = [];
+                  const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; service: MealServiceType; paid: boolean; isEnrolled: boolean }> = [];
                   filteredStudents.forEach(st => {
+                    const enrolled = st.mealSubscription?.active === true || st.enrolledServices?.meals === true;
                     (st.mealAttendances || []).forEach(a => {
                       if (a.date.startsWith(prefix)) {
-                        rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, service: a.service || 'lunch', paid: !!a.paid });
+                        rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, service: a.service || 'lunch', paid: !!a.paid, isEnrolled: enrolled });
                       }
                     });
                   });
-                  const sorted = rows.sort((a, b) => b.date.localeCompare(a.date));
+                  const sorted = rows.sort((a, b) => a.date.localeCompare(b.date));
 
                   return (
                     <div className="mt-5 border-t border-slate-100 pt-4">
@@ -2560,57 +2563,96 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
                           <button
                             type="button"
-                            onClick={() => setConsumedDetailMonth(null)}
+                            onClick={() => { setConsumedDetailMonth(null); setExpandedDays(new Set()); }}
                             className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer"
                           >
                             إغلاق
                           </button>
                         </div>
                       </div>
-                      <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                        <table className="w-full text-right text-xs">
-                          <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-                            <tr>
-                              <th className="p-3">التاريخ</th>
-                              <th className="p-3">التلميذ</th>
-                              <th className="p-3">المستوى</th>
-                              <th className="p-3">النوع والتصنيف</th>
-                              <th className="p-3">الحالة</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {sorted.length === 0 ? (
-                              <tr>
-                                <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">لا توجد وجبات مستهلكة في هذا الشهر.</td>
-                              </tr>
-                            ) : sorted.map((row, i) => (
-                              <tr key={i} className="hover:bg-slate-50/80 transition">
-                                <td className="p-3 font-mono text-slate-600">{row.date}</td>
-                                <td className="p-3 font-black text-slate-900">{row.studentName}</td>
-                                <td className="p-3 text-slate-500">{row.grade}</td>
-                                <td className="p-3">
-                                  {row.service === 'gouter_matin' ? (
-                                    <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-bold">
-                                      {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
-                                    </span>
-                                  ) : row.service === 'gouter_apres_midi' ? (
-                                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-lg text-[10px] font-bold">
-                                      {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-lg text-[10px] font-bold">
-                                      {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
-                                    </span>
+                      {sorted.length === 0 ? (
+                        <div className="p-6 text-center text-slate-400 font-bold text-xs rounded-2xl border border-slate-200">لا توجد وجبات مستهلكة في هذا الشهر.</div>
+                      ) : (() => {
+                        const grouped: Record<string, typeof sorted> = {};
+                        sorted.forEach(r => {
+                          if (!grouped[r.date]) grouped[r.date] = [];
+                          grouped[r.date].push(r);
+                        });
+                        const days = Object.keys(grouped).sort();
+                        return (
+                          <div className="space-y-2">
+                            {days.map(day => {
+                              const isOpen = expandedDays.has(day);
+                              const dayRows = grouped[day];
+                              const paidCount = dayRows.filter(r => r.paid).length;
+                              return (
+                                <div key={day} className="border border-slate-200 rounded-2xl overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = new Set(expandedDays);
+                                      if (next.has(day)) next.delete(day); else next.add(day);
+                                      setExpandedDays(next);
+                                    }}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition cursor-pointer text-right"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className={`text-[10px] font-bold transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                                      <span className="text-xs font-black text-slate-800">{day}</span>
+                                      <span className="text-[10px] font-bold text-slate-400">({dayRows.length} وجبة / لمجة)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-bold text-emerald-600">{paidCount} مدفوعة</span>
+                                      {dayRows.filter(r => !r.paid && r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-amber-600">{dayRows.filter(r => !r.paid && r.isEnrolled).length} لم يدفعو الإشتراك</span>}
+                                      {dayRows.filter(r => !r.paid && !r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-red-500">{dayRows.filter(r => !r.paid && !r.isEnrolled).length} غير مدفوعة</span>}
+                                    </div>
+                                  </button>
+                                  {isOpen && (
+                                    <div className="border-t border-slate-200">
+                                      <table className="w-full text-right text-xs">
+                                        <thead className="bg-slate-100/60 text-slate-600 font-bold">
+                                          <tr>
+                                            <th className="p-2.5">التلميذ</th>
+                                            <th className="p-2.5">المستوى</th>
+                                            <th className="p-2.5">النوع والتصنيف</th>
+                                            <th className="p-2.5">الحالة</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                          {dayRows.map((row, i) => (
+                                            <tr key={i} className="hover:bg-slate-50/80 transition">
+                                              <td className="p-2.5 font-black text-slate-900">{row.studentName}</td>
+                                              <td className="p-2.5 text-slate-500">{row.grade}</td>
+                                              <td className="p-2.5">
+                                                {row.service === 'gouter_matin' ? (
+                                                  <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-bold">
+                                                    {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
+                                                  </span>
+                                                ) : row.service === 'gouter_apres_midi' ? (
+                                                  <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-lg text-[10px] font-bold">
+                                                    {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
+                                                  </span>
+                                                ) : (
+                                                  <span className="px-2 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-lg text-[10px] font-bold">
+                                                    {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="p-2.5 font-bold">
+                                                {row.paid ? <span className="text-emerald-700">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   )}
-                                </td>
-                                <td className="p-3 font-bold">
-                                  {row.paid ? <span className="text-emerald-700">مدفوع</span> : <span className="text-red-600">غير مدفوع</span>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
