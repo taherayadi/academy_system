@@ -19,9 +19,9 @@ DROP TABLE users;
 -- Step 4: Rename new table
 ALTER TABLE users_new RENAME TO users;
 
--- Step 5: Add platform super admin account
+-- Step 5: Add platform super admin account (idempotent)
 -- Email: platform@systemacademy.tn
 -- Password: PlatformAdmin2026!
-INSERT INTO users (email, name, role, description, password_hash) VALUES
+INSERT OR IGNORE INTO users (email, name, role, description, password_hash) VALUES
   ('platform@systemacademy.tn', 'مدير المنصة الرئيسي', 'platform_super_admin', 'إدارة المنصة SaaS فقط - بدون صلاحية الدخول للسناتر', '7bbf0487d35eea207efbc20ae0cbaa8166201777c4a38d7607ddf868490dcca1');
 

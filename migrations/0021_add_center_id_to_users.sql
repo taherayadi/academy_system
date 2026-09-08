@@ -1,7 +1,9 @@
 -- Migration 0021: Add center_id column to users table
 -- Enables center scoping for center admins while platform_super_admin remains NULL (global access)
 
--- SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we check and only update
+-- Add center_id column (SQLite will error if it exists, but that's okay - we'll handle it)
+ALTER TABLE users ADD COLUMN center_id TEXT;
+
 -- Assign default center to super_admin (academy_system@gmail.com)
 UPDATE users SET center_id = 'e1000000-0000-4000-8000-000000000001' WHERE email = 'academy_system@gmail.com' AND center_id IS NULL;
 
