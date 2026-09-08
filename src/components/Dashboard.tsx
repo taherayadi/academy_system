@@ -12,7 +12,11 @@ import {
   UserPlus,
   BookMarked,
   Library,
-  Sparkles
+  Sparkles,
+  CalendarClock,
+  BookOpenCheck,
+  Award,
+  Bus
 } from 'lucide-react';
 import { StaffMember, Student, ACADEMIC_MONTHS, CenterSettings } from '../types';
 
@@ -33,11 +37,27 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
   const totalStaff = staff.length;
   const totalStudents = students.length;
-  const QUICK_MODULE_TABS = ['module1', 'module2', 'module3', 'module4', 'module5', 'module6', 'module7', 'module8'];
-  const moduleCount = QUICK_MODULE_TABS.filter(t => {
-    if ((t === 'module4' || t === 'module6') && hideRestrictedModules) return false;
-    return allowed(t);
-  }).length;
+
+  // ── Quick-access catalog: ONLY the modules enabled in the center's plan ──
+  const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6'];
+  const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
+    { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'studentTimeSheets', title: 'Jd. Horaires', desc: 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'module3', title: `Étude ${settings?.centerName || 'المركز'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'module4', title: `Études Hors ${settings?.centerName || 'المركز'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
+    { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'formations', title: 'Formations & Cours', desc: 'التكوينات والدورات', icon: Award, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module6', title: 'Gestion des Repas', desc: 'وجبة اليوم وتعويض الإلغاء', icon: Utensils, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'moduleBus', title: 'Plan de Bus', desc: 'خطة الحافلة والتوصيل', icon: Bus, tile: 'bg-slate-100 text-slate-500' },
+    { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module8', title: 'Gestion du Personnel', desc: 'بطاقات المعلمين وكشوفات الرواتب', icon: Users, tile: 'bg-slate-100 text-slate-500' }
+  ];
+  const quickModules = QUICK_MODULES.filter(m =>
+    allowed(m.tab) && !(hideRestrictedModules && RESTRICTED_TABS.includes(m.tab))
+  );
+  const moduleCount = quickModules.length;
 
   const finances = useMemo(() => {
     let collected = 0;
@@ -111,7 +131,8 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
           </div>
         </motion.div>
 
-        {/* Total Staff */}
+        {/* Total Staff — uniquement si le module Personnel est au plan */}
+        {allowed('module8') && (
         <motion.div 
           whileHover={{ y: -4 }}
           className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex items-center justify-between"
@@ -119,19 +140,18 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
           <div className="space-y-2">
             <span className="text-xs font-bold text-slate-400 block">المعلمون والطاقم</span>
             <span className="text-3xl font-black text-slate-900 block">{totalStaff} <span className="text-xs text-slate-400 font-normal">إطار</span></span>
-            {allowed('module8') && (
             <button 
               onClick={() => setActiveTab('module8')}
               className="text-xs font-bold text-[#257C86] hover:text-[#1e626b] transition flex items-center gap-1 cursor-pointer"
             >
               إدارة الموظفين <span>←</span>
             </button>
-            )}
           </div>
           <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
             <Users className="h-7 w-7" />
           </div>
         </motion.div>
+        )}
 
         {/* Total Revenues */}
         <motion.div 
@@ -171,114 +191,27 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         </motion.div>
       </div>
 
-      {/* Quick Access to the 8 Modules */}
+      {/* Quick Access — only the modules in the center plan */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
         <h3 className="text-lg font-black text-slate-900">الانتقال السريع إلى {moduleCount} موديولات</h3>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {allowed('module1') && (
-          <button 
-            onClick={() => setActiveTab('module1')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-[#257C86]/10 text-[#257C86] rounded-xl flex items-center justify-center">
-              <UserPlus className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Fiche d'inscription élève</h4>
-            <p className="text-[11px] text-slate-500 mt-1">بطاقة التسجيل والأولياء</p>
-          </button>
-          )}
-
-          {allowed('module2') && (
-          <button 
-            onClick={() => setActiveTab('module2')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Suivi Scolaire Lycée/Collège</h4>
-            <p className="text-[11px] text-slate-500 mt-1">الدراسة والمدفوعات</p>
-          </button>
-          )}
-
-          {allowed('module3') && (
-          <button 
-            onClick={() => setActiveTab('module3')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-[#257C86]/10 text-[#257C86] rounded-xl flex items-center justify-center">
-              <Clock className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Étude {settings?.centerName || 'المركز'}</h4>
-            <p className="text-[11px] text-slate-500 mt-1">الخانات الزمنية والتايم شيت</p>
-          </button>
-          )}
-
-          {!hideRestrictedModules && allowed('module4') && (
-            <button 
-              onClick={() => setActiveTab('module4')}
-              className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-            >
-              <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center">
-                <BookMarked className="h-5 w-5" />
-              </div>
-              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Études Hors {settings?.centerName || 'المركز'}</h4>
-              <p className="text-[11px] text-slate-500 mt-1">الكورسات الخاصة</p>
-            </button>
-          )}
-
-          {allowed('module5') && (
-          <button 
-            onClick={() => setActiveTab('module5')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <Library className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Bibliothèque</h4>
-            <p className="text-[11px] text-slate-500 mt-1">مكتبة المطالعة</p>
-          </button>
-          )}
-
-          {!hideRestrictedModules && allowed('module6') && (
-            <button 
-              onClick={() => setActiveTab('module6')}
-              className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-            >
-              <div className="w-10 h-10 bg-[#257C86]/10 text-[#257C86] rounded-xl flex items-center justify-center">
-                <Utensils className="h-5 w-5" />
-              </div>
-              <h4 className="font-extrabold text-slate-900 text-sm mt-2">Gestion des Repas</h4>
-              <p className="text-[11px] text-slate-500 mt-1">وجبة اليوم وتعويض الإلغاء</p>
-            </button>
-          )}
-
-          {allowed('module7') && (
-          <button 
-            onClick={() => setActiveTab('module7')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Module Financier</h4>
-            <p className="text-[11px] text-slate-500 mt-1">المصاريف STEG/SONEDE والمقبوضات</p>
-          </button>
-          )}
-
-          {allowed('module8') && (
-          <button 
-            onClick={() => setActiveTab('module8')}
-            className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center">
-              <Users className="h-5 w-5" />
-            </div>
-            <h4 className="font-extrabold text-slate-900 text-sm mt-2">Gestion du Personnel</h4>
-            <p className="text-[11px] text-slate-500 mt-1">بطاقات المعلمين وكشوفات الرواتب</p>
-          </button>
-          )}
+          {quickModules.map(m => {
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.tab}
+                onClick={() => setActiveTab(m.tab)}
+                className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
+              >
+                <div className={`w-10 h-10 ${m.tile} rounded-xl flex items-center justify-center`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h4 className="font-extrabold text-slate-900 text-sm mt-2">{m.title}</h4>
+                <p className="text-[11px] text-slate-500 mt-1">{m.desc}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
