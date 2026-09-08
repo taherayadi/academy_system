@@ -1214,7 +1214,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 3: PAYMENT HISTORY */}
       {activeTab === 'history' && (() => {
-        const historyPayments = serviceFilter === 'all' ? filteredPayments : filteredPayments.filter(p => p.service === serviceFilter);
+        const historyPayments = (serviceFilter === 'all' ? filteredPayments : filteredPayments.filter(p => p.service === serviceFilter))
+          .filter(p => !String(p.month || '').startsWith('Annuel') && !String(p.month || '').startsWith('Repas unitaire') && p.service !== 'Formation');
 
         const chequeGroups: Record<string, { chequeNumber?: string; chequeDate?: string; chequePaid?: boolean; payments: typeof historyPayments; totalAmount: number; receiptNumbers: string[]; studentNames: string[] }> = {};
         const nonChequePayments: typeof historyPayments = [];
