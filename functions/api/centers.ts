@@ -256,6 +256,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { updates.push('location_city = ?'); binds.push(String(body.locationCity).trim()); }
+    if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(String(body.centerType).trim()); }
     if (body.plan !== undefined) {
       // "basic" is stored as 'starter' (DB CHECK only allows starter/growth/pro/custom)
       const raw = String(body.plan).trim();
@@ -293,6 +294,19 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (updates.length > 0) {
       binds.push(id);
       await env.DB.prepare(`UPDATE centers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run();
+    }
+
+    // Keep the tenant-facing settings in sync when platform admin edits
+    // the center's identity or contact details.
+    const settingsUpdates: string[] = [];
+    const settingsBinds: any[] = [];
+    if (body.name !== undefined) { settingsUpdates.push('center_name = ?'); settingsBinds.push(String(body.name).trim()); }
+    if (body.phoneNumber !== undefined) { settingsUpdates.push('phone_number = ?'); settingsBinds.push(String(body.phoneNumber).trim()); }
+    if (body.locationCity !== undefined) { settingsUpdates.push('location_city = ?'); settingsBinds.push(String(body.locationCity).trim()); }
+    if (body.mealOperatingMode !== undefined) { settingsUpdates.push('meal_operating_mode = ?'); settingsBinds.push(String(body.mealOperatingMode).trim()); }
+    if (settingsUpdates.length > 0) {
+      settingsBinds.push(id);
+      await env.DB.prepare(`UPDATE center_settings SET ${settingsUpdates.join(', ')} WHERE center_id = ?`).bind(...settingsBinds).run();
     }
 
     // Also update admin password if requested

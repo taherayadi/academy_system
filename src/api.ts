@@ -483,11 +483,18 @@ export async function createCenterApi(payload: {
 export async function updateCenterApi(
   id: string,
   payload: {
+    name?: string;
+    logoUrl?: string;
+    phoneNumber?: string;
+    locationCity?: string;
+    centerType?: string;
     status?: string;
     plan?: string;
     enabledModules?: string[];
     trialEndsAt?: number | null;
     subscriptionEndsAt?: number | null;
+    billingCycle?: 'monthly' | 'annual';
+    monthlyPrice?: number | null;
     extendTrialDays?: number;
   }
 ): Promise<void> {

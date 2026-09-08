@@ -619,6 +619,220 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   );
 }
 
+// ─── Edit Center Modal ──────────────────────────────────────────────────────
+function centerDateInputValue(timestamp?: number | null): string {
+  return timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+}
+
+function centerDateTimestamp(value: string): number | null {
+  if (!value) return null;
+  const timestamp = new Date(`${value}T23:59:59`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [form, setForm] = useState(() => ({
+    name: center.name,
+    logoUrl: center.logoUrl || '',
+    phoneNumber: center.phoneNumber || '',
+    locationCity: center.locationCity || '',
+    centerType: normalizeCenterType(center.centerType),
+    plan: center.plan === 'starter' ? 'basic' : (center.plan || 'basic'),
+    status: center.status,
+    billingCycle: center.billingCycle || 'monthly',
+    monthlyPrice: String(center.monthlyPrice ?? 0),
+    trialEndsAt: centerDateInputValue(center.trialEndsAt),
+    subscriptionEndsAt: centerDateInputValue(center.subscriptionEndsAt),
+  }));
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const handleLogoSelect = (file?: File) => {
+    setLogoFile(file || null);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const handleRemoveLogo = () => {
+    setForm(current => ({ ...current, logoUrl: '' }));
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      toast.error('Le nom du centre est obligatoire.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const logoUrl = logoFile ? await uploadPlatformLogoApi(logoFile) : form.logoUrl;
+      const monthlyPrice = Number(form.monthlyPrice);
+      await updateCenterApi(center.id, {
+        name: form.name.trim(),
+        logoUrl,
+        phoneNumber: form.phoneNumber.trim(),
+        locationCity: form.locationCity.trim(),
+        centerType: form.centerType,
+        plan: form.plan,
+        status: form.status,
+        billingCycle: form.billingCycle,
+        monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : 0,
+        trialEndsAt: centerDateTimestamp(form.trialEndsAt),
+        subscriptionEndsAt: centerDateTimestamp(form.subscriptionEndsAt),
+      });
+      toast.success('Centre mis à jour');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la mise à jour du centre.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-[#257C86]/10"><Edit className="h-4 w-4 text-[#257C86]" /></span>
+            <div>
+              <h2 className="text-base font-black text-slate-900">Modifier le centre</h2>
+              <p className="text-[11px] font-semibold text-slate-400 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+            <X className="h-5 w-5 text-slate-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Nom du centre *</label>
+              <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+            </div>
+
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+                  <img src={logoPreview || form.logoUrl || icon} alt="Logo du centre" className="w-full h-full rounded-xl object-cover bg-white" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      Choisir une image
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" className="hidden" onChange={e => handleLogoSelect(e.target.files?.[0])} />
+                    </label>
+                    {(form.logoUrl || logoFile) && (
+                      <button type="button" onClick={handleRemoveLogo} disabled={saving} className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Trash2 className="h-4 w-4" />
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400">PNG · JPG · WEBP · SVG · GIF — 2 Mo maximum. Le nouveau logo sera envoyé à ImageKit lors de l’enregistrement.</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
+              <input value={form.locationCity} onChange={e => setForm(f => ({ ...f, locationCity: e.target.value }))} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone</label>
+              <input value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Type d’établissement</label>
+              <select value={form.centerType} onChange={e => setForm(f => ({ ...f, centerType: e.target.value as 'jardin' | 'formation' | '' }))} className={`${inputCls} cursor-pointer`}>
+                <option value="">Non défini</option>
+                <option value="jardin">Jardin d’enfant</option>
+                <option value="formation">Centre de formation</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Email administrateur</label>
+              <input value={center.adminEmail || '—'} readOnly className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-3">Abonnement</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan</label>
+                <select value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))} className={`${inputCls} cursor-pointer`}>
+                  <option value="basic">Basic</option>
+                  <option value="growth">Growth</option>
+                  <option value="pro">Pro</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Statut</label>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as CenterTenant['status'] }))} className={`${inputCls} cursor-pointer`}>
+                  <option value="trial">Essai</option>
+                  <option value="active">Actif</option>
+                  <option value="suspended">Suspendu</option>
+                  <option value="expired">Expiré</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
+                <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))} className={`${inputCls} cursor-pointer`}>
+                  <option value="monthly">Mensuel</option>
+                  <option value="annual">Annuel</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Tarif (TND)</label>
+                <input type="number" min="0" step="0.01" value={form.monthlyPrice} onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’essai</label>
+                <input type="date" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer`} />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement</label>
+                <input type="date" value={form.subscriptionEndsAt} onChange={e => setForm(f => ({ ...f, subscriptionEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer`} />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-lg shadow-[#257C86]/25 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Enregistrer
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 export default function PlatformAdminDashboard({ page = 'overview', onNavigate }: PlatformAdminDashboardProps) {
   const toast = useToast();
@@ -640,6 +854,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
   const [showNewCenter, setShowNewCenter] = useState(false);
   const [convertRequest, setConvertRequest] = useState<DemoRequest | null>(null);
+  const [editCenter, setEditCenter] = useState<CenterTenant | null>(null);
   const [editModulesCenter, setEditModulesCenter] = useState<CenterTenant | null>(null);
   const [deleteCenter, setDeleteCenter] = useState<CenterTenant | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DemoRequest | null>(null);
@@ -1179,6 +1394,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {/* Actions */}
                 <div className="mt-auto pt-4">
                 <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
+                  <button onClick={() => setEditCenter(c)}
+                    className="text-[11px] font-bold px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5">
+                    <Edit className="h-3.5 w-3.5" /> Modifier
+                  </button>
                   <button onClick={() => handleExtendTrial(c)}
                     className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
                     <CalendarClock className="h-3.5 w-3.5" /> +14 jours essai
@@ -1619,6 +1838,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             convertRequestId={convertRequest?.id}
             onClose={() => { setShowNewCenter(false); setConvertRequest(null); }}
             onCreated={load}
+          />
+        )}
+        {editCenter && (
+          <EditCenterModal
+            center={editCenter}
+            onClose={() => setEditCenter(null)}
+            onSaved={load}
           />
         )}
         {editModulesCenter && (
