@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
 import { UserAccount, CenterTenant } from '../types';
 import { verifyPassword } from '../auth';
-import logo from '../assets/logo.png';
+import icon from '../assets/icon.png';
 
 interface LoginScreenProps {
   onLogin: (user: UserAccount, center?: CenterTenant | null) => void;
@@ -76,8 +76,8 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
               <span>← الموقع التعريفي</span>
             </button>
           )}
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1.5 shadow-lg shadow-[#257C86]/25 flex items-center justify-center">
-            <img src={logo} alt={centerName || 'المركز'} className="w-full h-full object-contain brightness-0 invert" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
+            <img src={icon} alt={centerName || 'المركز'} className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">{centerName || 'المركز'}</h1>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1.5 rounded-full bg-[#257C86]/10 border border-[#257C86]/20">

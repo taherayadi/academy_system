@@ -46,6 +46,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           subscriptionEndsAt: c.subscription_ends_at || null,
           billingCycle: c.billing_cycle || 'monthly',
           monthlyPrice: c.monthly_price !== null ? Number(c.monthly_price) : 0,
+          centerType: c.center_type || '',
           createdAt: c.created_at || Date.now(),
           studentCount: Number(c.student_count) || 0,
           adminEmail: c.admin_email || ''
@@ -179,11 +180,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     stmts.push(env.DB.prepare(`
       INSERT INTO centers (
         id, name, slug, phone_number, location_city, plan, enabled_modules,
-        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, slug, phoneNumber, locationCity, plan, modulesJson,
-      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice, createdAt
+      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
+      String(body.centerType || '').trim(), createdAt
     ));
 
     // 2. Center Settings

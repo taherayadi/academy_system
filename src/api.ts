@@ -408,6 +408,7 @@ export async function createCenterApi(payload: {
   locationCity?: string;
   plan: string;
   enabledModules: string[];
+  centerType?: string;
   directorName: string;
   directorEmail: string;
   directorPassword: string;

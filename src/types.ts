@@ -29,6 +29,7 @@ export interface CenterTenant {
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
+  centerType?: string; // 'jardin' | 'formation'
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;
