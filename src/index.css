@@ -9,6 +9,12 @@
   --color-brand-500: #f59e0b;
   --color-brand-600: #d97706;
   --color-brand-700: #b45309;
+
+  /* Landing page marquee (infinite module ticker) */
+  --animate-marquee: marquee 42s linear infinite;
+  @keyframes marquee {
+    to { transform: translateX(-50%); }
+  }
 }
 
 @layer utilities {
