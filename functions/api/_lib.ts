@@ -1007,6 +1007,50 @@ export async function writeStudentTimeSheets(db: D1Database, sheets: any[], cent
 }
 
 // ===========================================================================
+// JARDIN STUDENT ATTENDANCE
+// ===========================================================================
+
+export async function readStudentAttendance(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  return (await db.prepare('SELECT * FROM student_attendance WHERE center_id = ? ORDER BY date DESC, student_id').bind(centerId).all()).results.map((r: any) => ({
+    id: str(r.id),
+    studentId: str(r.student_id),
+    date: str(r.date),
+    status: r.status === 'absent' ? 'absent' : 'present',
+    notes: r.notes == null ? undefined : str(r.notes),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at)
+  }));
+}
+
+function buildStudentAttendanceStmts(db: D1Database, records: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  return (records || []).map((record: any) => db.prepare(
+    'INSERT INTO student_attendance (id, student_id, date, status, notes, created_at, updated_at, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    str(record.id),
+    str(record.studentId),
+    str(record.date),
+    record.status === 'absent' ? 'absent' : 'present',
+    record.notes ?? null,
+    str(record.createdAt || new Date().toISOString()),
+    str(record.updatedAt || new Date().toISOString()),
+    centerId
+  ));
+}
+
+export async function writeStudentAttendance(db: D1Database, records: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const deduped = new Map<string, any>();
+  for (const record of records || []) {
+    if (!record || !record.studentId || !record.date) continue;
+    deduped.set(`${record.studentId}:${record.date}`, record);
+  }
+  const stmts = [
+    db.prepare('DELETE FROM student_attendance WHERE center_id = ?').bind(centerId),
+    ...buildStudentAttendanceStmts(db, Array.from(deduped.values()), centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+// ===========================================================================
 // FORMATIONS
 // ===========================================================================
 

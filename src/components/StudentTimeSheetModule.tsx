@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { Plus, Trash2, Users, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { Student, StudentTimeSheet, EXTERNAL_GRADE_OPTIONS } from '../types';
+import { Student, StudentTimeSheet, StudentAttendanceRecord, EXTERNAL_GRADE_OPTIONS } from '../types';
 import { useToast } from './Toast';
+import StudentAttendanceModule from './StudentAttendanceModule';
 import { AnimatePresence, motion } from 'motion/react';
 import TimeSheetModal from './TimeSheetModal';
 import AssignTimeSheetModal from './AssignTimeSheetModal';
@@ -14,6 +15,8 @@ interface StudentTimeSheetModuleProps {
   onUpdateStudent: (student: Student) => void;
   onUpdateStudents: (students: Student[]) => void;
   centerType?: string; // 'jardin' → Pointage Élèves, 'formation' → Jd. Horaires
+  studentAttendance: StudentAttendanceRecord[];
+  onUpdateStudentAttendance: (records: StudentAttendanceRecord[]) => void;
 }
 
 export default function StudentTimeSheetModule({
@@ -23,6 +26,8 @@ export default function StudentTimeSheetModule({
   onUpdateStudent,
   onUpdateStudents,
   centerType,
+  studentAttendance,
+  onUpdateStudentAttendance,
 }: StudentTimeSheetModuleProps) {
   const toast = useToast();
   const studentsRef = useRef(students);
@@ -48,6 +53,16 @@ export default function StudentTimeSheetModule({
   const [timeSheetGrade, setTimeSheetGrade] = useState('');
   const [timeSheetPage, setTimeSheetPage] = useState(1);
   const TIMESHEET_PAGE_SIZE = 9;
+
+  if (centerType === 'jardin') {
+    return (
+      <StudentAttendanceModule
+        students={students}
+        attendance={studentAttendance}
+        onUpdateAttendance={onUpdateStudentAttendance}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -728,6 +728,19 @@ export interface StudentTimeSheet {
   updatedAt: string;
 }
 
+export type StudentAttendanceStatus = 'present' | 'absent';
+
+/** Daily check-in record used by jardin centers (Pointage Élèves). */
+export interface StudentAttendanceRecord {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  status: StudentAttendanceStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const TIMESHEET_GRADES_NO_BRANCH = [
   'Primaire 1ère', 'Primaire 2ème', 'Primaire 3ème', 'Primaire 4ème', 'Primaire 5ème', 'Primaire 6ème',
   'Collège 7ème', 'Collège 8ème', 'Collège 9ème', 'Lycée 1ère'

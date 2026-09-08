@@ -2,7 +2,7 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, Formation, CenterTenant, DemoRequest, MealForfaitClosure
+  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure
 } from './types';
 
 const API_BASE = '/api';
@@ -181,6 +181,16 @@ export async function saveRevisionSeances(revisionSeances: RevisionSeance[]): Pr
 
 export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void> {
   return putDomain('/student-timesheets', sheets, 'تعذر حفظ جداول التوقيت.');
+}
+
+/** Save daily student check-in records for jardin centers. */
+export function saveStudentAttendanceApi(records: StudentAttendanceRecord[]): Promise<void> {
+  return putDomain('/student-attendance', records, 'تعذر حفظ pointage التلاميذ.');
+}
+
+/** Fetch daily student check-in records for jardin centers. */
+export function fetchStudentAttendanceApi(): Promise<StudentAttendanceRecord[]> {
+  return getDomain<StudentAttendanceRecord[]>('/student-attendance', 'تعذر تحميل pointage التلاميذ.');
 }
 
 export async function saveFormations(formations: Formation[]): Promise<void> {

@@ -371,6 +371,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
       // ── formations / timesheets / expenses ──
       env.DB.prepare('DELETE FROM formations WHERE center_id = ?').bind(id),
       env.DB.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM student_attendance WHERE center_id = ?').bind(id),
       env.DB.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(id),
       env.DB.prepare('DELETE FROM expenses WHERE center_id = ?').bind(id),
       // ── auth: sessions + the center's users (platform admins preserved) ──
