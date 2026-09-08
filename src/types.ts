@@ -84,7 +84,6 @@ export interface CenterSettings {
   centerName: string;
   phoneNumber: string;
   locationCity: string;
-  geminiApiKey?: string;
   mealOperatingMode?: MealOperatingMode;
   fees: CenterFeeSet;
   // Per-school-year fee overrides: key = "2025/2026" ...
@@ -257,7 +256,6 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     centerName: src.centerName || src.center_name || 'المركز',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
-    geminiApiKey: src.geminiApiKey || src.gemini_api_key || '',
     mealOperatingMode: src.mealOperatingMode || src.meal_operating_mode || 'external_traiteur',
     fees: baseFees,
     feesByYear,
@@ -940,7 +938,7 @@ export interface Formation {
   // Target grade (المستوى الدراسي) and branch (الشعبة, only for grades > 2ème)
   grade?: string;
   branch?: string;
-  // Weekly schedule of training sessions (seances), generated/edited via Gemini aide
+  // Weekly schedule of training sessions (seances), edited manually
   schedule?: FormationSeance[];
 }
 

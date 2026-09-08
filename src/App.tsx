@@ -21,7 +21,6 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
-  BarChart3,
   Award,
   CalendarCheck,
   ShieldCheck,
@@ -98,7 +97,6 @@ import LibraryModule from './components/LibraryModule';
 import MealsModule from './components/MealsModule';
 import FinanceModule from './components/FinanceModule';
 import StaffManagementModule from './components/StaffManagementModule';
-import DataAnalysisModule from './components/DataAnalysisModule';
 import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
@@ -184,7 +182,7 @@ export default function App() {
   const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
   const hasCenterModule = (tabId: string): boolean => {
     const moduleKey = TAB_MODULE[tabId];
-    if (!moduleKey) return true; // dashboard / dataAnalysis / settings — always available
+    if (!moduleKey) return true; // dashboard / settings — always available
     if (isPlatformSuperAdmin || centerModuleKeys.length === 0) return true;
     return centerModuleKeys.includes(moduleKey);
   };
@@ -861,7 +859,6 @@ export default function App() {
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
         { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
-        { id: 'dataAnalysis', label: 'تحليل البيانات', icon: BarChart3 },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
@@ -1204,23 +1201,6 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStaff={handleUpdateStaff}
                   onUpdateTimesheets={handleUpdateTimesheets}
-                />
-              )}
-
-              {activeTab === 'dataAnalysis' && (
-                <DataAnalysisModule
-                  students={students}
-                  staff={staff}
-                  slots={slots}
-                  courses={courses}
-                  sessions={sessions}
-                  mealPlans={mealPlans}
-                  expenses={expenses}
-                  timesheets={timesheets}
-                  revisionSeances={revisionSeances}
-                  externalStudents={externalStudents}
-                  formations={formations}
-                  settings={settings}
                 />
               )}
 

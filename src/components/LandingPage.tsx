@@ -729,7 +729,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                           'Fiches élèves complètes : parents, fratries, autorisations',
                           'Notes par trimestre — devoirs et synthèses',
                           'Moyennes automatiques et élèves à risque',
-                          'Import intelligent de fiches scannées (IA)'
+                          'Réinscriptions rapides depuis une année précédente'
                         ]
                       : [
                           'Carnet de paiements par élève avec reçus',

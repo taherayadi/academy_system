@@ -39,7 +39,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
-import { FORMATION_WORK_DAYS } from '../utils/aiFormationSchedule';
+import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
 
 interface FormationModuleProps {
   formations: Formation[];
@@ -109,7 +109,7 @@ export default function FormationModule({
   const [printingStudent, setPrintingStudent] = useState<{ formation: Formation; student: FormationStudent } | null>(null);
   const [printingSchedule, setPrintingSchedule] = useState<Formation | null>(null);
 
-  // Formation weekly schedule (Gemini aide)
+  // Formation weekly schedule (manual planning)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
 
   // Refund (student quit the formation after paying)
@@ -801,7 +801,7 @@ export default function FormationModule({
                   </div>
                 </div>
 
-                {/* Weekly schedule (Gemini aide) */}
+                {/* Weekly schedule */}
                 <div className="space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-slate-700">جدول الحصص الأسبوعي:</span>
@@ -1997,12 +1997,10 @@ export default function FormationModule({
         );
       })()}
 
-      {/* Formation Weekly Schedule (Gemini aide) */}
+      {/* Formation Weekly Schedule */}
       <FormationScheduleModal
         open={isScheduleModalOpen}
         formation={selectedFormation}
-        apiKey={settings?.geminiApiKey}
-        centerName={settings?.centerName}
         onClose={() => setIsScheduleModalOpen(false)}
         onSave={handleSaveFormationSchedule}
       />

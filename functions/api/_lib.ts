@@ -355,7 +355,6 @@ export async function readSettings(db: D1Database, centerId: string = DEFAULT_CE
     centerName: settingsRow?.center_name || 'المركز',
     phoneNumber: settingsRow?.phone_number || '',
     locationCity: settingsRow?.location_city || '',
-    geminiApiKey: settingsRow?.gemini_api_key || '',
     mealOperatingMode: settingsRow?.meal_operating_mode || 'external_traiteur',
     fees: baseFees, feesByYear, subjects, etablissements
   };
@@ -365,20 +364,19 @@ export async function writeSettings(db: D1Database, settings: any, centerId: str
   if (!settings || typeof settings !== 'object') return;
   const stmts: D1PreparedStatement[] = [];
   stmts.push(db.prepare(
-    'INSERT INTO center_settings (center_id, center_name, phone_number, location_city, gemini_api_key, meal_operating_mode) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(center_id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key, meal_operating_mode = excluded.meal_operating_mode'
+    'INSERT INTO center_settings (center_id, center_name, phone_number, location_city, meal_operating_mode) VALUES (?, ?, ?, ?, ?) ON CONFLICT(center_id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, meal_operating_mode = excluded.meal_operating_mode'
   ).bind(
     centerId,
     str(settings.centerName || settings.center_name || 'المركز'),
     str(settings.phoneNumber || settings.phone_number || ''),
     str(settings.locationCity || settings.location_city || ''),
-    str(settings.geminiApiKey || settings.gemini_api_key || ''),
     str(settings.mealOperatingMode || settings.meal_operating_mode || 'external_traiteur')
   ));
 
   if (centerId === DEFAULT_CENTER_ID) {
     stmts.push(db.prepare(
-      'INSERT INTO settings (id, center_name, phone_number, location_city, gemini_api_key) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city, gemini_api_key = excluded.gemini_api_key'
-    ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || ''), str(settings.geminiApiKey || settings.gemini_api_key || '')));
+      'INSERT INTO settings (id, center_name, phone_number, location_city) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET center_name = excluded.center_name, phone_number = excluded.phone_number, location_city = excluded.location_city'
+    ).bind(str(settings.centerName || settings.center_name || 'المركز'), str(settings.phoneNumber || settings.phone_number || ''), str(settings.locationCity || settings.location_city || '')));
   }
 
   stmts.push(db.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(centerId));

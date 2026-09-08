@@ -206,25 +206,6 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
           </div>
         </div>
 
-        {/* Gemini API Key */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
-          <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-            <KeyRound className="h-5 w-5 text-[#257C86]" />
-            مفتاح Gemini API
-          </h3>
-          <div>
-            <label className="text-xs font-bold text-slate-700 block mb-1">مفتاح API (للـ PDF extraction)</label>
-            <input
-              type="password"
-              value={formData.geminiApiKey || ''}
-              onChange={(e) => setFormData({ ...formData, geminiApiKey: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86] font-mono"
-              placeholder="AIza..."
-            />
-            <p className="text-[10px] text-slate-400 mt-1">احصل على المفتاح من: aistudio.google.com/apikey</p>
-          </div>
-        </div>
-
         {/* Section 2: Default Fees Configuration */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
