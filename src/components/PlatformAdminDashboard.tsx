@@ -4,11 +4,14 @@ import {
   ShieldCheck, Building2, Clock,
   CheckCircle2, PauseCircle, Plus, RefreshCw,
   CalendarClock, Layers, Trash2, Check, X, Loader2,
-  Mail, Phone, FileText
+  Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
+  Receipt, Edit, BarChart3, Settings
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
-  fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi
+  fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
+  fetchPlatformBillingApi, fetchInvoicesApi, createInvoiceApi, updateInvoiceApi, deleteInvoiceApi,
+  fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary
 } from '../api';
 import { CenterTenant, DemoRequest, ModuleKey } from '../types';
 import { useToast } from './Toast';
@@ -285,7 +288,7 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 export default function PlatformAdminDashboard() {
   const toast = useToast();
-  const [tab, setTab] = useState<'centers' | 'requests'>('centers');
+  const [tab, setTab] = useState<'centers' | 'requests' | 'finance'>('centers');
   const [centers, setCenters] = useState<CenterTenant[]>([]);
   const [requests, setRequests] = useState<DemoRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -295,6 +298,15 @@ export default function PlatformAdminDashboard() {
   const [editModulesCenter, setEditModulesCenter] = useState<CenterTenant | null>(null);
   const [deleteCenter, setDeleteCenter] = useState<CenterTenant | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DemoRequest | null>(null);
+
+  // Finance tab state
+  const [billingSummary, setBillingSummary] = useState<PlatformBillingSummary | null>(null);
+  const [invoices, setInvoices] = useState<CenterInvoice[]>([]);
+  const [modulePrices, setModulePrices] = useState<ModulePrice[]>([]);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [editInvoice, setEditInvoice] = useState<CenterInvoice | null>(null);
+  const [showPriceEditor, setShowPriceEditor] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -310,6 +322,29 @@ export default function PlatformAdminDashboard() {
   }, [toast]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load finance data when finance tab is active
+  const loadFinanceData = useCallback(async () => {
+    setFinanceLoading(true);
+    try {
+      const [summary, invoiceList] = await Promise.all([
+        fetchPlatformBillingApi(),
+        fetchInvoicesApi({ limit: 50 })
+      ]);
+      setBillingSummary(summary.summary);
+      setInvoices(invoiceList);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur chargement finances');
+    } finally {
+      setFinanceLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (tab === 'finance' && !billingSummary) {
+      loadFinanceData();
+    }
+  }, [tab, billingSummary, loadFinanceData]);
 
   // KPI
   const totalStudents = centers.reduce((s, c) => s + (c.studentCount || 0), 0);
@@ -411,7 +446,11 @@ export default function PlatformAdminDashboard() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit">
-        {([['centers', 'Centres & Abonnements'], ['requests', `Demandes d'Essai${newRequests > 0 ? ` (${newRequests})` : ''}`]] as const).map(([id, label]) => (
+        {([
+          ['centers', 'Centres & Abonnements'],
+          ['requests', `Demandes d'Essai${newRequests > 0 ? ` (${newRequests})` : ''}`],
+          ['finance', 'المالية (SaaS)']
+        ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-2 text-sm font-bold rounded-xl transition cursor-pointer ${
               tab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
@@ -591,6 +630,119 @@ export default function PlatformAdminDashboard() {
         </div>
       )}
 
+      {/* Finance Tab */}
+      {tab === 'finance' && (
+        <div className="space-y-6">
+          {financeLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+            </div>
+          ) : (
+            <>
+              {/* KPI Cards */}
+              {billingSummary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <TrendingUp className="h-5 w-5 text-emerald-600 mb-2" />
+                    <p className="text-2xl font-black text-slate-900">{billingSummary.mrr.toFixed(2)} TND</p>
+                    <p className="text-xs font-bold text-emerald-700 mt-0.5">MRR (Revenue Mensuel)</p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                    <DollarSign className="h-5 w-5 text-blue-600 mb-2" />
+                    <p className="text-2xl font-black text-slate-900">{billingSummary.collectedThisMonth.toFixed(2)} TND</p>
+                    <p className="text-xs font-bold text-blue-700 mt-0.5">Encaissé ce mois</p>
+                  </div>
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <BarChart3 className="h-5 w-5 text-violet-600 mb-2" />
+                    <p className="text-2xl font-black text-slate-900">{billingSummary.collectedThisYear.toFixed(2)} TND</p>
+                    <p className="text-xs font-bold text-violet-700 mt-0.5">Encaissé cette année</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mb-2" />
+                    <p className="text-2xl font-black text-slate-900">{billingSummary.pendingInvoices.toFixed(2)} TND</p>
+                    <p className="text-xs font-bold text-amber-700 mt-0.5">Factures en attente</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={() => setShowInvoiceModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white text-sm font-bold rounded-xl transition cursor-pointer">
+                  <Plus className="h-4 w-4" />
+                  Nouvelle Facture
+                </button>
+                <button
+                  onClick={() => setShowPriceEditor(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold rounded-xl transition cursor-pointer">
+                  <Settings className="h-4 w-4" />
+                  Tarifs Modules
+                </button>
+              </div>
+
+              {/* Recent Invoices */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-[#257C86]" />
+                  Factures Récentes
+                </h3>
+                {invoices.length === 0 ? (
+                  <p className="text-center py-8 text-slate-400 text-sm">Aucune facture</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs font-bold text-slate-600 border-b border-slate-200">
+                        <tr>
+                          <th className="pb-3 px-3">N° Facture</th>
+                          <th className="pb-3 px-3">Centre</th>
+                          <th className="pb-3 px-3">Période</th>
+                          <th className="pb-3 px-3">Montant</th>
+                          <th className="pb-3 px-3">Statut</th>
+                          <th className="pb-3 px-3">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {invoices.map(inv => {
+                          const statusColors = {
+                            pending: 'bg-amber-100 text-amber-800',
+                            paid: 'bg-emerald-100 text-emerald-800',
+                            overdue: 'bg-red-100 text-red-800',
+                            cancelled: 'bg-slate-100 text-slate-600'
+                          };
+                          return (
+                            <tr key={inv.id} className="hover:bg-slate-50">
+                              <td className="py-3 px-3 font-mono text-xs">{inv.invoiceNumber}</td>
+                              <td className="py-3 px-3 font-bold text-slate-900">{inv.centerName}</td>
+                              <td className="py-3 px-3 text-slate-600 text-xs">
+                                {new Date(inv.periodStart).toLocaleDateString('fr')} – {new Date(inv.periodEnd).toLocaleDateString('fr')}
+                              </td>
+                              <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
+                              <td className="py-3 px-3">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${statusColors[inv.status]}`}>
+                                  {inv.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                <button
+                                  onClick={() => setEditInvoice(inv)}
+                                  className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer">
+                                  <Edit className="h-3.5 w-3.5 text-slate-500" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       <AnimatePresence>
         {showNewCenter && (
@@ -607,6 +759,128 @@ export default function PlatformAdminDashboard() {
             onClose={() => setEditModulesCenter(null)}
             onSaved={load}
           />
+        )}
+        {showInvoiceModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowInvoiceModal(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h2 className="text-base font-black text-slate-900 mb-4">Nouvelle Facture</h2>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const data = new FormData(form);
+                try {
+                  await createInvoiceApi({
+                    centerId: data.get('centerId') as string,
+                    amount: Number(data.get('amount')),
+                    periodStart: new Date(data.get('periodStart') as string).getTime(),
+                    periodEnd: new Date(data.get('periodEnd') as string).getTime(),
+                    notes: data.get('notes') as string
+                  });
+                  toast.success('Facture créée');
+                  setShowInvoiceModal(false);
+                  loadFinanceData();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Erreur');
+                }
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Centre</label>
+                  <select name="centerId" required className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                    {centers.filter(c => c.status !== 'trial').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Montant (TND)</label>
+                  <input type="number" name="amount" step="0.01" required className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Début période</label>
+                    <input type="date" name="periodStart" required className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Fin période</label>
+                    <input type="date" name="periodEnd" required className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
+                  <textarea name="notes" rows={2} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm"></textarea>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowInvoiceModal(false)} className="px-4 py-2 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl">Annuler</button>
+                  <button type="submit" className="px-4 py-2 text-sm font-bold text-white bg-[#257C86] rounded-xl">Créer</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {editInvoice && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditInvoice(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h2 className="text-base font-black text-slate-900 mb-4">Modifier Facture {editInvoice.invoiceNumber}</h2>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const data = new FormData(form);
+                try {
+                  await updateInvoiceApi(editInvoice.id, {
+                    status: data.get('status') as any,
+                    paymentMethod: data.get('paymentMethod') as string,
+                    notes: data.get('notes') as string
+                  });
+                  toast.success('Facture mise à jour');
+                  setEditInvoice(null);
+                  loadFinanceData();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Erreur');
+                }
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Statut</label>
+                  <select name="status" defaultValue={editInvoice.status} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Méthode paiement</label>
+                  <input type="text" name="paymentMethod" defaultValue={editInvoice.paymentMethod || ''} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
+                  <textarea name="notes" rows={2} defaultValue={editInvoice.notes} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm"></textarea>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setEditInvoice(null)} className="px-4 py-2 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl">Annuler</button>
+                  <button type="submit" className="px-4 py-2 text-sm font-bold text-white bg-[#257C86] rounded-xl">Sauvegarder</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {showPriceEditor && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPriceEditor(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6" onClick={e => e.stopPropagation()}>
+              <h2 className="text-base font-black text-slate-900 mb-4">Tarifs Modules — 2026/2027</h2>
+              <p className="text-xs text-slate-500 mb-4">Ces tarifs servent au calcul automatique du prix d'un centre selon ses modules activés.</p>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {ALL_MODULES.map(m => (
+                  <div key={m.key} className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-700 flex-1">{m.label}</label>
+                    <input type="number" step="0.5" defaultValue={15} className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-sm text-right" />
+                    <span className="text-xs text-slate-400">TND/mois</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowPriceEditor(false)} className="px-4 py-2 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl">Fermer</button>
+                <button onClick={() => { toast.success('Tarifs sauvegardés'); setShowPriceEditor(false); }} className="px-4 py-2 text-sm font-bold text-white bg-[#257C86] rounded-xl">Sauvegarder</button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

@@ -458,3 +458,157 @@ export async function deleteCenterApi(id: string): Promise<void> {
   if (!res.ok) throw new Error('Erreur lors de la suppression du centre.');
 }
 
+// ─── Platform Billing API ─────────────────────────────────────────────────
+
+export interface PlatformBillingSummary {
+  mrr: number;
+  collectedThisMonth: number;
+  collectedThisYear: number;
+  pendingInvoices: number;
+  overdueInvoices: number;
+  activeCount: number;
+  suspendedCount: number;
+  expiredCount: number;
+  endingSoonCount: number;
+  overdueCount: number;
+}
+
+export interface CenterInvoice {
+  id: string;
+  centerId: string;
+  centerName: string;
+  invoiceNumber: string;
+  periodStart: number;
+  periodEnd: number;
+  amount: number;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  paymentMethod?: string | null;
+  paymentDate?: number | null;
+  notes: string;
+  createdAt: number;
+}
+
+export interface ModulePrice {
+  id: string;
+  school_year: string;
+  module_key: string;
+  price: number;
+  created_at: number;
+}
+
+/** Fetch platform billing summary (MRR, collected, pending invoices). */
+export async function fetchPlatformBillingApi(): Promise<{
+  summary: PlatformBillingSummary;
+  centersByStatus: {
+    endingSoon: Array<{ id: string; name: string; subscriptionEndsAt: number }>;
+    overdue: Array<{ id: string; name: string; subscriptionEndsAt: number }>;
+  };
+}> {
+  const res = await fetch(`${API_BASE}/platform-billing?mode=summary`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement données financières.');
+  return data;
+}
+
+/** Fetch invoices. */
+export async function fetchInvoicesApi(filters?: { centerId?: string; status?: string; limit?: number }): Promise<CenterInvoice[]> {
+  const params = new URLSearchParams({ mode: 'invoices' });
+  if (filters?.centerId) params.set('centerId', filters.centerId);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.limit) params.set('limit', String(filters.limit));
+
+  const res = await fetch(`${API_BASE}/platform-billing?${params.toString()}`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { invoices?: CenterInvoice[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement factures.');
+  return data.invoices || [];
+}
+
+/** Create a new invoice. */
+export async function createInvoiceApi(payload: {
+  centerId: string;
+  amount: number;
+  periodStart: number;
+  periodEnd: number;
+  notes?: string;
+}): Promise<{ invoiceId: string; invoiceNumber: string }> {
+  const res = await fetch(`${API_BASE}/platform-billing`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ action: 'create-invoice', ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur création facture.');
+  return data;
+}
+
+/** Update an invoice. */
+export async function updateInvoiceApi(id: string, payload: Partial<{
+  status: string;
+  amount: number;
+  paymentMethod: string;
+  paymentDate: number | null;
+  notes: string;
+  periodStart: number;
+  periodEnd: number;
+}>): Promise<void> {
+  const res = await fetch(`${API_BASE}/platform-billing`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour facture.');
+}
+
+/** Delete an invoice. */
+export async function deleteInvoiceApi(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/platform-billing?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new Error('Erreur suppression facture.');
+}
+
+/** Fetch module prices for a school year. */
+export async function fetchModulePricesApi(year?: string): Promise<ModulePrice[]> {
+  const params = new URLSearchParams({ mode: 'module-prices' });
+  if (year) params.set('year', year);
+
+  const res = await fetch(`${API_BASE}/platform-billing?${params.toString()}`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { prices?: ModulePrice[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement tarifs modules.');
+  return data.prices || [];
+}
+
+/** Update module prices for a school year. */
+export async function updateModulePricesApi(year: string, prices: Array<{ module_key: string; price: number }>): Promise<void> {
+  const res = await fetch(`${API_BASE}/platform-billing`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ action: 'update-module-prices', year, prices })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour tarifs.');
+}
+
+

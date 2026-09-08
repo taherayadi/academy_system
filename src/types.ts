@@ -27,6 +27,8 @@ export interface CenterTenant {
   status: CenterStatus;
   trialEndsAt?: number | null;
   subscriptionEndsAt?: number | null;
+  billingCycle?: 'monthly' | 'annual';
+  monthlyPrice?: number;
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;

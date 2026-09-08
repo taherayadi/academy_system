@@ -15,10 +15,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     if (isPlatformAdmin) {
       const { results } = await env.DB.prepare(`
-        SELECT 
-          c.id, c.name, c.slug, c.phone_number, c.location_city, c.plan, 
-          c.enabled_modules, c.meal_operating_mode, c.status, 
-          c.trial_ends_at, c.subscription_ends_at, c.created_at,
+        SELECT
+          c.id, c.name, c.slug, c.phone_number, c.location_city, c.plan,
+          c.enabled_modules, c.meal_operating_mode, c.status,
+          c.trial_ends_at, c.subscription_ends_at, c.billing_cycle, c.monthly_price, c.created_at,
           (SELECT COUNT(*) FROM students s WHERE s.center_id = c.id) as student_count,
           (SELECT email FROM users u WHERE u.center_id = c.id AND u.role IN ('admin', 'super_admin') LIMIT 1) as admin_email
         FROM centers c
@@ -44,6 +44,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           status: c.status || 'active',
           trialEndsAt: c.trial_ends_at || null,
           subscriptionEndsAt: c.subscription_ends_at || null,
+          billingCycle: c.billing_cycle || 'monthly',
+          monthlyPrice: c.monthly_price !== null ? Number(c.monthly_price) : 0,
           createdAt: c.created_at || Date.now(),
           studentCount: Number(c.student_count) || 0,
           adminEmail: c.admin_email || ''
@@ -76,6 +78,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           status: center.status || 'active',
           trialEndsAt: center.trial_ends_at || null,
           subscriptionEndsAt: center.subscription_ends_at || null,
+          billingCycle: center.billing_cycle || 'monthly',
+          monthlyPrice: center.monthly_price !== null ? Number(center.monthly_price) : 0,
           createdAt: center.created_at || Date.now()
         }]
       });
@@ -97,14 +101,21 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const slug = String(body.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || '').trim();
     const phoneNumber = String(body.phoneNumber || body.phone || '').trim();
     const locationCity = String(body.locationCity || body.city || 'تونس').trim();
-    const plan = String(body.plan || 'trial').trim();
-    const status = String(body.status || (plan === 'trial' ? 'trial' : 'active')).trim();
+    // "trial" is not a valid `plan` value (CHECK constraint only allows starter/growth/pro/custom),
+    // so a trial center is stored as plan='starter' with status='trial'.
+    const rawPlan = String(body.plan || 'trial').trim();
+    const requestedStatus = String(body.status || '').trim();
+    const isTrial = rawPlan === 'trial' || requestedStatus === 'trial';
+    const plan = isTrial ? 'starter' : (rawPlan === '' ? 'starter' : rawPlan);
+    const status = requestedStatus || (isTrial ? 'trial' : 'active');
     const mealOperatingMode = String(body.mealOperatingMode || 'external_traiteur').trim();
     const trialDays = Number(body.trialDays) || 14;
     const adminName = String(body.adminName || `مدير ${name}`).trim();
     const adminEmail = String(body.adminEmail || '').trim().toLowerCase();
     const adminPassword = String(body.adminPassword || '').trim();
-    const demoRequestId = body.demoRequestId ? String(body.demoRequestId).trim() : null;
+    const demoRequestId = body.demoRequestId
+      ? String(body.demoRequestId).trim()
+      : (body.convertFromRequestId ? String(body.convertFromRequestId).trim() : null);
 
     if (!name) return json({ error: 'اسم المركز مطلوب.' }, 400);
     if (!adminEmail || !adminPassword) {
@@ -118,15 +129,44 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const id = crypto.randomUUID();
     const createdAt = Date.now();
-    const trialEndsAt = (status === 'trial' || plan === 'trial') ? (createdAt + trialDays * 86400000) : null;
+    const trialEndsAt = isTrial ? (createdAt + trialDays * 86400000) : null;
 
+    const billingCycle = isTrial ? 'monthly' : (String(body.billingCycle || 'monthly').trim() === 'annual' ? 'annual' : 'monthly');
+
+    // Default modules
     const defaultModules = [
-      'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision', 
-      'formations', 'cantine', 'transport', 'events', 'bibliotheque', 
+      'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
+      'formations', 'cantine', 'transport', 'events', 'bibliotheque',
       'studentTimeSheets', 'staff'
     ];
     const enabledModules = Array.isArray(body.enabledModules) ? body.enabledModules : defaultModules;
     const modulesJson = JSON.stringify(enabledModules);
+
+    // Compute monthlyPrice from module_prices for the current school year
+    const billingMonth = new Date(createdAt).getMonth(); // 0-indexed
+    const billingYear = new Date(createdAt).getFullYear();
+    // School year: months Sep (8) – Jul (6) → start year; Aug (7) + first days Sep → same academic year as start
+    const schoolStartYear = billingMonth >= 8 ? billingYear : billingYear - 1;
+    const currentSchoolYear = `${schoolStartYear}/${schoolStartYear + 1}`;
+
+    let monthlyPrice = 0;
+    if (!isTrial) {
+      const placeholders = enabledModules.map(() => '?').join(',');
+      const { results: priceRows } = await env.DB.prepare(
+        `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
+      ).bind(currentSchoolYear, ...enabledModules).all<any>();
+      monthlyPrice = priceRows.reduce((sum, r) => sum + (Number(r.price) || 0), 0);
+      if (billingCycle === 'annual') {
+        monthlyPrice = monthlyPrice * 12 * 0.8; // 20% discount
+      }
+    }
+
+    // subscription_ends_at: 1 month for monthly, 1 year for annual (starts from creation for paid)
+    let subscriptionEndsAt = null;
+    if (!isTrial) {
+      const periodMs = billingCycle === 'annual' ? 365 * 86400000 : 30 * 86400000;
+      subscriptionEndsAt = createdAt + periodMs;
+    }
 
     const passwordHash = await sha256Hex(adminPassword);
 
@@ -135,12 +175,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     // 1. Center
     stmts.push(env.DB.prepare(`
       INSERT INTO centers (
-        id, name, slug, phone_number, location_city, plan, enabled_modules, 
-        meal_operating_mode, status, trial_ends_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, slug, phone_number, location_city, plan, enabled_modules,
+        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      id, name, slug, phoneNumber, locationCity, plan, modulesJson, 
-      mealOperatingMode, status, trialEndsAt, createdAt
+      id, name, slug, phoneNumber, locationCity, plan, modulesJson,
+      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice, createdAt
     ));
 
     // 2. Center Settings
@@ -216,6 +256,24 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
     if (body.subscriptionEndsAt !== undefined) { updates.push('subscription_ends_at = ?'); binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null); }
+
+    // "+N jours d'essai" button: extend trial from today (or from current end if later)
+    if (body.extendTrialDays !== undefined) {
+      const extraDays = Number(body.extendTrialDays) || 0;
+      const current = await env.DB.prepare('SELECT trial_ends_at, status FROM centers WHERE id = ?').bind(id).first<any>();
+      if (current) {
+        const now = Date.now();
+        const base = (current.trial_ends_at && Number(current.trial_ends_at) > now) ? Number(current.trial_ends_at) : now;
+        const newEnd = base + extraDays * 86400000;
+        if (current.status !== 'trial') {
+          updates.push('status = ?'); binds.push('trial');
+        }
+        updates.push('trial_ends_at = ?'); binds.push(newEnd);
+      }
+    }
+
+    if (body.billingCycle !== undefined) { updates.push('billing_cycle = ?'); binds.push(String(body.billingCycle).trim()); }
+    if (body.monthlyPrice !== undefined) { updates.push('monthly_price = ?'); binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice)); }
 
     if (updates.length > 0) {
       binds.push(id);
