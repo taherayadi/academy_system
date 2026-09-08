@@ -103,6 +103,16 @@ function normalizeCenterType(raw?: string): 'jardin' | 'formation' | '' {
   return '';
 }
 
+/** Capitalise la première lettre de chaque mot : "ahmed ben-ali" → "Ahmed Ben-Ali" */
+function titleCaseName(value?: string): string {
+  return (value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(/([\s-])/)
+    .map(p => (p ? p.charAt(0).toUpperCase() + p.slice(1) : p))
+    .join('');
+}
+
 const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
   { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
   { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
@@ -891,12 +901,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   {requests.slice(0, 4).map(r => (
                     <div key={r.id} className="flex items-center gap-3">
                       <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0">
-                        {r.fullName.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                        {titleCaseName(r.fullName).split(' ').map(w => w[0]).join('').slice(0, 2)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-black text-slate-900 truncate">{r.academyName}</div>
+                        <div className="text-xs font-black text-slate-900 truncate">{titleCaseName(r.academyName)}</div>
                         <div className="text-[10px] font-semibold text-slate-400 truncate">
-                          {r.fullName} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
+                          {titleCaseName(r.fullName)} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
                         </div>
                       </div>
                       <span className={`text-[9px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${REQ_STATUS_BADGE[r.status] || REQ_STATUS_BADGE.new}`}>
@@ -1171,11 +1181,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
                     <div className="h-11 w-11 rounded-2xl bg-blue-50 flex items-center justify-center text-sm font-black text-blue-600 flex-shrink-0">
-                      {req.fullName.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                      {titleCaseName(req.fullName).split(' ').map(w => w[0]).join('').slice(0, 2)}
                     </div>
                     <div>
-                      <p className="font-black text-slate-900 text-sm">{req.fullName}</p>
-                      <p className="text-xs font-black text-[#257C86]">{req.academyName}</p>
+                      <p className="font-black text-slate-900 text-sm">{titleCaseName(req.fullName)}</p>
+                      <p className="text-xs font-black text-[#257C86]">{titleCaseName(req.academyName)}</p>
                       <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{fmtDate(req.createdAt)}</p>
                     </div>
                   </div>
@@ -1639,7 +1649,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       <ConfirmDialog
         open={!!deleteRequest}
         title="Supprimer la demande ?"
-        message={`Supprimer la demande de "${deleteRequest?.fullName}" ?`}
+        message={`Supprimer la demande de "${titleCaseName(deleteRequest?.fullName)}" ?`}
         onConfirm={handleDeleteRequest}
         onCancel={() => setDeleteRequest(null)}
       />
