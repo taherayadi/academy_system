@@ -439,7 +439,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Filtered Payments by Year & Month & Search
   const filteredPayments = allPaymentsMerged.filter(p => {
     const matchesYear = schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter;
-    const matchesMonth = monthFilter === 'all' || p.month.includes(monthFilter);
+    const matchesMonth = monthFilter === 'all' || p.month.toLocaleLowerCase('fr').includes(monthFilter.toLocaleLowerCase('fr')) || (() => {
+      const datePrefix = monthFilterToDatePrefix(monthFilter, schoolYearFilter);
+      return datePrefix ? p.month.toLowerCase().startsWith(`repas unitaire (${datePrefix}`) : false;
+    })();
     const matchesSearch = !searchTerm || p.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || p.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesYear && matchesMonth && matchesSearch;
   });
@@ -554,7 +557,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   };
 
   const paymentServiceLabel = (p: { service: string; month?: string }): string => {
-    return SERVICE_LABELS[p.service] || p.service;
+    if (p.service === 'Inscription' || p.service === 'Inscription Suivi') return 'تسجيل متابعة دراسية';
+    const base = SERVICE_LABELS[p.service] || p.service;
+    return String(p.month || '').startsWith('Annuel') ? (base.startsWith('تسجيل') ? base : `تسجيل ${base}`) : base;
   };
 
   // Pending cheque amounts for filtered period (not yet cashed)
@@ -1319,11 +1324,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         const g = item.group;
                         return (
                           <tr key={g.chequeNumber} className="hover:bg-[#F2F8F9]/50 transition">
-                            <td className="p-4 font-mono font-bold text-slate-500">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
+                            <td className="p-4 font-mono font-bold text-slate-500 text-[10px]">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
                             <td className="p-4 font-mono text-slate-600">{g.chequeDate || '-'}</td>
-                            <td className="p-4 font-black text-slate-900">{g.studentNames.join(', ')}</td>
-                            <td className="p-4 font-bold text-[#14464E]">{Array.from(new Set(g.payments.map(p => paymentServiceLabel(p)))).join('، ')}</td>
-                            <td className="p-4 font-bold text-slate-700">
+                            <td className="p-4 font-black text-slate-900 text-[11px]">{g.studentNames.join(', ')}</td>
+                            <td className="p-4">
+                              <div className="flex flex-wrap gap-1">
+                                {Array.from(new Set(g.payments.map(p => paymentServiceLabel(p)))).map(label => (
+                                  <span key={label} className="inline-flex px-1.5 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-md font-bold text-[9px]">{label}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="p-4 font-bold text-slate-700 text-[10px]">
                               {(() => {
                                 const distinctServices = new Set(g.payments.map(p => p.service));
                                 const distinctMonths = new Set(g.payments.map(p => p.month));
@@ -1338,15 +1349,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             <td className="p-4"><span className="text-slate-300">—</span></td>
                             <td className="p-4 font-mono font-black text-emerald-700">{fmt(g.totalAmount)} د.ت</td>
                             <td className="p-4">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1">
                                 {g.chequePaid ? (
-                                  <span className="inline-flex items-center gap-1 text-slate-600 font-bold">
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                    <CheckCircle2 className="h-3 w-3" />
                                     شيك محصل
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-slate-600 font-bold">
-                                    <AlertCircle className="h-3.5 w-3.5" />
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#E0EFF1] text-[#14464E] rounded-lg font-bold text-[10px]">
+                                    <AlertCircle className="h-3 w-3" />
                                     شيك معلق
                                   </span>
                                 )}
@@ -2781,7 +2792,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">الحالة</p>
-                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-emerald-700' : 'text-slate-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
+                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-emerald-700' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">المبلغ الإجمالي</p>
