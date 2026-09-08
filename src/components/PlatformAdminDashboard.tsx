@@ -6,7 +6,7 @@ import {
   CalendarClock, Layers, Trash2, Check, X, Loader2,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
   Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ImagePlus
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
@@ -248,7 +248,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     const enabled = Array.from(new Set<string>([...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, ...(requested.length ? requested : ALL_MODULES.map(m => m.key))]));
     return {
       name: initialData?.academyName || '',
-      slug: '',
+      logoUrl: '',
       phoneNumber: initialData?.phone || '',
       locationCity: '',
       plan: 'trial' as string,
@@ -348,10 +348,26 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             </div>
 
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Slug (URL)</label>
-              <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))}
-                placeholder="ex: smart-kids-sfax"
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre (URL de l'image)</label>
+              <div className="flex items-center gap-2">
+                {form.logoUrl ? (
+                  <span className="h-10 w-10 rounded-xl border border-slate-200 bg-white p-0.5 overflow-hidden shrink-0">
+                    <img src={form.logoUrl} alt="" className="w-full h-full rounded-lg object-cover" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  </span>
+                ) : (
+                  <span className="h-10 w-10 rounded-xl bg-[#257C86]/10 flex items-center justify-center shrink-0">
+                    <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                  </span>
+                )}
+                <input
+                  value={form.logoUrl}
+                  onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
+                  dir="ltr"
+                  placeholder="https://… (lien de l'image — optionnel)"
+                  className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition"
+                />
+              </div>
+              <p className="text-[11px] font-semibold text-slate-400 mt-1.5">Vide = logo par défaut. Le centre pourra aussi changer son logo depuis ses paramètres.</p>
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
@@ -940,9 +956,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     return (
                       <button key={c.id} onClick={() => onNavigate?.('centers')}
                         className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 hover:border-[#257C86]/50 hover:bg-[#257C86]/[0.04] p-3.5 text-left transition cursor-pointer">
-                        <div className="h-9 w-9 rounded-xl bg-[#257C86]/10 flex items-center justify-center text-[10px] font-black text-[#257C86] flex-shrink-0">
-                          {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                        </div>
+                        {c.logoUrl ? (
+                          <div className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
+                            <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-xl object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-11 w-11 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-[10px] font-black text-[#257C86] flex-shrink-0">
+                            {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-black text-slate-900 truncate">{c.name}</div>
                           <div className="text-[10px] font-semibold text-slate-400">{c.adminEmail || '—'}</div>
@@ -1033,9 +1055,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
-                    <div className="h-11 w-11 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
-                      {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                    </div>
+                    {c.logoUrl ? (
+                      <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
+                        <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-lg object-cover" />
+                      </div>
+                    ) : (
+                      <div className="h-9 w-9 rounded-xl bg-[#257C86]/10 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
+                        {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-black text-slate-900 text-sm">{c.name}</p>
                       <p className="text-xs text-slate-500 font-semibold">{c.adminEmail || '—'}</p>

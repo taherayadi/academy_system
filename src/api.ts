@@ -426,7 +426,7 @@ export async function fetchCentersApi(): Promise<CenterTenant[]> {
 /** Create a new center with its director account (super-admin). */
 export async function createCenterApi(payload: {
   name: string;
-  slug?: string;
+  logoUrl?: string;
   phoneNumber?: string;
   locationCity?: string;
   plan: string;
@@ -445,6 +445,7 @@ export async function createCenterApi(payload: {
     // director* fields so the director account is created correctly.
     body: JSON.stringify({
       ...payload,
+      logoUrl: payload.logoUrl,
       adminName: payload.directorName,
       adminEmail: payload.directorEmail,
       adminPassword: payload.directorPassword
