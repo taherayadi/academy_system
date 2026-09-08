@@ -238,10 +238,10 @@ export default function SeanceRevisionModule({
     <div className="space-y-6">
 
       {/* Header Banner */}
-      <div className="bg-white border border-[#E0EFF1] p-6 rounded-3xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
+      <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#F2F8F9] text-[#14464E] text-xs font-bold rounded-lg border border-[#C3E0E4]/60">
+            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
               حصة المراجعة
             </span>
             <span className="text-xs text-slate-400 font-bold">حصص مراجعة واحدة مع أساتذة خارجيين</span>
@@ -257,7 +257,7 @@ export default function SeanceRevisionModule({
 
         <button
           onClick={openAdd}
-          className="px-5 py-3 bg-[#257C86] hover:bg-[#1E6A73] text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-[#257C86]/20 flex items-center gap-2 cursor-pointer shrink-0"
+          className="px-5 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-[#257C86]/20 flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="h-5 w-5" />
           إضافة حصة مراجعة
@@ -265,7 +265,7 @@ export default function SeanceRevisionModule({
       </div>
 
       {/* Filters - Full Width */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs no-print">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-lg shadow-slate-900/5 no-print">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#257C86]/30">
             <option value="all">كل السنوات</option>
@@ -310,17 +310,17 @@ export default function SeanceRevisionModule({
                   onClick={() => setSelectedId(r.id)}
                   className={`p-5 rounded-3xl border transition cursor-pointer ${
                     isSelected
-                      ? 'bg-[#F2F8F9]/60 border-[#A0CBCF] shadow-sm'
+                      ? 'bg-[#257C86]/[0.05] border-[#257C86]/20 shadow-sm'
                       : 'bg-white border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-[#14464E] bg-[#E0EFF1] px-2 py-0.5 rounded-md whitespace-nowrap">
+                        <span className="text-[10px] font-black uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md whitespace-nowrap">
                           {r.trimester} — {r.schoolYear}
                         </span>
-                        <span className="text-[10px] font-black uppercase text-sky-800 bg-sky-100 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
                           {r.subject}
                         </span>
                       </div>
@@ -350,9 +350,9 @@ export default function SeanceRevisionModule({
                     <p className="font-mono text-slate-500 text-[11px]"><span dir="rtl">📞 هاتف: {r.teacherPhone || '—'}</span></p>
                   </div>
 
-                  <div className="mt-3 p-2 bg-white rounded-xl border border-slate-200/80 flex justify-between text-[11px] font-bold">
+                  <div className="mt-3 p-2 bg-white rounded-xl border border-slate-200/70 flex justify-between text-[11px] font-bold">
                     <span className="text-emerald-700">الأستاذ: {r.teacherShare} د.ت</span>
-                    <span className="text-[#14464E]">مناب السنتر: {r.centerShare} د.ت</span>
+                    <span className="text-[#1e626b]">مناب السنتر: {r.centerShare} د.ت</span>
                     <span className="text-slate-400">التلاميذ: {r.students.length}</span>
                   </div>
                 </div>
@@ -366,16 +366,16 @@ export default function SeanceRevisionModule({
           <div className={`space-y-6 ${sidebarCollapsed ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
 
             {/* Header info card */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/90 space-y-4 shadow-xs">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/70 space-y-4 shadow-lg shadow-slate-900/5">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
                 <div>
-                  <span className="text-xs font-bold text-[#17555F] whitespace-nowrap">{selected.trimester} — {selected.schoolYear}</span>
+                  <span className="text-xs font-bold text-[#1e626b] whitespace-nowrap">{selected.trimester} — {selected.schoolYear}</span>
                   <h3 className="text-2xl font-black text-slate-900">{selected.gradeLevel} — {selected.subject}</h3>
                   <p className="text-[11px] text-slate-400 font-mono mt-0.5" dir="ltr">📅 {selected.date}</p>
                 </div>
                 <button
                   onClick={() => openPointage(selected)}
-                  className="px-4 py-2 bg-[#257C86] hover:bg-[#17555F] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0"
                 >
                   <ClipboardCheck className="h-4 w-4" />
                   تسجيل الحضور والدفع
@@ -392,9 +392,9 @@ export default function SeanceRevisionModule({
                   <span className="text-emerald-700 text-[10px] block font-bold">مناب الأستاذ:</span>
                   <span className="font-black text-emerald-800">{selected.teacherShare} د.ت</span>
                 </div>
-                <div className="p-3 bg-[#F2F8F9] rounded-2xl border border-[#C3E0E4]">
-                  <span className="text-[#14464E] text-[10px] block font-bold">مناب السنتر:</span>
-                  <span className="font-black text-[#103840]">{selected.centerShare} د.ت</span>
+                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
+                  <span className="text-[#1e626b] text-[10px] block font-bold">مناب السنتر:</span>
+                  <span className="font-black text-[#1e626b]">{selected.centerShare} د.ت</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
                   <span className="text-slate-400 text-[10px] block font-bold">تاريخ الحصة:</span>
@@ -404,7 +404,7 @@ export default function SeanceRevisionModule({
             </div>
 
             {/* Students list */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/90 space-y-4 shadow-xs">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/70 space-y-4 shadow-lg shadow-slate-900/5">
               <div className="flex flex-wrap justify-between items-center gap-2">
                 <button
                   type="button"
@@ -417,7 +417,7 @@ export default function SeanceRevisionModule({
                 </button>
                 <button
                   onClick={() => setIsStudentModalOpen(true)}
-                  className="px-3 py-1.5 bg-[#257C86] hover:bg-[#17555F] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   إضافة تلميذ
@@ -445,7 +445,7 @@ export default function SeanceRevisionModule({
                               <span className="w-4 shrink-0 text-center">{st.present ? '✓' : '✕'}</span>
                               <div className="space-y-1">
                                 <p className="flex items-center gap-1.5 flex-wrap">{st.studentName}
-                                  <span className="px-1.5 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-md text-[9px] font-black">خارجي</span>
+                                  <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md text-[9px] font-black">خارجي</span>
                                 </p>
                                 <p className="text-[10px] text-slate-400 font-bold"><span className="text-slate-500">📞 هاتف الولي:</span> <span className="font-mono">{st.parentPhone || '—'}</span></p>
                               </div>
@@ -481,7 +481,7 @@ export default function SeanceRevisionModule({
             </div>
 
             {/* Totals card at the bottom of the page */}
-            <div className="bg-white rounded-3xl p-6 border border-[#C3E0E4] shadow-xs space-y-3">
+            <div className="bg-white rounded-3xl p-6 border border-[#257C86]/20 shadow-lg shadow-slate-900/5 space-y-3">
               <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-[#257C86]" />
                 إجمالي مستحقات الحصة
@@ -499,14 +499,14 @@ export default function SeanceRevisionModule({
                   <span className="text-emerald-700 text-[10px] block font-bold">إجمالي مناب الأستاذ:</span>
                   <span className="font-black text-emerald-800">{profTotal} د.ت</span>
                 </div>
-                <div className="p-3 bg-[#F2F8F9] rounded-2xl border border-[#C3E0E4]">
-                  <span className="text-[#14464E] text-[10px] block font-bold">إجمالي مناب السنتر:</span>
-                  <span className="font-black text-[#103840]">{centerTotal} د.ت</span>
+                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
+                  <span className="text-[#1e626b] text-[10px] block font-bold">إجمالي مناب السنتر:</span>
+                  <span className="font-black text-[#1e626b]">{centerTotal} د.ت</span>
                 </div>
               </div>
-              <div className="p-3 bg-[#F2F8F9] rounded-2xl border border-[#C3E0E4] flex justify-between items-center">
-                <span className="text-[#14464E] text-[11px] font-black">المبلغ الإجمالي المحصّل:</span>
-                <span className="font-black text-[#103840] text-sm">{collectedTotal} د.ت</span>
+              <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 flex justify-between items-center">
+                <span className="text-[#1e626b] text-[11px] font-black">المبلغ الإجمالي المحصّل:</span>
+                <span className="font-black text-[#1e626b] text-sm">{collectedTotal} د.ت</span>
               </div>
             </div>
           </div>
@@ -532,9 +532,9 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <GraduationCap className="h-5 w-5 text-[#3A93A0]" />
+                  <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <div>
                     <h3 className="text-lg font-black">{editingId ? 'تعديل حصة مراجعة' : 'إضافة حصة مراجعة'}</h3>
                     <p className="text-xs text-slate-300">حصة مراجعة واحدة</p>
@@ -611,7 +611,7 @@ export default function SeanceRevisionModule({
                     <button
                       type="button"
                       onClick={() => setIsAddingSubject(!isAddingSubject)}
-                      className="px-3 py-2 bg-[#E0EFF1] hover:bg-[#C3E0E4] text-[#14464E] font-bold text-xs rounded-xl cursor-pointer shrink-0"
+                      className="px-3 py-2 bg-[#257C86]/10 hover:bg-[#257C86]/20 text-[#1e626b] font-bold text-xs rounded-xl cursor-pointer shrink-0"
                     >
                       إضافة مادة
                     </button>
@@ -624,7 +624,7 @@ export default function SeanceRevisionModule({
                           onChange={(e) => setNewSubject(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubject(); } }}
                           placeholder="اسم المادة الجديدة..."
-                          className="flex-1 px-3 py-1.5 bg-white border border-[#A0CBCF] rounded-xl text-xs font-bold"
+                          className="flex-1 px-3 py-1.5 bg-white border border-[#257C86]/20 rounded-xl text-xs font-bold"
                         />
                         <button
                           type="button"
@@ -659,7 +659,7 @@ export default function SeanceRevisionModule({
 
                 {/* Financial Shares Configuration */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 space-y-3">
-                  <span className="text-xs font-bold text-[#103840] block">💰 تقسيم مستحقات الحصة الواحدة</span>
+                  <span className="text-xs font-bold text-[#1e626b] block">💰 تقسيم مستحقات الحصة الواحدة</span>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-bold text-emerald-700 block mb-1">مناب الأستاذ (د.ت) *</label>
@@ -670,10 +670,10 @@ export default function SeanceRevisionModule({
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-bold text-[#14464E] block mb-1">مناب السنتر (د.ت) *</label>
+                      <label className="text-[10px] font-bold text-[#1e626b] block mb-1">مناب السنتر (د.ت) *</label>
                       <input
                         type="number" required value={centerShare} onFocus={(e) => e.target.select()} onChange={(e) => setCenterShare(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-white border border-[#A0CBCF] rounded-xl text-xs font-bold text-[#103840]"
+                        className="w-full px-3 py-2 bg-white border border-[#257C86]/20 rounded-xl text-xs font-bold text-[#1e626b]"
                       />
                     </div>
                   </div>
@@ -689,7 +689,7 @@ export default function SeanceRevisionModule({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl cursor-pointer"
                   >
                     {editingId ? 'حفظ التعديلات' : 'إنشاء الحصة'}
                   </button>
@@ -710,9 +710,9 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <UserPlus className="h-5 w-5 text-[#3A93A0]" />
+                  <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
                     <h3 className="text-lg font-black">إضافة تلميذ إلى الحصة</h3>
                     <p className="text-xs text-slate-300">{selected.subject} — {selected.gradeLevel}</p>
@@ -745,7 +745,7 @@ export default function SeanceRevisionModule({
                   />
                 </div>
 
-                <label className="flex items-center gap-3 p-3 bg-[#F2F8F9] rounded-2xl border border-[#C3E0E4] cursor-pointer">
+                <label className="flex items-center gap-3 p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={stPaid}
@@ -753,8 +753,8 @@ export default function SeanceRevisionModule({
                     className="h-4 w-4 accent-[#257C86]"
                   />
                   <div>
-                    <p className="text-xs font-black text-[#103840]">دفع حصة المراجعة</p>
-                    <p className="text-[10px] text-[#17555F] font-bold">المبلغ: {seanceFee} د.ت — يُدفع مرة واحدة للحصة</p>
+                    <p className="text-xs font-black text-[#1e626b]">دفع حصة المراجعة</p>
+                    <p className="text-[10px] text-[#1e626b] font-bold">المبلغ: {seanceFee} د.ت — يُدفع مرة واحدة للحصة</p>
                   </div>
                 </label>
 
@@ -768,7 +768,7 @@ export default function SeanceRevisionModule({
                   <button
                     type="button"
                     onClick={handleAddStudent}
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#17555F] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                   >
                     <UserPlus className="h-4 w-4" />
                     إضافة التلميذ
@@ -790,7 +790,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black">تسجيل الحضور والدفع — {selected.subject}</h3>
                   <p className="text-xs text-slate-300">الأستاذ: {selected.teacherName}</p>
@@ -842,7 +842,7 @@ export default function SeanceRevisionModule({
                                   <div className="space-y-1">
                                     <p className="flex items-center gap-1.5 flex-wrap">
                                       {st.studentName}
-                                      <span className="px-1.5 py-0.5 bg-[#E0EFF1] text-[#14464E] rounded-md text-[9px] font-black">خارجي</span>
+                                      <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md text-[9px] font-black">خارجي</span>
                                     </p>
                                     <p className="text-[10px] text-slate-400 font-bold"><span className="text-slate-500">📞 هاتف الولي:</span> <span className="font-mono">{st.parentPhone || '—'}</span></p>
                                   </div>
@@ -901,7 +901,7 @@ export default function SeanceRevisionModule({
                   <button
                     type="button"
                     onClick={handleSavePointage}
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     حفظ الحضور والدفع

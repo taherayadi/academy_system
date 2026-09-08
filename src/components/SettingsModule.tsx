@@ -30,11 +30,15 @@ interface SettingsModuleProps {
   onExportDatabase?: () => void;
   onImportDatabase?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   currentUserEmail?: string;
+  /** SaaS plan: modules enabled for this center (undefined = all, legacy compat). */
+  enabledModules?: string[];
 }
 
 const YEAR_OPTIONS = DEFAULT_ACADEMIC_YEARS;
 
-export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail }: SettingsModuleProps) {
+export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail, enabledModules }: SettingsModuleProps) {
+  // SaaS gating: fees can only be set for services included in the center's plan.
+  const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
   const toast = useToast();
   const [formData, setFormData] = useState<CenterSettings>(settings || initialCenterSettings);
   const [isSaved, setIsSaved] = useState(false);
@@ -124,10 +128,10 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#0B252B] text-white rounded-3xl p-6 shadow-md border border-[#257C86]/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-6 shadow-lg shadow-[#257C86]/25 border border-white/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <SettingsIcon className="h-6 w-6 text-[#3A93A0]" />
+            <SettingsIcon className="h-6 w-6 text-[#257C86]" />
             <h2 className="text-xl md:text-2xl font-black">إعدادات السنتر والرسوم</h2>
           </div>
           <p className="text-xs text-slate-300 mt-1">
@@ -146,7 +150,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Section 1: Center General Details */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
           <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
             <Building2 className="h-5 w-5 text-[#257C86]" />
             معلومات السنتر
@@ -203,7 +207,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
         </div>
 
         {/* Gemini API Key */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
           <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
             <KeyRound className="h-5 w-5 text-[#257C86]" />
             مفتاح Gemini API
@@ -222,7 +226,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
         </div>
 
         {/* Section 2: Default Fees Configuration */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-[#257C86]" />
@@ -240,7 +244,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
             </div>
           </div>
 
-          <div className="bg-[#F2F8F9]/60 border border-[#C3E0E4] rounded-2xl px-4 py-2 text-xs text-[#103840] font-bold flex items-center gap-2">
+          <div className="bg-[#257C86]/[0.05] border border-[#257C86]/20 rounded-2xl px-4 py-2 text-xs text-[#1e626b] font-bold flex items-center gap-2">
             <DollarSign className="h-4 w-4 shrink-0" />
             الأسعار المحددة للسنة <span className="font-black">{selectedYear}</span> خاصة بها فقط.
           </div>
@@ -248,8 +252,8 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             
             {/* Suivi Scolaire */}
-            <div className="bg-[#F2F8F9]/40 p-4 rounded-2xl border border-[#C3E0E4]/60 space-y-3">
-              <span className="text-xs font-extrabold text-[#103840] block border-b border-[#C3E0E4]/60 pb-1">
+            <div className="bg-[#257C86]/[0.04] p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
+              <span className="text-xs font-extrabold text-[#1e626b] block border-b border-[#257C86]/20 pb-1">
                 المتابعة الدراسية
               </span>
               
@@ -288,9 +292,10 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
               </div>
             </div>
 
-            {/* Bibliotheque */}
-            <div className="bg-blue-50/40 p-4 rounded-2xl border border-blue-200/60 space-y-3">
-              <span className="text-xs font-extrabold text-blue-900 block border-b border-blue-200/60 pb-1">
+            {/* Bibliotheque — uniquement si le module est au plan */}
+            {hasModule('bibliotheque') && (
+            <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-200/60 space-y-3">
+              <span className="text-xs font-extrabold text-emerald-900 block border-b border-emerald-200/60 pb-1">
                 المكتبة
               </span>
               
@@ -328,21 +333,22 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Repas / Restaurant & Cantine Adaptative */}
-            {!hideRestrictedModules && (
-              <div className="bg-[#F2F8F9]/60 p-4 rounded-2xl border border-[#C3E0E4] space-y-4 md:col-span-2 lg:col-span-3">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[#C3E0E4] pb-2">
-                  <span className="text-xs font-extrabold text-[#103840] flex items-center gap-2">
+            {/* Repas / Restaurant & Cantine Adaptative — module Cantine requis */}
+            {!hideRestrictedModules && hasModule('cantine') && (
+              <div className="bg-[#257C86]/[0.05] p-4 rounded-2xl border border-[#257C86]/20 space-y-4 md:col-span-2 lg:col-span-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[#257C86]/20 pb-2">
+                  <span className="text-xs font-extrabold text-[#1e626b] flex items-center gap-2">
                     <Utensils className="h-4 w-4 text-[#257C86]" />
                     المطعم والوجبات (Cantine Adaptative)
                   </span>
                   {/* Mode Selector */}
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#C3E0E4] text-[11px] font-bold">
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#257C86]/20 text-[11px] font-bold">
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'external_traiteur' }))}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-[#257C86] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-[#257C86] text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
                     >
                       🤝 متعاقد مع Traiteur خارجي
                     </button>
@@ -352,7 +358,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                         setFormData(prev => ({ ...prev, mealOperatingMode: 'in_house_kitchen' }));
                         updateFee('prixPlatTraiteur', 0);
                       }}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-emerald-600 text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
                     >
                       👨‍🍳 مطبخ داخلي (طباخ قار)
                     </button>
@@ -425,15 +431,15 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                 </div>
 
                 {/* Sub-section: Goûter Service */}
-                <div className="mt-4 pt-3 border-t border-[#C3E0E4]">
+                <div className="mt-4 pt-3 border-t border-[#257C86]/20">
                   <div className="flex items-center gap-2 mb-3">
                     <Coffee className="h-4 w-4 text-[#257C86]" />
-                    <span className="text-xs font-black text-[#103840]">
+                    <span className="text-xs font-black text-[#1e626b]">
                       تسعيرة خدمة اللمجة (Goûter)
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-3.5 rounded-2xl border border-[#C3E0E4]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-3.5 rounded-2xl border border-[#257C86]/20">
                     <div>
                       <label className="text-[10px] font-bold text-slate-700 block mb-1">
                         لمجة الصباح — اشتراك شهري
@@ -503,7 +509,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-bold text-[#103840] block mb-1">
+                      <label className="text-[10px] font-bold text-[#1e626b] block mb-1">
                         اللمجتان معاً — اشتراك شهري
                       </label>
                       <div className="flex items-center gap-2">
@@ -513,7 +519,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                           value={currentYearFees.fraisDeuxGoutersMensuel || 0}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => updateFee('fraisDeuxGoutersMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                          className="w-full px-2.5 py-1.5 bg-[#F2F8F9] border border-[#C3E0E4] rounded-xl text-xs font-bold font-mono text-[#103840]"
+                          className="w-full px-2.5 py-1.5 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-xl text-xs font-bold font-mono text-[#1e626b]"
                         />
                         <span className="text-[11px] font-black text-[#257C86]">د.ت</span>
                       </div>
@@ -523,9 +529,10 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
               </div>
             )}
 
-            {/* Étude */}
-            <div className="bg-purple-50/40 p-4 rounded-2xl border border-purple-200/60 space-y-3">
-              <span className="text-xs font-extrabold text-purple-900 block border-b border-purple-200/60 pb-1">
+            {/* Étude — uniquement si le module est au plan */}
+            {hasModule('etude') && (
+            <div className="bg-teal-50/40 p-4 rounded-2xl border border-teal-200/60 space-y-3">
+              <span className="text-xs font-extrabold text-teal-900 block border-b border-teal-200/60 pb-1">
                 تأطير Étude
               </span>
               
@@ -563,9 +570,10 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Cours Particuliers */}
-            {!hideRestrictedModules && (
+            {/* Cours Particuliers — module requis au plan */}
+            {!hideRestrictedModules && hasModule('coursParticuliers') && (
               <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-200/60 space-y-3 lg:col-span-2">
                 <span className="text-xs font-extrabold text-emerald-900 block border-b border-emerald-200/60 pb-1">
                   الدروس الخصوصية
@@ -602,13 +610,13 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
         </div>
 
         {/* Security: Change Password */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
           <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
             <KeyRound className="h-5 w-5 text-[#257C86]" />
             تغيير كلمة السر
           </h3>
 
-          <div className="bg-[#F2F8F9]/60 border border-[#C3E0E4] rounded-2xl px-4 py-2 text-xs text-[#103840] font-bold flex items-center gap-2">
+          <div className="bg-[#257C86]/[0.05] border border-[#257C86]/20 rounded-2xl px-4 py-2 text-xs text-[#1e626b] font-bold flex items-center gap-2">
             <Lock className="h-4 w-4 shrink-0" />
             الحساب الحالي:{' '}
             <span className="font-mono font-black" dir="ltr">{currentUserEmail || '—'}</span>
@@ -680,7 +688,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
             <button
               type="button"
               onClick={handleChangePassword}
-              className="flex items-center justify-center gap-2 px-6 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white rounded-xl font-black text-xs transition cursor-pointer"
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-xl font-black text-xs transition cursor-pointer"
             >
               <KeyRound className="h-4 w-4" />
               تغيير كلمة السر
@@ -690,7 +698,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
         {/* Database Backup & Restore */}
         {(onExportDatabase || onImportDatabase) && (
-          <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80">
+          <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/70">
             <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2 mb-4">
               <Database className="h-4 w-4 text-slate-500" />
               النسخ الاحتياطي والاسترجاع
@@ -699,12 +707,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
               <button
                 type="button"
                 onClick={onExportDatabase}
-                className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 hover:border-[#3A93A0] hover:bg-[#F2F8F9] text-slate-700 rounded-2xl font-bold text-xs transition cursor-pointer"
+                className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 hover:border-[#257C86] hover:bg-[#257C86]/[0.06] text-slate-700 rounded-2xl font-bold text-xs transition cursor-pointer"
               >
                 <Download className="h-4 w-4 text-[#257C86]" />
                 تصدير نسخة JSON
               </button>
-              <label className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 hover:border-[#3A93A0] hover:bg-[#F2F8F9] text-slate-700 rounded-2xl font-bold text-xs transition cursor-pointer">
+              <label className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 hover:border-[#257C86] hover:bg-[#257C86]/[0.06] text-slate-700 rounded-2xl font-bold text-xs transition cursor-pointer">
                 <Upload className="h-4 w-4 text-[#257C86]" />
                 استرجاع نسخة احتياطية
                 <input type="file" accept=".json" onChange={onImportDatabase} className="hidden" />
@@ -720,7 +728,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
         <div className="flex justify-end">
           <button
             type="submit"
-            className="flex items-center gap-2 px-8 py-3 bg-[#257C86] hover:bg-[#1E6A73] text-white rounded-2xl font-black text-sm shadow-md shadow-[#257C86]/20 transition cursor-pointer"
+            className="flex items-center gap-2 px-8 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-2xl font-black text-sm shadow-md shadow-[#257C86]/20 transition cursor-pointer"
           >
             <Save className="h-5 w-5" />
             حفظ الإعدادات

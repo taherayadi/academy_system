@@ -1065,6 +1065,7 @@ export default function App() {
                   onDeleteStudent={handleDeleteStudent}
                   hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
+                  enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
 
@@ -1228,6 +1229,7 @@ export default function App() {
                   currentUserEmail={currentUser.email}
                   onExportDatabase={handleExportDatabase}
                   onImportDatabase={handleImportDatabase}
+                  enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
 

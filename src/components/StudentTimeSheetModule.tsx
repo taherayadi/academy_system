@@ -51,10 +51,10 @@ export default function StudentTimeSheetModule({
     <div className="space-y-6">
 
       {/* Header Banner */}
-      <div className="bg-white border border-[#E0EFF1] p-6 rounded-3xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#F2F8F9] text-[#14464E] text-xs font-bold rounded-lg border border-[#C3E0E4]/60">
+            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
               جداول التوقيت
             </span>
             <span className="text-xs text-slate-400 font-bold">الجداول الزمنية الأسبوعية للتلاميذ</span>
@@ -70,7 +70,7 @@ export default function StudentTimeSheetModule({
       </div>
 
       {/* TimeSheets List */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 no-print space-y-4">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 no-print space-y-4">
         {/* Header row: add button */}
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-black text-slate-900">
@@ -78,7 +78,7 @@ export default function StudentTimeSheetModule({
           </span>
           <button
             onClick={() => { setEditingTimeSheet(null); setIsTimeSheetModalOpen(true); }}
-            className="px-4 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white rounded-xl font-bold text-sm flex items-center gap-2 cursor-pointer shadow-md"
+            className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-xl font-bold text-sm flex items-center gap-2 cursor-pointer shadow-md"
           >
             <Plus className="h-4 w-4" />
             إضافة جدول توقيت
@@ -152,11 +152,11 @@ export default function StudentTimeSheetModule({
                           return (
                             <div
                               key={ts.id}
-                              className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#C3E0E4] hover:shadow-md transition-all duration-200"
+                              className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#257C86]/20 hover:shadow-md transition-all duration-200"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-black text-[#14464E] truncate">
+                                  <p className="text-sm font-black text-[#1e626b] truncate">
                                     {ts.establishmentName} - {ts.schoolYear}
                                   </p>
                                   <p className="text-xs text-slate-500 font-bold mt-1">
@@ -170,14 +170,14 @@ export default function StudentTimeSheetModule({
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     onClick={() => { setAssignTimeSheet(ts); setIsAssignModalOpen(true); }}
-                                    className="p-2 text-[#257C86] hover:bg-[#F2F8F9] rounded-xl transition cursor-pointer"
+                                    className="p-2 text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-xl transition cursor-pointer"
                                     title="إسناد للتلاميذ"
                                   >
                                     <Users className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => { setEditingTimeSheet(ts); setIsTimeSheetModalOpen(true); }}
-                                    className="p-2 text-[#257C86] hover:bg-[#F2F8F9] rounded-xl transition cursor-pointer"
+                                    className="p-2 text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-xl transition cursor-pointer"
                                     title="تعديل"
                                   >
                                     <Edit3 className="h-4 w-4" />
@@ -206,7 +206,7 @@ export default function StudentTimeSheetModule({
                             <button
                               onClick={() => setTimeSheetPage(Math.max(1, safePage - 1))}
                               disabled={safePage <= 1}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F2F8F9] transition cursor-pointer"
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#257C86]/[0.06] transition cursor-pointer"
                             >
                               السابق
                             </button>
@@ -217,7 +217,7 @@ export default function StudentTimeSheetModule({
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                                   p === safePage
                                     ? 'bg-[#257C86] text-white'
-                                    : 'bg-white border border-slate-200 text-slate-500 hover:bg-[#F2F8F9]'
+                                    : 'bg-white border border-slate-200 text-slate-500 hover:bg-[#257C86]/[0.06]'
                                 }`}
                               >
                                 {p}
@@ -226,7 +226,7 @@ export default function StudentTimeSheetModule({
                             <button
                               onClick={() => setTimeSheetPage(Math.min(totalPages, safePage + 1))}
                               disabled={safePage >= totalPages}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F2F8F9] transition cursor-pointer"
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#257C86]/[0.06] transition cursor-pointer"
                             >
                               التالي
                             </button>
@@ -300,7 +300,7 @@ export default function StudentTimeSheetModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <h3 className="text-lg font-black">تأكيد الحذف</h3>

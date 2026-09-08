@@ -282,7 +282,7 @@ export default function DataAnalysisModule({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs">
+      <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1d6169] flex items-center justify-center shadow-lg shadow-[#257C86]/25">
             <BarChart3 className="h-5 w-5 text-white" />
@@ -295,7 +295,7 @@ export default function DataAnalysisModule({
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs">
+      <div className="bg-white rounded-3xl p-5 border border-slate-200/70 shadow-lg shadow-slate-900/5">
         <div className="flex flex-wrap items-center gap-3">
           <div>
             <label className="block text-[10px] font-extrabold text-slate-500 mb-1">السنة الدراسية</label>
@@ -343,7 +343,7 @@ export default function DataAnalysisModule({
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+          className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center">
               <TrendingUp className="h-4 w-4 text-emerald-600" />
@@ -354,7 +354,7 @@ export default function DataAnalysisModule({
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+          className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center">
               <TrendingDown className="h-4 w-4 text-red-600" />
@@ -365,20 +365,20 @@ export default function DataAnalysisModule({
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+          className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-blue-600" />
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-emerald-600" />
             </div>
             <span className="text-[10px] font-extrabold text-slate-500">صافي الربح</span>
           </div>
-          <p className={`text-lg font-black ${stats.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+          <p className={`text-lg font-black ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
             {stats.netProfit >= 0 ? '+' : ''}{stats.netProfit.toLocaleString('fr-TN')} <span className="text-[10px]">د.ت</span>
           </p>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+          className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
               <GraduationCap className="h-4 w-4 text-amber-600" />
@@ -390,7 +390,7 @@ export default function DataAnalysisModule({
       </div>
 
       {/* Module Breakdown */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
         <button
           onClick={() => setShowModuleBreakdown(!showModuleBreakdown)}
           className="w-full flex items-center justify-between p-5 cursor-pointer"
@@ -449,7 +449,7 @@ export default function DataAnalysisModule({
 
       {/* Meals Detail */}
       {sortedDishes.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
           <button
             onClick={() => setShowMealsDetail(!showMealsDetail)}
             className="w-full flex items-center justify-between p-5 cursor-pointer"
@@ -478,7 +478,7 @@ export default function DataAnalysisModule({
                       <tr key={dish} className={`border-b border-slate-50 hover:bg-slate-50/50 ${idx === 0 ? 'bg-emerald-50/50' : ''}`}>
                         <td className="py-2.5 px-3">
                           <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-                            idx === 0 ? 'bg-emerald-500 text-white' : idx === 1 ? 'bg-blue-500 text-white' : idx === 2 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+                            idx === 0 ? 'bg-emerald-500 text-white' : idx === 1 ? 'bg-emerald-500 text-white' : idx === 2 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
                           }`}>{idx + 1}</span>
                         </td>
                         <td className="py-2.5 px-3 font-bold text-slate-800">{dish}</td>
@@ -497,7 +497,7 @@ export default function DataAnalysisModule({
 
       {/* Expenses Detail */}
       {sortedExpenses.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
           <button
             onClick={() => setShowExpensesDetail(!showExpensesDetail)}
             className="w-full flex items-center justify-between p-5 cursor-pointer"
@@ -547,7 +547,7 @@ export default function DataAnalysisModule({
 
       {/* Quick Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-1">
             <Users className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-extrabold text-slate-500">التلاميذ الداخليون</span>
@@ -555,7 +555,7 @@ export default function DataAnalysisModule({
           <p className="text-sm font-black text-slate-900">{stats.totalStudents}</p>
           <p className="text-[10px] text-slate-400 font-bold">{Object.keys(stats.studentsByGrade).length} مستوى</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-1">
             <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-extrabold text-slate-500">التلاميذ الخارجيون</span>
@@ -563,14 +563,14 @@ export default function DataAnalysisModule({
           <p className="text-sm font-black text-slate-900">{stats.externalCourseStudents}</p>
           <p className="text-[10px] text-[#257C86] font-bold">{stats.externalCourseRevenue.toLocaleString('fr-TN')} د.ت</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-extrabold text-slate-500">ساعات Étude</span>
           </div>
           <p className="text-sm font-black text-slate-900">{stats.slotsCount} حصة</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-1">
             <BookOpen className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-extrabold text-slate-500">حصص المراجعة</span>
@@ -578,7 +578,7 @@ export default function DataAnalysisModule({
           <p className="text-sm font-black text-slate-900">{stats.totalRevisionSessions} حصة</p>
           <p className="text-[10px] text-[#257C86] font-bold">{stats.revisionRevenue.toLocaleString('fr-TN')} د.ت</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
           <div className="flex items-center gap-2 mb-1">
             <Utensils className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-extrabold text-slate-500">الوجبات</span>
@@ -590,7 +590,7 @@ export default function DataAnalysisModule({
 
       {/* Weekly Meal Plan */}
       {Object.keys(stats.weeklyMealPlan).length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
           <div className="p-5 flex items-center gap-2">
             <Utensils className="h-4 w-4 text-[#257C86]" />
             <h3 className="font-black text-slate-900 text-sm">خطة الوجبات الأسبوعية</h3>
@@ -617,7 +617,7 @@ export default function DataAnalysisModule({
       {(stats.externalCourseStudents > 0 || stats.totalRevisionSessions > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {stats.externalCourseStudents > 0 && (
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
               <div className="flex items-center gap-2 mb-3">
                 <GraduationCap className="h-4 w-4 text-[#257C86]" />
                 <h3 className="font-black text-slate-900 text-xs">الدروس الخصوصية</h3>
@@ -643,7 +643,7 @@ export default function DataAnalysisModule({
             </div>
           )}
           {stats.totalRevisionSessions > 0 && (
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-lg shadow-slate-900/5">
               <div className="flex items-center gap-2 mb-3">
                 <BookOpen className="h-4 w-4 text-[#257C86]" />
                 <h3 className="font-black text-slate-900 text-xs">حصص المراجعة</h3>
@@ -691,7 +691,7 @@ export default function DataAnalysisModule({
       {/* AI Analysis Result */}
       {analysis && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+          className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
           <div className="p-5 bg-gradient-to-r from-[#257C86] to-[#1d6169] text-white flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
             <h3 className="font-black text-sm">تحليل الذكاء الاصطناعي — {periodLabel}</h3>
