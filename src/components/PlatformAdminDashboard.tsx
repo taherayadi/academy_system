@@ -80,10 +80,26 @@ const PLAN_LABEL: Record<string, string> = {
   custom: 'Custom'
 };
 
+const PLAN_BADGE: Record<string, string> = {
+  starter: 'bg-slate-100 text-slate-600 border border-slate-200',
+  basic: 'bg-slate-100 text-slate-600 border border-slate-200',
+  growth: 'bg-slate-100 text-slate-600 border border-slate-200',
+  pro: 'bg-slate-100 text-slate-600 border border-slate-200',
+  custom: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'
+};
+
 const CENTER_TYPE_LABEL: Record<string, string> = {
   jardin: 'Jardin d’enfant',
   formation: 'Centre de formation'
 };
+
+/** Normalise le type d'établissement : 'jardin' | 'formation' | '' */
+function normalizeCenterType(raw?: string): 'jardin' | 'formation' | '' {
+  const v = String(raw || '').trim().toLowerCase();
+  if (v.includes('jardin')) return 'jardin';
+  if (v.includes('formation') || v.includes('centre')) return 'formation';
+  return '';
+}
 
 const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
   { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
@@ -91,10 +107,10 @@ const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }
 ];
 
 const STATUS_BADGE: Record<string, string> = {
-  trial: 'bg-amber-100 text-amber-800',
-  active: 'bg-emerald-100 text-emerald-800',
-  suspended: 'bg-red-100 text-red-700',
-  expired: 'bg-slate-100 text-slate-600',
+  trial: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20',
+  active: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  suspended: 'bg-slate-100 text-slate-500 border border-slate-200',
+  expired: 'bg-slate-50 text-slate-400 border border-slate-100',
 };
 const STATUS_LABEL: Record<string, string> = {
   trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré'
@@ -606,14 +622,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const q = search.trim().toLowerCase();
   const filteredCenters = centers.filter(c => {
     if (q && !`${c.name} ${c.adminEmail || ''} ${c.locationCity || ''}`.toLowerCase().includes(q)) return false;
-    if (centerTypeFilter !== 'all' && (c.centerType || '') !== centerTypeFilter) return false;
+    if (centerTypeFilter !== 'all' && normalizeCenterType(c.centerType) !== centerTypeFilter) return false;
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (planFilter !== 'all' && (c.plan === 'starter' ? 'basic' : c.plan) !== planFilter) return false;
     return true;
   });
   const filteredRequests = requests.filter(r => {
     if (q && !`${r.fullName} ${r.academyName} ${r.email}`.toLowerCase().includes(q)) return false;
-    if (reqTypeFilter !== 'all' && (r.centerType || '') !== reqTypeFilter) return false;
+    if (reqTypeFilter !== 'all' && normalizeCenterType(r.centerType) !== reqTypeFilter) return false;
     if (reqStatusFilter !== 'all' && r.status !== reqStatusFilter) return false;
     return true;
   });
@@ -813,7 +829,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-black text-slate-900 truncate">{r.academyName}</div>
                         <div className="text-[10px] font-semibold text-slate-400 truncate">
-                          {r.fullName} · {r.centerType ? CENTER_TYPE_LABEL[r.centerType] : fmtDate(r.createdAt)}
+                          {r.fullName} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
                         </div>
                       </div>
                       <span className={`text-[9px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${REQ_STATUS_BADGE[r.status] || REQ_STATUS_BADGE.new}`}>
@@ -855,9 +871,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                           <div className="text-[10px] font-semibold text-slate-400">{c.adminEmail || '—'}</div>
                         </div>
                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0 ${
-                          days === null ? 'bg-slate-100 text-slate-500'
-                            : days <= 3 ? 'bg-red-50 text-red-600 border border-red-200'
-                            : days <= 7 ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          days === null ? 'bg-slate-50 text-slate-400 border border-slate-100'
+                            : days <= 3 ? 'bg-[#257C86]/15 text-[#257C86] border border-[#257C86]/25'
+                            : days <= 7 ? 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'
                             : 'bg-slate-50 text-slate-500 border border-slate-200'
                         }`}>
                           {days === null ? '—' : days > 0 ? `${days} j` : 'Expiré'}
@@ -946,22 +962,26 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {c.centerType && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${c.centerType === 'jardin' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
-                        {CENTER_TYPE_LABEL[c.centerType] || c.centerType}
+                    {normalizeCenterType(c.centerType) && (
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'}`}>
+                        {CENTER_TYPE_LABEL[normalizeCenterType(c.centerType)]}
                       </span>
                     )}
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${STATUS_BADGE[c.status] || 'bg-slate-100 text-slate-600'}`}>
                       {STATUS_LABEL[c.status] || c.status}
                     </span>
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">{PLAN_LABEL[c.plan] || c.plan}</span>
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${PLAN_BADGE[c.plan] || PLAN_BADGE.starter}`}>{PLAN_LABEL[c.plan] || c.plan}</span>
                   </div>
                 </div>
 
                 {/* Trial countdown */}
                 {c.status === 'trial' && days !== null && (
-                  <div className={`mt-3.5 flex items-center gap-2 text-xs font-bold rounded-xl px-3.5 py-2.5 ${
-                    days <= 3 ? 'bg-red-50 text-red-700' : days <= 7 ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-600'
+                  <div className={`mt-3.5 flex items-center gap-2 text-xs font-bold rounded-xl px-3.5 py-2.5 border ${
+                    days <= 3
+                      ? 'bg-[#257C86]/15 text-[#257C86] border-[#257C86]/25'
+                      : days <= 7
+                        ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20'
+                        : 'bg-slate-50 text-slate-500 border-slate-200'
                   }`}>
                     <CalendarClock className="h-3.5 w-3.5" />
                     {days > 0 ? `Essai expire dans ${days} jour${days > 1 ? 's' : ''} (${fmtDate(c.trialEndsAt)})` : 'Essai expiré'}
@@ -1076,9 +1096,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {req.centerType && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${req.centerType === 'jardin' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
-                        {CENTER_TYPE_LABEL[req.centerType] || req.centerType}
+                    {normalizeCenterType(req.centerType) && (
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(req.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'}`}>
+                        {CENTER_TYPE_LABEL[normalizeCenterType(req.centerType)]}
                       </span>
                     )}
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${REQ_STATUS_BADGE[req.status] || REQ_STATUS_BADGE.new}`}>

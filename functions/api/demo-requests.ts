@@ -48,7 +48,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     const { results } = await env.DB.prepare(`
-      SELECT id, full_name, academy_name, email, phone, estimated_students, requested_modules, message, status, request_type, notes, created_at
+      SELECT id, full_name, academy_name, email, phone, estimated_students, requested_modules, message, status, request_type, notes, center_type, created_at
       FROM demo_requests
       ORDER BY created_at DESC
     `).all<any>();
@@ -60,6 +60,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       } catch {
         modules = r.requested_modules ? [r.requested_modules] : [];
       }
+      // Normalize the center type to 'jardin' | 'formation' | ''
+      // (the DB may contain variants like "jardin d'enfant", "Jardin", "Centre de formation"…)
+      const rawType = String(r.center_type || '').trim().toLowerCase();
+      const centerType = rawType.includes('jardin')
+        ? 'jardin'
+        : (rawType.includes('formation') || rawType.includes('centre')) ? 'formation' : '';
       return {
         id: r.id,
         fullName: r.full_name,
@@ -71,6 +77,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         message: r.message,
         status: r.status,
         requestType: r.request_type || 'trial',
+        centerType,
         notes: r.notes || '',
         createdAt: r.created_at
       };
