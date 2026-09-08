@@ -416,7 +416,14 @@ export async function createCenterApi(payload: {
     method: 'POST',
     headers: authHeaders(true),
     credentials: 'include',
-    body: JSON.stringify(payload)
+    // The backend expects adminName / adminEmail / adminPassword — map the
+    // director* fields so the director account is created correctly.
+    body: JSON.stringify({
+      ...payload,
+      adminName: payload.directorName,
+      adminEmail: payload.directorEmail,
+      adminPassword: payload.directorPassword
+    })
   });
   if (res.status === 401) throw new UnauthorizedError();
   const data: { centerId?: string; error?: string } = await res.json().catch(() => ({}));

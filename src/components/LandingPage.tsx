@@ -30,7 +30,8 @@ import {
   Layers,
   X,
   Quote,
-  CreditCard
+  CreditCard,
+  Clock
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 
@@ -40,11 +41,12 @@ interface LandingPageProps {
 }
 
 // ─── Module catalogue (landing only — bibliotheque & pointage élèves exclus) ──
-const BASE_KEYS = ['scolaire', 'finance'] as const;
+const BASE_KEYS = ['scolaire', 'studentTimeSheets', 'finance'] as const;
 
 const ALL_MODULES = [
   { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, price: 20, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
   { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, price: 20, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
+  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, price: 0, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
   { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, price: 15, description: 'Planning hebdomadaire, présences, horaires.' },
   { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, price: 15, description: 'Cours 1-à-1, tarification, enseignants.' },
   { key: 'revision', label: 'Révision Examens', icon: Award, price: 15, description: 'Séances de révision, groupes, présences.' },
@@ -308,7 +310,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#257C86] opacity-50"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#257C86]"></span>
                 </span>
-                <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance — 40 TND/mois</span>
+                <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance + Jd. Horaires offert — 40 TND/mois</span>
               </motion.div>
 
               <motion.h1
@@ -332,7 +334,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               >
                 Chaque abonnement démarre avec la base{' '}
                 <span className="text-slate-900 font-black">Scolaire &amp; Notes</span> +{' '}
-                <span className="text-slate-900 font-black">Finance &amp; Paiements</span>.
+                <span className="text-slate-900 font-black">Finance &amp; Paiements</span>,
+                avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert.
                 Ajoutez des modules à la carte — étude, cantine, transport — uniquement
                 quand vous en avez besoin.
               </motion.p>
@@ -565,7 +568,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             >
               <m.icon className="h-4 w-4 text-[#257C86]" />
               <span className="text-sm font-bold text-slate-700">{m.label}</span>
-              <span className="text-xs font-black text-slate-400">{m.price} TND</span>
+              <span className="text-xs font-black text-slate-400">{m.price === 0 ? 'Inclus' : `${m.price} TND`}</span>
             </div>
           ))}
         </div>
@@ -663,16 +666,16 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               Le plan de base
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-4 tracking-tight">
-              Deux modules. Toujours inclus.
+              Trois modules. Toujours inclus.
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
-              Le socle de chaque abonnement — <span className="text-slate-900 font-black">Scolaire &amp; Finance</span> pour 40 TND/mois.
-              Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
+              Le socle de chaque abonnement — <span className="text-slate-900 font-black">Scolaire &amp; Finance</span> pour 40 TND/mois,
+              avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
             </p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            {BASE_MODULES.map((mod, i) => (
+            {BASE_MODULES.filter(m => m.price > 0).map((mod, i) => (
               <motion.div
                 key={mod.key}
                 initial={{ opacity: 0, y: 30 }}
@@ -772,6 +775,37 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             ))}
           </div>
 
+          {/* Jd. Horaires — bundled with the base, no extra cost */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ duration: 0.5 }}
+            className="mt-6 rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-[#257C86]/[0.04] p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
+          >
+            <div className="p-3.5 rounded-2xl bg-emerald-100 border border-emerald-200 flex-shrink-0">
+              <Clock className="h-7 w-7 text-emerald-600" />
+            </div>
+            <div className="flex-1 text-center sm:text-left min-w-0">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mb-1.5">
+                <h3 className="text-lg font-black text-slate-900">Jd. Horaires — Pointage Élèves</h3>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                  <Check className="h-3 w-3" />
+                  Offert avec la base
+                </span>
+              </div>
+              <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                Pointage journalier des entrées et sorties de vos élèves. Pas de tarif dédié :
+                ce module est <span className="font-black text-emerald-700">inclus gratuitement avec Scolaire</span>,
+                pour chaque abonnement — dès le plan de base.
+              </p>
+            </div>
+            <div className="text-center flex-shrink-0">
+              <div className="text-2xl font-black text-emerald-600">Inclus</div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">0 TND supplémentaire</div>
+            </div>
+          </motion.div>
+
           {/* base price banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -786,7 +820,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               </div>
               <div>
                 <div className="text-slate-900 font-black text-lg">Le plan de base</div>
-                <div className="text-slate-600 text-sm font-semibold">Scolaire &amp; Notes + Finance &amp; Paiements — élèves et utilisateurs illimités</div>
+                <div className="text-slate-600 text-sm font-semibold">Scolaire &amp; Notes + Jd. Horaires + Finance &amp; Paiements — élèves et utilisateurs illimités</div>
               </div>
             </div>
             <div className="flex items-center gap-5">
@@ -938,7 +972,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {BASE_MODULES.map(mod => (
+                  {BASE_MODULES.filter(m => m.price > 0).map(mod => (
                     <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl border border-[#257C86]/30 bg-white shadow-sm">
                       <div className="p-2.5 rounded-xl bg-[#257C86]/10">
                         <mod.icon className="h-5 w-5 text-[#257C86]" />
@@ -953,6 +987,20 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       </div>
                     </div>
                   ))}
+                  {/* Jd. Horaires — bundled, no tarif */}
+                  <div className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60">
+                    <div className="p-2.5 rounded-xl bg-emerald-100 border border-emerald-200">
+                      <Clock className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-black text-slate-900">Jd. Horaires — Pointage Élèves</div>
+                      <div className="text-[11px] font-semibold text-slate-500">Entrées/sorties journalières — offert avec Scolaire</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-base font-black text-emerald-600">Inclus</div>
+                      <div className="text-[9px] font-bold text-slate-400">0 TND</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1004,12 +1052,19 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-5">Récapitulatif</div>
 
                   {/* base line */}
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-bold text-slate-600 flex items-center gap-2">
                       <Lock className="h-3.5 w-3.5 text-[#257C86]" />
-                      Base (2 modules)
+                      Base (3 modules)
                     </span>
                     <span className="text-sm font-black text-slate-900">{BASE_PRICE} TND</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-3 pl-6">
+                    <span className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                      <Clock className="h-3 w-3 text-emerald-500" />
+                      dont Jd. Horaires
+                    </span>
+                    <span className="text-xs font-black text-emerald-600">Inclus — offert</span>
                   </div>
 
                   {/* addon lines */}
@@ -1437,7 +1492,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               </div>
               <p className="text-sm text-slate-500 leading-relaxed max-w-sm font-medium mb-6">
                 La solution tunisienne de gestion académique modulaire. Chaque abonnement inclut la base
-                Scolaire + Finance — puis évolue à votre rythme, module par module.
+                Scolaire + Finance, avec Jd. Horaires offert — puis évolue à votre rythme, module par module.
               </p>
               <button
                 onClick={() => scrollToSection('contact')}

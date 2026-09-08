@@ -18,7 +18,9 @@ import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
+// Base plan: Scolaire + Finance (priced) + Jd. Horaires (bundled, no tarif)
 const BASE_MODULE_KEYS = ['scolaire', 'finance'];
+const BUNDLED_MODULE_KEY = 'studentTimeSheets'; // Jd. Horaires — offert avec la base, sans tarif
 
 const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'scolaire', label: 'Scolaire' },
@@ -36,7 +38,8 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
 ];
 
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
-const isBaseModule = (key: string) => (BASE_MODULE_KEYS as string[]).includes(key);
+const isBaseModule = (key: string) =>
+  (BASE_MODULE_KEYS as string[]).includes(key) || key === BUNDLED_MODULE_KEY;
 
 export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing';
 
@@ -246,6 +249,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
                 </span>
               ))}
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/25 cursor-default">
+                <Lock className="h-3 w-3" />
+                {MODULE_LABEL(BUNDLED_MODULE_KEY)}
+                <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
+              </span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -264,7 +272,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 );
               })}
             </div>
-            <p className="text-[11px] font-semibold text-slate-400 mt-2.5">La base Scolaire + Finance est toujours incluse et ne peut pas être retirée.</p>
+            <p className="text-[11px] font-semibold text-slate-400 mt-2.5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert — ils ne peuvent pas être retirés.</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -332,6 +340,11 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
               <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
             </span>
           ))}
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white cursor-default">
+            <Lock className="h-3 w-3" />
+            {MODULE_LABEL(BUNDLED_MODULE_KEY)}
+            <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
+          </span>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
@@ -1109,7 +1122,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <span className="text-[10px] font-black text-white/80 uppercase tracking-[0.15em]">Le plan de base</span>
                   </div>
                   <h3 className="text-lg font-black mb-1">Scolaire + Finance</h3>
-                  <p className="text-xs text-white/70 font-semibold mb-5">Toujours inclus dans chaque abonnement — non retirable.</p>
+                  <p className="text-xs text-white/70 font-semibold mb-5">Toujours inclus dans chaque abonnement — avec Jd. Horaires offert, non retirable.</p>
                   <div className="flex items-end gap-2 mb-6">
                     <span className="text-4xl font-black tracking-tight">
                       {(priceList['scolaire'] || 0) + (priceList['finance'] || 0)}
@@ -1124,6 +1137,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <div className="flex items-center justify-between rounded-xl bg-white/10 px-3.5 py-2.5">
                       <span className="flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Finance</span>
                       <span className="font-black">{priceList['finance'] ?? '—'} TND</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-emerald-400/20 border border-emerald-300/30 px-3.5 py-2.5">
+                      <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> Jd. Horaires</span>
+                      <span className="font-black text-emerald-200">Inclus — offert</span>
                     </div>
                   </div>
                 </div>
@@ -1144,7 +1161,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                             {m.label}
-                            {base && <span className="text-[8px] font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/25 rounded-full px-1.5 py-px uppercase">Base</span>}
+                            {m.key === BUNDLED_MODULE_KEY ? (
+                              <span className="text-[8px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-px uppercase">Offert</span>
+                            ) : base ? (
+                              <span className="text-[8px] font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/25 rounded-full px-1.5 py-px uppercase">Base</span>
+                            ) : null}
                           </div>
                           <div className="text-[10px] font-semibold text-slate-400">{m.key}</div>
                         </div>

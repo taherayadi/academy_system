@@ -34,7 +34,7 @@ function clickModuleToggle(label: string) {
   fireEvent.click(btn);
 }
 
-describe('LandingPage (base = Scolaire + Finance, add-ons only)', () => {
+describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)', () => {
   it('renders the hero and emphasises the base plan', () => {
     render(<LandingPage onOpenLogin={() => {}} centerName="Test Academy" />);
 
@@ -48,11 +48,23 @@ describe('LandingPage (base = Scolaire + Finance, add-ons only)', () => {
     expect(screen.getAllByText('Connexion').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('hides Bibliothèque and Pointage Élèves from the landing', () => {
+  it('shows Jd. Horaires as bundled (no tarif) and hides Bibliothèque', () => {
     render(<LandingPage onOpenLogin={() => {}} />);
+
+    // Jd. Horaires is on the landing as part of the base, marked as offered/included
+    expect(screen.getAllByText(/Jd\. Horaires/i).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/Offert avec la base|offert/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Inclus/i).length).toBeGreaterThan(0);
+
+    // Bibliothèque stays hidden
     expect(screen.queryByText('Bibliothèque')).toBeNull();
-    expect(screen.queryByText(/Pointage Élèves/i)).toBeNull();
     expect(screen.queryByText('Prêts livres, inventaire')).toBeNull();
+
+    // Jd. Horaires must NOT appear as a paid add-on toggle button
+    const jdToggle = screen.getAllByText(/Jd\. Horaires/i)
+      .map(el => el.closest('button'))
+      .filter(Boolean);
+    expect(jdToggle.length).toBe(0);
   });
 
   it('locks the base modules and only allows adding', () => {
@@ -62,15 +74,15 @@ describe('LandingPage (base = Scolaire + Finance, add-ons only)', () => {
     expect(screen.getAllByText(/Non retirable/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Toujours incluse/i).length).toBeGreaterThan(0);
 
-    // Default selection: 2 modules (base only)
-    expect(screen.getAllByText(/2 modules au total/i).length).toBeGreaterThan(0);
+    // Default selection: 3 modules (scolaire + studentTimeSheets + finance)
+    expect(screen.getAllByText(/3 modules au total/i).length).toBeGreaterThan(0);
 
     // Adding an add-on module increases the count
     clickModuleToggle('Étude Surveillée');
-    expect(screen.getAllByText(/3 modules au total/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/4 modules au total/i).length).toBeGreaterThan(0);
   });
 
-  it('sends the selected modules with the demo request', async () => {
+  it('sends the selected modules (base incl. Jd. Horaires) with the demo request', async () => {
     render(<LandingPage onOpenLogin={() => {}} />);
 
     // Add two add-on modules
@@ -86,7 +98,7 @@ describe('LandingPage (base = Scolaire + Finance, add-ons only)', () => {
 
     await waitFor(() => {
       expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
-        requestedModules: ['scolaire', 'finance', 'cantine', 'transport']
+        requestedModules: ['scolaire', 'studentTimeSheets', 'finance', 'cantine', 'transport']
       }));
     });
   });
