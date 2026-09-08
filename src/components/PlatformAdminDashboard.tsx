@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Building2, Clock,
   CheckCircle2, PauseCircle, Plus, RefreshCw,
   CalendarClock, Layers, Trash2, Check, X, Loader2,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
-  Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight
+  Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
@@ -22,6 +23,7 @@ import icon from '../assets/icon.png';
 // Base plan: Scolaire + Finance (priced) + Jd. Horaires (bundled, no tarif)
 const BASE_MODULE_KEYS = ['scolaire', 'finance'];
 const BUNDLED_MODULE_KEY = 'studentTimeSheets'; // Jd. Horaires — offert avec la base, sans tarif
+const PAGE_SIZE = 9; // Centres & Demandes : 9 cartes par page (3 lignes × 3 colonnes)
 
 const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'scolaire', label: 'Scolaire' },
@@ -141,6 +143,55 @@ function fmtDate(ts?: number | null): string {
 }
 
 // ─── Segmented filter control (landing style) ──────────────────────────────
+// ── Pagination (thème plateforme) ──────────────────────────────────────────
+function pageNumbers(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set<number>([1, total, current - 1, current, current + 1].filter(p => p >= 1 && p <= total));
+  const out: (number | '…')[] = [];
+  let prev = 0;
+  for (const p of [...set].sort((a, b) => a - b)) {
+    if (p - prev > 1) out.push('…');
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
+function Pagination({ page, totalPages, total, onChange }: {
+  page: number; totalPages: number; total: number; onChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-3">
+      <span className="text-xs font-bold text-slate-400">
+        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} sur {total}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => onChange(page - 1)} disabled={page <= 1}
+          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        {pageNumbers(page, totalPages).map((p, i) => p === '…' ? (
+          <span key={`gap-${i}`} className="h-9 min-w-6 flex items-center justify-center text-xs font-black text-slate-300">…</span>
+        ) : (
+          <button key={p} onClick={() => onChange(p)} aria-current={p === page ? 'page' : undefined}
+            className={`h-9 min-w-9 px-2 rounded-xl text-xs font-black transition cursor-pointer ${
+              p === page
+                ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25'
+                : 'border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86]'
+            }`}>
+            {p}
+          </button>
+        ))}
+        <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
+          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Segmented<T extends string>({
   options, value, onChange
 }: {
@@ -493,6 +544,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // Filters — requests
   const [reqTypeFilter, setReqTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [reqStatusFilter, setReqStatusFilter] = useState<'all' | 'new' | 'contacted' | 'converted' | 'archived'>('all');
+  const [centersPage, setCentersPage] = useState(1);
+  const [requestsPage, setRequestsPage] = useState(1);
+  const listTopRef = useRef<HTMLDivElement>(null);
 
   const [showNewCenter, setShowNewCenter] = useState(false);
   const [convertRequest, setConvertRequest] = useState<DemoRequest | null>(null);
@@ -533,6 +587,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setSearch('');
     setCenterTypeFilter('all'); setStatusFilter('all'); setPlanFilter('all');
     setReqTypeFilter('all'); setReqStatusFilter('all');
+    setCentersPage(1); setRequestsPage(1);
   }, [page]);
 
   const loadFinanceData = useCallback(async () => {
@@ -633,6 +688,18 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     if (reqStatusFilter !== 'all' && r.status !== reqStatusFilter) return false;
     return true;
   });
+
+  // Retour à la page 1 dès qu'un filtre ou la recherche change
+  useEffect(() => { setCentersPage(1); }, [search, centerTypeFilter, statusFilter, planFilter]);
+  useEffect(() => { setRequestsPage(1); }, [search, reqTypeFilter, reqStatusFilter]);
+
+  // Pagination — 9 éléments par page (grille 3 × 3)
+  const centersTotalPages = Math.max(1, Math.ceil(filteredCenters.length / PAGE_SIZE));
+  const safeCentersPage = Math.min(centersPage, centersTotalPages);
+  const pagedCenters = filteredCenters.slice((safeCentersPage - 1) * PAGE_SIZE, safeCentersPage * PAGE_SIZE);
+  const requestsTotalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const safeRequestsPage = Math.min(requestsPage, requestsTotalPages);
+  const pagedRequests = filteredRequests.slice((safeRequestsPage - 1) * PAGE_SIZE, safeRequestsPage * PAGE_SIZE);
 
   // ── Handlers ──
   const handleExtendTrial = async (c: CenterTenant) => {
@@ -892,7 +959,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="centers" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
 
           {/* Filters — type / statut / plan */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4">
+          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type</div>
               <Segmented<'all' | 'jardin' | 'formation'>
@@ -945,12 +1012,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucun centre'}</p>
             </div>
-          ) : filteredCenters.map(c => {
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+              {pagedCenters.map(c => {
             const days = daysLeft(c.trialEndsAt);
             const mods = (c.enabledModules as string[]) || [];
             return (
               <motion.div key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition">
+                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
                     <div className="h-11 w-11 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
@@ -1005,7 +1075,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 )}
 
                 {/* Actions */}
-                <div className="mt-4 flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
+                <div className="mt-auto pt-4">
+                <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
                   <button onClick={() => handleExtendTrial(c)}
                     className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
                     <CalendarClock className="h-3.5 w-3.5" /> +14 jours essai
@@ -1027,9 +1098,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <Trash2 className="h-3.5 w-3.5" /> Supprimer
                   </button>
                 </div>
+                </div>
               </motion.div>
             );
-          })}
+              })}
+              </div>
+              <Pagination
+                page={safeCentersPage}
+                totalPages={centersTotalPages}
+                total={filteredCenters.length}
+                onChange={p => { setCentersPage(p); listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+              />
+            </>
+          )}
         </motion.div>
       )}
 
@@ -1038,7 +1119,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="requests" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
 
           {/* Filters — type / statut */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4">
+          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type d’établissement</div>
               <Segmented<'all' | 'jardin' | 'formation'>
@@ -1079,11 +1160,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucune demande reçue'}</p>
             </div>
-          ) : filteredRequests.map(req => {
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+              {pagedRequests.map(req => {
             const mods = parseModules(req.requestedModules);
             return (
               <motion.div key={req.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition">
+                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
                     <div className="h-11 w-11 rounded-2xl bg-blue-50 flex items-center justify-center text-sm font-black text-blue-600 flex-shrink-0">
@@ -1152,7 +1236,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 )}
 
                 {/* Actions */}
-                <div className="mt-4 flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
+                <div className="mt-auto pt-4">
+                <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
                   <select
                     value={req.status}
                     onChange={e => handleReqStatus(req, e.target.value)}
@@ -1174,9 +1259,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <Trash2 className="h-3.5 w-3.5" /> Supprimer
                   </button>
                 </div>
+                </div>
               </motion.div>
             );
-          })}
+              })}
+              </div>
+              <Pagination
+                page={safeRequestsPage}
+                totalPages={requestsTotalPages}
+                total={filteredRequests.length}
+                onChange={p => { setRequestsPage(p); listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+              />
+            </>
+          )}
         </motion.div>
       )}
 

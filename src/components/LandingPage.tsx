@@ -1498,9 +1498,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <div>
                     <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Téléphone * <span className="text-slate-400 font-bold normal-case tracking-normal">(8 chiffres)</span></label>
                     <input
-                      type="tel" required inputMode="numeric" maxLength={13}
+                      type="tel" required inputMode="numeric" maxLength={8} autoComplete="tel"
                       value={phone}
-                      onChange={e => { setPhone(e.target.value); setFormError(''); }}
+                      onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 8)); setFormError(''); }}
                       className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
                       placeholder="20 123 456"
                     />
