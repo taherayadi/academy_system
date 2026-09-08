@@ -24,7 +24,10 @@ import {
   BarChart3,
   Award,
   CalendarCheck,
-  ShieldCheck
+  ShieldCheck,
+  Building2,
+  Inbox,
+  Tags
 } from 'lucide-react';
 
 import { 
@@ -165,9 +168,9 @@ export default function App() {
 
   // Keep active tab in sync with user role
   useEffect(() => {
-    if (isPlatformSuperAdmin && activeTab !== 'platformAdmin') {
+    if (isPlatformSuperAdmin && !activeTab.startsWith('platform')) {
       setActiveTab('platformAdmin');
-    } else if (!isPlatformSuperAdmin && activeTab === 'platformAdmin') {
+    } else if (!isPlatformSuperAdmin && activeTab.startsWith('platform')) {
       setActiveTab('dashboard');
     }
   }, [isPlatformSuperAdmin, activeTab]);
@@ -794,7 +797,13 @@ export default function App() {
   // Platform super admin sees ONLY the SaaS platform management interface.
   // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
   const menuItems = isPlatformSuperAdmin
-    ? [{ id: 'platformAdmin', label: 'إدارة المنصة (SaaS)', icon: ShieldCheck }]
+    ? [
+        { id: 'platformAdmin', label: 'الرئيسية · SaaS', icon: LayoutDashboard },
+        { id: 'platformCenters', label: 'المراكز والاشتراكات', icon: Building2 },
+        { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
+        { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
+        { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
+      ]
     : [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
@@ -1179,8 +1188,23 @@ export default function App() {
                 />
               )}
 
-              {(activeTab === 'platformAdmin' || isPlatformSuperAdmin) && (
-                <PlatformAdminDashboard />
+              {activeTab.startsWith('platform') && (
+                <PlatformAdminDashboard
+                  page={
+                    activeTab === 'platformCenters' ? 'centers'
+                    : activeTab === 'platformRequests' ? 'requests'
+                    : activeTab === 'platformFinance' ? 'finance'
+                    : activeTab === 'platformPricing' ? 'pricing'
+                    : 'overview'
+                  }
+                  onNavigate={(p) => setActiveTab(
+                    p === 'centers' ? 'platformCenters'
+                    : p === 'requests' ? 'platformRequests'
+                    : p === 'finance' ? 'platformFinance'
+                    : p === 'pricing' ? 'platformPricing'
+                    : 'platformAdmin'
+                  )}
+                />
               )}
             </motion.div>
           </AnimatePresence>
