@@ -5,12 +5,18 @@ const DEFAULT_ACADEMIC_YEARS = [
 ];
 const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
+const ALL_MODULE_KEYS = [
+  'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
+  'formations', 'cantine', 'transport', 'events', 'bibliotheque',
+  BUNDLED_MODULE_KEY, 'staff'
+];
 const ANNUAL_DISCOUNT = 0.2;
 const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 
-function normalizeEnabledModules(value: unknown): string[] {
+function normalizeEnabledModules(value: unknown, plan?: string): string[] {
   const requested = Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
-  return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...requested]));
+  const modules = plan === 'pro' ? ALL_MODULE_KEYS : requested;
+  return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...modules]));
 }
 
 function currentSchoolYear(timestamp = Date.now()): string {
@@ -197,7 +203,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const billingCycle = isTrial ? 'monthly' : (String(body.billingCycle || 'monthly').trim() === 'annual' ? 'annual' : 'monthly');
 
-    const enabledModules = normalizeEnabledModules(body.enabledModules);
+    // Pro starts with the complete catalogue selected; the backend enforces
+    // this preset even when a caller does not send the module list.
+    const enabledModules = normalizeEnabledModules(body.enabledModules, plan);
     const modulesJson = JSON.stringify(enabledModules);
 
     // Compute the automatic tariff from module_prices for the current school year
@@ -352,7 +360,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.enabledModules !== undefined) {
       updates.push('enabled_modules = ?');
-      binds.push(JSON.stringify(normalizeEnabledModules(body.enabledModules)));
+      binds.push(JSON.stringify(normalizeEnabledModules(body.enabledModules, effectivePlan)));
+    } else if (body.plan !== undefined && effectivePlan === 'pro') {
+      updates.push('enabled_modules = ?');
+      binds.push(JSON.stringify(ALL_MODULE_KEYS));
     }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
     if (body.subscriptionEndsAt !== undefined && !autoCalculateSubscription
@@ -388,7 +399,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         ? body.enabledModules
         : (() => {
           try { return JSON.parse(String(current?.enabled_modules || '[]')); } catch { return []; }
-        })());
+        })(), effectivePlan);
       if (effectiveStatus === 'trial') {
         updates.push('monthly_price = ?');
         binds.push(0);

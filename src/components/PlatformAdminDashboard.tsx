@@ -387,6 +387,14 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     }));
   };
 
+  // Keep the Pro preset true even when the form is opened or updated from
+  // another flow instead of through the plan select change handler.
+  React.useEffect(() => {
+    if (form.plan === 'pro' && form.enabledModules.length !== ALL_MODULE_KEYS.length) {
+      setForm(current => ({ ...current, enabledModules: [...ALL_MODULE_KEYS] }));
+    }
+  }, [form.plan]);
+
   // La base ne peut pas être retirée — on ne peut qu'ajouter des modules
   const toggle = (key: string) => {
     if (isBaseModule(key)) return;
