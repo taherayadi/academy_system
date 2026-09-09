@@ -45,6 +45,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         status: inv.status,
         paymentMethod: inv.payment_method || null,
         paymentDate: inv.payment_date || null,
+        chequeNumber: inv.cheque_number || null,
+        chequeDate: inv.cheque_date || null,
         notes: inv.notes || '',
         createdAt: inv.created_at
       }));
@@ -187,19 +189,47 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const id = String(body.id || '').trim();
     if (!id) return json({ error: 'معرف الفاتورة مطلوب.' }, 400);
 
+    const existing = await env.DB.prepare('SELECT status, payment_date FROM center_invoices WHERE id = ?').bind(id).first<any>();
+    if (!existing) return json({ error: 'الفاتورة غير موجودة.' }, 404);
+
     const updates: string[] = [];
     const binds: any[] = [];
 
     if (body.status !== undefined) {
+      const targetStatus = String(body.status).trim();
       updates.push('status = ?');
-      binds.push(String(body.status).trim());
-      if (body.status === 'paid' && !body.paymentDate) {
-        updates.push('payment_date = ?');
-        binds.push(Date.now());
+      binds.push(targetStatus);
+      // Revenue is recognised only for paid invoices: stamp the collection
+      // date when an invoice BECOMES paid, and clear it when it stops being
+      // paid. Editing an already-paid invoice must not move its payment date.
+      if (body.paymentDate === undefined) {
+        const wasPaid = existing.status === 'paid';
+        if (targetStatus === 'paid' && !wasPaid) {
+          updates.push('payment_date = ?');
+          binds.push(Date.now());
+        } else if (targetStatus !== 'paid' && wasPaid) {
+          updates.push('payment_date = ?');
+          binds.push(null);
+        }
       }
     }
     if (body.amount !== undefined) { updates.push('amount = ?'); binds.push(Number(body.amount)); }
-    if (body.paymentMethod !== undefined) { updates.push('payment_method = ?'); binds.push(String(body.paymentMethod).trim()); }
+    if (body.paymentMethod !== undefined) {
+      const method = String(body.paymentMethod ?? '').trim();
+      // Cheque payments are kept pending ("chèque en attente") until encashed
+      // — they are never counted as revenue. Encashing = status → 'paid'.
+      // Only 'cash' and 'cheque' are accepted; anything else is cleared.
+      updates.push('payment_method = ?');
+      binds.push(method === 'cash' || method === 'cheque' ? method : null);
+    }
+    if (body.chequeNumber !== undefined) {
+      updates.push('cheque_number = ?');
+      binds.push(body.chequeNumber ? String(body.chequeNumber).trim() : null);
+    }
+    if (body.chequeDate !== undefined) {
+      updates.push('cheque_date = ?');
+      binds.push(body.chequeDate ? Number(body.chequeDate) : null);
+    }
     if (body.paymentDate !== undefined) { updates.push('payment_date = ?'); binds.push(body.paymentDate ? Number(body.paymentDate) : null); }
     if (body.notes !== undefined) { updates.push('notes = ?'); binds.push(String(body.notes).trim()); }
     if (body.periodStart !== undefined) { updates.push('period_start = ?'); binds.push(Number(body.periodStart)); }

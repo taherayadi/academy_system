@@ -580,6 +580,13 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       if (!current) return json({ error: 'المركز غير موجود.' }, 404);
     }
 
+    // A center with a running subscription cannot be turned back into a trial
+    // (that would silently void its paid period). Trial periods are only added
+    // while the center is still IN trial.
+    if (current && body.status !== undefined && String(body.status).trim() === 'trial' && current.status === 'active') {
+      return json({ error: 'لا يمكن تحويل مركز باشتراك فعّال إلى فترة تجريبية.' }, 400);
+    }
+
     const now = Date.now();
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -828,35 +835,21 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null);
     }
 
-    // Add promotional days without changing the selected plan. For a paid
-    // center, the free period moves the subscription start and end together:
-    // trial end +N days, subscription start +N days, subscription end +N days.
-    // Keep extendTrialDays as a backwards-compatible alias for existing callers.
+    // Add promotional/trial days — ONLY while the center is still in its trial
+    // period. A center already inside a paid subscription window cannot be
+    // granted a trial extension (a paid plan change must never silently give
+    // free days). Keep extendTrialDays as a backwards-compatible alias.
     const requestedOfferDays = body.addOfferDays !== undefined ? body.addOfferDays : body.extendTrialDays;
     if (requestedOfferDays !== undefined) {
       const extraDays = normalizeDayCount(requestedOfferDays, 0);
       if (extraDays > 0 && current) {
-        const durationMs = (current.billing_cycle || 'monthly') === 'annual' ? 365 * DAY_MS : 30 * DAY_MS;
-        const existingSubscriptionEnd = Number(current.subscription_ends_at) || 0;
-        const existingTrialEnd = Number(current.trial_ends_at) || 0;
-
-        if (current.status === 'trial') {
-          const baseTrialEnd = existingTrialEnd > now ? existingTrialEnd : now;
-          updates.push('trial_ends_at = ?');
-          binds.push(baseTrialEnd + extraDays * DAY_MS);
-        } else {
-          // If an active paid center has no stored trial boundary, infer its
-          // original subscription start from the current subscription end.
-          const subscriptionStart = existingSubscriptionEnd > 0
-            ? existingSubscriptionEnd - durationMs
-            : (existingTrialEnd || now);
-          const baseTrialEnd = existingTrialEnd || subscriptionStart;
-          const subscriptionEnd = existingSubscriptionEnd || (subscriptionStart + durationMs);
-          updates.push('trial_ends_at = ?');
-          binds.push(baseTrialEnd + extraDays * DAY_MS);
-          updates.push('subscription_ends_at = ?');
-          binds.push(subscriptionEnd + extraDays * DAY_MS);
+        if (current.status !== 'trial') {
+          return json({ error: 'لا يمكن إضافة أيام تجريبية لمركز مشترك. الفترة التجريبية تُضاف فقط أثناء الاشتراك التجريبي.' }, 400);
         }
+        const existingTrialEnd = Number(current.trial_ends_at) || 0;
+        const baseTrialEnd = existingTrialEnd > now ? existingTrialEnd : now;
+        updates.push('trial_ends_at = ?');
+        binds.push(baseTrialEnd + extraDays * DAY_MS);
       }
     }
 

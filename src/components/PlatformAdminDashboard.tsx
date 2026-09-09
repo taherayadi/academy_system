@@ -12,7 +12,7 @@ import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
   uploadPlatformLogoApi,
   fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
-  fetchPlatformBillingApi, fetchInvoicesApi, createInvoiceApi, updateInvoiceApi, deleteInvoiceApi,
+  fetchPlatformBillingApi, fetchInvoicesApi, updateInvoiceApi, deleteInvoiceApi,
   fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, PlanChangeOutcome
 } from '../api';
 import { CenterTenant, DemoRequest, ModuleKey } from '../types';
@@ -193,6 +193,26 @@ function addSubscriptionPeriod(timestamp: number, billingCycle: 'monthly' | 'ann
 
 function formatTnd(value: number): string {
   return `${value.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
+}
+
+/** Badge + label of an invoice status (a pending cheque gets its own badge). */
+function invoiceStatusMeta(inv: { status: string; paymentMethod?: string | null }): { label: string; cls: string } {
+  if (inv.status === 'pending' && inv.paymentMethod === 'cheque') {
+    return { label: 'Chèque en attente', cls: 'bg-indigo-50 text-indigo-700 border border-indigo-200' };
+  }
+  switch (inv.status) {
+    case 'pending': return { label: 'En attente', cls: 'bg-amber-50 text-amber-800 border border-amber-200' };
+    case 'paid': return { label: 'Payée', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
+    case 'overdue': return { label: 'En retard', cls: 'bg-red-50 text-red-700 border border-red-200' };
+    case 'cancelled': return { label: 'Annulée', cls: 'bg-slate-100 text-slate-500 border border-slate-200' };
+    default: return { label: inv.status, cls: 'bg-slate-100 text-slate-600 border border-slate-200' };
+  }
+}
+
+function paymentMethodLabel(method?: string | null): string {
+  if (method === 'cash') return 'Espèces';
+  if (method === 'cheque') return 'Chèque';
+  return method || '—';
 }
 
 function inferredSubscriptionStart(center: CenterTenant): number | null {
@@ -893,6 +913,154 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   );
 }
 
+// ─── Edit Invoice Modal (statut / paiement / chèque) ────────────────────────
+function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoice; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<CenterInvoice['status']>(invoice.status);
+  const [method, setMethod] = useState<string>(
+    invoice.paymentMethod === 'cash' || invoice.paymentMethod === 'cheque' ? invoice.paymentMethod : ''
+  );
+  const [chequeNumber, setChequeNumber] = useState(invoice.chequeNumber || '');
+  const [chequeDate, setChequeDate] = useState(
+    invoice.chequeDate ? new Date(invoice.chequeDate).toISOString().slice(0, 10) : ''
+  );
+  const [notes, setNotes] = useState(invoice.notes || '');
+
+  const chequeMode = method === 'cheque';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (status === 'paid' && !method) {
+      toast.error('Sélectionnez la méthode de paiement (Espèces ou Chèque).');
+      return;
+    }
+    if (chequeMode && !chequeNumber.trim()) {
+      toast.error('Le numéro du chèque est obligatoire.');
+      return;
+    }
+    if (chequeMode && !chequeDate) {
+      toast.error('La date du chèque est obligatoire.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const chequeDateTs = chequeMode && chequeDate ? new Date(`${chequeDate}T12:00:00`).getTime() : null;
+      await updateInvoiceApi(invoice.id, {
+        status,
+        paymentMethod: method || null,
+        chequeNumber: chequeMode ? chequeNumber.trim() : null,
+        chequeDate: chequeMode ? chequeDateTs : null,
+        notes
+      });
+      toast.success('Facture mise à jour');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la mise à jour.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
+            <h2 className="text-base font-black text-slate-900">Facture {invoice.invoiceNumber}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+            <X className="h-5 w-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 mb-4 text-xs font-bold text-slate-600">
+          {invoice.centerName} · {invoice.amount.toFixed(2)} TND
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Statut</label>
+            <select value={status} onChange={e => setStatus(e.target.value as CenterInvoice['status'])} className={`${inputCls} cursor-pointer`}>
+              <option value="pending">En attente</option>
+              <option value="paid">Payée</option>
+              <option value="overdue">En retard</option>
+              <option value="cancelled">Annulée</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Méthode de paiement</label>
+            <select value={method} onChange={e => setMethod(e.target.value)} className={`${inputCls} cursor-pointer`}>
+              <option value="">—</option>
+              <option value="cash">Espèces</option>
+              <option value="cheque">Chèque</option>
+            </select>
+          </div>
+
+          {chequeMode && (
+            <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/50 p-3.5 space-y-3">
+              <p className="text-[10px] font-bold text-indigo-700 leading-relaxed">
+                Chèque reçu : laissez le statut « En attente » — la facture apparaît dans « Chèques en attente » et
+                n’est <span className="underline">pas comptée dans les revenus</span> tant que vous ne l’encaissez pas
+                (bouton « Encaisser », qui passe la facture en « Payée »).
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">N° Chèque</label>
+                  <input
+                    type="text"
+                    value={chequeNumber}
+                    onChange={e => setChequeNumber(e.target.value)}
+                    placeholder="Ex : 001245"
+                    dir="ltr"
+                    className={`${inputCls} text-left`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Date du chèque</label>
+                  <input
+                    type="date"
+                    dir="ltr"
+                    value={chequeDate}
+                    onChange={e => setChequeDate(e.target.value)}
+                    className={`${inputCls} cursor-pointer input-date-ltr text-left`}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer">
+              Annuler
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Sauvegarder
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── Edit Center Modal ──────────────────────────────────────────────────────
 function centerDateInputValue(timestamp?: number | null): string {
   return timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
@@ -1261,7 +1429,8 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Statut</label>
                 <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as CenterTenant['status'] }))} className={`${inputCls} cursor-pointer`}>
-                  <option value="trial">Essai</option>
+                  {/* Un centre déjà en abonnement actif ne peut pas repasser en essai */}
+                  {center.status !== 'active' && <option value="trial">Essai</option>}
                   <option value="active">Actif</option>
                   <option value="suspended">Suspendu</option>
                   <option value="expired">Expiré</option>
@@ -1461,7 +1630,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [billingSummary, setBillingSummary] = useState<PlatformBillingSummary | null>(null);
   const [invoices, setInvoices] = useState<CenterInvoice[]>([]);
   const [financeLoading, setFinanceLoading] = useState(false);
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState<CenterInvoice | null>(null);
 
   // Module prices (Tarifs page)
@@ -1551,6 +1719,24 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       && (!q || inv.centerName.toLowerCase().includes(q))
     );
   }, [invoices, invoiceSearch, invoiceStatusFilter]);
+
+  // Invoices paid by cheque but not encashed yet — tracked separately, they
+  // are NEVER part of revenue until their status becomes 'paid'.
+  const pendingCheques = useMemo(() => invoices.filter(inv =>
+    inv.status === 'pending' && inv.paymentMethod === 'cheque' && !!inv.chequeNumber
+  ), [invoices]);
+
+  // Group the filtered invoices by center (each center has its own list).
+  const invoiceGroups = useMemo(() => {
+    const byCenter = new Map<string, { centerId: string; centerName: string; invoices: CenterInvoice[] }>();
+    filteredInvoices.forEach(inv => {
+      const group = byCenter.get(inv.centerId)
+        || { centerId: inv.centerId, centerName: inv.centerName, invoices: [] };
+      group.invoices.push(inv);
+      byCenter.set(inv.centerId, group);
+    });
+    return Array.from(byCenter.values()).sort((a, b) => a.centerName.localeCompare(b.centerName));
+  }, [filteredInvoices]);
 
   const loadPrices = useCallback(async (year: string) => {
     setPricesLoading(true);
@@ -2110,10 +2296,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     className="text-[11px] font-bold px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5">
                     <Edit className="h-3.5 w-3.5" /> Modifier
                   </button>
-                  <button onClick={() => handleAddOfferDays(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
-                    <CalendarClock className="h-3.5 w-3.5" /> +14 jours d’essai
-                  </button>
+                  {c.status === 'trial' && (
+                    <button onClick={() => handleAddOfferDays(c)}
+                      title="Prolonger la période d’essai (disponible uniquement pendant l’essai)"
+                      className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
+                      <CalendarClock className="h-3.5 w-3.5" /> +14 jours d’essai
+                    </button>
+                  )}
                   <button onClick={() => handleToggleStatus(c)}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       c.status === 'suspended'
@@ -2337,27 +2526,76 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <button onClick={() => setShowInvoiceModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer">
-                  <Plus className="h-4 w-4" />
-                  Nouvelle Facture
-                </button>
-                <button onClick={() => onNavigate?.('pricing')}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 text-sm font-bold rounded-xl transition cursor-pointer">
-                  <Layers className="h-4 w-4" />
-                  Tarifs Modules
-                </button>
-              </div>
+              {/* Chèques en attente — le revenu n'est compté qu'après encaissement */}
+              {pendingCheques.length > 0 && (
+                <div className="bg-white rounded-3xl border border-indigo-200/70 p-6 shadow-lg shadow-slate-900/5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
+                      <span className="p-2 bg-indigo-100 rounded-xl"><Receipt className="h-4 w-4 text-indigo-600" /></span>
+                      Chèques en attente
+                      <span className="text-[11px] font-bold text-slate-400 font-sans">{pendingCheques.length}</span>
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-400">
+                      Les chèques en attente ne sont <span className="text-indigo-600">pas comptés dans les revenus</span> — encaissez-les pour les comptabiliser.
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="pb-3 px-3">Centre</th>
+                          <th className="pb-3 px-3">N° Facture</th>
+                          <th className="pb-3 px-3">Montant</th>
+                          <th className="pb-3 px-3">N° Chèque</th>
+                          <th className="pb-3 px-3">Date du chèque</th>
+                          <th className="pb-3 px-3">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {pendingCheques.map(inv => (
+                          <tr key={inv.id} className="hover:bg-indigo-50/40">
+                            <td className="py-3 px-3 font-black text-slate-900">{inv.centerName}</td>
+                            <td className="py-3 px-3 font-mono text-xs text-slate-500">{inv.invoiceNumber}</td>
+                            <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
+                            <td className="py-3 px-3 text-slate-600 text-xs font-bold">{inv.chequeNumber || '—'}</td>
+                            <td className="py-3 px-3 text-slate-600 text-xs">{inv.chequeDate ? new Date(inv.chequeDate).toLocaleDateString('fr-TN') : '—'}</td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await updateInvoiceApi(inv.id, { status: 'paid' });
+                                      toast.success(`Chèque encaissé — facture ${inv.invoiceNumber} payée`);
+                                      loadFinanceData();
+                                    } catch (err) {
+                                      toast.error(err instanceof Error ? err.message : 'Erreur');
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition cursor-pointer"
+                                  title="Le chèque est encaissé : la facture devient payée et compte dans les revenus"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Encaisser
+                                </button>
+                                <button onClick={() => setEditInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
+                                  <Edit className="h-3.5 w-3.5 text-slate-500" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
-              {/* Invoices */}
+              {/* Factures — groupées par centre */}
               <div className="bg-white rounded-3xl border border-slate-200/70 p-6 shadow-lg shadow-slate-900/5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
                     <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
                     Factures
-                    <span className="text-[11px] font-bold text-slate-400 font-sans">{filteredInvoices.length} affichée{filteredInvoices.length > 1 ? 's' : ''}</span>
+                    <span className="text-[11px] font-bold text-slate-400 font-sans">{invoiceGroups.length} centre{invoiceGroups.length > 1 ? 's' : ''} · {filteredInvoices.length} facture{filteredInvoices.length > 1 ? 's' : ''}</span>
                   </h3>
 
                   {/* Filters — centre + statut */}
@@ -2398,67 +2636,97 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 ) : filteredInvoices.length === 0 ? (
                   <p className="text-center py-12 text-slate-400 text-sm font-bold">Aucune facture ne correspond aux filtres</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                        <tr>
-                          <th className="pb-3 px-3">N° Facture</th>
-                          <th className="pb-3 px-3">Centre</th>
-                          <th className="pb-3 px-3">Période</th>
-                          <th className="pb-3 px-3">Montant</th>
-                          <th className="pb-3 px-3">Statut</th>
-                          <th className="pb-3 px-3">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredInvoices.map(inv => {
-                          const statusColors: Record<string, string> = {
-                            pending: 'bg-amber-100 text-amber-800',
-                            paid: 'bg-emerald-100 text-emerald-800',
-                            overdue: 'bg-red-100 text-red-700',
-                            cancelled: 'bg-slate-100 text-slate-600'
-                          };
-                          const statusLabels: Record<string, string> = {
-                            pending: 'En attente', paid: 'Payée', overdue: 'En retard', cancelled: 'Annulée'
-                          };
-                          return (
-                            <tr key={inv.id} className="hover:bg-slate-50/70">
-                              <td className="py-3 px-3 font-mono text-xs text-slate-500">{inv.invoiceNumber}</td>
-                              <td className="py-3 px-3 font-black text-slate-900">{inv.centerName}</td>
-                              <td className="py-3 px-3 text-slate-600 text-xs">
-                                {new Date(inv.periodStart).toLocaleDateString('fr')} – {new Date(inv.periodEnd).toLocaleDateString('fr')}
-                              </td>
-                              <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
-                              <td className="py-3 px-3">
-                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${statusColors[inv.status]}`}>
-                                  {statusLabels[inv.status] || inv.status}
+                  <div className="space-y-5">
+                    {invoiceGroups.map(group => {
+                      const paidTotal = group.invoices
+                        .filter(inv => inv.status === 'paid')
+                        .reduce((sum, inv) => sum + inv.amount, 0);
+                      const outstandingTotal = group.invoices
+                        .filter(inv => inv.status === 'pending' || inv.status === 'overdue')
+                        .reduce((sum, inv) => sum + inv.amount, 0);
+                      return (
+                        <div key={group.centerId} className="rounded-2xl border border-slate-200/80 overflow-hidden">
+                          {/* Centre header */}
+                          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 border-b border-slate-200/70">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
+                                {group.centerName.split(' ').map((word: string) => word[0]).join('').slice(0, 2).toUpperCase()}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-black text-slate-900 truncate">{group.centerName}</p>
+                                <p className="text-[10px] font-semibold text-slate-400">
+                                  {group.invoices.length} facture{group.invoices.length > 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {outstandingTotal > 0 && (
+                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                  Reste à encaisser : {outstandingTotal.toFixed(2)} TND
                                 </span>
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="flex items-center gap-1">
-                                  <button onClick={() => setEditInvoice(inv)}
-                                    className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
-                                    <Edit className="h-3.5 w-3.5 text-slate-500" />
-                                  </button>
-                                  <button onClick={async () => {
-                                    try {
-                                      await deleteInvoiceApi(inv.id);
-                                      toast.success('Facture supprimée');
-                                      loadFinanceData();
-                                    } catch (err) {
-                                      toast.error(err instanceof Error ? err.message : 'Erreur');
-                                    }
-                                  }}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Supprimer">
-                                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              )}
+                              {paidTotal > 0 && (
+                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Payé : {paidTotal.toFixed(2)} TND
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                              <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-white">
+                                <tr>
+                                  <th className="py-2.5 px-3">N° Facture</th>
+                                  <th className="py-2.5 px-3">Période</th>
+                                  <th className="py-2.5 px-3">Montant</th>
+                                  <th className="py-2.5 px-3">Paiement</th>
+                                  <th className="py-2.5 px-3">Statut</th>
+                                  <th className="py-2.5 px-3">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {group.invoices.map(inv => {
+                                  const meta = invoiceStatusMeta(inv);
+                                  return (
+                                    <tr key={inv.id} className="hover:bg-slate-50/70">
+                                      <td className="py-3 px-3 font-mono text-xs text-slate-500">{inv.invoiceNumber}</td>
+                                      <td className="py-3 px-3 text-slate-600 text-xs">
+                                        {new Date(inv.periodStart).toLocaleDateString('fr-TN')} – {new Date(inv.periodEnd).toLocaleDateString('fr-TN')}
+                                      </td>
+                                      <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
+                                      <td className="py-3 px-3 text-slate-600 text-xs font-semibold">{paymentMethodLabel(inv.paymentMethod)}</td>
+                                      <td className="py-3 px-3">
+                                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${meta.cls}`}>{meta.label}</span>
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => setEditInvoice(inv)}
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
+                                            <Edit className="h-3.5 w-3.5 text-slate-500" />
+                                          </button>
+                                          <button onClick={async () => {
+                                            try {
+                                              await deleteInvoiceApi(inv.id);
+                                              toast.success('Facture supprimée');
+                                              loadFinanceData();
+                                            } catch (err) {
+                                              toast.error(err instanceof Error ? err.message : 'Erreur');
+                                            }
+                                          }}
+                                            className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Supprimer">
+                                            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2604,106 +2872,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             onSaved={load}
           />
         )}
-        {showInvoiceModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowInvoiceModal(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <h2 className="text-base font-black text-slate-900 mb-5">Nouvelle Facture</h2>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const data = new FormData(form);
-                try {
-                  await createInvoiceApi({
-                    centerId: data.get('centerId') as string,
-                    amount: Number(data.get('amount')),
-                    periodStart: new Date(data.get('periodStart') as string).getTime(),
-                    periodEnd: new Date(data.get('periodEnd') as string).getTime(),
-                    notes: data.get('notes') as string
-                  });
-                  toast.success('Facture créée');
-                  setShowInvoiceModal(false);
-                  loadFinanceData();
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Erreur');
-                }
-              }} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Centre</label>
-                  <select name="centerId" required className={inputCls}>
-                    {centers.filter(c => c.status !== 'trial').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Montant (TND)</label>
-                  <input type="number" name="amount" step="0.01" required className={inputCls} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Début période</label>
-                    <input type="date" name="periodStart" required className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin période</label>
-                    <input type="date" name="periodEnd" required className={inputCls} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
-                  <textarea name="notes" rows={2} className={inputCls}></textarea>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setShowInvoiceModal(false)} className="px-4 py-2.5 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
-                  <button type="submit" className="px-4 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer">Créer</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
         {editInvoice && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditInvoice(null)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <h2 className="text-base font-black text-slate-900 mb-5">Modifier Facture {editInvoice.invoiceNumber}</h2>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const data = new FormData(form);
-                try {
-                  await updateInvoiceApi(editInvoice.id, {
-                    status: data.get('status') as CenterInvoice['status'],
-                    paymentMethod: data.get('paymentMethod') as string,
-                    notes: data.get('notes') as string
-                  });
-                  toast.success('Facture mise à jour');
-                  setEditInvoice(null);
-                  loadFinanceData();
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Erreur');
-                }
-              }} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Statut</label>
-                  <select name="status" defaultValue={editInvoice.status} className={inputCls}>
-                    <option value="pending">En attente</option>
-                    <option value="paid">Payée</option>
-                    <option value="overdue">En retard</option>
-                    <option value="cancelled">Annulée</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Méthode paiement</label>
-                  <input type="text" name="paymentMethod" defaultValue={editInvoice.paymentMethod || ''} className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
-                  <textarea name="notes" rows={2} defaultValue={editInvoice.notes} className={inputCls}></textarea>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setEditInvoice(null)} className="px-4 py-2.5 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
-                  <button type="submit" className="px-4 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer">Sauvegarder</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+          <EditInvoiceModal
+            invoice={editInvoice}
+            onClose={() => setEditInvoice(null)}
+            onSaved={loadFinanceData}
+          />
         )}
       </AnimatePresence>
 

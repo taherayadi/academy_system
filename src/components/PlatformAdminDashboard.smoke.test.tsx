@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import PlatformAdminDashboard from './PlatformAdminDashboard';
+import type { CenterInvoice } from '../api';
 
 // Every API surface used by the dashboard is mocked; the finance fetches are
 // counted to detect the self-triggering fetch-loop regression.
@@ -73,5 +74,45 @@ describe('PlatformAdminDashboard — Finance data loading', () => {
     await waitFor(() => expect(api.fetchInvoicesApi).toHaveBeenCalledTimes(1));
     await settle();
     expect(api.fetchInvoicesApi).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques)', () => {
+  const invoices: CenterInvoice[] = [
+    {
+      id: 'c1-inv-pending', centerId: 'c1', centerName: 'Jardin Alya', invoiceNumber: 'INV-2026-0001',
+      periodStart: Date.now() - 5 * 86400000, periodEnd: Date.now() + 25 * 86400000,
+      amount: 90, status: 'pending', paymentMethod: 'cheque', chequeNumber: 'CHQ-001', chequeDate: Date.now(),
+      notes: '', createdAt: Date.now(),
+    },
+    {
+      id: 'c2-inv-paid', centerId: 'c2', centerName: 'Centre Horizon', invoiceNumber: 'INV-2026-0002',
+      periodStart: Date.now() - 5 * 86400000, periodEnd: Date.now() + 25 * 86400000,
+      amount: 45, status: 'paid', paymentMethod: 'cash', paymentDate: Date.now(),
+      notes: '', createdAt: Date.now(),
+    },
+  ];
+
+  beforeEach(() => {
+    (api.fetchInvoicesApi as ReturnType<typeof vi.fn>).mockResolvedValue(invoices);
+  });
+
+  it('groups invoices under their center, shows the pending-cheque table, and no manual invoice creation', async () => {
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Chèques en attente')).toBeTruthy());
+    expect(screen.getByText('CHQ-001')).toBeTruthy();
+    expect(screen.getAllByText(/Encaisser/).length).toBeGreaterThan(0);
+
+    // Center group headers + their invoices are rendered
+    await waitFor(() => expect(screen.getAllByText('Jardin Alya').length).toBeGreaterThanOrEqual(1));
+    expect(screen.getAllByText('Centre Horizon').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('INV-2026-0001').length).toBeGreaterThanOrEqual(1); // cheque table + center group
+    expect(screen.getAllByText('INV-2026-0002').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Chèque en attente').length).toBeGreaterThanOrEqual(1);
+
+    // Manual invoice creation and the Tarifs Modules shortcut are gone
+    expect(screen.queryByText('Nouvelle Facture')).toBeNull();
+    expect(screen.queryByText('Tarifs Modules')).toBeNull();
   });
 });

@@ -592,6 +592,8 @@ export interface CenterInvoice {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   paymentMethod?: string | null;
   paymentDate?: number | null;
+  chequeNumber?: string | null;
+  chequeDate?: number | null;
   notes: string;
   createdAt: number;
 }
@@ -659,12 +661,14 @@ export async function createInvoiceApi(payload: {
   return data;
 }
 
-/** Update an invoice. */
+/** Update an invoice (status / payment method / cheque details / notes). */
 export async function updateInvoiceApi(id: string, payload: Partial<{
   status: string;
   amount: number;
-  paymentMethod: string;
+  paymentMethod: string | null;
   paymentDate: number | null;
+  chequeNumber: string | null;
+  chequeDate: number | null;
   notes: string;
   periodStart: number;
   periodEnd: number;
