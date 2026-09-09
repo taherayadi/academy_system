@@ -1494,7 +1494,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setCentersPage(1); setRequestsPage(1);
   }, [page]);
 
+  // Finance data is loaded exactly once per entry into the Finance tab, and on
+  // first Overview visit when no summary is cached yet. Refs (not state) drive
+  // the decision so a fetch never re-triggers itself while loading.
+  const financePageRef = useRef<PlatformAdminPage | ''>('');
+  const financeLoadingRef = useRef(false);
+  const billingSummaryRef = useRef(billingSummary);
+  billingSummaryRef.current = billingSummary;
+
   const loadFinanceData = useCallback(async () => {
+    if (financeLoadingRef.current) return; // never stack overlapping finance fetches
+    financeLoadingRef.current = true;
     setFinanceLoading(true);
     try {
       const [summary, invoiceList] = await Promise.all([
@@ -1506,19 +1516,30 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur chargement finances');
     } finally {
+      financeLoadingRef.current = false;
       setFinanceLoading(false);
     }
   }, [toast]);
 
-  // Refresh the SaaS finance data every time the page is opened (auto-created
-  // invoices from center creation / plan changes must show up immediately).
   useEffect(() => {
     if (page === 'finance') {
-      loadFinanceData();
-    } else if (page === 'overview' && !billingSummary && !financeLoading) {
-      loadFinanceData();
+      // Entering the Finance tab always refreshes once (fresh invoices).
+      if (financePageRef.current !== 'finance') {
+        financePageRef.current = 'finance';
+        loadFinanceData();
+      }
+    } else if (page === 'overview') {
+      // Overview only loads finance data when none is cached yet.
+      if (!billingSummaryRef.current) {
+        financePageRef.current = 'overview';
+        loadFinanceData();
+      }
+    } else {
+      // Leaving finance/overview: the next entry must reload.
+      financePageRef.current = '';
     }
-  }, [page, loadFinanceData, billingSummary, financeLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   // ── Invoice filters (center name + status) ──
   const [invoiceSearch, setInvoiceSearch] = useState('');
