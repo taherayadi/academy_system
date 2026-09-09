@@ -438,8 +438,12 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     setSaving(true);
     try {
       const logoUrl = logoFile ? await uploadSelectedLogo() : form.logoUrl;
-      await createCenterApi({ ...form, logoUrl, convertFromRequestId: convertRequestId });
-      toast.success('Centre créé avec succès !');
+      const created = await createCenterApi({ ...form, logoUrl, convertFromRequestId: convertRequestId });
+      if (created.invoice) {
+        toast.success(`Centre créé. Facture ${created.invoice.invoiceNumber} créée (${formatTnd(created.invoice.amount)}) — en attente de paiement.`);
+      } else {
+        toast.success('Centre créé avec succès !');
+      }
       onCreated();
       onClose();
     } catch (err) {
@@ -1089,7 +1093,11 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
           : 'Changement planifié — il sera appliqué à la prochaine reconduction.'
       );
     } else if (mode === 'renewal') {
-      toast.success('Centre mis à jour. Nouvelle période d’abonnement démarrée.');
+      toast.success(
+        outcome?.invoice
+          ? `Nouvelle période démarrée. Facture ${outcome.invoice.invoiceNumber} créée (${formatTnd(outcome.invoice.amount)}) — en attente de paiement.`
+          : 'Centre mis à jour. Nouvelle période d’abonnement démarrée.'
+      );
     } else {
       toast.success('Centre mis à jour');
     }
@@ -1482,6 +1490,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setSearch('');
     setCenterTypeFilter('all'); setStatusFilter('all'); setPlanFilter('all');
     setReqTypeFilter('all'); setReqStatusFilter('all');
+    setInvoiceSearch(''); setInvoiceStatusFilter('all');
     setCentersPage(1); setRequestsPage(1);
   }, [page]);
 
@@ -1490,7 +1499,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     try {
       const [summary, invoiceList] = await Promise.all([
         fetchPlatformBillingApi(),
-        fetchInvoicesApi({ limit: 50 })
+        fetchInvoicesApi({ limit: 500 })
       ]);
       setBillingSummary(summary.summary);
       setInvoices(invoiceList);
@@ -1501,11 +1510,26 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     }
   }, [toast]);
 
+  // Refresh the SaaS finance data every time the page is opened (auto-created
+  // invoices from center creation / plan changes must show up immediately).
   useEffect(() => {
-    if ((page === 'overview' || page === 'finance') && !billingSummary && !financeLoading) {
+    if (page === 'finance') {
+      loadFinanceData();
+    } else if (page === 'overview' && !billingSummary && !financeLoading) {
       loadFinanceData();
     }
-  }, [page, billingSummary, financeLoading, loadFinanceData]);
+  }, [page, loadFinanceData, billingSummary, financeLoading]);
+
+  // ── Invoice filters (center name + status) ──
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<'all' | CenterInvoice['status']>('all');
+  const filteredInvoices = useMemo(() => {
+    const q = invoiceSearch.trim().toLowerCase();
+    return invoices.filter(inv =>
+      (invoiceStatusFilter === 'all' || inv.status === invoiceStatusFilter)
+      && (!q || inv.centerName.toLowerCase().includes(q))
+    );
+  }, [invoices, invoiceSearch, invoiceStatusFilter]);
 
   const loadPrices = useCallback(async (year: string) => {
     setPricesLoading(true);
@@ -1620,9 +1644,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
   const handleApplyScheduledPlan = async (c: CenterTenant) => {
     if (!c.scheduledPlan) return;
+    const planLabelValue = PLAN_LABEL[c.scheduledPlan.plan === 'starter' ? 'basic' : c.scheduledPlan.plan];
     try {
       const res = await updateCenterApi(c.id, { applyScheduledPlan: true });
-      toast.success(`Plan ${PLAN_LABEL[c.scheduledPlan.plan === 'starter' ? 'basic' : c.scheduledPlan.plan]} appliqué`);
+      const outcome = res.planChange;
+      if (outcome?.invoice) {
+        toast.success(
+          `Plan ${planLabelValue} appliqué. Nouvelle période démarrée — facture ${outcome.invoice.invoiceNumber} créée (${formatTnd(outcome.invoice.amount)}), en attente de paiement.`
+        );
+      } else {
+        toast.success(`Plan ${planLabelValue} appliqué`);
+      }
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur');
@@ -2300,12 +2332,50 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
               {/* Invoices */}
               <div className="bg-white rounded-3xl border border-slate-200/70 p-6 shadow-lg shadow-slate-900/5">
-                <h3 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2.5">
-                  <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
-                  Factures Récentes
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
+                    <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
+                    Factures
+                    <span className="text-[11px] font-bold text-slate-400 font-sans">{filteredInvoices.length} affichée{filteredInvoices.length > 1 ? 's' : ''}</span>
+                  </h3>
+
+                  {/* Filters — centre + statut */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        value={invoiceSearch}
+                        onChange={e => setInvoiceSearch(e.target.value)}
+                        placeholder="Filtrer par nom du centre…"
+                        className="pl-9 pr-3 py-2 text-xs font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition w-48 sm:w-56"
+                      />
+                    </div>
+                    <select
+                      value={invoiceStatusFilter}
+                      onChange={e => setInvoiceStatusFilter(e.target.value as 'all' | CenterInvoice['status'])}
+                      className="px-3 py-2 text-xs font-bold border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer"
+                    >
+                      <option value="all">Tous les statuts</option>
+                      <option value="pending">En attente</option>
+                      <option value="paid">Payée</option>
+                      <option value="overdue">En retard</option>
+                      <option value="cancelled">Annulée</option>
+                    </select>
+                    {(invoiceSearch || invoiceStatusFilter !== 'all') && (
+                      <button
+                        onClick={() => { setInvoiceSearch(''); setInvoiceStatusFilter('all'); }}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" /> Réinitialiser
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {invoices.length === 0 ? (
                   <p className="text-center py-12 text-slate-400 text-sm font-bold">Aucune facture</p>
+                ) : filteredInvoices.length === 0 ? (
+                  <p className="text-center py-12 text-slate-400 text-sm font-bold">Aucune facture ne correspond aux filtres</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -2320,7 +2390,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {invoices.map(inv => {
+                        {filteredInvoices.map(inv => {
                           const statusColors: Record<string, string> = {
                             pending: 'bg-amber-100 text-amber-800',
                             paid: 'bg-emerald-100 text-emerald-800',

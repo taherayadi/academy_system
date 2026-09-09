@@ -462,7 +462,7 @@ export async function createCenterApi(payload: {
   directorEmail: string;
   directorPassword: string;
   convertFromRequestId?: string;
-}): Promise<{ centerId: string }> {
+}): Promise<{ centerId: string; invoice?: { invoiceNumber: string; amount: number } | null }> {
   const res = await fetch(`${API_BASE}/centers`, {
     method: 'POST',
     headers: authHeaders(true),
@@ -498,6 +498,8 @@ export interface PlanChangeOutcome {
     skipped?: boolean;
   } | null;
   scheduledPlan?: { plan: string; billingCycle: string; enabledModules: string[] } | null;
+  /** Pending invoice automatically created for a new/renewed subscription window. */
+  invoice?: { invoiceNumber: string; amount: number } | null;
 }
 
 /**

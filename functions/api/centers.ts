@@ -152,6 +152,51 @@ async function hasPaidInvoiceForWindow(db: D1Database, centerId: string, windowE
 }
 
 // ---------------------------------------------------------------------------
+// Automatic subscription invoices (creation / activation / renewal)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create (or refresh) the PENDING invoice that covers a subscription window.
+ *
+ * Rules:
+ *  - amount <= 0            → nothing to bill, returns null.
+ *  - a PAID invoice already covers the window → do nothing (never double-bill).
+ *  - otherwise any PENDING invoice covering the window is cancelled and a
+ *    fresh pending invoice is created at the current plan price — the same
+ *    "annuler l'ancienne + créer la nouvelle, marquée non payée" rule used
+ *    for mid-period changes.
+ */
+export async function ensurePeriodInvoice(
+  db: D1Database,
+  args: { centerId: string; periodStart: number; periodEnd: number; amount: number; notes: string }
+): Promise<{ id: string; invoiceNumber: string; amount: number } | null> {
+  const { centerId, periodStart, periodEnd, amount } = args;
+  if (!amount || amount <= 0 || !periodEnd || periodEnd <= periodStart) return null;
+
+  const paid = await db.prepare(
+    `SELECT id FROM center_invoices WHERE center_id = ? AND status = 'paid' AND period_start < ? AND period_end > ? LIMIT 1`
+  ).bind(centerId, periodEnd, periodStart).first();
+  if (paid) return null;
+
+  await db.prepare(
+    `UPDATE center_invoices SET status = 'cancelled' WHERE center_id = ? AND status = 'pending' AND period_start < ? AND period_end > ?`
+  ).bind(centerId, periodEnd, periodStart).run();
+
+  const id = crypto.randomUUID();
+  const createdAt = Date.now();
+  const invoiceNumber = invoiceNumberFor(createdAt);
+  await db.prepare(`
+    INSERT INTO center_invoices (id, center_id, invoice_number, period_start, period_end, amount, status, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+  `).bind(id, centerId, invoiceNumber, periodStart, periodEnd, round2(amount), args.notes, createdAt).run();
+
+  return { id, invoiceNumber, amount: round2(amount) };
+}
+
+const fmtFr = (ts: number) => new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+
+// ---------------------------------------------------------------------------
 // Module price lookup shared by POST / PATCH
 // ---------------------------------------------------------------------------
 
@@ -470,12 +515,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       `).bind(`تم تحويل الطلب إلى مركز (${name}) بنجاح بتاريخ ${new Date().toLocaleDateString('fr-FR')}`, demoRequestId));
     }
 
+    // 6. Automatic subscription invoice — creating a PAID center starts a
+    // subscription, so a pending invoice covering the first period is created
+    // automatically (trial centers stay free and are invoiced on activation).
+    let createdInvoice: { invoiceNumber: string; amount: number } | null = null;
+    if (!isTrial && subscriptionEndsAt && monthlyPrice > 0) {
+      const periodMs = billingCycle === 'annual' ? 365 * 86400000 : 30 * 86400000;
+      const periodStart = subscriptionEndsAt - periodMs;
+      const invoiceId = crypto.randomUUID();
+      const invoiceCreatedAt = Date.now();
+      const invoiceNumber = invoiceNumberFor(invoiceCreatedAt);
+      const invoiceNotes = `Abonnement ${planLabel(plan)} (${billingCycle}) — ${fmtFr(periodStart)} → ${fmtFr(subscriptionEndsAt)} · création du centre`;
+      stmts.push(env.DB.prepare(`
+        INSERT INTO center_invoices (id, center_id, invoice_number, period_start, period_end, amount, status, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `).bind(invoiceId, id, invoiceNumber, periodStart, subscriptionEndsAt, round2(monthlyPrice), invoiceNotes, invoiceCreatedAt));
+      createdInvoice = { invoiceNumber, amount: round2(monthlyPrice) };
+    }
+
     await env.DB.batch(stmts);
 
-    return json({ 
-      success: true, 
-      centerId: id, 
-      message: `تم إنشاء مركز (${name}) وتعيين حساب المدير (${adminEmail}) بنجاح!` 
+    return json({
+      success: true,
+      centerId: id,
+      invoice: createdInvoice,
+      message: `تم إنشاء مركز (${name}) وتعيين حساب المدير (${adminEmail}) بنجاح!`
     }, 201);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في إنشاء المركز.' }, 500);
@@ -617,7 +681,15 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const currentModules = parseModulesJson(current?.enabled_modules);
     const currentCycle = (current?.billing_cycle as BillingCycle) || 'monthly';
     const currentStatus = current?.status || 'active';
-    const requestedStatus = body.status === undefined ? currentStatus : String(body.status).trim();
+    // Force-applying a scheduled plan ("Appliquer" on the card) is also a
+    // renewal when the current paid window is over: the center becomes ACTIVE
+    // again and a fresh period starts at the scheduled plan/price.
+    const autoRenewScheduled = applyScheduledPlan && body.status === undefined && Boolean(pending)
+      && (currentStatus === 'expired'
+        || (currentStatus === 'active' && (!Number(current?.subscription_ends_at) || Number(current?.subscription_ends_at) <= now)));
+    const requestedStatus = body.status === undefined
+      ? (autoRenewScheduled ? 'active' : currentStatus)
+      : String(body.status).trim();
     const effectiveStatus = requestedStatus === 'trial' ? 'trial'
       : (['active', 'suspended', 'expired'].includes(requestedStatus) ? requestedStatus : 'active');
     const statusChangedToPaid = Boolean(current && (current.status === 'trial' || current.status === 'expired') && effectiveStatus === 'active');
@@ -722,7 +794,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       }
     }
 
-    if (body.status !== undefined) { updates.push('status = ?'); binds.push(effectiveStatus); }
+    if (body.status !== undefined || autoRenewScheduled) { updates.push('status = ?'); binds.push(effectiveStatus); }
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
     if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
@@ -792,6 +864,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     // Only an ACTIVE center gets a paid window (a center saved as expired or
     // suspended must not silently accumulate future time).
     let newSubscriptionEndsAt: number | null = null;
+    let extensionBase = 0;
     if (autoCalculateSubscription && effectiveStatus === 'active') {
       const existingEnd = Number(current?.subscription_ends_at) || 0;
       const requestedTrialEnd = body.trialEndsAt === undefined
@@ -801,9 +874,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       // Activating a center during its trial starts the paid period at the
       // trial boundary, not immediately. Other renewals extend from an
       // existing future subscription end when present.
-      const base = trialEnd || (existingEnd > now ? existingEnd : now);
+      extensionBase = trialEnd || (existingEnd > now ? existingEnd : now);
       const duration = effectiveBillingCycle === 'annual' ? 365 : 30;
-      newSubscriptionEndsAt = base + duration * DAY_MS;
+      newSubscriptionEndsAt = extensionBase + duration * DAY_MS;
       updates.push('subscription_ends_at = ?');
       binds.push(newSubscriptionEndsAt);
     } else if (autoCalculatePrice && effectiveStatus === 'trial' && (body.status !== undefined || current?.status === 'trial')) {
@@ -879,6 +952,35 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     } else if (scheduleStmts.length > 0) {
       await env.DB.batch(scheduleStmts);
     }
+
+    // ── Automatic subscription invoice for a NEW/RENEWED paid window ────────
+    // Trial activation, expired → active renewal, a scheduled plan applied at
+    // renewal ("Appliquer"): a pending invoice is created for the fresh window
+    // at the (possibly new) plan price. No regularization here — that only
+    // happens for mid-period plan changes handled above.
+    let autoInvoice: { invoiceNumber: string; amount: number } | null = null;
+    if (autoCalculateSubscription && effectiveStatus === 'active' && !suppressExtension && !scheduleDecrease
+      && newSubscriptionEndsAt && extensionBase > 0) {
+      const amount = effectivePlan === 'custom'
+        ? (customPriceAvailable && customPriceForTarget !== null ? customPriceForTarget : (Number(current?.monthly_price) || 0))
+        : newPeriodAmount;
+      if (amount > 0) {
+        const tag = foldSchedule
+          ? `plan programmé appliqué (${planLabel(currentPlan)} → ${planLabel(effectivePlan)})`
+          : statusChangedToPaid && current?.status === 'trial'
+            ? 'activation après la période d’essai'
+            : 'reconduction de l’abonnement';
+        const invoice = await ensurePeriodInvoice(env.DB, {
+          centerId: id,
+          periodStart: extensionBase,
+          periodEnd: newSubscriptionEndsAt,
+          amount,
+          notes: `Abonnement ${planLabel(effectivePlan)} (${effectiveBillingCycle}) — ${fmtFr(extensionBase)} → ${fmtFr(newSubscriptionEndsAt)} · ${tag}`
+        });
+        autoInvoice = invoice ? { invoiceNumber: invoice.invoiceNumber, amount: invoice.amount } : null;
+      }
+    }
+    planChangeResponse.invoice = autoInvoice;
 
     // Keep the tenant-facing settings in sync when platform admin edits
     // the center's identity or contact details.
