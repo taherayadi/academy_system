@@ -645,6 +645,22 @@ export async function deleteInvoiceApi(id: string): Promise<void> {
   if (!res.ok) throw new Error('Erreur suppression facture.');
 }
 
+/** Fetch public module prices for the landing page without a session. */
+export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
+  const params = new URLSearchParams();
+  if (year) params.set('year', year);
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/public-pricing${query ? `?${query}` : ''}`, {
+    credentials: 'same-origin'
+  });
+  const data: { prices?: Array<{ module_key?: string; price?: number }>; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement des tarifs publics.');
+  return (data.prices || []).reduce<Record<string, number>>((prices, row) => {
+    if (row.module_key) prices[row.module_key] = Number(row.price) || 0;
+    return prices;
+  }, {});
+}
+
 /** Fetch module prices for a school year. */
 export async function fetchModulePricesApi(year?: string): Promise<ModulePrice[]> {
   const params = new URLSearchParams({ mode: 'module-prices' });

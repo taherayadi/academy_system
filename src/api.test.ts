@@ -32,6 +32,7 @@ import {
   updateDemoRequestApi,
   deleteDemoRequestApi,
   fetchCentersApi,
+  fetchPublicModulePricesApi,
   createCenterApi,
   updateCenterApi,
   deleteCenterApi,
@@ -407,6 +408,13 @@ describe('SaaS Platform API', () => {
     await deleteDemoRequestApi('r1');
     expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests?id=r1');
     expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+  });
+
+  it('fetchPublicModulePricesApi calls the public pricing endpoint', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ schoolYear: '2026/2027', prices: [{ module_key: 'scolaire', price: 25 }] }));
+    const prices = await fetchPublicModulePricesApi();
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/public-pricing');
+    expect(prices.scolaire).toBe(25);
   });
 
   it('fetchCentersApi calls GET /api/centers', async () => {

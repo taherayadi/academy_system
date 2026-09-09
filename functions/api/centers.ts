@@ -3,6 +3,7 @@ import { Env, json, readBody, validateSession, sha256Hex, DEFAULT_CENTER_ID } fr
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
+const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 
 function currentSchoolYear(timestamp = Date.now()): string {
   const date = new Date(timestamp);
@@ -50,7 +51,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         const storedMonthlyPrice = c.monthly_price === null || c.monthly_price === undefined
           ? 0
           : Number(c.monthly_price) || 0;
-        const calculatedMonthlyPrice = modules.reduce((total, moduleKey) => total + (modulePrices.get(moduleKey) || 0), 0);
+        const calculatedMonthlyPrice = modules.reduce(
+          (total, moduleKey) => total + (moduleKey === BUNDLED_MODULE_KEY ? 0 : (modulePrices.get(moduleKey) || 0)),
+          0
+        );
         const status = c.status || 'active';
         const billingCycle = c.billing_cycle || 'monthly';
         const monthlyPrice = storedMonthlyPrice > 0 || status === 'trial'
@@ -190,7 +194,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       const { results: priceRows } = await env.DB.prepare(
         `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
       ).bind(currentSchoolYear, ...enabledModules).all<any>();
-      monthlyPrice = priceRows.reduce((sum, r) => sum + (Number(r.price) || 0), 0);
+      monthlyPrice = priceRows.reduce(
+        (sum, r) => sum + (r.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(r.price) || 0)),
+        0
+      );
       if (billingCycle === 'annual') {
         monthlyPrice = monthlyPrice * 12 * 0.8; // 20% discount
       }

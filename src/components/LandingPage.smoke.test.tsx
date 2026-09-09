@@ -3,7 +3,22 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LandingPage from './LandingPage';
 import { submitDemoRequestApi } from '../api';
 
-vi.mock('../api', () => ({ submitDemoRequestApi: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../api', () => ({
+  fetchPublicModulePricesApi: vi.fn().mockResolvedValue({
+    scolaire: 20,
+    finance: 20,
+    studentTimeSheets: 0,
+    etude: 15,
+    coursParticuliers: 15,
+    revision: 15,
+    formations: 15,
+    cantine: 18,
+    transport: 15,
+    events: 15,
+    staff: 12
+  }),
+  submitDemoRequestApi: vi.fn().mockResolvedValue(undefined)
+}));
 
 beforeAll(() => {
   // jsdom lacks the observers used by motion's whileInView / useInView
@@ -42,13 +57,13 @@ function fillForm(phone: string) {
 }
 
 describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)', () => {
-  it('renders the hero and emphasises the base plan', () => {
+  it('renders the hero and emphasises the base plan', async () => {
     render(<LandingPage onOpenLogin={() => {}} centerName="Test Academy" />);
 
     expect(screen.getAllByText(/sous contrôle total/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Scolaire & Notes').length).toBeGreaterThan(1);
     expect(screen.getAllByText('Finance & Paiements').length).toBeGreaterThan(1);
-    expect(screen.getAllByText(/40 TND/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/40 TND/).length).toBeGreaterThan(0));
     expect(screen.getAllByText('Connexion').length).toBeGreaterThanOrEqual(1);
   });
 
