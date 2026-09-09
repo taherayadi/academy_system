@@ -428,20 +428,24 @@ describe('SaaS Platform API', () => {
     mockFetch.mockResolvedValue(jsonResponse({ centerId: 'c_new' }));
     const res = await createCenterApi({
       name: 'Nouveau Centre',
-      plan: 'trial',
+      plan: 'growth',
       enabledModules: ['scolaire', 'finance'],
+      billingCycle: 'monthly',
+      offerDays: 14,
       directorName: 'Directeur',
       directorEmail: 'dir@test.tn',
       directorPassword: 'password123'
     });
     expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
     expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.offerDays).toBe(14);
     expect(res.centerId).toBe('c_new');
   });
 
   it('updateCenterApi calls PATCH /api/centers', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await updateCenterApi('c1', { extendTrialDays: 14 });
+    await updateCenterApi('c1', { addOfferDays: 14 });
     expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
     expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
   });

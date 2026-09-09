@@ -207,7 +207,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const id = crypto.randomUUID();
     const createdAt = Date.now();
-    const trialEndsAt = isTrial ? (createdAt + trialDays * 86400000) : null;
+    // A paid offer is represented as a trial boundary without changing the
+    // selected plan or status: access stays active, while the subscription
+    // starts after the free offer and ends after the full paid period.
+    const trialEndsAt = isTrial
+      ? (createdAt + trialDays * 86400000)
+      : (offerDays > 0 ? createdAt + offerDays * 86400000 : null);
 
     const billingCycle = isTrial ? 'monthly' : (String(body.billingCycle || 'monthly').trim() === 'annual' ? 'annual' : 'monthly');
 
@@ -239,11 +244,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     // subscription_ends_at: 30 days for monthly or 365 days for annual,
-    // plus any promotional days granted during creation.
+    // starting after any promotional days granted during creation.
     let subscriptionEndsAt = null;
     if (!isTrial) {
       const periodMs = billingCycle === 'annual' ? 365 * 86400000 : 30 * 86400000;
-      subscriptionEndsAt = createdAt + periodMs + offerDays * 86400000;
+      subscriptionEndsAt = createdAt + offerDays * 86400000 + periodMs;
     }
 
     const passwordHash = await sha256Hex(adminPassword);
@@ -327,7 +332,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const requestedAutoCalculatePrice = body.autoCalculatePrice === true;
     const requestedAutoCalculateSubscription = body.autoCalculateSubscription === true;
     let current: any = null;
-    if (requestedAutoCalculatePrice || requestedAutoCalculateSubscription || body.extendTrialDays !== undefined
+    if (requestedAutoCalculatePrice || requestedAutoCalculateSubscription || body.addOfferDays !== undefined || body.extendTrialDays !== undefined
       || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined || body.status !== undefined) {
       current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at FROM centers WHERE id = ?').bind(id).first<any>();
       if (!current) return json({ error: 'المركز غير موجود.' }, 404);
@@ -381,18 +386,36 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null);
     }
 
-    // "+N jours d'essai" button: extend trial from today (or from current end if later)
-    if (body.extendTrialDays !== undefined) {
-      const extraDays = Number(body.extendTrialDays) || 0;
-      const trialCenter = current || await env.DB.prepare('SELECT trial_ends_at, status FROM centers WHERE id = ?').bind(id).first<any>();
-      if (trialCenter) {
-        const now = Date.now();
-        const base = (trialCenter.trial_ends_at && Number(trialCenter.trial_ends_at) > now) ? Number(trialCenter.trial_ends_at) : now;
-        const newEnd = base + extraDays * 86400000;
-        if (trialCenter.status !== 'trial') {
-          updates.push('status = ?'); binds.push('trial');
+    // Add promotional days without changing the selected plan. For a paid
+    // center, the free period moves the subscription start and end together:
+    // trial end +N days, subscription start +N days, subscription end +N days.
+    // Keep extendTrialDays as a backwards-compatible alias for existing callers.
+    const requestedOfferDays = body.addOfferDays !== undefined ? body.addOfferDays : body.extendTrialDays;
+    if (requestedOfferDays !== undefined) {
+      const extraDays = normalizeDayCount(requestedOfferDays, 0);
+      if (extraDays > 0 && current) {
+        const dayMs = 86400000;
+        const durationMs = (current.billing_cycle || 'monthly') === 'annual' ? 365 * dayMs : 30 * dayMs;
+        const existingSubscriptionEnd = Number(current.subscription_ends_at) || 0;
+        const existingTrialEnd = Number(current.trial_ends_at) || 0;
+
+        if (current.status === 'trial') {
+          const baseTrialEnd = existingTrialEnd > Date.now() ? existingTrialEnd : Date.now();
+          updates.push('trial_ends_at = ?');
+          binds.push(baseTrialEnd + extraDays * dayMs);
+        } else {
+          // If an active paid center has no stored trial boundary, infer its
+          // original subscription start from the current subscription end.
+          const subscriptionStart = existingSubscriptionEnd > 0
+            ? existingSubscriptionEnd - durationMs
+            : (existingTrialEnd || Date.now());
+          const baseTrialEnd = existingTrialEnd || subscriptionStart;
+          const subscriptionEnd = existingSubscriptionEnd || (subscriptionStart + durationMs);
+          updates.push('trial_ends_at = ?');
+          binds.push(baseTrialEnd + extraDays * dayMs);
+          updates.push('subscription_ends_at = ?');
+          binds.push(subscriptionEnd + extraDays * dayMs);
         }
-        updates.push('trial_ends_at = ?'); binds.push(newEnd);
       }
     }
 

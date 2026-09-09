@@ -501,6 +501,7 @@ export async function updateCenterApi(
     monthlyPrice?: number | null;
     autoCalculatePrice?: boolean;
     autoCalculateSubscription?: boolean;
+    addOfferDays?: number;
     extendTrialDays?: number;
   }
 ): Promise<void> {
