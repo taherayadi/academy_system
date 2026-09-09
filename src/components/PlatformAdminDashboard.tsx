@@ -13,9 +13,10 @@ import {
   uploadPlatformLogoApi,
   fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
   fetchPlatformBillingApi, fetchInvoicesApi, createInvoiceApi, updateInvoiceApi, deleteInvoiceApi,
-  fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary
+  fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, PlanChangeOutcome
 } from '../api';
 import { CenterTenant, DemoRequest, ModuleKey } from '../types';
+import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
 import icon from '../assets/icon.png';
@@ -773,11 +774,28 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateCenterApi(center.id, {
+      const res = await updateCenterApi(center.id, {
         enabledModules: enabled,
-        autoCalculatePrice: true
+        autoCalculatePrice: true,
+        // Mid-period module additions are settled automatically by the backend.
+        settlementPolicy: 'auto'
       });
-      toast.success('Modules mis à jour');
+      const outcome = res.planChange;
+      if (outcome?.mode === 'mid_period_increase') {
+        const settlement = outcome.settlement;
+        if (settlement && !settlement.skipped && settlement.amount > 0) {
+          toast.success(
+            `Modules mis à jour. Solde à régler: ${formatTnd(settlement.amount)} ` +
+            `(${settlement.paid ? 'période déjà réglée — complément' : 'facture créée'}${settlement.invoiceNumber ? ` ${settlement.invoiceNumber}` : ''}).`
+          );
+        } else {
+          toast.success('Modules mis à jour. Fin d’abonnement inchangée.');
+        }
+      } else if (outcome?.mode === 'scheduled') {
+        toast.success(`Modules mis à jour — retrait appliqué le ${fmtDate(outcome.applyAt)} (fin de la période en cours).`);
+      } else {
+        toast.success('Modules mis à jour');
+      }
       onSaved();
       onClose();
     } catch (err) {
@@ -850,6 +868,11 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
             {center.status === 'trial' ? 'Le centre d’essai reste gratuit.' : center.billingCycle === 'annual' ? 'Cycle annuel : total mensuel × 12 avec 20 % de remise.' : 'Cycle mensuel : total des modules sélectionnés.'}
             {' '}La fin d’abonnement actuelle ne change pas lors d’une modification des modules.
           </p>
+          {center.status === 'active' && center.subscriptionEndsAt && center.subscriptionEndsAt > Date.now() && (
+            <p className="text-[10px] font-semibold text-[#257C86] mt-1.5 leading-relaxed">
+              En cours de période : un ajout de module génère une facture de solde proratisée ; un retrait est appliqué automatiquement à la fin de la période ({fmtDate(center.subscriptionEndsAt)}).
+            </p>
+          )}
         </div>
         <p className="text-[11px] font-semibold text-slate-400 mb-5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert.</p>
 
@@ -910,19 +933,86 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
     return () => { mounted = false; };
   }, []);
 
+  // Invoices of this center are used to detect whether the current subscription
+  // window was already paid (prorated settlement is smaller in that case).
+  const [invoices, setInvoices] = useState<CenterInvoice[]>([]);
+  const [windowPaid, setWindowPaid] = useState(false);
+  // Mid-period plan change options: settle immediately or schedule at renewal.
+  const [applyChoice, setApplyChoice] = useState<'settle' | 'schedule'>('settle');
+  const [paymentState, setPaymentState] = useState<'paid' | 'unpaid'>('unpaid');
+  const [pricesReady, setPricesReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+      setPricesReady(true);
+    }).catch(() => { /* backend remains authoritative */ });
+    fetchInvoicesApi({ centerId: center.id, limit: 200 }).then(list => {
+      if (!mounted) return;
+      setInvoices(list);
+      // Auto-detect: has the current window already been invoiced & paid?
+      const end = center.subscriptionEndsAt;
+      if (end) {
+        const tolerance = 3 * 86400000;
+        const found = (list || []).some(inv =>
+          inv.status === 'paid' && Math.abs(inv.periodEnd - end) <= tolerance);
+        setWindowPaid(found);
+        setPaymentState(found ? 'paid' : 'unpaid');
+      }
+    }).catch(() => { /* optional */ });
+    return () => { mounted = false; };
+  }, [center.id, center.subscriptionEndsAt]);
+
   const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(form.plan);
   const calculatedTariff = form.status === 'trial'
     ? 0
     : calculatePlanTariff(form.plan, form.billingCycle, enabledModules, modulePrices, Number(form.monthlyPrice));
+  const originalModules = normalizeCenterModules(center.enabledModules as string[] || []);
   const planChanged = form.plan !== (center.plan === 'starter' ? 'basic' : center.plan);
   const billingCycleChanged = form.billingCycle !== (center.billingCycle || 'monthly');
-  const statusChangedToPaid = form.status !== 'trial' && (center.status === 'trial' || center.status === 'expired');
+  const statusChangedToPaid = form.status === 'active' && (center.status === 'trial' || center.status === 'expired');
   const previewTrialEnd = centerDateTimestamp(form.trialEndsAt) || center.trialEndsAt || null;
   const startsAfterTrial = statusChangedToPaid && !!previewTrialEnd && previewTrialEnd > Date.now();
-  const shouldExtendSubscription = form.status !== 'trial' && (planChanged || billingCycleChanged || statusChangedToPaid);
+
+  // Decide what a plan/module/cycle change means for the running subscription.
+  const decision: ClientPlanDecision = pricesReady
+    ? analyzePlanChange({
+      plan: center.plan,
+      billingCycle: center.billingCycle || 'monthly',
+      monthlyPrice: center.monthlyPrice,
+      enabledModules: originalModules,
+      status: center.status,
+      subscriptionEndsAt: center.subscriptionEndsAt,
+    }, {
+      plan: (form.plan === 'starter' ? 'basic' : form.plan) as 'basic' | 'growth' | 'pro' | 'custom',
+      billingCycle: form.billingCycle,
+      enabledModules,
+      manualPrice: Number(form.monthlyPrice) || 0,
+    }, modulePrices)
+    : { kind: 'no_change' };
+  const midPeriod = decision.kind === 'mid_period_increase'
+    || decision.kind === 'mid_period_decrease'
+    || decision.kind === 'mid_period_same_price';
+  const settlementRelevant = decision.kind === 'mid_period_increase';
+  // Downgrades inside a paid window are scheduled by design (no refund for the
+  // current window, the lower price applies from the next renewal).
+  const scheduleOnly = decision.kind === 'mid_period_decrease';
+  const effectiveApplyChoice = scheduleOnly ? 'schedule' : applyChoice;
+
+  // Renewal semantics (fresh full period) only when the result is ACTIVE and
+  // the change happens outside a running paid window.
+  const extendsSubscription = form.status === 'active'
+    && (billingCycleChanged || statusChangedToPaid || decision.kind === 'renewal');
+  const shouldExtendSubscription = extendsSubscription;
+
   const previewSubscriptionEnd = form.status === 'trial'
     ? null
-    : shouldExtendSubscription
+    : extendsSubscription
       ? addSubscriptionPeriod(
         center.status === 'trial' && previewTrialEnd && previewTrialEnd > Date.now()
           ? previewTrialEnd
@@ -930,6 +1020,14 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
         form.billingCycle
       )
       : (center.subscriptionEndsAt || addSubscriptionPeriod(Date.now(), form.billingCycle));
+
+  // The subscription end date shown in the summary never moves for an
+  // immediate mid-period switch — the settlement invoice covers the rest.
+  const unchangedEndDate = midPeriod && effectiveApplyChoice === 'settle';
+  const displayedEnd = unchangedEndDate
+    ? (center.subscriptionEndsAt || previewSubscriptionEnd)
+    : previewSubscriptionEnd;
+  const showPlanChangePanel = pricesReady && midPeriod;
 
   useEffect(() => {
     if (form.plan === 'pro') {
@@ -972,6 +1070,31 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
     setLogoPreview(null);
   };
 
+  const planChangeToast = (outcome?: PlanChangeOutcome) => {
+    const mode = outcome?.mode;
+    if (mode === 'mid_period_increase' || mode === 'mid_period_same_price') {
+      const settlement = outcome?.settlement;
+      if (settlement && !settlement.skipped && settlement.amount > 0) {
+        toast.success(
+          `Plan changé immédiatement. Solde à régler: ${formatTnd(settlement.amount)} ` +
+          `(${settlement.paid ? 'période déjà réglée — complément' : 'facture créée'}${settlement.invoiceNumber ? ` ${settlement.invoiceNumber}` : ''}).`
+        );
+      } else {
+        toast.success('Plan changé immédiatement. La fin de l’abonnement ne change pas.');
+      }
+    } else if (mode === 'scheduled') {
+      toast.success(
+        outcome?.applyAt
+          ? `Changement planifié — il sera appliqué le ${fmtDate(outcome.applyAt)}.`
+          : 'Changement planifié — il sera appliqué à la prochaine reconduction.'
+      );
+    } else if (mode === 'renewal') {
+      toast.success('Centre mis à jour. Nouvelle période d’abonnement démarrée.');
+    } else {
+      toast.success('Centre mis à jour');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValidCenterPhone(form.phoneNumber)) {
@@ -987,22 +1110,47 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
     try {
       const logoUrl = logoFile ? await uploadPlatformLogoApi(logoFile) : form.logoUrl;
       const monthlyPrice = Number(form.monthlyPrice);
-      await updateCenterApi(center.id, {
+      const identityPayload = {
         name: form.name.trim(),
         logoUrl,
         phoneNumber: form.phoneNumber.trim(),
         locationCity: form.locationCity.trim(),
         centerType: form.centerType,
+      };
+
+      // ── Scheduled change (keep the running period untouched) ─────────────
+      if (effectiveApplyChoice === 'schedule' && midPeriod) {
+        const outcome = await updateCenterApi(center.id, {
+          ...identityPayload,
+          scheduleChange: {
+            plan: form.plan,
+            billingCycle: center.billingCycle || 'monthly',
+            enabledModules,
+            ...(form.plan === 'custom' ? { monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : null } : {}),
+          },
+        });
+        planChangeToast(outcome.planChange);
+        onSaved();
+        onClose();
+        return;
+      }
+
+      // ── Immediate change (live plan switch) ──────────────────────────────
+      const outcome = await updateCenterApi(center.id, {
+        ...identityPayload,
+        trialEndsAt: centerDateTimestamp(form.trialEndsAt),
         plan: form.plan,
         status: form.status,
         billingCycle: form.billingCycle,
         enabledModules,
         ...(form.plan === 'custom' ? { monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : 0 } : {}),
-        trialEndsAt: centerDateTimestamp(form.trialEndsAt),
         autoCalculatePrice: true,
         autoCalculateSubscription: shouldExtendSubscription,
+        ...(settlementRelevant && !scheduleOnly
+          ? { settlementPolicy: paymentState }
+          : {}),
       });
-      toast.success('Centre mis à jour');
+      planChangeToast(outcome.planChange);
       onSaved();
       onClose();
     } catch (err) {
@@ -1132,9 +1280,16 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement calculée</label>
-                <input type="date" dir="ltr" value={previewSubscriptionEnd ? centerDateInputValue(previewSubscriptionEnd) : ''} readOnly aria-readonly="true"
+                <input type="date" dir="ltr" value={displayedEnd ? centerDateInputValue(displayedEnd) : ''} readOnly aria-readonly="true"
                   className={`${inputCls} bg-slate-50 text-slate-700 cursor-not-allowed input-date-ltr text-left`} />
-                {shouldExtendSubscription && form.status !== 'trial' && (
+                {midPeriod && (
+                  <p className={`text-[10px] font-semibold mt-1 ${scheduleOnly || effectiveApplyChoice === 'schedule' ? 'text-amber-700' : 'text-[#257C86]'}`}>
+                    {scheduleOnly || effectiveApplyChoice === 'schedule'
+                      ? `Inchangée. Changement programmé pour le ${fmtDate(center.subscriptionEndsAt)}.`
+                      : `Inchangée. Changement immédiat — régularisation au prorata de la période en cours.`}
+                  </p>
+                )}
+                {!midPeriod && shouldExtendSubscription && form.status !== 'trial' && (
                   <p className="text-[10px] font-semibold text-[#257C86] mt-1">Sera prolongée de {form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à l’enregistrement.</p>
                 )}
                 {startsAfterTrial && (
@@ -1144,6 +1299,77 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
                 )}
               </div>
             </div>
+
+            {/* Plan change consequence (mid-period switches) */}
+            {showPlanChangePanel && (
+              <div className="mt-4 rounded-2xl border-2 border-[#257C86]/20 bg-[#257C86]/[0.04] p-4">
+                <p className="text-xs font-black text-slate-700 mb-3 flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-[#257C86]" />
+                  Changement {decision.kind === 'mid_period_decrease' ? 'à la baisse' : 'de plan'} en cours de période
+                </p>
+
+                {scheduleOnly ? (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3 text-[11px] font-semibold text-amber-800 leading-relaxed">
+                    Le centre a déjà payé sa période en cours au tarif actuel ({formatTnd(decision.oldAmount)} → {formatTnd(decision.newAmount)}). Le passage à la
+                    baisse sera appliqué automatiquement le <strong>{fmtDate(center.subscriptionEndsAt)}</strong> — sans remboursement ni modification de la date
+                    de fin actuelle.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid sm:grid-cols-2 gap-2 mb-2.5">
+                      <button type="button" onClick={() => setApplyChoice('settle')}
+                        className={`text-left rounded-xl border-2 px-3.5 py-3 transition cursor-pointer ${applyChoice === 'settle' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                        <div className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                          <span className={`h-2.5 w-2.5 rounded-full border-2 ${applyChoice === 'settle' ? 'border-[#257C86] bg-[#257C86]' : 'border-slate-300'}`} />
+                          Appliquer maintenant
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-500 mt-1.5 leading-relaxed">
+                          Les modules Growth/Pro sont activés immédiatement. La fin d’abonnement ({fmtDate(center.subscriptionEndsAt)}) ne bouge pas.
+                        </div>
+                      </button>
+                      <button type="button" onClick={() => setApplyChoice('schedule')}
+                        className={`text-left rounded-xl border-2 px-3.5 py-3 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                        <div className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                          <span className={`h-2.5 w-2.5 rounded-full border-2 ${applyChoice === 'schedule' ? 'border-[#257C86] bg-[#257C86]' : 'border-slate-300'}`} />
+                          Programmer pour le {fmtDate(center.subscriptionEndsAt)}
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-500 mt-1.5 leading-relaxed">
+                          Le centre reste au plan actuel jusqu’à la fin de sa période, puis bascule automatiquement.
+                        </div>
+                      </button>
+                    </div>
+
+                    {applyChoice === 'settle' && settlementRelevant && (
+                      <div className="rounded-xl bg-white border border-slate-200 px-3.5 py-3 space-y-2">
+                        <p className="text-[11px] font-black text-slate-700">
+                          Régularisation à facturer — {decision.remainingDays} jour{decision.remainingDays > 1 ? 's' : ''} restant{decision.remainingDays > 1 ? 's' : ''} ·{' '}
+                          {formatTnd(decision.newAmount)} / {center.billingCycle === 'annual' ? 'an' : 'mois'} au lieu de {formatTnd(decision.oldAmount)}
+                        </p>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <button type="button" onClick={() => setPaymentState('paid')}
+                            className={`text-left rounded-xl border-2 px-3.5 py-2.5 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
+                            <div className="text-[10px] font-black text-emerald-800">Période déjà payée</div>
+                            <div className="text-sm font-black text-emerald-700 mt-0.5">+ {formatTnd(decision.paidAmount)}</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-0.5">complément (différence × jours restants)</div>
+                          </button>
+                          <button type="button" onClick={() => setPaymentState('unpaid')}
+                            className={`text-left rounded-xl border-2 px-3.5 py-2.5 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
+                            <div className="text-[10px] font-black text-amber-800">Période pas encore payée</div>
+                            <div className="text-sm font-black text-amber-700 mt-0.5">{formatTnd(decision.unpaidAmount)}</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-0.5">nouvelle facture — l’ancienne en attente sera annulée</div>
+                          </button>
+                        </div>
+                        {!windowPaid && paymentState === 'unpaid' && (
+                          <p className="text-[10px] font-semibold text-slate-500">
+                            Détecté : aucune facture payée pour la fenêtre actuelle — l’option « pas encore payée » est présélectionnée.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-100 pt-4">
@@ -1181,7 +1407,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
                 })}
               </div>
             )}
-            <p className="text-[11px] font-semibold text-slate-400 mt-2.5">Scolaire, Finance et Jd. Horaires sont obligatoires. La modification des modules recalcule le tarif sans prolonger la date d’abonnement.</p>
+            <p className="text-[11px] font-semibold text-slate-400 mt-2.5">Scolaire, Finance et Jd. Horaires sont obligatoires. La modification des modules ou du plan recalcule le tarif sans prolonger la date d’abonnement. En cours de période : hausse régularisée au prorata, baisse programmée à la fin de la période.</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -1386,6 +1612,28 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     try {
       await updateCenterApi(c.id, { status: newStatus });
       toast.success(newStatus === 'active' ? 'Centre activé' : 'Centre suspendu');
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur');
+    }
+  };
+
+  const handleApplyScheduledPlan = async (c: CenterTenant) => {
+    if (!c.scheduledPlan) return;
+    try {
+      const res = await updateCenterApi(c.id, { applyScheduledPlan: true });
+      toast.success(`Plan ${PLAN_LABEL[c.scheduledPlan.plan === 'starter' ? 'basic' : c.scheduledPlan.plan]} appliqué`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur');
+    }
+  };
+
+  const handleCancelScheduledPlan = async (c: CenterTenant) => {
+    if (!c.scheduledPlan) return;
+    try {
+      await updateCenterApi(c.id, { cancelScheduledChange: true });
+      toast.success('Changement de plan programmé annulé');
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur');
@@ -1753,6 +2001,36 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         {subscriptionDays !== null && subscriptionDays > 0 ? ` · ${subscriptionDays} jours restants` : ' · expiré'}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Scheduled plan change */}
+                {c.scheduledPlan && (
+                  <div className="mt-3.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="text-[11px] font-black text-amber-800 inline-flex items-center gap-1.5">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      → {PLAN_LABEL[c.scheduledPlan.plan === 'starter' ? 'basic' : c.scheduledPlan.plan]}
+                      <span className="font-semibold text-amber-700">
+                        planifié{c.scheduledPlan.applyAt ? ` pour le ${fmtDate(c.scheduledPlan.applyAt)}` : ' (prochaine reconduction)'}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1.5 ml-auto">
+                      <button
+                        onClick={() => handleApplyScheduledPlan(c)}
+                        disabled={!!c.scheduledPlan.applyAt && c.scheduledPlan.applyAt > Date.now() && c.status === 'active'}
+                        title="Appliquer maintenant (disponible dès la fin de la période en cours)"
+                        className="text-[10px] font-black px-2.5 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Appliquer
+                      </button>
+                      <button
+                        onClick={() => handleCancelScheduledPlan(c)}
+                        title="Annuler le changement planifié"
+                        className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-100 transition cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
                   </div>
                 )}
 

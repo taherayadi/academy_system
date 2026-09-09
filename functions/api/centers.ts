@@ -1,4 +1,8 @@
 import { Env, json, readBody, validateSession, sha256Hex, DEFAULT_CENTER_ID, getCenterAccessState } from './_lib';
+import {
+  DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
+  round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
+} from './planLogic';
 
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
@@ -30,6 +34,143 @@ function currentSchoolYear(timestamp = Date.now()): string {
   const date = new Date(timestamp);
   const schoolStartYear = date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
   return `${schoolStartYear}/${schoolStartYear + 1}`;
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled plan changes (center_plan_schedules)
+// ---------------------------------------------------------------------------
+
+interface PlanScheduleRow {
+  id: string;
+  center_id: string;
+  to_plan: string;
+  to_billing_cycle: string;
+  to_enabled_modules: string;
+  to_monthly_price: number | null;
+  status: string;
+  apply_at: number | null;
+  notes: string | null;
+  created_at: number;
+}
+
+function parseModulesJson(value: unknown): string[] {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getPendingSchedule(db: D1Database, centerId: string): Promise<PlanScheduleRow | null> {
+  return db.prepare(
+    `SELECT * FROM center_plan_schedules WHERE center_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1`
+  ).bind(centerId).first<PlanScheduleRow>() || null;
+}
+
+/** Keep at most one pending schedule per center: supersede any older one. */
+function supersedePendingSchedules(db: D1Database, centerId: string): D1PreparedStatement {
+  return db.prepare(`UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — superseded' WHERE center_id = ? AND status = 'pending'`).bind(centerId);
+}
+
+function insertPlanSchedule(
+  db: D1Database,
+  centerId: string,
+  target: { plan: string; billingCycle: BillingCycle; enabledModules: string[]; monthlyPrice: number | null },
+  applyAt: number | null,
+  notes: string
+): D1PreparedStatement {
+  const id = crypto.randomUUID();
+  return db.prepare(`
+    INSERT INTO center_plan_schedules (id, center_id, to_plan, to_billing_cycle, to_enabled_modules, to_monthly_price, status, apply_at, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+  `).bind(id, centerId, target.plan, target.billingCycle, JSON.stringify(target.enabledModules), target.monthlyPrice, applyAt, notes, Date.now());
+}
+
+function markScheduleApplied(db: D1Database, scheduleId: string): D1PreparedStatement {
+  return db.prepare(`UPDATE center_plan_schedules SET status = 'applied', applied_at = ? WHERE id = ? AND status = 'pending'`).bind(Date.now(), scheduleId);
+}
+
+// ---------------------------------------------------------------------------
+// Prorated settlement invoices (mid-period plan price increase)
+// ---------------------------------------------------------------------------
+
+function invoiceNumberFor(createdAt: number): string {
+  return `INV-${new Date(createdAt).getFullYear()}-${String(crypto.randomUUID()).slice(0, 8).toUpperCase()}`;
+}
+
+/** Insert a pending settlement invoice, cancelling old pending invoices when the window was not paid yet. */
+async function createSettlementInvoice(
+  db: D1Database,
+  args: {
+    centerId: string;
+    amount: number;
+    periodStart: number;
+    periodEnd: number;
+    paid: boolean;
+    oldPlan: string;
+    newPlan: string;
+    remainingDays: number;
+  }
+): Promise<{ id: string; invoiceNumber: string; amount: number; cancelledOld: boolean }> {
+  const { centerId, amount, periodStart, periodEnd, paid, oldPlan, newPlan, remainingDays } = args;
+  let cancelledOld = false;
+
+  if (!paid) {
+    // The current window was not invoiced/paid yet: cancel the pending old
+    // invoices that cover it, then bill the remaining window at the new price.
+    const res = await db.prepare(
+      `UPDATE center_invoices SET status = 'cancelled' WHERE center_id = ? AND status = 'pending' AND period_start <= ? AND period_end >= ?`
+    ).bind(centerId, periodEnd, periodStart).run();
+    cancelledOld = (res.meta.changes || 0) > 0;
+  }
+
+  const id = crypto.randomUUID();
+  const createdAt = Date.now();
+  const invoiceNumber = invoiceNumberFor(createdAt);
+  const label = `${planLabel(oldPlan)} → ${planLabel(newPlan)}`;
+  const d = (ts: number) => new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const notes = paid
+    ? `Solde proratisé changement de plan ${label} (${d(periodStart)} → ${d(periodEnd)}), ${remainingDays} j restants. Période déjà réglée: complément ${round2(amount)} TND.`
+    : `Changement de plan ${label} le ${d(Date.now())}. Période restante ${d(periodStart)} → ${d(periodEnd)} facturée au nouveau tarif: ${round2(amount)} TND. Anciennes factures en attente annulées.`;
+
+  await db.prepare(`
+    INSERT INTO center_invoices (id, center_id, invoice_number, period_start, period_end, amount, status, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+  `).bind(id, centerId, invoiceNumber, periodStart, periodEnd, round2(amount), notes, createdAt).run();
+
+  return { id, invoiceNumber, amount: round2(amount), cancelledOld };
+}
+
+/** Whether the platform already invoiced (and collected) the current window. */
+async function hasPaidInvoiceForWindow(db: D1Database, centerId: string, windowEnd: number): Promise<boolean> {
+  const tolerance = 3 * DAY_MS;
+  const row = await db.prepare(
+    `SELECT id FROM center_invoices WHERE center_id = ? AND status = 'paid' AND period_end >= ? AND period_end <= ? LIMIT 1`
+  ).bind(centerId, windowEnd - tolerance, windowEnd + tolerance).first();
+  return !!row;
+}
+
+// ---------------------------------------------------------------------------
+// Module price lookup shared by POST / PATCH
+// ---------------------------------------------------------------------------
+
+async function computePeriodAmount(
+  db: D1Database,
+  args: { plan: string; modules: string[]; billingCycle: BillingCycle; customPrice?: number | null }
+): Promise<number> {
+  if (args.plan === 'custom') return Math.max(0, Number(args.customPrice) || 0);
+  if (!AUTO_PRICED_PLANS.has(args.plan)) return 0;
+  const placeholders = args.modules.map(() => '?').join(',');
+  const { results } = await db.prepare(
+    `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
+  ).bind(currentSchoolYear(), ...args.modules).all<any>();
+  let total = (results || []).reduce(
+    (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
+    0
+  );
+  if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
+  return total;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
@@ -119,7 +260,34 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         };
       });
 
-      return json({ centers: formatted });
+      // Attach the pending scheduled plan change (if any) to each center so the
+      // platform admin can see / cancel / force-apply it.
+      const schedulesById = new Map<string, PlanScheduleRow>();
+      const { results: scheduleRows } = await env.DB.prepare(
+        `SELECT * FROM center_plan_schedules WHERE status = 'pending' ORDER BY created_at DESC`
+      ).all<PlanScheduleRow>();
+      (scheduleRows || []).forEach(row => {
+        if (!schedulesById.has(row.center_id)) schedulesById.set(row.center_id, row);
+      });
+
+      const withSchedules = formatted.map(c => {
+        const pending = schedulesById.get(c.id);
+        return {
+          ...c,
+          scheduledPlan: pending ? {
+            id: pending.id,
+            plan: pending.to_plan,
+            billingCycle: pending.to_billing_cycle,
+            enabledModules: parseModulesJson(pending.to_enabled_modules),
+            monthlyPrice: pending.to_monthly_price === null || pending.to_monthly_price === undefined
+              ? null : Number(pending.to_monthly_price),
+            applyAt: pending.apply_at || null,
+            createdAt: pending.created_at
+          } : null
+        };
+      });
+
+      return json({ centers: withSchedules });
     } else {
       const centerId = session.centerId || DEFAULT_CENTER_ID;
       const center = await env.DB.prepare('SELECT * FROM centers WHERE id = ?').bind(centerId).first<any>();
@@ -331,55 +499,257 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     const requestedAutoCalculatePrice = body.autoCalculatePrice === true;
     const requestedAutoCalculateSubscription = body.autoCalculateSubscription === true;
+    const scheduleChangeBody = body.scheduleChange && typeof body.scheduleChange === 'object'
+      ? body.scheduleChange as Record<string, unknown>
+      : null;
+    const cancelScheduledChange = body.cancelScheduledChange === true;
+    const applyScheduledPlan = body.applyScheduledPlan === true;
+    const needsCenter = requestedAutoCalculatePrice || requestedAutoCalculateSubscription
+      || body.addOfferDays !== undefined || body.extendTrialDays !== undefined
+      || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined
+      || body.status !== undefined || scheduleChangeBody || cancelScheduledChange || applyScheduledPlan
+      || body.monthlyPrice !== undefined;
+
     let current: any = null;
-    if (requestedAutoCalculatePrice || requestedAutoCalculateSubscription || body.addOfferDays !== undefined || body.extendTrialDays !== undefined
-      || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined || body.status !== undefined) {
+    if (needsCenter) {
       current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at FROM centers WHERE id = ?').bind(id).first<any>();
       if (!current) return json({ error: 'المركز غير موجود.' }, 404);
     }
 
-    const updates: string[] = [];
-    const binds: any[] = [];
+    const now = Date.now();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Scheduled-plan bookkeeping (no live plan change)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Cancel a previously scheduled change.
+    if (cancelScheduledChange) {
+      if (!current) return json({ error: 'المركز غير موجود.' }, 404);
+      const res = await env.DB.prepare(
+        `UPDATE center_plan_schedules SET status = 'cancelled', applied_at = NULL WHERE center_id = ? AND status = 'pending'`
+      ).bind(id).run();
+      return json({ success: true, planChange: { mode: 'schedule_cancelled', cancelled: (res.meta.changes || 0) > 0 } });
+    }
+
+    // Store a scheduled change ("at the end of the current period please switch
+    // to Growth/Pro"). The live plan / modules / price / dates are untouched.
+    if (scheduleChangeBody) {
+      if (!current) return json({ error: 'المركز غير موجود.' }, 404);
+      const rawPlan = String(scheduleChangeBody.plan || '').trim();
+      if (!rawPlan) return json({ error: 'الخطة المبرمجة مطلوبة.' }, 400);
+      if (!['starter', 'growth', 'pro', 'custom'].includes(rawPlan === 'basic' ? 'starter' : rawPlan)) {
+        return json({ error: 'خطة غير صالحة.' }, 400);
+      }
+      const toPlan = rawPlan === 'basic' ? 'starter' : rawPlan;
+      const toCycle: BillingCycle = String(scheduleChangeBody.billingCycle || current.billing_cycle || 'monthly') === 'annual' ? 'annual' : 'monthly';
+      const toModules = normalizeEnabledModules(
+        Array.isArray(scheduleChangeBody.enabledModules) ? scheduleChangeBody.enabledModules : parseModulesJson(current.enabled_modules),
+        toPlan
+      );
+      const toPrice = scheduleChangeBody.monthlyPrice !== undefined && scheduleChangeBody.monthlyPrice !== null && String(scheduleChangeBody.monthlyPrice).trim() !== ''
+        ? Number(scheduleChangeBody.monthlyPrice)
+        : (current.monthly_price !== null && current.monthly_price !== undefined ? Number(current.monthly_price) : null);
+
+      // Apply at the end of the current paid window (or right away when there
+      // is no active window — e.g. scheduling while expired).
+      const currentEnd = Number(current.subscription_ends_at) || 0;
+      const applyAt = current.status !== 'trial' && currentEnd > now ? currentEnd : null;
+
+      const target: { plan: string; billingCycle: BillingCycle; enabledModules: string[]; monthlyPrice: number | null } = {
+        plan: toPlan,
+        billingCycle: toCycle,
+        enabledModules: toModules,
+        monthlyPrice: toPlan === 'custom' ? toPrice : null
+      };
+      const label = `Changement programmé: ${planLabel(current.plan || 'starter')} → ${planLabel(toPlan)} (${toCycle})`;
+      await env.DB.batch([
+        supersedePendingSchedules(env.DB, id),
+        insertPlanSchedule(env.DB, id, target, applyAt, label)
+      ]);
+
+      // Identity/contact fields may travel with the scheduled change — persist
+      // them too so a combined save is not silently truncated. Billing fields
+      // (status/plan/modules/dates) are intentionally ignored here.
+      const scheduleBaseUpdates: string[] = [];
+      const scheduleBaseBinds: any[] = [];
+      if (body.name !== undefined) { scheduleBaseUpdates.push('name = ?'); scheduleBaseBinds.push(String(body.name).trim()); }
+      if (body.logoUrl !== undefined) { scheduleBaseUpdates.push('logo_url = ?'); scheduleBaseBinds.push(String(body.logoUrl).trim()); }
+      if (body.phoneNumber !== undefined) { scheduleBaseUpdates.push('phone_number = ?'); scheduleBaseBinds.push(String(body.phoneNumber).trim()); }
+      if (body.locationCity !== undefined) { scheduleBaseUpdates.push('location_city = ?'); scheduleBaseBinds.push(String(body.locationCity).trim()); }
+      if (body.centerType !== undefined) { scheduleBaseUpdates.push('center_type = ?'); scheduleBaseBinds.push(String(body.centerType).trim()); }
+      if (body.mealOperatingMode !== undefined) { scheduleBaseUpdates.push('meal_operating_mode = ?'); scheduleBaseBinds.push(String(body.mealOperatingMode).trim()); }
+      if (scheduleBaseUpdates.length > 0) {
+        scheduleBaseBinds.push(id);
+        await env.DB.prepare(`UPDATE centers SET ${scheduleBaseUpdates.join(', ')} WHERE id = ?`).bind(...scheduleBaseBinds).run();
+      }
+      const scheduleSettingsUpdates: string[] = [];
+      const scheduleSettingsBinds: any[] = [];
+      if (body.name !== undefined) { scheduleSettingsUpdates.push('center_name = ?'); scheduleSettingsBinds.push(String(body.name).trim()); }
+      if (body.phoneNumber !== undefined) { scheduleSettingsUpdates.push('phone_number = ?'); scheduleSettingsBinds.push(String(body.phoneNumber).trim()); }
+      if (body.locationCity !== undefined) { scheduleSettingsUpdates.push('location_city = ?'); scheduleSettingsBinds.push(String(body.locationCity).trim()); }
+      if (body.mealOperatingMode !== undefined) { scheduleSettingsUpdates.push('meal_operating_mode = ?'); scheduleSettingsBinds.push(String(body.mealOperatingMode).trim()); }
+      if (scheduleSettingsUpdates.length > 0) {
+        scheduleSettingsBinds.push(id);
+        await env.DB.prepare(`UPDATE center_settings SET ${scheduleSettingsUpdates.join(', ')} WHERE center_id = ?`).bind(...scheduleSettingsBinds).run();
+      }
+
+      return json({
+        success: true,
+        planChange: {
+          mode: 'scheduled',
+          applyAt,
+          plan: toPlan,
+          billingCycle: toCycle,
+          enabledModules: toModules
+        }
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Live update path (includes legacy fields + the new mid-period logic)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const pending = await getPendingSchedule(env.DB, id);
     const normalizedBodyPlan = body.plan === undefined
       ? null
       : (String(body.plan).trim() === 'basic' ? 'starter' : String(body.plan).trim());
-    const effectivePlan = normalizedBodyPlan || (current?.plan || 'starter');
-    const requestedBillingCycle = body.billingCycle === undefined
-      ? (current?.billing_cycle || 'monthly')
-      : String(body.billingCycle).trim();
-    const effectiveBillingCycle = requestedBillingCycle === 'annual' ? 'annual' : 'monthly';
-    const effectiveStatus = body.status === undefined
-      ? (current?.status || 'active')
-      : String(body.status).trim();
-    const planChanged = Boolean(current && normalizedBodyPlan && normalizedBodyPlan !== current.plan);
-    const billingCycleChanged = Boolean(current && body.billingCycle !== undefined && effectiveBillingCycle !== (current.billing_cycle || 'monthly'));
-    const statusChangedToPaid = Boolean(current && (current.status === 'trial' || current.status === 'expired') && effectiveStatus !== 'trial');
+    const currentPlan = current?.plan || 'starter';
+    const currentModules = parseModulesJson(current?.enabled_modules);
+    const currentCycle = (current?.billing_cycle as BillingCycle) || 'monthly';
+    const currentStatus = current?.status || 'active';
+    const requestedStatus = body.status === undefined ? currentStatus : String(body.status).trim();
+    const effectiveStatus = requestedStatus === 'trial' ? 'trial'
+      : (['active', 'suspended', 'expired'].includes(requestedStatus) ? requestedStatus : 'active');
+    const statusChangedToPaid = Boolean(current && (current.status === 'trial' || current.status === 'expired') && effectiveStatus === 'active');
+    // A request that starts (or restarts) a paid window: trial → active,
+    // expired → active, or an explicit renewal extension.
+    const renewalTrigger = statusChangedToPaid || requestedAutoCalculateSubscription;
+
+    // Fold the pending scheduled change when this request renews the center,
+    // or when the platform admin explicitly force-applies it.
+    const explicitLivePlanConflict = Boolean(normalizedBodyPlan) && pending && normalizedBodyPlan !== pending.to_plan;
+    const scheduleEligible = Boolean(pending) && (applyScheduledPlan
+      || (renewalTrigger && (!pending!.apply_at || pending!.apply_at <= now)));
+    const foldSchedule = Boolean(pending) && scheduleEligible && !explicitLivePlanConflict;
+    if (applyScheduledPlan && !pending) {
+      return json({ error: 'لا يوجد تغيير خطة مبرمج لهذا المركز.' }, 400);
+    }
+    if (applyScheduledPlan && explicitLivePlanConflict) {
+      return json({ error: 'لا يمكن تطبيق الخطة المبرمجة مع تغيير خطة يدوي في نفس الطلب.' }, 400);
+    }
+
+    const effectivePlan = foldSchedule
+      ? pending!.to_plan
+      : (normalizedBodyPlan || currentPlan);
+    let effectiveBillingCycle: BillingCycle = body.billingCycle === undefined
+      ? (foldSchedule ? (pending!.to_billing_cycle as BillingCycle) : currentCycle)
+      : (String(body.billingCycle).trim() === 'annual' ? 'annual' : 'monthly');
+    const cycleWrite = effectiveBillingCycle !== currentCycle;
+
+    const requestedModulesRaw = foldSchedule
+      ? parseModulesJson(pending!.to_enabled_modules)
+      : (Array.isArray(body.enabledModules) ? body.enabledModules : currentModules);
+    const targetModules = normalizeEnabledModules(requestedModulesRaw, effectivePlan);
+    const modulesChanged = JSON.stringify(targetModules) !== JSON.stringify(currentModules);
+    const planChanged = (normalizedBodyPlan !== null && normalizedBodyPlan !== currentPlan) || (foldSchedule && effectivePlan !== currentPlan);
+    const billingCycleChanged = cycleWrite;
+    const customPriceForTarget = effectivePlan === 'custom'
+      ? (body.monthlyPrice !== undefined && body.monthlyPrice !== null && String(body.monthlyPrice).trim() !== ''
+        ? Number(body.monthlyPrice)
+        : (foldSchedule ? (pending!.to_monthly_price !== null && pending!.to_monthly_price !== undefined ? Number(pending!.to_monthly_price) : null)
+          : (current?.monthly_price !== null && current?.monthly_price !== undefined ? Number(current.monthly_price) : null)))
+      : null;
+    const customPriceAvailable = effectivePlan === 'custom' && customPriceForTarget !== null;
+
+    // Amounts used both for the mid-period evaluation and for the monthly_price
+    // write, so the UI decision and the stored price always agree.
+    const oldPeriodAmount = effectiveStatus === 'trial' || !current
+      ? 0
+      : ((Number(current.monthly_price) || 0) > 0
+        ? Number(current.monthly_price)
+        : await computePeriodAmount(env.DB, { plan: currentPlan, modules: currentModules, billingCycle: currentCycle }));
+    const newPeriodAmount = effectiveStatus === 'trial'
+      ? 0
+      : await computePeriodAmount(env.DB, { plan: effectivePlan, modules: targetModules, billingCycle: effectiveBillingCycle, customPrice: customPriceAvailable ? customPriceForTarget : null });
+
+    const planRelevantChange = planChanged || modulesChanged || billingCycleChanged;
+    const evaluation: PlanChangeEvaluation = evaluatePlanChange(
+      { status: currentStatus, plan: currentPlan, billingCycle: currentCycle, monthlyPrice: oldPeriodAmount, trialEndsAt: current?.trial_ends_at, subscriptionEndsAt: current?.subscription_ends_at },
+      { plan: effectivePlan, billingCycle: effectiveBillingCycle, periodAmount: newPeriodAmount, modulesChanged },
+      now
+    );
+
+    const midPeriodMode = evaluation.mode === 'mid_period_increase'
+      || evaluation.mode === 'mid_period_decrease'
+      || evaluation.mode === 'mid_period_same_price';
+    // The heart of the fix: a plan change made WHILE a paid period is running
+    // must NOT silently push the subscription end date by a full extra period.
+    const suppressExtension = midPeriodMode && !requestedAutoCalculateSubscription && !statusChangedToPaid && !billingCycleChanged;
+
+    // Mid-period price DECREASE is applied at the end of the current period
+    // (the center already paid the higher price for the window). Unless the
+    // platform admin explicitly force-applies an already scheduled change.
+    const scheduleDecrease = evaluation.mode === 'mid_period_decrease' && !applyScheduledPlan && !foldSchedule;
+
     const autoCalculatePrice = requestedAutoCalculatePrice
       || body.plan !== undefined
       || body.billingCycle !== undefined
       || body.enabledModules !== undefined
-      || body.status !== undefined;
-    const autoCalculateSubscription = requestedAutoCalculateSubscription || planChanged || billingCycleChanged || statusChangedToPaid;
+      || body.status !== undefined
+      || foldSchedule;
+    const autoCalculateSubscription = (requestedAutoCalculateSubscription || planChanged || billingCycleChanged || statusChangedToPaid)
+      && !suppressExtension && !scheduleDecrease;
+
+    const updates: string[] = [];
+    const binds: any[] = [];
+    const scheduleStmts: D1PreparedStatement[] = [];
+    let planChangeResponse: any = { mode: evaluation.mode };
 
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { updates.push('location_city = ?'); binds.push(String(body.locationCity).trim()); }
     if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(String(body.centerType).trim()); }
-    if (body.plan !== undefined) {
-      // "basic" is stored as 'starter' (DB CHECK only allows starter/growth/pro/custom)
-      updates.push('plan = ?');
-      binds.push(normalizedBodyPlan);
+
+    // Plan / enabled modules: applied live, except for a scheduled decrease.
+    if (!scheduleDecrease && (planChanged || modulesChanged || foldSchedule || body.plan !== undefined || body.enabledModules !== undefined)) {
+      if (planChanged || body.plan !== undefined || foldSchedule) {
+        updates.push('plan = ?');
+        binds.push(effectivePlan);
+      }
+      if (modulesChanged || body.enabledModules !== undefined || foldSchedule) {
+        updates.push('enabled_modules = ?');
+        binds.push(JSON.stringify(targetModules));
+      }
     }
-    if (body.status !== undefined) { updates.push('status = ?'); binds.push(String(body.status).trim()); }
+
+    if (body.status !== undefined) { updates.push('status = ?'); binds.push(effectiveStatus); }
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
-    if (body.enabledModules !== undefined) {
-      updates.push('enabled_modules = ?');
-      binds.push(JSON.stringify(normalizeEnabledModules(body.enabledModules, effectivePlan)));
-    } else if (body.plan !== undefined && (effectivePlan === 'pro' || effectivePlan === 'starter')) {
-      updates.push('enabled_modules = ?');
-      binds.push(JSON.stringify(effectivePlan === 'pro' ? ALL_MODULE_KEYS : REQUIRED_MODULE_KEYS));
-    }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
+    if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
+    if (body.billingCycle !== undefined || foldSchedule) { updates.push('billing_cycle = ?'); binds.push(effectiveBillingCycle); }
+
+    // Manual price (custom plans only — auto plans are recomputed below).
+    if (!scheduleDecrease && body.monthlyPrice !== undefined && effectiveStatus !== 'trial' && effectivePlan === 'custom') {
+      updates.push('monthly_price = ?');
+      binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice));
+    }
+
+    // Automatic price (module total / manual custom / zero while in trial).
+    if (autoCalculatePrice && !scheduleDecrease) {
+      if (effectiveStatus === 'trial') {
+        updates.push('monthly_price = ?');
+        binds.push(0);
+      } else if (AUTO_PRICED_PLANS.has(effectivePlan)) {
+        updates.push('monthly_price = ?');
+        binds.push(newPeriodAmount);
+      } else if (effectivePlan === 'custom' && foldSchedule && customPriceAvailable) {
+        updates.push('monthly_price = ?');
+        binds.push(customPriceForTarget);
+      }
+    }
+
+    // subscription_ends_at: manual override only when dates are not managed
+    // automatically by this handler.
     if (body.subscriptionEndsAt !== undefined && !autoCalculateSubscription
       && !(autoCalculatePrice && effectiveStatus === 'trial')) {
       updates.push('subscription_ends_at = ?');
@@ -394,64 +764,35 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (requestedOfferDays !== undefined) {
       const extraDays = normalizeDayCount(requestedOfferDays, 0);
       if (extraDays > 0 && current) {
-        const dayMs = 86400000;
-        const durationMs = (current.billing_cycle || 'monthly') === 'annual' ? 365 * dayMs : 30 * dayMs;
+        const durationMs = (current.billing_cycle || 'monthly') === 'annual' ? 365 * DAY_MS : 30 * DAY_MS;
         const existingSubscriptionEnd = Number(current.subscription_ends_at) || 0;
         const existingTrialEnd = Number(current.trial_ends_at) || 0;
 
         if (current.status === 'trial') {
-          const baseTrialEnd = existingTrialEnd > Date.now() ? existingTrialEnd : Date.now();
+          const baseTrialEnd = existingTrialEnd > now ? existingTrialEnd : now;
           updates.push('trial_ends_at = ?');
-          binds.push(baseTrialEnd + extraDays * dayMs);
+          binds.push(baseTrialEnd + extraDays * DAY_MS);
         } else {
           // If an active paid center has no stored trial boundary, infer its
           // original subscription start from the current subscription end.
           const subscriptionStart = existingSubscriptionEnd > 0
             ? existingSubscriptionEnd - durationMs
-            : (existingTrialEnd || Date.now());
+            : (existingTrialEnd || now);
           const baseTrialEnd = existingTrialEnd || subscriptionStart;
           const subscriptionEnd = existingSubscriptionEnd || (subscriptionStart + durationMs);
           updates.push('trial_ends_at = ?');
-          binds.push(baseTrialEnd + extraDays * dayMs);
+          binds.push(baseTrialEnd + extraDays * DAY_MS);
           updates.push('subscription_ends_at = ?');
-          binds.push(subscriptionEnd + extraDays * dayMs);
+          binds.push(subscriptionEnd + extraDays * DAY_MS);
         }
       }
     }
 
-    if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
-    if (body.billingCycle !== undefined) { updates.push('billing_cycle = ?'); binds.push(effectiveBillingCycle); }
-    if (body.monthlyPrice !== undefined && effectiveStatus !== 'trial' && (!autoCalculatePrice || effectivePlan === 'custom')) {
-      binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice));
-      updates.push('monthly_price = ?');
-    }
-
-    if (autoCalculatePrice) {
-      const modules = normalizeEnabledModules(Array.isArray(body.enabledModules)
-        ? body.enabledModules
-        : (() => {
-          try { return JSON.parse(String(current?.enabled_modules || '[]')); } catch { return []; }
-        })(), effectivePlan);
-      if (effectiveStatus === 'trial') {
-        updates.push('monthly_price = ?');
-        binds.push(0);
-      } else if (AUTO_PRICED_PLANS.has(effectivePlan)) {
-        const placeholders = modules.map(() => '?').join(',');
-        const { results: priceRows } = await env.DB.prepare(
-          `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
-        ).bind(currentSchoolYear(), ...modules).all<any>();
-        let calculatedPrice = priceRows.reduce(
-          (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
-          0
-        );
-        if (effectiveBillingCycle === 'annual') calculatedPrice *= 12 * (1 - ANNUAL_DISCOUNT);
-        updates.push('monthly_price = ?');
-        binds.push(calculatedPrice);
-      }
-    }
-
-    if (autoCalculateSubscription && effectiveStatus !== 'trial') {
-      const now = Date.now();
+    // ── Subscription extension ────────────────────────────────────────────────
+    // Only an ACTIVE center gets a paid window (a center saved as expired or
+    // suspended must not silently accumulate future time).
+    let newSubscriptionEndsAt: number | null = null;
+    if (autoCalculateSubscription && effectiveStatus === 'active') {
       const existingEnd = Number(current?.subscription_ends_at) || 0;
       const requestedTrialEnd = body.trialEndsAt === undefined
         ? (Number(current?.trial_ends_at) || 0)
@@ -462,16 +803,81 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       // existing future subscription end when present.
       const base = trialEnd || (existingEnd > now ? existingEnd : now);
       const duration = effectiveBillingCycle === 'annual' ? 365 : 30;
+      newSubscriptionEndsAt = base + duration * DAY_MS;
       updates.push('subscription_ends_at = ?');
-      binds.push(base + duration * 86400000);
+      binds.push(newSubscriptionEndsAt);
     } else if (autoCalculatePrice && effectiveStatus === 'trial' && (body.status !== undefined || current?.status === 'trial')) {
       updates.push('subscription_ends_at = ?');
       binds.push(null);
     }
 
+    // ── Mid-period handling ──────────────────────────────────────────────────
+    // (a) Price INCREASE while inside a paid window: apply immediately, keep
+    // the end date, and settle the prorated difference.
+    let settlementResult: any = null;
+    if (evaluation.mode === 'mid_period_increase') {
+      const policy = String(body.settlementPolicy || 'auto').trim();
+      const paid = policy === 'paid' ? true
+        : policy === 'unpaid' ? false
+          : (await hasPaidInvoiceForWindow(env.DB, id, Number(current.subscription_ends_at)));
+      const settlement = upgradeSettlement(evaluation, paid, now);
+      if (settlement && settlement.amount > PRICE_EPSILON && current?.subscription_ends_at) {
+        const invoice = await createSettlementInvoice(env.DB, {
+          centerId: id,
+          amount: settlement.amount,
+          periodStart: now,
+          periodEnd: Number(current.subscription_ends_at),
+          paid,
+          oldPlan: currentPlan,
+          newPlan: effectivePlan,
+          remainingDays: settlement.remainingDays
+        });
+        settlementResult = { ...invoice, paid, remainingDays: settlement.remainingDays };
+      } else {
+        settlementResult = { amount: 0, paid, remainingDays: settlement?.remainingDays || 0, skipped: true };
+      }
+      planChangeResponse.settlement = settlementResult;
+      // A live change supersedes any pending scheduled change.
+      if (pending && !foldSchedule) scheduleStmts.push(supersedePendingSchedules(env.DB, id));
+    }
+
+    // (b) Price DECREASE while inside a paid window: schedule it for the end
+    // of the current period instead of applying it live.
+    if (evaluation.mode === 'mid_period_decrease' && scheduleDecrease) {
+      const end = Number(current?.subscription_ends_at) || 0;
+      const applyAt = end > now ? end : null;
+      const target: { plan: string; billingCycle: BillingCycle; enabledModules: string[]; monthlyPrice: number | null } = {
+        plan: effectivePlan,
+        billingCycle: effectiveBillingCycle,
+        enabledModules: targetModules,
+        monthlyPrice: customPriceAvailable ? customPriceForTarget : null
+      };
+      scheduleStmts.push(
+        supersedePendingSchedules(env.DB, id),
+        insertPlanSchedule(env.DB, id, target, applyAt, `Downgrade programmé: ${planLabel(currentPlan)} → ${planLabel(effectivePlan)} (${effectiveBillingCycle})`)
+      );
+      planChangeResponse.mode = 'scheduled';
+      planChangeResponse.applyAt = applyAt;
+      planChangeResponse.scheduledPlan = { plan: effectivePlan, billingCycle: effectiveBillingCycle, enabledModules: targetModules };
+    }
+
+    // Folded/force-applied scheduled change → mark it as applied.
+    if (foldSchedule && pending) {
+      scheduleStmts.push(markScheduleApplied(env.DB, pending.id));
+      planChangeResponse.appliedScheduleId = pending.id;
+      planChangeResponse.mode = evaluation.mode === 'mid_period_increase' || evaluation.mode === 'mid_period_same_price'
+        ? evaluation.mode : 'renewal';
+      if (newSubscriptionEndsAt) planChangeResponse.newSubscriptionEndsAt = newSubscriptionEndsAt;
+    }
+
     if (updates.length > 0) {
       binds.push(id);
-      await env.DB.prepare(`UPDATE centers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run();
+      const mainStmts: D1PreparedStatement[] = [
+        env.DB.prepare(`UPDATE centers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds)
+      ];
+      await env.DB.batch([...mainStmts, ...scheduleStmts]);
+    } else if (scheduleStmts.length > 0) {
+      await env.DB.batch(scheduleStmts);
     }
 
     // Keep the tenant-facing settings in sync when platform admin edits
@@ -494,7 +900,16 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         .bind(newHash, String(body.adminEmail).trim().toLowerCase(), id).run();
     }
 
-    return json({ success: true });
+    // Also cancel a pending schedule when this live change supersedes it but
+    // no scheduled/plan bookkeeping statement was added above.
+    if (pending && !foldSchedule && planRelevantChange
+      && evaluation.mode !== 'mid_period_decrease'
+      && !planChangeResponse.settlement) {
+      await env.DB.prepare(`UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — remplacé par un changement immédiat' WHERE id = ?`).bind(pending.id).run();
+      planChangeResponse.cancelledScheduleId = pending.id;
+    }
+
+    return json({ success: true, planChange: planChangeResponse });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث المركز.' }, 500);
   }
@@ -572,6 +987,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
       // ── center config & billing ──
       env.DB.prepare('DELETE FROM center_settings WHERE center_id = ?').bind(id),
       env.DB.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM center_plan_schedules WHERE center_id = ?').bind(id),
       env.DB.prepare('DELETE FROM center_invoices WHERE center_id = ?').bind(id),
       // ── finally the center itself ──
       env.DB.prepare('DELETE FROM centers WHERE id = ?').bind(id)

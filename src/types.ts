@@ -1,6 +1,17 @@
 export type SaaSPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
 export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
 
+/** A plan change recorded to take effect at the end of the current period. */
+export interface ScheduledPlanChange {
+  id: string;
+  plan: string; // storage value: 'starter' (Basic) | 'growth' | 'pro' | 'custom'
+  billingCycle: 'monthly' | 'annual';
+  enabledModules: string[];
+  monthlyPrice: number | null;
+  applyAt: number | null; // eligible once subscription_ends_at passes
+  createdAt: number;
+}
+
 export type ModuleKey = 
   | 'scolaire' 
   | 'finance' 
@@ -34,6 +45,7 @@ export interface CenterTenant {
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;
+  scheduledPlan?: ScheduledPlanChange | null;
 }
 
 export interface DemoRequest {

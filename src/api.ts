@@ -483,7 +483,30 @@ export async function createCenterApi(payload: {
   return { centerId: data.centerId! };
 }
 
-/** Update center properties (super-admin): status, plan, modules, trial dates, etc. */
+/** Outcome of a plan change, echoed by the backend so the UI can explain it. */
+export interface PlanChangeOutcome {
+  mode: string;
+  applyAt?: number | null;
+  newSubscriptionEndsAt?: number | null;
+  settlement?: {
+    amount: number;
+    paid: boolean;
+    remainingDays: number;
+    invoiceNumber?: string;
+    invoiceId?: string;
+    cancelledOld?: boolean;
+    skipped?: boolean;
+  } | null;
+  scheduledPlan?: { plan: string; billingCycle: string; enabledModules: string[] } | null;
+}
+
+/**
+ * Update center properties (super-admin): status, plan, modules, trial dates,
+ * scheduled plan changes and prorated settlements.
+ *
+ * Response carries `planChange` so the platform admin UI can explain what the
+ * system did (invoice created / change scheduled / period extended…).
+ */
 export async function updateCenterApi(
   id: string,
   payload: {
@@ -503,8 +526,21 @@ export async function updateCenterApi(
     autoCalculateSubscription?: boolean;
     addOfferDays?: number;
     extendTrialDays?: number;
+    /** Store a plan change to apply at the end of the current period. */
+    scheduleChange?: {
+      plan: string;
+      billingCycle?: 'monthly' | 'annual';
+      enabledModules?: string[];
+      monthlyPrice?: number | null;
+    };
+    /** Cancel the pending scheduled plan change of this center. */
+    cancelScheduledChange?: boolean;
+    /** Force-apply the pending scheduled plan change now. */
+    applyScheduledPlan?: boolean;
+    /** How to settle an immediate mid-period price increase. */
+    settlementPolicy?: 'auto' | 'paid' | 'unpaid';
   }
-): Promise<void> {
+): Promise<{ planChange?: PlanChangeOutcome }> {
   const res = await fetch(`${API_BASE}/centers`, {
     method: 'PATCH',
     headers: authHeaders(true),
@@ -512,8 +548,9 @@ export async function updateCenterApi(
     body: JSON.stringify({ id, ...payload })
   });
   if (res.status === 401) throw new UnauthorizedError();
-  const data: { error?: string } = await res.json().catch(() => ({}));
+  const data: { error?: string; planChange?: PlanChangeOutcome } = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du centre.');
+  return data;
 }
 
 /** Delete a center (super-admin). Cannot delete the default center. */
