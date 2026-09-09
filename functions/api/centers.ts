@@ -4,6 +4,12 @@ const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
 
+function currentSchoolYear(timestamp = Date.now()): string {
+  const date = new Date(timestamp);
+  const schoolStartYear = date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
+  return `${schoolStartYear}/${schoolStartYear + 1}`;
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
@@ -26,6 +32,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         ORDER BY c.created_at DESC
       `).all<any>();
 
+      // Older centers may predate the billing columns being populated. Compute
+      // their current subscription total from the enabled modules so the edit
+      // form does not show a misleading zero for an active paid center.
+      const { results: priceRows } = await env.DB.prepare(
+        'SELECT module_key, price FROM module_prices WHERE school_year = ?'
+      ).bind(currentSchoolYear()).all<any>();
+      const modulePrices = new Map<string, number>((priceRows || []).map(row => [row.module_key, Number(row.price) || 0]));
+
       const formatted = (results || []).map(c => {
         let modules: string[] = [];
         try {
@@ -33,6 +47,16 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         } catch {
           modules = [];
         }
+        const storedMonthlyPrice = c.monthly_price === null || c.monthly_price === undefined
+          ? 0
+          : Number(c.monthly_price) || 0;
+        const calculatedMonthlyPrice = modules.reduce((total, moduleKey) => total + (modulePrices.get(moduleKey) || 0), 0);
+        const status = c.status || 'active';
+        const billingCycle = c.billing_cycle || 'monthly';
+        const monthlyPrice = storedMonthlyPrice > 0 || status === 'trial'
+          ? storedMonthlyPrice
+          : calculatedMonthlyPrice * (billingCycle === 'annual' ? 12 * 0.8 : 1);
+
         return {
           id: c.id,
           name: c.name,
@@ -42,11 +66,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           plan: c.plan || 'starter',
           enabledModules: modules,
           mealOperatingMode: c.meal_operating_mode || 'external_traiteur',
-          status: c.status || 'active',
+          status,
           trialEndsAt: c.trial_ends_at || null,
           subscriptionEndsAt: c.subscription_ends_at || null,
-          billingCycle: c.billing_cycle || 'monthly',
-          monthlyPrice: c.monthly_price !== null ? Number(c.monthly_price) : 0,
+          billingCycle,
+          monthlyPrice,
           centerType: c.center_type || '',
           logoUrl: c.logo_url || '',
           createdAt: c.created_at || Date.now(),
@@ -105,6 +129,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const name = String(body.name || '').trim();
     const slug = String(body.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || '').trim();
     const phoneNumber = String(body.phoneNumber || body.phone || '').trim();
+    if (!/^[0-9]{8}$/.test(phoneNumber)) {
+      return json({ error: 'رقم الهاتف مطلوب ويجب أن يتكون من 8 أرقام.' }, 400);
+    }
     const locationCity = String(body.locationCity || body.city || 'تونس').trim();
     // "trial" is not a valid `plan` value (CHECK constraint only allows starter/growth/pro/custom),
     // so a trial center is stored as plan='starter' with status='trial'.
@@ -249,6 +276,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const body = await readBody(request);
     const id = String(body.id || '').trim();
     if (!id) return json({ error: 'معرف المركز مطلوب.' }, 400);
+
+    if (body.phoneNumber !== undefined && !/^[0-9]{8}$/.test(String(body.phoneNumber).trim())) {
+      return json({ error: 'رقم الهاتف يجب أن يتكون من 8 أرقام.' }, 400);
+    }
 
     const updates: string[] = [];
     const binds: any[] = [];

@@ -153,6 +153,14 @@ function fmtDate(ts?: number | null): string {
   return new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function normalizePhoneInput(value?: string): string {
+  return String(value || '').replace(/[^0-9]/g, '').slice(0, 8);
+}
+
+function isValidCenterPhone(value: string): boolean {
+  return /^[0-9]{8}$/.test(value);
+}
+
 // ─── Segmented filter control (landing style) ──────────────────────────────
 // ── Pagination (thème plateforme) ──────────────────────────────────────────
 function pageNumbers(current: number, total: number): (number | '…')[] {
@@ -287,7 +295,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     return {
       name: initialData?.academyName || '',
       logoUrl: '',
-      phoneNumber: initialData?.phone || '',
+      phoneNumber: normalizePhoneInput(initialData?.phone),
       locationCity: '',
       plan: 'trial' as string,
       centerType: (initialData?.centerType as 'jardin' | 'formation' | '') || '',
@@ -311,6 +319,10 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidCenterPhone(form.phoneNumber)) {
+      toast.error('Le téléphone doit contenir exactement 8 chiffres.');
+      return;
+    }
     if (!form.centerType) {
       toast.error('Sélectionnez le type d’établissement (jardin d’enfant ou centre de formation).');
       return;
@@ -439,9 +451,10 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone</label>
-              <input value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
+              <input required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
+                onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
+                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition text-left" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan *</label>
@@ -639,7 +652,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
   const [form, setForm] = useState(() => ({
     name: center.name,
     logoUrl: center.logoUrl || '',
-    phoneNumber: center.phoneNumber || '',
+    phoneNumber: normalizePhoneInput(center.phoneNumber),
     locationCity: center.locationCity || '',
     centerType: normalizeCenterType(center.centerType),
     plan: center.plan === 'starter' ? 'basic' : (center.plan || 'basic'),
@@ -669,6 +682,10 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidCenterPhone(form.phoneNumber)) {
+      toast.error('Le téléphone doit contenir exactement 8 chiffres.');
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Le nom du centre est obligatoire.');
       return;
@@ -760,8 +777,10 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
               <input value={form.locationCity} onChange={e => setForm(f => ({ ...f, locationCity: e.target.value }))} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone</label>
-              <input value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))} className={inputCls} />
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
+              <input required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
+                onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
+                className={`${inputCls} text-left`} />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Type d’établissement</label>
@@ -811,11 +830,11 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’essai</label>
-                <input type="date" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer`} />
+                <input type="date" dir="ltr" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr`} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement</label>
-                <input type="date" value={form.subscriptionEndsAt} onChange={e => setForm(f => ({ ...f, subscriptionEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer`} />
+                <input type="date" dir="ltr" value={form.subscriptionEndsAt} onChange={e => setForm(f => ({ ...f, subscriptionEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr`} />
               </div>
             </div>
           </div>
