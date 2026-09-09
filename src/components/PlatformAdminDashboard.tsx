@@ -161,6 +161,30 @@ function isValidCenterPhone(value: string): boolean {
   return /^[0-9]{8}$/.test(value);
 }
 
+const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
+const ANNUAL_DISCOUNT = 0.2;
+
+function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
+  return enabledModules.reduce((total, key) => (
+    total + (key === BUNDLED_MODULE_KEY ? 0 : (Number(modulePrices[key]) || 0))
+  ), 0);
+}
+
+function calculatePlanTariff(plan: string, billingCycle: 'monthly' | 'annual', enabledModules: string[], modulePrices: Record<string, number>, manualTariff = 0): number {
+  if (plan === 'custom') return Math.max(0, Number(manualTariff) || 0);
+  if (!AUTOMATIC_PLAN_KEYS.includes(plan)) return 0;
+  const monthlyTotal = calculateModuleTotal(enabledModules, modulePrices);
+  return billingCycle === 'annual' ? monthlyTotal * 12 * (1 - ANNUAL_DISCOUNT) : monthlyTotal;
+}
+
+function addSubscriptionPeriod(timestamp: number, billingCycle: 'monthly' | 'annual'): number {
+  return timestamp + (billingCycle === 'annual' ? 365 : 30) * 86400000;
+}
+
+function formatTnd(value: number): string {
+  return `${value.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
+}
+
 // ─── Segmented filter control (landing style) ──────────────────────────────
 // ── Pagination (thème plateforme) ──────────────────────────────────────────
 function pageNumbers(current: number, total: number): (number | '…')[] {
@@ -254,6 +278,21 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => {
+      // The backend remains authoritative; an empty map gives a conservative preview.
+    });
+    return () => { mounted = false; };
+  }, []);
 
   React.useEffect(() => {
     return () => {
@@ -291,13 +330,19 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   const [form, setForm] = useState(() => {
     // Base toujours incluse + modules demandés lors d'une conversion
     const requested = parseModules(initialData?.requestedModules);
-    const enabled = Array.from(new Set<string>([...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, ...(requested.length ? requested : ALL_MODULES.map(m => m.key))]));
+    const enabled = Array.from(new Set<string>([
+      ...BASE_MODULE_KEYS,
+      BUNDLED_MODULE_KEY,
+      ...(requested.length ? requested : [])
+    ]));
     return {
       name: initialData?.academyName || '',
       logoUrl: '',
       phoneNumber: normalizePhoneInput(initialData?.phone),
       locationCity: '',
       plan: 'trial' as string,
+      billingCycle: 'monthly' as 'monthly' | 'annual',
+      monthlyPrice: '',
       centerType: (initialData?.centerType as 'jardin' | 'formation' | '') || '',
       directorName: initialData?.fullName || '',
       directorEmail: initialData?.email || '',
@@ -305,6 +350,18 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       enabledModules: enabled,
     };
   });
+
+  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(form.plan);
+  const calculatedTariff = calculatePlanTariff(
+    form.plan,
+    form.billingCycle,
+    form.enabledModules,
+    modulePrices,
+    Number(form.monthlyPrice)
+  );
+  const previewEnd = form.plan === 'trial'
+    ? Date.now() + 14 * 86400000
+    : addSubscriptionPeriod(Date.now(), form.billingCycle);
 
   // La base ne peut pas être retirée — on ne peut qu'ajouter des modules
   const toggle = (key: string) => {
@@ -462,9 +519,59 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
                 <option value="trial">Essai (14 j)</option>
                 <option value="basic">Basic</option>
+                <option value="growth">Growth</option>
+                <option value="pro">Pro</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
+            {form.plan !== 'trial' && (
+              <>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
+                  <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))}
+                    className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
+                    <option value="monthly">Mensuel</option>
+                    <option value="annual">Annuel — 20 % de remise</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-black text-slate-600">Tarif calculé</span>
+                    <span className="text-lg font-black text-[#257C86]">
+                      {automaticPlan ? formatTnd(calculatedTariff) : 'Tarif négocié'}
+                    </span>
+                  </div>
+                  {automaticPlan ? (
+                    <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                      {form.billingCycle === 'annual'
+                        ? 'Total annuel : total mensuel × 12 avec 20 % de remise.'
+                        : 'Total mensuel des modules sélectionnés.'}
+                    </p>
+                  ) : (
+                    <input type="number" min="0" step="0.01" value={form.monthlyPrice}
+                      onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))}
+                      placeholder="Saisir le tarif négocié en TND"
+                      className="mt-2 w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] outline-none" />
+                  )}
+                </div>
+                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3" dir="ltr">
+                  <div className="flex items-center justify-between gap-3 text-left">
+                    <span className="text-xs font-black text-slate-600">Fin d’abonnement calculée</span>
+                    <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">{form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à partir de la création.</p>
+                </div>
+              </>
+            )}
+            {form.plan === 'trial' && (
+              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3" dir="ltr">
+                <div className="flex items-center justify-between gap-3 text-left">
+                  <span className="text-xs font-black text-slate-600">Fin de l’essai (14 jours)</span>
+                  <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
+                </div>
+                <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">Le centre d’essai reste gratuit.</p>
+              </div>
+            )}
           </div>
 
           {/* Director */}
@@ -548,9 +655,27 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
   const [enabled, setEnabled] = useState<string[]>(() =>
     Array.from(new Set<string>([...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, ...(center.enabledModules as string[] || [])]))
   );
+
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => { /* backend remains authoritative */ });
+    return () => { mounted = false; };
+  }, []);
+
+  const displayedPlan = center.plan === 'starter' ? 'basic' : center.plan;
+  const calculatedTariff = center.status === 'trial'
+    ? 0
+    : calculatePlanTariff(displayedPlan, center.billingCycle || 'monthly', enabled, modulePrices, center.monthlyPrice || 0);
 
   const toggle = (key: string) => {
     if (isBaseModule(key)) return;
@@ -560,7 +685,10 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateCenterApi(center.id, { enabledModules: enabled });
+      await updateCenterApi(center.id, {
+        enabledModules: enabled,
+        autoCalculatePrice: true
+      });
       toast.success('Modules mis à jour');
       onSaved();
       onClose();
@@ -617,6 +745,18 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
           })}
         </div>
 
+        <div className="rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-black text-slate-600">Tarif après sélection</span>
+            <span className="text-base font-black text-[#257C86]">
+              {center.status === 'trial' ? 'Gratuit' : center.plan === 'custom' ? `${formatTnd(center.monthlyPrice || 0)} · négocié` : formatTnd(calculatedTariff)}
+            </span>
+          </div>
+          <p className="text-[11px] font-semibold text-slate-500 mt-1">
+            {center.status === 'trial' ? 'Le centre d’essai reste gratuit.' : center.billingCycle === 'annual' ? 'Cycle annuel : total mensuel × 12 avec 20 % de remise.' : 'Cycle mensuel : total des modules sélectionnés.'}
+            {' '}La fin d’abonnement actuelle ne change pas lors d’une modification des modules.
+          </p>
+        </div>
         <p className="text-[11px] font-semibold text-slate-400 mb-5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert.</p>
 
         <div className="flex justify-end gap-3">
@@ -649,6 +789,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
   const [form, setForm] = useState(() => ({
     name: center.name,
     logoUrl: center.logoUrl || '',
@@ -660,8 +801,41 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
     billingCycle: center.billingCycle || 'monthly',
     monthlyPrice: String(center.monthlyPrice ?? 0),
     trialEndsAt: centerDateInputValue(center.trialEndsAt),
-    subscriptionEndsAt: centerDateInputValue(center.subscriptionEndsAt),
   }));
+
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => { /* backend remains authoritative */ });
+    return () => { mounted = false; };
+  }, []);
+
+  const enabledModules = Array.from(new Set<string>([
+    ...BASE_MODULE_KEYS,
+    BUNDLED_MODULE_KEY,
+    ...((center.enabledModules as string[]) || [])
+  ]));
+  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(form.plan);
+  const calculatedTariff = form.status === 'trial'
+    ? 0
+    : calculatePlanTariff(form.plan, form.billingCycle, enabledModules, modulePrices, Number(form.monthlyPrice));
+  const planChanged = form.plan !== (center.plan === 'starter' ? 'basic' : center.plan);
+  const billingCycleChanged = form.billingCycle !== (center.billingCycle || 'monthly');
+  const statusChangedToPaid = form.status !== 'trial' && center.status === 'trial';
+  const shouldExtendSubscription = form.status !== 'trial' && (planChanged || billingCycleChanged || statusChangedToPaid);
+  const previewSubscriptionEnd = form.status === 'trial'
+    ? null
+    : shouldExtendSubscription
+      ? addSubscriptionPeriod(
+        center.subscriptionEndsAt && center.subscriptionEndsAt > Date.now() ? center.subscriptionEndsAt : Date.now(),
+        form.billingCycle
+      )
+      : (center.subscriptionEndsAt || addSubscriptionPeriod(Date.now(), form.billingCycle));
 
   useEffect(() => {
     return () => {
@@ -704,9 +878,10 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
         plan: form.plan,
         status: form.status,
         billingCycle: form.billingCycle,
-        monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : 0,
+        ...(form.plan === 'custom' ? { monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : 0 } : {}),
         trialEndsAt: centerDateTimestamp(form.trialEndsAt),
-        subscriptionEndsAt: centerDateTimestamp(form.subscriptionEndsAt),
+        autoCalculatePrice: true,
+        autoCalculateSubscription: shouldExtendSubscription,
       });
       toast.success('Centre mis à jour');
       onSaved();
@@ -821,20 +996,28 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
                 <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))} className={`${inputCls} cursor-pointer`}>
                   <option value="monthly">Mensuel</option>
-                  <option value="annual">Annuel</option>
+                  <option value="annual">Annuel — 20 % de remise</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Tarif (TND)</label>
-                <input type="number" min="0" step="0.01" value={form.monthlyPrice} onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))} className={inputCls} />
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Tarif {form.billingCycle === 'annual' ? 'annuel' : 'mensuel'} (TND)</label>
+                {automaticPlan ? (
+                  <input type="text" value={calculatedTariff.toFixed(2)} readOnly aria-readonly="true" className={`${inputCls} bg-slate-50 text-[#257C86] cursor-not-allowed`} />
+                ) : (
+                  <input type="number" min="0" step="0.01" value={form.monthlyPrice} onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))} className={inputCls} />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’essai</label>
-                <input type="date" dir="ltr" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr`} />
+                <input type="date" dir="ltr" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr text-left`} />
               </div>
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement</label>
-                <input type="date" dir="ltr" value={form.subscriptionEndsAt} onChange={e => setForm(f => ({ ...f, subscriptionEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr`} />
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement calculée</label>
+                <input type="date" dir="ltr" value={previewSubscriptionEnd ? centerDateInputValue(previewSubscriptionEnd) : ''} readOnly aria-readonly="true"
+                  className={`${inputCls} bg-slate-50 text-slate-700 cursor-not-allowed input-date-ltr text-left`} />
+                {shouldExtendSubscription && form.status !== 'trial' && (
+                  <p className="text-[10px] font-semibold text-[#257C86] mt-1">Sera prolongée de {form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à l’enregistrement.</p>
+                )}
               </div>
             </div>
           </div>
@@ -863,7 +1046,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // Filters — centers
   const [centerTypeFilter, setCenterTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'trial' | 'active' | 'suspended' | 'expired'>('all');
-  const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'custom'>('all');
+  const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'growth' | 'pro' | 'custom'>('all');
   // Filters — requests
   const [reqTypeFilter, setReqTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [reqStatusFilter, setReqStatusFilter] = useState<'all' | 'new' | 'contacted' | 'converted' | 'archived'>('all');
@@ -1318,12 +1501,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Plan</div>
-              <Segmented<'all' | 'basic' | 'custom'>
+              <Segmented<'all' | 'basic' | 'growth' | 'pro' | 'custom'>
                 value={planFilter}
                 onChange={setPlanFilter}
                 options={[
                   { key: 'all', label: 'Tous' },
                   { key: 'basic', label: 'Basic' },
+                  { key: 'growth', label: 'Growth' },
+                  { key: 'pro', label: 'Pro' },
                   { key: 'custom', label: 'Custom' }
                 ]}
               />

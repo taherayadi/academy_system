@@ -446,6 +446,42 @@ describe('SaaS Platform API', () => {
     expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
   });
 
+  it('sends billing automation fields for an edited center', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+    await updateCenterApi('c1', {
+      plan: 'growth',
+      billingCycle: 'annual',
+      enabledModules: ['scolaire', 'finance', 'studentTimeSheets', 'etude'],
+      autoCalculatePrice: true,
+      autoCalculateSubscription: true
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body).toMatchObject({
+      id: 'c1',
+      plan: 'growth',
+      billingCycle: 'annual',
+      autoCalculatePrice: true,
+      autoCalculateSubscription: true
+    });
+    expect(body.enabledModules).toContain('etude');
+  });
+
+  it('sends a manually negotiated tariff when creating a custom center', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ centerId: 'c_custom' }));
+    await createCenterApi({
+      name: 'Custom Centre',
+      plan: 'custom',
+      billingCycle: 'annual',
+      monthlyPrice: 480,
+      enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
+      directorName: 'Directeur',
+      directorEmail: 'custom@test.tn',
+      directorPassword: 'password123'
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body).toMatchObject({ plan: 'custom', billingCycle: 'annual', monthlyPrice: 480 });
+  });
+
   it('deleteCenterApi calls DELETE /api/centers', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ success: true }));
     await deleteCenterApi('c1');

@@ -454,6 +454,8 @@ export async function createCenterApi(payload: {
   plan: string;
   enabledModules: string[];
   centerType?: string;
+  billingCycle?: 'monthly' | 'annual';
+  monthlyPrice?: number | string | null;
   directorName: string;
   directorEmail: string;
   directorPassword: string;
@@ -495,6 +497,8 @@ export async function updateCenterApi(
     subscriptionEndsAt?: number | null;
     billingCycle?: 'monthly' | 'annual';
     monthlyPrice?: number | null;
+    autoCalculatePrice?: boolean;
+    autoCalculateSubscription?: boolean;
     extendTrialDays?: number;
   }
 ): Promise<void> {

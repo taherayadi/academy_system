@@ -4,6 +4,14 @@ const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
 const BUNDLED_MODULE_KEY = 'studentTimeSheets';
+const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
+const ANNUAL_DISCOUNT = 0.2;
+const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
+
+function normalizeEnabledModules(value: unknown): string[] {
+  const requested = Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
+  return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...requested]));
+}
 
 function currentSchoolYear(timestamp = Date.now()): string {
   const date = new Date(timestamp);
@@ -57,9 +65,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         );
         const status = c.status || 'active';
         const billingCycle = c.billing_cycle || 'monthly';
-        const monthlyPrice = storedMonthlyPrice > 0 || status === 'trial'
+        const monthlyPrice = storedMonthlyPrice > 0 || status === 'trial' || !AUTO_PRICED_PLANS.has(c.plan || 'starter')
           ? storedMonthlyPrice
-          : calculatedMonthlyPrice * (billingCycle === 'annual' ? 12 * 0.8 : 1);
+          : calculatedMonthlyPrice * (billingCycle === 'annual' ? 12 * (1 - ANNUAL_DISCOUNT) : 1);
 
         return {
           id: c.id,
@@ -139,13 +147,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const locationCity = String(body.locationCity || body.city || 'تونس').trim();
     // "trial" is not a valid `plan` value (CHECK constraint only allows starter/growth/pro/custom),
     // so a trial center is stored as plan='starter' with status='trial'.
-    // The UI now offers: Essai / Basic / Custom. "Basic" is stored as 'starter'
-    // (the DB CHECK does not include 'basic'); the admin UI displays 'starter' as "Basic".
+    // Basic is stored as 'starter' because the DB CHECK constraint does not include 'basic'.
+    // Growth, Pro, and Custom retain their storage values.
     const rawPlan = String(body.plan || 'trial').trim();
     const requestedStatus = String(body.status || '').trim();
     const isTrial = rawPlan === 'trial' || requestedStatus === 'trial';
     const normalizedPlan = rawPlan === 'basic' ? 'starter' : rawPlan; // basic → starter (storage)
     const plan = isTrial ? 'starter' : (normalizedPlan === '' ? 'starter' : normalizedPlan);
+    const isCustomPlan = plan === 'custom';
+    const autoPrice = !isTrial && AUTO_PRICED_PLANS.has(plan);
     const status = requestedStatus || (isTrial ? 'trial' : 'active');
     const mealOperatingMode = String(body.mealOperatingMode || 'external_traiteur').trim();
     const trialDays = Number(body.trialDays) || 14;
@@ -172,24 +182,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const billingCycle = isTrial ? 'monthly' : (String(body.billingCycle || 'monthly').trim() === 'annual' ? 'annual' : 'monthly');
 
-    // Default modules
-    const defaultModules = [
-      'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-      'formations', 'cantine', 'transport', 'events', 'bibliotheque',
-      'studentTimeSheets', 'staff'
-    ];
-    const enabledModules = Array.isArray(body.enabledModules) ? body.enabledModules : defaultModules;
+    const enabledModules = normalizeEnabledModules(body.enabledModules);
     const modulesJson = JSON.stringify(enabledModules);
 
-    // Compute monthlyPrice from module_prices for the current school year
+    // Compute the automatic tariff from module_prices for the current school year
     const billingMonth = new Date(createdAt).getMonth(); // 0-indexed
     const billingYear = new Date(createdAt).getFullYear();
     // School year: months Sep (8) – Jul (6) → start year; Aug (7) + first days Sep → same academic year as start
     const schoolStartYear = billingMonth >= 8 ? billingYear : billingYear - 1;
     const currentSchoolYear = `${schoolStartYear}/${schoolStartYear + 1}`;
 
-    let monthlyPrice = 0;
-    if (!isTrial) {
+    let monthlyPrice = isCustomPlan ? (Number(body.monthlyPrice) || 0) : 0;
+    if (autoPrice) {
       const placeholders = enabledModules.map(() => '?').join(',');
       const { results: priceRows } = await env.DB.prepare(
         `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
@@ -199,7 +203,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         0
       );
       if (billingCycle === 'annual') {
-        monthlyPrice = monthlyPrice * 12 * 0.8; // 20% discount
+        monthlyPrice = monthlyPrice * 12 * (1 - ANNUAL_DISCOUNT);
       }
     }
 
@@ -288,8 +292,37 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'رقم الهاتف يجب أن يتكون من 8 أرقام.' }, 400);
     }
 
+    const requestedAutoCalculatePrice = body.autoCalculatePrice === true;
+    const requestedAutoCalculateSubscription = body.autoCalculateSubscription === true;
+    let current: any = null;
+    if (requestedAutoCalculatePrice || requestedAutoCalculateSubscription || body.extendTrialDays !== undefined
+      || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined || body.status !== undefined) {
+      current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at FROM centers WHERE id = ?').bind(id).first<any>();
+      if (!current) return json({ error: 'المركز غير موجود.' }, 404);
+    }
+
     const updates: string[] = [];
     const binds: any[] = [];
+    const normalizedBodyPlan = body.plan === undefined
+      ? null
+      : (String(body.plan).trim() === 'basic' ? 'starter' : String(body.plan).trim());
+    const effectivePlan = normalizedBodyPlan || (current?.plan || 'starter');
+    const requestedBillingCycle = body.billingCycle === undefined
+      ? (current?.billing_cycle || 'monthly')
+      : String(body.billingCycle).trim();
+    const effectiveBillingCycle = requestedBillingCycle === 'annual' ? 'annual' : 'monthly';
+    const effectiveStatus = body.status === undefined
+      ? (current?.status || 'active')
+      : String(body.status).trim();
+    const planChanged = Boolean(current && normalizedBodyPlan && normalizedBodyPlan !== current.plan);
+    const billingCycleChanged = Boolean(current && body.billingCycle !== undefined && effectiveBillingCycle !== (current.billing_cycle || 'monthly'));
+    const statusChangedToPaid = Boolean(current && current.status === 'trial' && effectiveStatus !== 'trial');
+    const autoCalculatePrice = requestedAutoCalculatePrice
+      || body.plan !== undefined
+      || body.billingCycle !== undefined
+      || body.enabledModules !== undefined
+      || body.status !== undefined;
+    const autoCalculateSubscription = requestedAutoCalculateSubscription || planChanged || billingCycleChanged || statusChangedToPaid;
 
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
@@ -297,28 +330,31 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(String(body.centerType).trim()); }
     if (body.plan !== undefined) {
       // "basic" is stored as 'starter' (DB CHECK only allows starter/growth/pro/custom)
-      const raw = String(body.plan).trim();
       updates.push('plan = ?');
-      binds.push(raw === 'basic' ? 'starter' : raw);
+      binds.push(normalizedBodyPlan);
     }
     if (body.status !== undefined) { updates.push('status = ?'); binds.push(String(body.status).trim()); }
     if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.enabledModules !== undefined) {
       updates.push('enabled_modules = ?');
-      binds.push(Array.isArray(body.enabledModules) ? JSON.stringify(body.enabledModules) : String(body.enabledModules));
+      binds.push(JSON.stringify(normalizeEnabledModules(body.enabledModules)));
     }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
-    if (body.subscriptionEndsAt !== undefined) { updates.push('subscription_ends_at = ?'); binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null); }
+    if (body.subscriptionEndsAt !== undefined && !autoCalculateSubscription
+      && !(autoCalculatePrice && effectiveStatus === 'trial')) {
+      updates.push('subscription_ends_at = ?');
+      binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null);
+    }
 
     // "+N jours d'essai" button: extend trial from today (or from current end if later)
     if (body.extendTrialDays !== undefined) {
       const extraDays = Number(body.extendTrialDays) || 0;
-      const current = await env.DB.prepare('SELECT trial_ends_at, status FROM centers WHERE id = ?').bind(id).first<any>();
-      if (current) {
+      const trialCenter = current || await env.DB.prepare('SELECT trial_ends_at, status FROM centers WHERE id = ?').bind(id).first<any>();
+      if (trialCenter) {
         const now = Date.now();
-        const base = (current.trial_ends_at && Number(current.trial_ends_at) > now) ? Number(current.trial_ends_at) : now;
+        const base = (trialCenter.trial_ends_at && Number(trialCenter.trial_ends_at) > now) ? Number(trialCenter.trial_ends_at) : now;
         const newEnd = base + extraDays * 86400000;
-        if (current.status !== 'trial') {
+        if (trialCenter.status !== 'trial') {
           updates.push('status = ?'); binds.push('trial');
         }
         updates.push('trial_ends_at = ?'); binds.push(newEnd);
@@ -326,8 +362,47 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
-    if (body.billingCycle !== undefined) { updates.push('billing_cycle = ?'); binds.push(String(body.billingCycle).trim()); }
-    if (body.monthlyPrice !== undefined) { updates.push('monthly_price = ?'); binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice)); }
+    if (body.billingCycle !== undefined) { updates.push('billing_cycle = ?'); binds.push(effectiveBillingCycle); }
+    if (body.monthlyPrice !== undefined && effectiveStatus !== 'trial' && (!autoCalculatePrice || effectivePlan === 'custom')) {
+      binds.push(body.monthlyPrice === null ? null : Number(body.monthlyPrice));
+      updates.push('monthly_price = ?');
+    }
+
+    if (autoCalculatePrice) {
+      const modules = normalizeEnabledModules(Array.isArray(body.enabledModules)
+        ? body.enabledModules
+        : (() => {
+          try { return JSON.parse(String(current?.enabled_modules || '[]')); } catch { return []; }
+        })());
+      if (effectiveStatus === 'trial') {
+        updates.push('monthly_price = ?');
+        binds.push(0);
+      } else if (AUTO_PRICED_PLANS.has(effectivePlan)) {
+        const placeholders = modules.map(() => '?').join(',');
+        const { results: priceRows } = await env.DB.prepare(
+          `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
+        ).bind(currentSchoolYear(), ...modules).all<any>();
+        let calculatedPrice = priceRows.reduce(
+          (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
+          0
+        );
+        if (effectiveBillingCycle === 'annual') calculatedPrice *= 12 * (1 - ANNUAL_DISCOUNT);
+        updates.push('monthly_price = ?');
+        binds.push(calculatedPrice);
+      }
+    }
+
+    if (autoCalculateSubscription && effectiveStatus !== 'trial') {
+      const now = Date.now();
+      const existingEnd = Number(current?.subscription_ends_at) || 0;
+      const base = existingEnd > now ? existingEnd : now;
+      const duration = effectiveBillingCycle === 'annual' ? 365 : 30;
+      updates.push('subscription_ends_at = ?');
+      binds.push(base + duration * 86400000);
+    } else if (autoCalculatePrice && effectiveStatus === 'trial' && (body.status !== undefined || current?.status === 'trial')) {
+      updates.push('subscription_ends_at = ?');
+      binds.push(null);
+    }
 
     if (updates.length > 0) {
       binds.push(id);
