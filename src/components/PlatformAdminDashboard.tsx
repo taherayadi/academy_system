@@ -360,6 +360,8 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       plan: 'trial' as string,
       billingCycle: 'monthly' as 'monthly' | 'annual',
       monthlyPrice: '',
+      trialDays: '14',
+      offerDays: '0',
       centerType: (initialData?.centerType as 'jardin' | 'formation' | '') || '',
       directorName: initialData?.fullName || '',
       directorEmail: initialData?.email || '',
@@ -376,14 +378,17 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     modulePrices,
     Number(form.monthlyPrice)
   );
+  const trialDays = Math.max(1, Math.floor(Number(form.trialDays) || 14));
+  const offerDays = Math.max(0, Math.floor(Number(form.offerDays) || 0));
   const previewEnd = form.plan === 'trial'
-    ? Date.now() + 14 * 86400000
-    : addSubscriptionPeriod(Date.now(), form.billingCycle);
+    ? Date.now() + trialDays * 86400000
+    : addSubscriptionPeriod(Date.now(), form.billingCycle) + offerDays * 86400000;
 
   const handlePlanChange = (plan: string) => {
     setForm(current => ({
       ...current,
       plan,
+      offerDays: plan === 'trial' ? '0' : current.offerDays,
       enabledModules: plan === 'pro'
         ? [...ALL_MODULE_KEYS]
         : plan === 'basic'
@@ -559,7 +564,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan *</label>
               <select required value={form.plan} onChange={e => handlePlanChange(e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
-                <option value="trial">Essai (14 j)</option>
+                <option value="trial">Essai gratuit</option>
                 <option value="basic">Basic</option>
                 <option value="growth">Growth</option>
                 <option value="pro">Pro</option>
@@ -575,6 +580,14 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     <option value="monthly">Mensuel</option>
                     <option value="annual">Annuel — 20 % de remise</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Jours offerts</label>
+                  <input type="number" min="0" max="3650" step="1" inputMode="numeric" value={form.offerDays}
+                    onChange={e => setForm(f => ({ ...f, offerDays: e.target.value }))}
+                    className="w-full border-2 border-amber-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-amber-50 focus:border-amber-400 focus:ring-0 outline-none transition"
+                    aria-describedby="new-center-offer-days-hint" />
+                  <p id="new-center-offer-days-hint" className="text-[10px] font-semibold text-amber-700 mt-1">Ajoutés gratuitement à la première période.</p>
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -601,17 +614,29 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     <span className="text-xs font-black text-slate-600">Fin d’abonnement calculée</span>
                     <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">{form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à partir de la création.</p>
+                  <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">
+                    {form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à partir de la création
+                    {offerDays > 0 ? ` + ${offerDays} jour${offerDays > 1 ? 's' : ''} offert${offerDays > 1 ? 's' : ''}.` : '.'}
+                  </p>
                 </div>
               </>
             )}
             {form.plan === 'trial' && (
-              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3" dir="ltr">
+              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+                  <label htmlFor="new-center-trial-days" className="text-xs font-black text-slate-600">Durée de l’essai offert</label>
+                  <div className="flex items-center gap-2">
+                    <input id="new-center-trial-days" type="number" min="1" max="3650" step="1" inputMode="numeric" value={form.trialDays}
+                      onChange={e => setForm(f => ({ ...f, trialDays: e.target.value }))}
+                      className="w-20 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                    <span className="text-xs font-bold text-slate-500">jours</span>
+                  </div>
+                </div>
                 <div className="flex items-center justify-between gap-3 text-left">
-                  <span className="text-xs font-black text-slate-600">Fin de l’essai (14 jours)</span>
+                  <span className="text-xs font-black text-slate-600">Fin de l’essai ({trialDays} jours)</span>
                   <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
                 </div>
-                <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">Le centre d’essai reste gratuit.</p>
+                <p className="text-[11px] font-semibold text-slate-500 text-left">Le centre d’essai reste gratuit.</p>
               </div>
             )}
           </div>

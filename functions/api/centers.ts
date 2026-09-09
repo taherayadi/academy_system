@@ -19,6 +19,13 @@ function normalizeEnabledModules(value: unknown, plan?: string): string[] {
   return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...modules]));
 }
 
+function normalizeDayCount(value: unknown, fallback: number): number {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(3650, Math.max(0, Math.floor(parsed)));
+}
+
 function currentSchoolYear(timestamp = Date.now()): string {
   const date = new Date(timestamp);
   const schoolStartYear = date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
@@ -179,7 +186,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const autoPrice = !isTrial && AUTO_PRICED_PLANS.has(plan);
     const status = requestedStatus || (isTrial ? 'trial' : 'active');
     const mealOperatingMode = String(body.mealOperatingMode || 'external_traiteur').trim();
-    const trialDays = Number(body.trialDays) || 14;
+    const trialDays = Math.max(1, normalizeDayCount(body.trialDays, 14));
+    const offerDays = normalizeDayCount(body.offerDays, 0);
     const adminName = String(body.adminName || `مدير ${name}`).trim();
     const adminEmail = String(body.adminEmail || '').trim().toLowerCase();
     const adminPassword = String(body.adminPassword || '').trim();
@@ -230,11 +238,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       }
     }
 
-    // subscription_ends_at: 30 days for monthly, 365 days for annual.
+    // subscription_ends_at: 30 days for monthly or 365 days for annual,
+    // plus any promotional days granted during creation.
     let subscriptionEndsAt = null;
     if (!isTrial) {
       const periodMs = billingCycle === 'annual' ? 365 * 86400000 : 30 * 86400000;
-      subscriptionEndsAt = createdAt + periodMs;
+      subscriptionEndsAt = createdAt + periodMs + offerDays * 86400000;
     }
 
     const passwordHash = await sha256Hex(adminPassword);

@@ -456,6 +456,8 @@ export async function createCenterApi(payload: {
   centerType?: string;
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number | string | null;
+  trialDays?: number | string;
+  offerDays?: number | string;
   directorName: string;
   directorEmail: string;
   directorPassword: string;
