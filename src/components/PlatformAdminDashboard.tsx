@@ -41,6 +41,7 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'staff', label: 'Personnel' },
 ];
 const ALL_MODULE_KEYS = ALL_MODULES.map(module => module.key);
+const BASIC_MODULE_KEYS = [...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY];
 
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
 const isBaseModule = (key: string) =>
@@ -383,7 +384,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     setForm(current => ({
       ...current,
       plan,
-      enabledModules: plan === 'pro' ? [...ALL_MODULE_KEYS] : current.enabledModules
+      enabledModules: plan === 'pro'
+        ? [...ALL_MODULE_KEYS]
+        : plan === 'basic'
+          ? [...BASIC_MODULE_KEYS]
+          : current.enabledModules
     }));
   };
 
@@ -392,6 +397,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   React.useEffect(() => {
     if (form.plan === 'pro' && form.enabledModules.length !== ALL_MODULE_KEYS.length) {
       setForm(current => ({ ...current, enabledModules: [...ALL_MODULE_KEYS] }));
+    } else if (
+      form.plan === 'basic'
+      && (form.enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => form.enabledModules.includes(key)))
+    ) {
+      setForm(current => ({ ...current, enabledModules: [...BASIC_MODULE_KEYS] }));
     }
   }, [form.plan]);
 
@@ -647,22 +657,28 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
-                const on = form.enabledModules.includes(m.key);
-                return (
-                  <button key={m.key} type="button" onClick={() => toggle(m.key)}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
-                      on
-                        ? 'bg-[#257C86] text-white border-[#257C86]'
-                        : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
-                    }`}>
-                    {on && <Check className="h-3 w-3" />}
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
+            {form.plan === 'basic' ? (
+              <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                Le plan Basic utilise uniquement les modules de base. Tarif recalculé automatiquement.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
+                  const on = form.enabledModules.includes(m.key);
+                  return (
+                    <button key={m.key} type="button" onClick={() => toggle(m.key)}
+                      className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
+                        on
+                          ? 'bg-[#257C86] text-white border-[#257C86]'
+                          : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
+                      }`}>
+                      {on && <Check className="h-3 w-3" />}
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-[11px] font-semibold text-slate-400 mt-2.5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert — ils ne peuvent pas être retirés.</p>
           </div>
 
@@ -689,7 +705,11 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   const [saving, setSaving] = useState(false);
   const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
   const [enabled, setEnabled] = useState<string[]>(() =>
-    center.plan === 'pro' ? [...ALL_MODULE_KEYS] : normalizeCenterModules(center.enabledModules as string[] || [])
+    center.plan === 'pro'
+      ? [...ALL_MODULE_KEYS]
+      : center.plan === 'starter'
+        ? [...BASIC_MODULE_KEYS]
+        : normalizeCenterModules(center.enabledModules as string[] || [])
   );
 
   useEffect(() => {
@@ -705,6 +725,7 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   }, []);
 
   const displayedPlan = center.plan === 'starter' ? 'basic' : center.plan;
+  const basicPlan = displayedPlan === 'basic';
   const calculatedTariff = center.status === 'trial'
     ? 0
     : calculatePlanTariff(displayedPlan, center.billingCycle || 'monthly', enabled, modulePrices, center.monthlyPrice || 0);
@@ -762,20 +783,26 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
-            const on = enabled.includes(m.key);
-            return (
-              <button key={m.key} onClick={() => toggle(m.key)}
-                className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
-                  on ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
-                }`}>
-                {on && <Check className="h-3 w-3" />}
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+        {basicPlan ? (
+          <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 mb-4">
+            Le plan Basic utilise uniquement les modules de base.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
+              const on = enabled.includes(m.key);
+              return (
+                <button key={m.key} onClick={() => toggle(m.key)}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
+                    on ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
+                  }`}>
+                  {on && <Check className="h-3 w-3" />}
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -870,12 +897,20 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
       : (center.subscriptionEndsAt || addSubscriptionPeriod(Date.now(), form.billingCycle));
 
   useEffect(() => {
-    if (form.plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+    if (form.plan === 'pro') {
+      setEnabledModules([...ALL_MODULE_KEYS]);
+    } else if (
+      form.plan === 'basic'
+      && (enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => enabledModules.includes(key)))
+    ) {
+      setEnabledModules([...BASIC_MODULE_KEYS]);
+    }
   }, [form.plan]);
 
   const handleEditPlanChange = (plan: string) => {
     setForm(current => ({ ...current, plan }));
     if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+    if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
   };
 
   const toggleEditModule = (key: string) => {
@@ -1091,20 +1126,26 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
                 <Lock className="h-3 w-3" /> {MODULE_LABEL(BUNDLED_MODULE_KEY)} <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {ALL_MODULES.filter(module => !isBaseModule(module.key)).map(module => {
-                const selected = enabledModules.includes(module.key);
-                return (
-                  <button key={module.key} type="button" onClick={() => toggleEditModule(module.key)}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
-                      selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
-                    }`}>
-                    {selected && <Check className="h-3 w-3" />}
-                    {module.label}
-                  </button>
-                );
-              })}
-            </div>
+            {form.plan === 'basic' ? (
+              <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                Le plan Basic utilise uniquement les modules de base. Tarif recalculé automatiquement.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {ALL_MODULES.filter(module => !isBaseModule(module.key)).map(module => {
+                  const selected = enabledModules.includes(module.key);
+                  return (
+                    <button key={module.key} type="button" onClick={() => toggleEditModule(module.key)}
+                      className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
+                        selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
+                      }`}>
+                      {selected && <Check className="h-3 w-3" />}
+                      {module.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-[11px] font-semibold text-slate-400 mt-2.5">Scolaire, Finance et Jd. Horaires sont obligatoires. La modification des modules recalcule le tarif sans prolonger la date d’abonnement.</p>
           </div>
 

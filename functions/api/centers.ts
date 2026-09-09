@@ -15,7 +15,7 @@ const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 
 function normalizeEnabledModules(value: unknown, plan?: string): string[] {
   const requested = Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
-  const modules = plan === 'pro' ? ALL_MODULE_KEYS : requested;
+  const modules = plan === 'pro' ? ALL_MODULE_KEYS : plan === 'starter' ? [] : requested;
   return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...modules]));
 }
 
@@ -361,9 +361,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.enabledModules !== undefined) {
       updates.push('enabled_modules = ?');
       binds.push(JSON.stringify(normalizeEnabledModules(body.enabledModules, effectivePlan)));
-    } else if (body.plan !== undefined && effectivePlan === 'pro') {
+    } else if (body.plan !== undefined && (effectivePlan === 'pro' || effectivePlan === 'starter')) {
       updates.push('enabled_modules = ?');
-      binds.push(JSON.stringify(ALL_MODULE_KEYS));
+      binds.push(JSON.stringify(effectivePlan === 'pro' ? ALL_MODULE_KEYS : REQUIRED_MODULE_KEYS));
     }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
     if (body.subscriptionEndsAt !== undefined && !autoCalculateSubscription
