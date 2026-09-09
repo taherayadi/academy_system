@@ -2,7 +2,7 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, Formation, CenterTenant, DemoRequest, MealForfaitClosure
+  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure
 } from './types';
 
 const API_BASE = '/api';
@@ -183,6 +183,16 @@ export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void>
   return putDomain('/student-timesheets', sheets, 'تعذر حفظ جداول التوقيت.');
 }
 
+/** Save daily student check-in records for jardin centers. */
+export function saveStudentAttendanceApi(records: StudentAttendanceRecord[]): Promise<void> {
+  return putDomain('/student-attendance', records, 'تعذر حفظ pointage التلاميذ.');
+}
+
+/** Fetch daily student check-in records for jardin centers. */
+export function fetchStudentAttendanceApi(): Promise<StudentAttendanceRecord[]> {
+  return getDomain<StudentAttendanceRecord[]>('/student-attendance', 'تعذر تحميل pointage التلاميذ.');
+}
+
 export async function saveFormations(formations: Formation[]): Promise<void> {
   return putDomain('/formations', formations, 'تعذر حفظ بيانات التكوينات.');
 }
@@ -320,6 +330,41 @@ export async function changePasswordRequest(
   }
 }
 
+/** Upload a logo image to ImageKit (via backend) — returns the CDN URL. */
+export async function uploadCenterLogoApi(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/upload-logo`, {
+    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
+  });
+  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
+  return data.url;
+}
+
+/** Upload a logo selected by the platform admin before creating a center. */
+export async function uploadPlatformLogoApi(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/platform-upload-logo`, {
+    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
+  });
+  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
+  return data.url;
+}
+
+/** Save (or clear with '') the connected center's logo URL. */
+export async function saveCenterLogoApi(logoUrl: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/center-logo`, {
+    method: 'POST', headers: authHeaders(true), credentials: 'include',
+    body: JSON.stringify({ logoUrl })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'تعذر حفظ الشعار.');
+}
+
 // ========================================================================
 // SaaS Platform API – Demo Requests
 // ========================================================================
@@ -403,12 +448,14 @@ export async function fetchCentersApi(): Promise<CenterTenant[]> {
 /** Create a new center with its director account (super-admin). */
 export async function createCenterApi(payload: {
   name: string;
-  slug?: string;
+  logoUrl?: string;
   phoneNumber?: string;
   locationCity?: string;
   plan: string;
   enabledModules: string[];
   centerType?: string;
+  billingCycle?: 'monthly' | 'annual';
+  monthlyPrice?: number | string | null;
   directorName: string;
   directorEmail: string;
   directorPassword: string;
@@ -422,6 +469,7 @@ export async function createCenterApi(payload: {
     // director* fields so the director account is created correctly.
     body: JSON.stringify({
       ...payload,
+      logoUrl: payload.logoUrl,
       adminName: payload.directorName,
       adminEmail: payload.directorEmail,
       adminPassword: payload.directorPassword
@@ -437,11 +485,20 @@ export async function createCenterApi(payload: {
 export async function updateCenterApi(
   id: string,
   payload: {
+    name?: string;
+    logoUrl?: string;
+    phoneNumber?: string;
+    locationCity?: string;
+    centerType?: string;
     status?: string;
     plan?: string;
     enabledModules?: string[];
     trialEndsAt?: number | null;
     subscriptionEndsAt?: number | null;
+    billingCycle?: 'monthly' | 'annual';
+    monthlyPrice?: number | null;
+    autoCalculatePrice?: boolean;
+    autoCalculateSubscription?: boolean;
     extendTrialDays?: number;
   }
 ): Promise<void> {
@@ -590,6 +647,22 @@ export async function deleteInvoiceApi(id: string): Promise<void> {
   });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new Error('Erreur suppression facture.');
+}
+
+/** Fetch public module prices for the landing page without a session. */
+export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
+  const params = new URLSearchParams();
+  if (year) params.set('year', year);
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/public-pricing${query ? `?${query}` : ''}`, {
+    credentials: 'same-origin'
+  });
+  const data: { prices?: Array<{ module_key?: string; price?: number }>; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement des tarifs publics.');
+  return (data.prices || []).reduce<Record<string, number>>((prices, row) => {
+    if (row.module_key) prices[row.module_key] = Number(row.price) || 0;
+    return prices;
+  }, {});
 }
 
 /** Fetch module prices for a school year. */

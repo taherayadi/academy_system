@@ -30,6 +30,7 @@ export interface CenterTenant {
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
   centerType?: string; // 'jardin' | 'formation'
+  logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;
@@ -723,6 +724,19 @@ export interface StudentTimeSheet {
   branch?: string;
   className?: string;
   weeklySchedule: TimeSheetSlot[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StudentAttendanceStatus = 'present' | 'absent';
+
+/** Daily check-in record used by jardin centers (Pointage Élèves). */
+export interface StudentAttendanceRecord {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  status: StudentAttendanceStatus;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

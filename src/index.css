@@ -112,6 +112,12 @@ input[type="date"] {
   text-align: right;
 }
 
+/* Platform admin subscription dates are intentionally displayed left-to-right. */
+input[type="date"].input-date-ltr {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
 /* Phone fields in RTL forms: digits read LTR but sit on the right side of the input */
 .input-phone {
   direction: ltr;

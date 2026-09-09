@@ -17,10 +17,16 @@ import {
   EyeOff,
   Lock,
   Utensils,
-  Coffee
+  Coffee,
+  ImagePlus,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { CenterSettings, CenterFeeSet, getFeesForYear, initialStudentFeeSet, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear } from '../types';
-import { changeAccountPassword } from '../auth';import { useToast } from './Toast';
+import { changeAccountPassword } from '../auth';
+import { uploadCenterLogoApi, saveCenterLogoApi } from '../api';
+import { useToast } from './Toast';
+import defaultLogo from '../assets/icon.png';
 
 interface SettingsModuleProps {
   key?: React.Key;
@@ -30,19 +36,71 @@ interface SettingsModuleProps {
   onExportDatabase?: () => void;
   onImportDatabase?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   currentUserEmail?: string;
+  /** Center logo URL (ImageKit) — empty = default brand logo. */
+  centerLogoUrl?: string;
+  /** Called after the logo was uploaded/saved/cleared to refresh the menu. */
+  onCenterLogoChange?: (url: string) => void;
   /** SaaS plan: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
 }
 
 const YEAR_OPTIONS = DEFAULT_ACADEMIC_YEARS;
 
-export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail, enabledModules }: SettingsModuleProps) {
+export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail, centerLogoUrl, onCenterLogoChange, enabledModules }: SettingsModuleProps) {
   // SaaS gating: fees can only be set for services included in the center's plan.
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
   const toast = useToast();
   const [formData, setFormData] = useState<CenterSettings>(settings || initialCenterSettings);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string>(getCurrentAcademicYear());
+
+  // ── Center logo (ImageKit) ──
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  React.useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const handleLogoSelect = (file?: File) => {
+    setLogoFile(file || null);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setLogoUploading(true);
+    try {
+      const url = await uploadCenterLogoApi(logoFile);
+      await saveCenterLogoApi(url);
+      onCenterLogoChange?.(url);
+      setLogoFile(null);
+      setLogoPreview(null);
+      toast.success('تم رفع وحفظ شعار المركز.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر رفع الشعار.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    setLogoUploading(true);
+    try {
+      await saveCenterLogoApi('');
+      onCenterLogoChange?.('');
+      setLogoFile(null);
+      setLogoPreview(null);
+      toast.success('تم حذف شعار المركز.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر حذف الشعار.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   // Keep formData synchronized when settings prop updates (e.g., loaded from server or restored from backup)
   React.useEffect(() => {
@@ -201,6 +259,61 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   className="w-full pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86] text-right"
                   placeholder="Sfax / تونس"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 1b: Center Logo (ImageKit) */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+          <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <ImagePlus className="h-5 w-5 text-[#257C86]" />
+            شعار المركز (Logo)
+          </h3>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0">
+              <img
+                src={logoPreview || centerLogoUrl || defaultLogo}
+                alt="شعار المركز"
+                className="w-full h-full rounded-xl object-cover bg-white"
+              />
+            </div>
+            <div className="space-y-3 min-w-0">
+              <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                يظهر الشعار في قائمة المركز بعد الحفظ. اتركه فارغاً لاستعمال الشعار الافتراضي. الصيغ المسموحة: PNG · JPG · WEBP · SVG (الحد الأقصى 2 ميغا).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                  <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                  اختيار صورة
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                    className="hidden"
+                    onChange={e => handleLogoSelect(e.target.files?.[0])}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleLogoUpload}
+                  disabled={!logoFile || logoUploading}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  رفع وحفظ الشعار
+                </button>
+                {(centerLogoUrl || logoFile) && (
+                  <button
+                    type="button"
+                    onClick={handleLogoRemove}
+                    disabled={logoUploading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    حذف الشعار
+                  </button>
+                )}
               </div>
             </div>
           </div>

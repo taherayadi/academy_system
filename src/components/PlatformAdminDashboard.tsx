@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Building2, Clock,
   CheckCircle2, PauseCircle, Plus, RefreshCw,
-  CalendarClock, Layers, Trash2, Check, X, Loader2,
+  CalendarClock, Layers, Trash2, Check, X, Loader2, Upload,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
   Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ImagePlus
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
+  uploadPlatformLogoApi,
   fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
   fetchPlatformBillingApi, fetchInvoicesApi, createInvoiceApi, updateInvoiceApi, deleteInvoiceApi,
   fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary
@@ -39,10 +40,19 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'studentTimeSheets', label: 'Jd. Horaires' },
   { key: 'staff', label: 'Personnel' },
 ];
+const ALL_MODULE_KEYS = ALL_MODULES.map(module => module.key);
 
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
 const isBaseModule = (key: string) =>
   (BASE_MODULE_KEYS as string[]).includes(key) || key === BUNDLED_MODULE_KEY;
+
+function normalizeCenterModules(modules?: string[] | null): string[] {
+  return Array.from(new Set([
+    ...BASE_MODULE_KEYS,
+    BUNDLED_MODULE_KEY,
+    ...(modules || [])
+  ]));
+}
 
 export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing';
 
@@ -72,8 +82,7 @@ function currentSchoolYear(): string {
 }
 
 // ─── Labels & badges ───────────────────────────────────────────────────────
-// The UI offers Essai / Basic / Custom. "Basic" is stored as 'starter'
-// (the DB CHECK constraint only allows starter/growth/pro/custom).
+// Basic is stored as 'starter'; the database also accepts Growth, Pro, and Custom.
 const PLAN_LABEL: Record<string, string> = {
   starter: 'Basic',
   basic: 'Basic',
@@ -150,6 +159,46 @@ function daysLeft(ts?: number | null): number | null {
 function fmtDate(ts?: number | null): string {
   if (!ts) return '—';
   return new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function normalizePhoneInput(value?: string): string {
+  return String(value || '').replace(/[^0-9]/g, '').slice(0, 8);
+}
+
+function isValidCenterPhone(value: string): boolean {
+  return /^[0-9]{8}$/.test(value);
+}
+
+const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
+const ANNUAL_DISCOUNT = 0.2;
+
+function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
+  return enabledModules.reduce((total, key) => (
+    total + (key === BUNDLED_MODULE_KEY ? 0 : (Number(modulePrices[key]) || 0))
+  ), 0);
+}
+
+function calculatePlanTariff(plan: string, billingCycle: 'monthly' | 'annual', enabledModules: string[], modulePrices: Record<string, number>, manualTariff = 0): number {
+  if (plan === 'custom') return Math.max(0, Number(manualTariff) || 0);
+  if (!AUTOMATIC_PLAN_KEYS.includes(plan)) return 0;
+  const monthlyTotal = calculateModuleTotal(enabledModules, modulePrices);
+  return billingCycle === 'annual' ? monthlyTotal * 12 * (1 - ANNUAL_DISCOUNT) : monthlyTotal;
+}
+
+function addSubscriptionPeriod(timestamp: number, billingCycle: 'monthly' | 'annual'): number {
+  return timestamp + (billingCycle === 'annual' ? 365 : 30) * 86400000;
+}
+
+function formatTnd(value: number): string {
+  return `${value.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
+}
+
+function inferredSubscriptionStart(center: CenterTenant): number | null {
+  if (center.status === 'trial') return null;
+  if (center.trialEndsAt) return center.trialEndsAt;
+  if (!center.subscriptionEndsAt) return null;
+  const durationDays = center.billingCycle === 'annual' ? 365 : 30;
+  return center.subscriptionEndsAt - durationDays * 86400000;
 }
 
 // ─── Segmented filter control (landing style) ──────────────────────────────
@@ -242,16 +291,74 @@ interface NewCenterModalProps {
 function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: NewCenterModalProps) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => {
+      // The backend remains authoritative; an empty map gives a conservative preview.
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const handleLogoSelect = (file?: File) => {
+    setLogoFile(file || null);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const uploadSelectedLogo = async (): Promise<string> => {
+    if (!logoFile) return form.logoUrl;
+    const url = await uploadPlatformLogoApi(logoFile);
+    setForm(current => ({ ...current, logoUrl: url }));
+    setLogoFile(null);
+    setLogoPreview(null);
+    return url;
+  };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setLogoUploading(true);
+    try {
+      await uploadSelectedLogo();
+      toast.success('Logo du centre téléchargé.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors du téléchargement du logo.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const [form, setForm] = useState(() => {
     // Base toujours incluse + modules demandés lors d'une conversion
     const requested = parseModules(initialData?.requestedModules);
-    const enabled = Array.from(new Set<string>([...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, ...(requested.length ? requested : ALL_MODULES.map(m => m.key))]));
+    const enabled = Array.from(new Set<string>([
+      ...BASE_MODULE_KEYS,
+      BUNDLED_MODULE_KEY,
+      ...(requested.length ? requested : [])
+    ]));
     return {
       name: initialData?.academyName || '',
-      slug: '',
-      phoneNumber: initialData?.phone || '',
+      logoUrl: '',
+      phoneNumber: normalizePhoneInput(initialData?.phone),
       locationCity: '',
       plan: 'trial' as string,
+      billingCycle: 'monthly' as 'monthly' | 'annual',
+      monthlyPrice: '',
       centerType: (initialData?.centerType as 'jardin' | 'formation' | '') || '',
       directorName: initialData?.fullName || '',
       directorEmail: initialData?.email || '',
@@ -259,6 +366,26 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       enabledModules: enabled,
     };
   });
+
+  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(form.plan);
+  const calculatedTariff = calculatePlanTariff(
+    form.plan,
+    form.billingCycle,
+    form.enabledModules,
+    modulePrices,
+    Number(form.monthlyPrice)
+  );
+  const previewEnd = form.plan === 'trial'
+    ? Date.now() + 14 * 86400000
+    : addSubscriptionPeriod(Date.now(), form.billingCycle);
+
+  const handlePlanChange = (plan: string) => {
+    setForm(current => ({
+      ...current,
+      plan,
+      enabledModules: plan === 'pro' ? [...ALL_MODULE_KEYS] : current.enabledModules
+    }));
+  };
 
   // La base ne peut pas être retirée — on ne peut qu'ajouter des modules
   const toggle = (key: string) => {
@@ -273,13 +400,18 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidCenterPhone(form.phoneNumber)) {
+      toast.error('Le téléphone doit contenir exactement 8 chiffres.');
+      return;
+    }
     if (!form.centerType) {
       toast.error('Sélectionnez le type d’établissement (jardin d’enfant ou centre de formation).');
       return;
     }
     setSaving(true);
     try {
-      await createCenterApi({ ...form, convertFromRequestId: convertRequestId });
+      const logoUrl = logoFile ? await uploadSelectedLogo() : form.logoUrl;
+      await createCenterApi({ ...form, logoUrl, convertFromRequestId: convertRequestId });
       toast.success('Centre créé avec succès !');
       onCreated();
       onClose();
@@ -314,17 +446,17 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
           {/* Centre info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Nom du centre *</label>
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
 
             {/* Type d'établissement */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Type d’établissement *</label>
               <div className="grid grid-cols-2 gap-3">
                 {CENTER_TYPES.map(ct => {
@@ -347,11 +479,52 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Slug (URL)</label>
-              <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))}
-                placeholder="ex: smart-kids-sfax"
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+                  <img
+                    src={logoPreview || form.logoUrl || icon}
+                    alt="Logo du centre"
+                    className="w-full h-full rounded-xl object-cover bg-white"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      Choisir une image
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                        className="hidden"
+                        onChange={e => handleLogoSelect(e.target.files?.[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleLogoUpload}
+                      disabled={!logoFile || logoUploading}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/20 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      Télécharger et enregistrer
+                    </button>
+                    {(form.logoUrl || logoFile) && (
+                      <button
+                        type="button"
+                        onClick={() => { setForm(f => ({ ...f, logoUrl: '' })); setLogoFile(null); setLogoPreview(null); }}
+                        disabled={logoUploading}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400">PNG · JPG · WEBP · SVG · GIF — 2 Mo maximum. Le logo est envoyé à ImageKit avant la création du centre.</p>
+                </div>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
@@ -359,19 +532,70 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone</label>
-              <input value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
+              <input required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
+                onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
+                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition text-left" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan *</label>
-              <select required value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}
+              <select required value={form.plan} onChange={e => handlePlanChange(e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
                 <option value="trial">Essai (14 j)</option>
                 <option value="basic">Basic</option>
+                <option value="growth">Growth</option>
+                <option value="pro">Pro</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
+            {form.plan !== 'trial' && (
+              <>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
+                  <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))}
+                    className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
+                    <option value="monthly">Mensuel</option>
+                    <option value="annual">Annuel — 20 % de remise</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-black text-slate-600">Tarif calculé</span>
+                    <span className="text-lg font-black text-[#257C86]">
+                      {automaticPlan ? formatTnd(calculatedTariff) : 'Tarif négocié'}
+                    </span>
+                  </div>
+                  {automaticPlan ? (
+                    <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                      {form.billingCycle === 'annual'
+                        ? 'Total annuel : total mensuel × 12 avec 20 % de remise.'
+                        : 'Total mensuel des modules sélectionnés.'}
+                    </p>
+                  ) : (
+                    <input type="number" min="0" step="0.01" value={form.monthlyPrice}
+                      onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))}
+                      placeholder="Saisir le tarif négocié en TND"
+                      className="mt-2 w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] outline-none" />
+                  )}
+                </div>
+                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3" dir="ltr">
+                  <div className="flex items-center justify-between gap-3 text-left">
+                    <span className="text-xs font-black text-slate-600">Fin d’abonnement calculée</span>
+                    <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">{form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à partir de la création.</p>
+                </div>
+              </>
+            )}
+            {form.plan === 'trial' && (
+              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3" dir="ltr">
+                <div className="flex items-center justify-between gap-3 text-left">
+                  <span className="text-xs font-black text-slate-600">Fin de l’essai (14 jours)</span>
+                  <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
+                </div>
+                <p className="text-[11px] font-semibold text-slate-500 mt-1 text-left">Le centre d’essai reste gratuit.</p>
+              </div>
+            )}
           </div>
 
           {/* Director */}
@@ -388,7 +612,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 <input required type="email" value={form.directorEmail} onChange={e => setForm(f => ({ ...f, directorEmail: e.target.value }))}
                   className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Mot de passe initial *</label>
                 <input required type="password" minLength={6} value={form.directorPassword} onChange={e => setForm(f => ({ ...f, directorPassword: e.target.value }))}
                   className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
@@ -455,9 +679,27 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
   const [enabled, setEnabled] = useState<string[]>(() =>
-    Array.from(new Set<string>([...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, ...(center.enabledModules as string[] || [])]))
+    center.plan === 'pro' ? [...ALL_MODULE_KEYS] : normalizeCenterModules(center.enabledModules as string[] || [])
   );
+
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => { /* backend remains authoritative */ });
+    return () => { mounted = false; };
+  }, []);
+
+  const displayedPlan = center.plan === 'starter' ? 'basic' : center.plan;
+  const calculatedTariff = center.status === 'trial'
+    ? 0
+    : calculatePlanTariff(displayedPlan, center.billingCycle || 'monthly', enabled, modulePrices, center.monthlyPrice || 0);
 
   const toggle = (key: string) => {
     if (isBaseModule(key)) return;
@@ -467,7 +709,10 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateCenterApi(center.id, { enabledModules: enabled });
+      await updateCenterApi(center.id, {
+        enabledModules: enabled,
+        autoCalculatePrice: true
+      });
       toast.success('Modules mis à jour');
       onSaved();
       onClose();
@@ -524,6 +769,18 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
           })}
         </div>
 
+        <div className="rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-black text-slate-600">Tarif après sélection</span>
+            <span className="text-base font-black text-[#257C86]">
+              {center.status === 'trial' ? 'Gratuit' : center.plan === 'custom' ? `${formatTnd(center.monthlyPrice || 0)} · négocié` : formatTnd(calculatedTariff)}
+            </span>
+          </div>
+          <p className="text-[11px] font-semibold text-slate-500 mt-1">
+            {center.status === 'trial' ? 'Le centre d’essai reste gratuit.' : center.billingCycle === 'annual' ? 'Cycle annuel : total mensuel × 12 avec 20 % de remise.' : 'Cycle mensuel : total des modules sélectionnés.'}
+            {' '}La fin d’abonnement actuelle ne change pas lors d’une modification des modules.
+          </p>
+        </div>
         <p className="text-[11px] font-semibold text-slate-400 mb-5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert.</p>
 
         <div className="flex justify-end gap-3">
@@ -534,6 +791,323 @@ function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; 
             Sauvegarder
           </button>
         </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── Edit Center Modal ──────────────────────────────────────────────────────
+function centerDateInputValue(timestamp?: number | null): string {
+  return timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+}
+
+function centerDateTimestamp(value: string): number | null {
+  if (!value) return null;
+  const timestamp = new Date(`${value}T23:59:59`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+  const [enabledModules, setEnabledModules] = useState<string[]>(() => normalizeCenterModules(center.enabledModules as string[] || []));
+  const [form, setForm] = useState(() => ({
+    name: center.name,
+    logoUrl: center.logoUrl || '',
+    phoneNumber: normalizePhoneInput(center.phoneNumber),
+    locationCity: center.locationCity || '',
+    centerType: normalizeCenterType(center.centerType),
+    plan: center.plan === 'starter' ? 'basic' : (center.plan || 'basic'),
+    status: center.status,
+    billingCycle: center.billingCycle || 'monthly',
+    monthlyPrice: String(center.monthlyPrice ?? 0),
+    trialEndsAt: centerDateInputValue(center.trialEndsAt),
+  }));
+
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
+        result[price.module_key] = Number(price.price) || 0;
+        return result;
+      }, {}));
+    }).catch(() => { /* backend remains authoritative */ });
+    return () => { mounted = false; };
+  }, []);
+
+  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(form.plan);
+  const calculatedTariff = form.status === 'trial'
+    ? 0
+    : calculatePlanTariff(form.plan, form.billingCycle, enabledModules, modulePrices, Number(form.monthlyPrice));
+  const planChanged = form.plan !== (center.plan === 'starter' ? 'basic' : center.plan);
+  const billingCycleChanged = form.billingCycle !== (center.billingCycle || 'monthly');
+  const statusChangedToPaid = form.status !== 'trial' && (center.status === 'trial' || center.status === 'expired');
+  const previewTrialEnd = centerDateTimestamp(form.trialEndsAt) || center.trialEndsAt || null;
+  const startsAfterTrial = statusChangedToPaid && !!previewTrialEnd && previewTrialEnd > Date.now();
+  const shouldExtendSubscription = form.status !== 'trial' && (planChanged || billingCycleChanged || statusChangedToPaid);
+  const previewSubscriptionEnd = form.status === 'trial'
+    ? null
+    : shouldExtendSubscription
+      ? addSubscriptionPeriod(
+        center.status === 'trial' && previewTrialEnd && previewTrialEnd > Date.now()
+          ? previewTrialEnd
+          : (center.subscriptionEndsAt && center.subscriptionEndsAt > Date.now() ? center.subscriptionEndsAt : Date.now()),
+        form.billingCycle
+      )
+      : (center.subscriptionEndsAt || addSubscriptionPeriod(Date.now(), form.billingCycle));
+
+  useEffect(() => {
+    if (form.plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+  }, [form.plan]);
+
+  const handleEditPlanChange = (plan: string) => {
+    setForm(current => ({ ...current, plan }));
+    if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+  };
+
+  const toggleEditModule = (key: string) => {
+    if (isBaseModule(key)) return;
+    setEnabledModules(current => current.includes(key)
+      ? current.filter(moduleKey => moduleKey !== key)
+      : [...current, key]);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const handleLogoSelect = (file?: File) => {
+    setLogoFile(file || null);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const handleRemoveLogo = () => {
+    setForm(current => ({ ...current, logoUrl: '' }));
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValidCenterPhone(form.phoneNumber)) {
+      toast.error('Le téléphone doit contenir exactement 8 chiffres.');
+      return;
+    }
+    if (!form.name.trim()) {
+      toast.error('Le nom du centre est obligatoire.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const logoUrl = logoFile ? await uploadPlatformLogoApi(logoFile) : form.logoUrl;
+      const monthlyPrice = Number(form.monthlyPrice);
+      await updateCenterApi(center.id, {
+        name: form.name.trim(),
+        logoUrl,
+        phoneNumber: form.phoneNumber.trim(),
+        locationCity: form.locationCity.trim(),
+        centerType: form.centerType,
+        plan: form.plan,
+        status: form.status,
+        billingCycle: form.billingCycle,
+        enabledModules,
+        ...(form.plan === 'custom' ? { monthlyPrice: Number.isFinite(monthlyPrice) ? monthlyPrice : 0 } : {}),
+        trialEndsAt: centerDateTimestamp(form.trialEndsAt),
+        autoCalculatePrice: true,
+        autoCalculateSubscription: shouldExtendSubscription,
+      });
+      toast.success('Centre mis à jour');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la mise à jour du centre.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-[#257C86]/10"><Edit className="h-4 w-4 text-[#257C86]" /></span>
+            <div>
+              <h2 className="text-base font-black text-slate-900">Modifier le centre</h2>
+              <p className="text-[11px] font-semibold text-slate-400 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+            <X className="h-5 w-5 text-slate-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Nom du centre *</label>
+              <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+            </div>
+
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+                  <img src={logoPreview || form.logoUrl || icon} alt="Logo du centre" className="w-full h-full rounded-xl object-cover bg-white" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      Choisir une image
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" className="hidden" onChange={e => handleLogoSelect(e.target.files?.[0])} />
+                    </label>
+                    {(form.logoUrl || logoFile) && (
+                      <button type="button" onClick={handleRemoveLogo} disabled={saving} className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Trash2 className="h-4 w-4" />
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400">PNG · JPG · WEBP · SVG · GIF — 2 Mo maximum. Le nouveau logo sera envoyé à ImageKit lors de l’enregistrement.</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
+              <input value={form.locationCity} onChange={e => setForm(f => ({ ...f, locationCity: e.target.value }))} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
+              <input required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
+                onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
+                className={`${inputCls} text-left`} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Type d’établissement</label>
+              <select value={form.centerType} onChange={e => setForm(f => ({ ...f, centerType: e.target.value as 'jardin' | 'formation' | '' }))} className={`${inputCls} cursor-pointer`}>
+                <option value="">Non défini</option>
+                <option value="jardin">Jardin d’enfant</option>
+                <option value="formation">Centre de formation</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Email administrateur</label>
+              <input value={center.adminEmail || '—'} readOnly className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-3">Abonnement</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan</label>
+                <select value={form.plan} onChange={e => handleEditPlanChange(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                  <option value="basic">Basic</option>
+                  <option value="growth">Growth</option>
+                  <option value="pro">Pro</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Statut</label>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as CenterTenant['status'] }))} className={`${inputCls} cursor-pointer`}>
+                  <option value="trial">Essai</option>
+                  <option value="active">Actif</option>
+                  <option value="suspended">Suspendu</option>
+                  <option value="expired">Expiré</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
+                <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))} className={`${inputCls} cursor-pointer`}>
+                  <option value="monthly">Mensuel</option>
+                  <option value="annual">Annuel — 20 % de remise</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Tarif {form.billingCycle === 'annual' ? 'annuel' : 'mensuel'} (TND)</label>
+                {automaticPlan ? (
+                  <input type="text" value={calculatedTariff.toFixed(2)} readOnly aria-readonly="true" className={`${inputCls} bg-slate-50 text-[#257C86] cursor-not-allowed`} />
+                ) : (
+                  <input type="number" min="0" step="0.01" value={form.monthlyPrice} onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))} className={inputCls} />
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’essai</label>
+                <input type="date" dir="ltr" value={form.trialEndsAt} onChange={e => setForm(f => ({ ...f, trialEndsAt: e.target.value }))} className={`${inputCls} cursor-pointer input-date-ltr text-left`} />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin de l’abonnement calculée</label>
+                <input type="date" dir="ltr" value={previewSubscriptionEnd ? centerDateInputValue(previewSubscriptionEnd) : ''} readOnly aria-readonly="true"
+                  className={`${inputCls} bg-slate-50 text-slate-700 cursor-not-allowed input-date-ltr text-left`} />
+                {shouldExtendSubscription && form.status !== 'trial' && (
+                  <p className="text-[10px] font-semibold text-[#257C86] mt-1">Sera prolongée de {form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à l’enregistrement.</p>
+                )}
+                {startsAfterTrial && (
+                  <p className="text-[10px] font-semibold text-amber-700 mt-1">
+                    La période d’essai se termine le {fmtDate(previewTrialEnd)}. L’abonnement commencera à cette date.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Modules activés</p>
+              {form.plan === 'pro' && <span className="text-[10px] font-black text-[#257C86]">Tous les modules sélectionnés pour Pro</span>}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {BASE_MODULE_KEYS.map(key => (
+                <span key={key} className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-[#257C86] text-white cursor-default">
+                  <Lock className="h-3 w-3" /> {MODULE_LABEL(key)} <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white cursor-default">
+                <Lock className="h-3 w-3" /> {MODULE_LABEL(BUNDLED_MODULE_KEY)} <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ALL_MODULES.filter(module => !isBaseModule(module.key)).map(module => {
+                const selected = enabledModules.includes(module.key);
+                return (
+                  <button key={module.key} type="button" onClick={() => toggleEditModule(module.key)}
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
+                      selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
+                    }`}>
+                    {selected && <Check className="h-3 w-3" />}
+                    {module.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] font-semibold text-slate-400 mt-2.5">Scolaire, Finance et Jd. Horaires sont obligatoires. La modification des modules recalcule le tarif sans prolonger la date d’abonnement.</p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-lg shadow-[#257C86]/25 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Enregistrer
+            </button>
+          </div>
+        </form>
       </motion.div>
     </div>
   );
@@ -550,7 +1124,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // Filters — centers
   const [centerTypeFilter, setCenterTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'trial' | 'active' | 'suspended' | 'expired'>('all');
-  const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'custom'>('all');
+  const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'growth' | 'pro' | 'custom'>('all');
   // Filters — requests
   const [reqTypeFilter, setReqTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [reqStatusFilter, setReqStatusFilter] = useState<'all' | 'new' | 'contacted' | 'converted' | 'archived'>('all');
@@ -560,6 +1134,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
   const [showNewCenter, setShowNewCenter] = useState(false);
   const [convertRequest, setConvertRequest] = useState<DemoRequest | null>(null);
+  const [editCenter, setEditCenter] = useState<CenterTenant | null>(null);
   const [editModulesCenter, setEditModulesCenter] = useState<CenterTenant | null>(null);
   const [deleteCenter, setDeleteCenter] = useState<CenterTenant | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DemoRequest | null>(null);
@@ -940,9 +1515,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     return (
                       <button key={c.id} onClick={() => onNavigate?.('centers')}
                         className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 hover:border-[#257C86]/50 hover:bg-[#257C86]/[0.04] p-3.5 text-left transition cursor-pointer">
-                        <div className="h-9 w-9 rounded-xl bg-[#257C86]/10 flex items-center justify-center text-[10px] font-black text-[#257C86] flex-shrink-0">
-                          {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                        </div>
+                        {c.logoUrl ? (
+                          <div className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
+                            <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-xl object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-11 w-11 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-[10px] font-black text-[#257C86] flex-shrink-0">
+                            {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-black text-slate-900 truncate">{c.name}</div>
                           <div className="text-[10px] font-semibold text-slate-400">{c.adminEmail || '—'}</div>
@@ -998,12 +1579,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Plan</div>
-              <Segmented<'all' | 'basic' | 'custom'>
+              <Segmented<'all' | 'basic' | 'growth' | 'pro' | 'custom'>
                 value={planFilter}
                 onChange={setPlanFilter}
                 options={[
                   { key: 'all', label: 'Tous' },
                   { key: 'basic', label: 'Basic' },
+                  { key: 'growth', label: 'Growth' },
+                  { key: 'pro', label: 'Pro' },
                   { key: 'custom', label: 'Custom' }
                 ]}
               />
@@ -1027,15 +1610,23 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
               {pagedCenters.map(c => {
             const days = daysLeft(c.trialEndsAt);
+            const subscriptionStart = inferredSubscriptionStart(c);
+            const subscriptionDays = daysLeft(c.subscriptionEndsAt);
             const mods = (c.enabledModules as string[]) || [];
             return (
               <motion.div key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
-                    <div className="h-11 w-11 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
-                      {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                    </div>
+                    {c.logoUrl ? (
+                      <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
+                        <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-lg object-cover" />
+                      </div>
+                    ) : (
+                      <div className="h-9 w-9 rounded-xl bg-[#257C86]/10 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
+                        {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-black text-slate-900 text-sm">{c.name}</p>
                       <p className="text-xs text-slate-500 font-semibold">{c.adminEmail || '—'}</p>
@@ -1054,17 +1645,30 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                 </div>
 
-                {/* Trial countdown */}
-                {c.status === 'trial' && days !== null && (
+                {/* Trial and subscription lifecycle dates */}
+                {c.status === 'trial' && c.trialEndsAt && (
                   <div className={`mt-3.5 flex items-center gap-2 text-xs font-bold rounded-xl px-3.5 py-2.5 border ${
-                    days <= 3
+                    (days ?? 0) <= 3
                       ? 'bg-[#257C86]/15 text-[#257C86] border-[#257C86]/25'
-                      : days <= 7
+                      : (days ?? 0) <= 7
                         ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20'
                         : 'bg-slate-50 text-slate-500 border-slate-200'
                   }`}>
                     <CalendarClock className="h-3.5 w-3.5" />
-                    {days > 0 ? `Essai expire dans ${days} jour${days > 1 ? 's' : ''} (${fmtDate(c.trialEndsAt)})` : 'Essai expiré'}
+                    {days !== null && days > 0
+                      ? `Période d’essai : encore ${days} jour${days > 1 ? 's' : ''} · fin le ${fmtDate(c.trialEndsAt)}`
+                      : `Période d’essai terminée le ${fmtDate(c.trialEndsAt)}`}
+                  </div>
+                )}
+                {c.status !== 'trial' && (c.subscriptionEndsAt || c.trialEndsAt) && (
+                  <div className="mt-3.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[11px] font-bold text-slate-600 space-y-1">
+                    {c.trialEndsAt && <div>Fin de la période d’essai : {fmtDate(c.trialEndsAt)}</div>}
+                    {c.subscriptionEndsAt && (
+                      <div className={subscriptionDays !== null && subscriptionDays <= 7 ? 'text-amber-700' : 'text-slate-600'}>
+                        Abonnement : début {subscriptionStart ? fmtDate(subscriptionStart) : '—'} · fin {fmtDate(c.subscriptionEndsAt)}
+                        {subscriptionDays !== null && subscriptionDays > 0 ? ` · ${subscriptionDays} jours restants` : ' · expiré'}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1087,6 +1691,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {/* Actions */}
                 <div className="mt-auto pt-4">
                 <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
+                  <button onClick={() => setEditCenter(c)}
+                    className="text-[11px] font-bold px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5">
+                    <Edit className="h-3.5 w-3.5" /> Modifier
+                  </button>
                   <button onClick={() => handleExtendTrial(c)}
                     className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
                     <CalendarClock className="h-3.5 w-3.5" /> +14 jours essai
@@ -1527,6 +2135,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             convertRequestId={convertRequest?.id}
             onClose={() => { setShowNewCenter(false); setConvertRequest(null); }}
             onCreated={load}
+          />
+        )}
+        {editCenter && (
+          <EditCenterModal
+            center={editCenter}
+            onClose={() => setEditCenter(null)}
+            onSaved={load}
           />
         )}
         {editModulesCenter && (

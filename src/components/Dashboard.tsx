@@ -28,11 +28,13 @@ interface DashboardProps {
   openAddStaff: () => void;
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
+  /** 'jardin' | 'formation' — drives the time-sheet module naming. */
+  centerType?: string;
   /** SaaS gating: returns false when the tab's module is not enabled for this center. */
   isModuleAllowed?: (tabId: string) => boolean;
 }
 
-export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, isModuleAllowed }: DashboardProps) {
+export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed }: DashboardProps) {
   // SaaS module gating (default: everything allowed).
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
   const totalStaff = staff.length;
@@ -43,7 +45,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
     { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-emerald-50 text-emerald-600' },
-    { tab: 'studentTimeSheets', title: 'Jd. Horaires', desc: 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'studentTimeSheets', title: centerType === 'jardin' ? 'Pointage Élèves' : 'Jd. Horaires', desc: centerType === 'jardin' ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'module3', title: `Étude ${settings?.centerName || 'المركز'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'module4', title: `Études Hors ${settings?.centerName || 'المركز'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
     { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-emerald-50 text-emerald-600' },

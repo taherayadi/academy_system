@@ -8,6 +8,8 @@
 
 export interface Env {
   DB: D1Database;
+  /** ImageKit.io private API key — set via Cloudflare Pages env var / secret. */
+  IMAGEKIT_PRIVATE_KEY?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +218,23 @@ export async function createSession(db: D1Database, email: string, centerId: str
   return token;
 }
 
+export type CenterAccessState = 'trial_expired' | 'subscription_expired' | 'suspended' | 'expired';
+
+/** Returns the lifecycle reason that prevents a center administrator from using the app. */
+export function getCenterAccessState(center: any, now = Date.now()): CenterAccessState | null {
+  if (!center) return null;
+  if (center.status === 'suspended') return 'suspended';
+  if (center.status === 'expired') return 'expired';
+
+  if (center.status === 'trial') {
+    const trialEndsAt = Number(center.trial_ends_at) || 0;
+    return trialEndsAt > 0 && trialEndsAt <= now ? 'trial_expired' : null;
+  }
+
+  const subscriptionEndsAt = Number(center.subscription_ends_at) || 0;
+  return subscriptionEndsAt > 0 && subscriptionEndsAt <= now ? 'subscription_expired' : null;
+}
+
 export async function validateSession(db: D1Database, request: Request): Promise<{ email: string; token: string; centerId: string; role?: string } | null> {
   const token = getSessionToken(request);
   if (!token) return null;
@@ -224,6 +243,17 @@ export async function validateSession(db: D1Database, request: Request): Promise
     .bind(DEFAULT_CENTER_ID, token, Date.now())
     .first<{ email: string; token: string; center_id: string; role?: string }>();
   if (!row) return null;
+
+  // Platform accounts have no tenant subscription and must remain usable even
+  // when the default center is expired. Center accounts are checked on every
+  // authenticated request, not only during the login request.
+  if (row.role !== 'platform_super_admin') {
+    const center = await db.prepare('SELECT status, trial_ends_at, subscription_ends_at FROM centers WHERE id = ?')
+      .bind(row.center_id || DEFAULT_CENTER_ID)
+      .first<any>();
+    if (getCenterAccessState(center)) return null;
+  }
+
   return { email: row.email, token: row.token, centerId: row.center_id || DEFAULT_CENTER_ID, role: row.role };
 }
 
@@ -1005,6 +1035,50 @@ export async function writeStudentTimeSheets(db: D1Database, sheets: any[], cent
 }
 
 // ===========================================================================
+// JARDIN STUDENT ATTENDANCE
+// ===========================================================================
+
+export async function readStudentAttendance(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  return (await db.prepare('SELECT * FROM student_attendance WHERE center_id = ? ORDER BY date DESC, student_id').bind(centerId).all()).results.map((r: any) => ({
+    id: str(r.id),
+    studentId: str(r.student_id),
+    date: str(r.date),
+    status: r.status === 'absent' ? 'absent' : 'present',
+    notes: r.notes == null ? undefined : str(r.notes),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at)
+  }));
+}
+
+function buildStudentAttendanceStmts(db: D1Database, records: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  return (records || []).map((record: any) => db.prepare(
+    'INSERT INTO student_attendance (id, student_id, date, status, notes, created_at, updated_at, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    str(record.id),
+    str(record.studentId),
+    str(record.date),
+    record.status === 'absent' ? 'absent' : 'present',
+    record.notes ?? null,
+    str(record.createdAt || new Date().toISOString()),
+    str(record.updatedAt || new Date().toISOString()),
+    centerId
+  ));
+}
+
+export async function writeStudentAttendance(db: D1Database, records: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const deduped = new Map<string, any>();
+  for (const record of records || []) {
+    if (!record || !record.studentId || !record.date) continue;
+    deduped.set(`${record.studentId}:${record.date}`, record);
+  }
+  const stmts = [
+    db.prepare('DELETE FROM student_attendance WHERE center_id = ?').bind(centerId),
+    ...buildStudentAttendanceStmts(db, Array.from(deduped.values()), centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+// ===========================================================================
 // FORMATIONS
 // ===========================================================================
 
@@ -1252,6 +1326,7 @@ export function mapCenterRow(c: any): any {
     billingCycle: c.billing_cycle || 'monthly',
     monthlyPrice: c.monthly_price !== null && c.monthly_price !== undefined ? Number(c.monthly_price) : 0,
     centerType: c.center_type || '',
+    logoUrl: c.logo_url || '',
     createdAt: c.created_at || Date.now()
   };
 }

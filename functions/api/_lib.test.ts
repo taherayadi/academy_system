@@ -9,6 +9,7 @@ import {
   makeSessionCookie,
   clearSessionCookie,
   mapCenterRow,
+  getCenterAccessState,
 } from './_lib';
 
 // ---------------------------------------------------------------------------
@@ -254,6 +255,7 @@ describe('mapCenterRow', () => {
       billing_cycle: 'annual',
       monthly_price: 90,
       center_type: 'jardin',
+      logo_url: 'https://ik.imagekit.io/abc/logo.png',
       created_at: 1700000000000
     };
 
@@ -272,6 +274,7 @@ describe('mapCenterRow', () => {
       billingCycle: 'annual',
       monthlyPrice: 90,
       centerType: 'jardin',
+      logoUrl: 'https://ik.imagekit.io/abc/logo.png',
       createdAt: 1700000000000
     });
   });
@@ -279,7 +282,33 @@ describe('mapCenterRow', () => {
   it('parses enabled_modules and defaults to [] on invalid JSON or missing fields', () => {
     expect(mapCenterRow({ id: 'c1', name: 'X', enabled_modules: 'not-json' }).enabledModules).toEqual([]);
     expect(mapCenterRow({ id: 'c2', name: 'Y' }).enabledModules).toEqual([]);
+    expect(mapCenterRow({ id: 'c2', name: 'Y' }).logoUrl).toBe('');
     expect(mapCenterRow({ id: 'c2', name: 'Y' }).plan).toBe('starter');
     expect(mapCenterRow({ id: 'c2', name: 'Y', monthly_price: null }).monthlyPrice).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCenterAccessState — trial/subscription lifecycle gate
+// ---------------------------------------------------------------------------
+describe('getCenterAccessState', () => {
+  const now = 1_700_000_000_000;
+
+  it('allows a center while its trial is still active', () => {
+    expect(getCenterAccessState({ status: 'trial', trial_ends_at: now + 1_000 }, now)).toBeNull();
+  });
+
+  it('blocks an expired trial and an expired paid subscription', () => {
+    expect(getCenterAccessState({ status: 'trial', trial_ends_at: now - 1 }, now)).toBe('trial_expired');
+    expect(getCenterAccessState({ status: 'active', subscription_ends_at: now - 1 }, now)).toBe('subscription_expired');
+  });
+
+  it('blocks explicitly suspended or expired centers', () => {
+    expect(getCenterAccessState({ status: 'suspended' }, now)).toBe('suspended');
+    expect(getCenterAccessState({ status: 'expired' }, now)).toBe('expired');
+  });
+
+  it('keeps legacy paid centers without an end date usable', () => {
+    expect(getCenterAccessState({ status: 'active', subscription_ends_at: null }, now)).toBeNull();
   });
 });

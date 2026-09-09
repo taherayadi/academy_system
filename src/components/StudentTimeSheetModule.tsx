@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { Plus, Trash2, Users, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { Student, StudentTimeSheet, EXTERNAL_GRADE_OPTIONS } from '../types';
+import { Student, StudentTimeSheet, StudentAttendanceRecord, EXTERNAL_GRADE_OPTIONS } from '../types';
 import { useToast } from './Toast';
+import StudentAttendanceModule from './StudentAttendanceModule';
 import { AnimatePresence, motion } from 'motion/react';
 import TimeSheetModal from './TimeSheetModal';
 import AssignTimeSheetModal from './AssignTimeSheetModal';
@@ -13,6 +14,9 @@ interface StudentTimeSheetModuleProps {
   onUpdateStudentTimeSheets: (sheets: StudentTimeSheet[]) => void;
   onUpdateStudent: (student: Student) => void;
   onUpdateStudents: (students: Student[]) => void;
+  centerType?: string; // 'jardin' → Pointage Élèves, 'formation' → Jd. Horaires
+  studentAttendance: StudentAttendanceRecord[];
+  onUpdateStudentAttendance: (records: StudentAttendanceRecord[]) => void;
 }
 
 export default function StudentTimeSheetModule({
@@ -21,6 +25,9 @@ export default function StudentTimeSheetModule({
   onUpdateStudentTimeSheets,
   onUpdateStudent,
   onUpdateStudents,
+  centerType,
+  studentAttendance,
+  onUpdateStudentAttendance,
 }: StudentTimeSheetModuleProps) {
   const toast = useToast();
   const studentsRef = useRef(students);
@@ -47,6 +54,16 @@ export default function StudentTimeSheetModule({
   const [timeSheetPage, setTimeSheetPage] = useState(1);
   const TIMESHEET_PAGE_SIZE = 9;
 
+  if (centerType === 'jardin') {
+    return (
+      <StudentAttendanceModule
+        students={students}
+        attendance={studentAttendance}
+        onUpdateAttendance={onUpdateStudentAttendance}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
 
@@ -55,16 +72,16 @@ export default function StudentTimeSheetModule({
         <div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
-              جداول التوقيت
+              {centerType === 'jardin' ? 'Pointage Élèves' : 'جداول التوقيت'}
             </span>
-            <span className="text-xs text-slate-400 font-bold">الجداول الزمنية الأسبوعية للتلاميذ</span>
+            <span className="text-xs text-slate-400 font-bold">{centerType === 'jardin' ? 'تسجيل الدخول والخروج اليومي للتلاميذ' : 'الجداول الزمنية الأسبوعية للتلاميذ'}</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
             <Clock className="h-6 w-6 text-[#257C86]" />
-            إدارة جداول التوقيت الأسبوعية
+            {centerType === 'jardin' ? 'نظام تسجيل حضور التلاميذ' : 'إدارة جداول التوقيت الأسبوعية'}
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            إنشاء وتعديل جداول التوقيت الأسبوعية وإسنادها للتلاميذ حسب المؤسسة والمستوى.
+            {centerType === 'jardin' ? 'تسجيل أوقات حضور وخروج التلاميذ يومياً وإسناد الجدول الأسبوعي لكل تلميذ.' : 'إنشاء وتعديل جداول التوقيت الأسبوعية وإسنادها للتلاميذ حسب المؤسسة والمستوى.'}
           </p>
         </div>
       </div>
