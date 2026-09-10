@@ -82,7 +82,7 @@ export default function AdvertisementCarousel({ location, centerId, className = 
 
   const carouselContent = (
     <div
-      className={`relative w-full overflow-hidden rounded-lg bg-gray-100 shadow-md ${className}`}
+      className={`group relative w-full overflow-hidden rounded-lg bg-gray-100 shadow-md ${className}`}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
@@ -129,26 +129,55 @@ export default function AdvertisementCarousel({ location, centerId, className = 
           </>
         )}
 
-        {/* Dot Indicators (only if multiple images) */}
+        {/* Indicateurs animés (uniquement si plusieurs images) */}
         {hasMultipleImages && (
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-            {currentAd.imageUrls.map((_, index) => (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  goToImage(index);
-                }}
-                className={`h-2 w-2 rounded-full transition-all ${
-                  index === currentImageIndex
-                    ? 'w-6 bg-white'
-                    : 'bg-white/50 hover:bg-white/75'
-                }`}
-                aria-label={`Go to image ${index + 1}`}
-              />
-            ))}
-          </div>
+          <>
+            {/* Compteur 2 / 4 — pulse à chaque changement d'image */}
+            <div className="absolute top-3 right-3 overflow-hidden rounded-full bg-black/45 backdrop-blur-sm">
+              <motion.span
+                key={`${currentAd.id}-${currentImageIndex}`}
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: '0%', opacity: 1 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="block px-2.5 py-0.5 text-[11px] font-black tabular-nums text-white"
+              >
+                {currentImageIndex + 1} / {currentAd.imageUrls.length}
+              </motion.span>
+            </div>
+
+            {/* Points + pastille active animée (largeur) */}
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2">
+              {currentAd.imageUrls.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    goToImage(index);
+                  }}
+                  aria-label={`Go to image ${index + 1}`}
+                  className="h-2 rounded-full p-0 transition-all duration-300 hover:bg-white/90"
+                >
+                  <motion.span
+                    className={`block h-2 rounded-full ${
+                      index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                    }`}
+                    animate={{ width: index === currentImageIndex ? 24 : 8 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Barre de progression du défilement auto (5 s) — gèle en survol */}
+            <motion.div
+              key={`${currentAd.id}-${currentImageIndex}-bar`}
+              className="absolute bottom-0 left-0 h-[3px] bg-white/80"
+              initial={{ width: '0%' }}
+              animate={isPaused ? { width: '60%' } : { width: '100%' }}
+              transition={{ duration: isPaused ? 0.2 : 5, ease: 'linear' }}
+            />
+          </>
         )}
       </div>
     </div>

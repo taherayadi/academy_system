@@ -615,7 +615,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       </section>
 
       {/* ─── PUBLICITÉ — bannières actives de la vitrine (gérées dans l'admin SaaS) ─── */}
-      <AdvertisementCarousel location="landing_page" className="mx-auto mb-10 w-[min(1150px,94vw)] rounded-2xl shadow-xl" />
+      {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
+          Les classes verticales vivent sur le carrousel (il rend null sans
+          annonce → aucun espace fantôme sur la landing). */}
+      <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
+        <AdvertisementCarousel location="landing_page" className="mb-10 rounded-2xl shadow-xl" />
+      </div>
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">
