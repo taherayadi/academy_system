@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  GraduationCap, 
-  BookOpen, 
-  Clock, 
-  BookMarked, 
-  Utensils, 
-  DollarSign, 
-  Users, 
-  Bus, 
-  Menu, 
-  X, 
+import {
+  LayoutDashboard,
+  GraduationCap,
+  BookOpen,
+  Clock,
+  BookMarked,
+  Utensils,
+  DollarSign,
+  Users,
+  Bus,
+  Menu,
+  X,
   Sparkles,
   Settings as SettingsIcon,
   LogOut,
@@ -26,7 +26,8 @@ import {
   ShieldCheck,
   Building2,
   Inbox,
-  Tags
+  Tags,
+  ImagePlus
 } from 'lucide-react';
 
 import { 
