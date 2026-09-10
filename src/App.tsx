@@ -878,6 +878,7 @@ export default function App() {
         { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
         { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
         { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
+        { id: 'platformAdvertisements', label: 'الإعلانات', icon: ImagePlus },
       ]
     : [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
@@ -1264,6 +1265,7 @@ export default function App() {
                     : activeTab === 'platformRequests' ? 'requests'
                     : activeTab === 'platformFinance' ? 'finance'
                     : activeTab === 'platformPricing' ? 'pricing'
+                    : activeTab === 'platformAdvertisements' ? 'advertisements'
                     : 'overview'
                   }
                   onNavigate={(p) => setActiveTab(
@@ -1271,6 +1273,7 @@ export default function App() {
                     : p === 'requests' ? 'platformRequests'
                     : p === 'finance' ? 'platformFinance'
                     : p === 'pricing' ? 'platformPricing'
+                    : p === 'advertisements' ? 'platformAdvertisements'
                     : 'platformAdmin'
                   )}
                 />
