@@ -706,6 +706,36 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     })));
   });
 
+  it('modal: LTR date fields and multi-select display positions', async () => {
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
+    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    // Dates never render RTL.
+    const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    expect(dates.length).toBeGreaterThanOrEqual(2);
+    for (const d of dates) { expect(d.getAttribute('dir')).toBe('ltr'); expect(d.className).toContain('text-left'); }
+
+    // Les quatre formats connus sont proposés.
+    const lb = screen.getByRole('button', { name: /Bannière horizontale/ });
+    const rect = screen.getByRole('button', { name: /Rectangle moyen/ });
+    expect(screen.getByRole('button', { name: /Bannière mobile/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Gratte-ciel/ })).toBeTruthy();
+    fireEvent.click(lb);
+    fireEvent.click(rect);
+
+    fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Soldes' } });
+    fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/s.jpg' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+
+    await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
+      positions: ['leaderboard_728x90', 'medium_rectangle_300x250'],
+    })));
+  });
+
   it('edit reuses the form prefilled and PATCHes the advertisement', async () => {
     const ad = {
       id: 'ADV_9', title: 'Cantine', dateStart: Date.now(), dateEnd: Date.now() + 10 * 86400000,

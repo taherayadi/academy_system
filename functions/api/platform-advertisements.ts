@@ -24,10 +24,23 @@ function formatAdvertisement(row: any, centerIds: string[] = []): any {
     isActive: !!row.is_active,
     isPublished: !!row.is_published,
     centerIds,
+    positions: parseJson(row.positions, [] as string[]),
     createdBy: row.created_by || '',
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at)
   };
+}
+
+// Display formats (see migration 0031). Unknown ids are dropped, duplicates merged.
+const AD_POSITION_IDS = new Set([
+  'leaderboard_728x90',
+  'medium_rectangle_300x250',
+  'mobile_leaderboard_320x50',
+  'skyscraper_160x600',
+]);
+function sanitizeAdPositions(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw.map(p => String(p)) : [];
+  return Array.from(new Set(list.filter(p => AD_POSITION_IDS.has(p))));
 }
 
 // Landing-page ads target no center; center dashboard / both placements are
@@ -86,6 +99,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const priority = Number(body.priority) || 100;
     const isActive = body.isActive !== undefined ? !!body.isActive : true;
     const isPublished = body.isPublished !== undefined ? !!body.isPublished : false;
+    const positions = sanitizeAdPositions(body.positions);
     let centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
 
     // Validation
@@ -120,12 +134,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       env.DB.prepare(`
         INSERT INTO platform_advertisements (
           id, title, date_start, date_end, location, image_urls,
-          link_url, priority, is_active, is_published, created_by,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          link_url, priority, is_active, is_published, positions,
+          created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
-        linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0,
+        linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0, JSON.stringify(positions),
         session.email, now, now
       ),
       // Insert center assignments
@@ -217,6 +231,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(String(body.linkUrl).trim());
     }
 
+    if (body.positions !== undefined) {
+      updates.push('positions = ?');
+      binds.push(JSON.stringify(sanitizeAdPositions(body.positions)));
+    }
     if (body.priority !== undefined) {
       updates.push('priority = ?');
       binds.push(Number(body.priority));

@@ -40,7 +40,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       query = `
         SELECT DISTINCT
           a.id, a.title, a.date_start, a.date_end, a.location,
-          a.image_urls, a.link_url, a.priority
+          a.image_urls, a.link_url, a.priority, a.positions
         FROM platform_advertisements a
         INNER JOIN advertisement_centers ac ON a.id = ac.advertisement_id
         WHERE ${locationCond}
@@ -57,7 +57,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       query = `
         SELECT
           a.id, a.title, a.date_start, a.date_end, a.location,
-          a.image_urls, a.link_url, a.priority
+          a.image_urls, a.link_url, a.priority, a.positions
         FROM platform_advertisements a
         WHERE ${locationCond}
           AND a.is_active = 1
@@ -79,7 +79,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       location: row.location,
       imageUrls: parseJson(row.image_urls, []),
       linkUrl: row.link_url || '',
-      priority: Number(row.priority)
+      priority: Number(row.priority),
+      positions: parseJson(row.positions, [] as string[])
     }));
 
     return json({ advertisements });

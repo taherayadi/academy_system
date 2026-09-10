@@ -88,6 +88,37 @@ describe('platform-advertisements PATCH — center rules by location', () => {
   });
 });
 
+describe('platform-advertisements — positions', () => {
+  it('POST stores only known position ids, deduplicated, as JSON', async () => {
+    const db = makeDb();
+    const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
+      ...base, location: 'landing_page',
+      positions: ['leaderboard_728x90', 'leaderboard_728x90', 'fake_size_9999', 'skyscraper_160x600'],
+    }) } as any);
+    expect(res.status).toBe(201);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
+    expect(insert.args).toContain(JSON.stringify(['leaderboard_728x90', 'skyscraper_160x600']));
+  });
+
+  it('POST without positions stores an empty array (carousel default)', async () => {
+    const db = makeDb();
+    await onRequestPost({ env: { DB: db }, request: req('POST', { ...base, location: 'landing_page' }) } as any);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
+    expect(insert.args).toContain('[]');
+  });
+
+  it('PATCH replaces positions when provided', async () => {
+    const db = makeDb({ id: 'ADV_1', location: 'center_admin' });
+    const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', {
+      id: 'ADV_1', positions: ['medium_rectangle_300x250', 'nope'],
+    }) } as any);
+    expect(res.status).toBe(200);
+    const upd = db.calls.find(c => c.sql.includes('UPDATE platform_advertisements'));
+    expect(upd.sql).toContain('positions = ?');
+    expect(upd.args).toContain(JSON.stringify(['medium_rectangle_300x250']));
+  });
+});
+
 describe('advertisements/active — « both » visibility', () => {
   it('landing page query expands to both; center query joins centers; custom does not expand', async () => {
     const seen: string[] = [];

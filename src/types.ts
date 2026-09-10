@@ -70,6 +70,34 @@ export type AdvertisementLocation =
   | 'both' // visible on the landing page AND in the selected centers' dashboards
   | string; // Allow custom locations
 
+// Positions d'affichage (formats type IAB) — une annonce peut en cumuler plusieurs.
+export type AdPositionId =
+  | 'leaderboard_728x90'
+  | 'medium_rectangle_300x250'
+  | 'mobile_leaderboard_320x50'
+  | 'skyscraper_160x600';
+
+export interface AdPositionSpec {
+  id: AdPositionId;
+  label: string;
+  size: string;
+  hint: string;
+}
+
+export const AD_POSITION_SPECS: AdPositionSpec[] = [
+  { id: 'leaderboard_728x90', label: 'Bannière horizontale', size: '728×90', hint: 'Leaderboard — large bandeau tout en haut des pages desktop.' },
+  { id: 'medium_rectangle_300x250', label: 'Rectangle moyen', size: '300×250', hint: 'Medium Rectangle — format polyvalent, flux de contenu et barres latérales.' },
+  { id: 'mobile_leaderboard_320x50', label: 'Bannière mobile', size: '320×50', hint: 'Mobile Leaderboard — bandeau compact pour téléphone et tablette.' },
+  { id: 'skyscraper_160x600', label: 'Gratte-ciel', size: '120×600 / 160×600', hint: 'Skyscraper — bannière verticale haute pour les marges latérales.' },
+];
+
+export const AD_POSITION_IDS: string[] = AD_POSITION_SPECS.map(s => s.id);
+
+export function adPositionLabel(id: string): string {
+  const spec = AD_POSITION_SPECS.find(s => s.id === id);
+  return spec ? `${spec.label} (${spec.size})` : id;
+}
+
 export interface PlatformAdvertisement {
   id: string;
   title: string;
@@ -82,6 +110,7 @@ export interface PlatformAdvertisement {
   isActive: boolean;
   isPublished: boolean;
   centerIds: string[]; // Selected center IDs
+  positions?: string[]; // AdPositionId list (empty = emplacements par défaut du carrousel)
   createdBy?: string;
   createdAt: number;
   updatedAt: number;

@@ -18,7 +18,7 @@ import {
   fetchAdvertisementsApi, createAdvertisementApi, updateAdvertisementApi, deleteAdvertisementApi,
   uploadMultipleImagesApi
 } from '../api';
-import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement } from '../types';
+import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel } from '../types';
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -2107,6 +2107,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   const [isActive, setIsActive] = useState(ad ? !!ad.isActive : true);
   const [isPublished, setIsPublished] = useState(ad ? !!ad.isPublished : false);
   const [centerIds, setCenterIds] = useState<string[]>(ad?.centerIds || []);
+  const [positions, setPositions] = useState<string[]>(ad?.positions || []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -2129,6 +2130,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   };
 
   const toggleCenter = (id: string) => setCenterIds(cur => cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]);
+  const togglePosition = (id: string) => setPositions(cur => cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2151,6 +2153,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
         priority: Number(priority) || 100,
         isActive,
         isPublished,
+        positions,
         centerIds: locationSel === 'landing_page' ? [] : centerIds,
       };
       if (isEdit && ad) await updateAdvertisementApi(ad.id, payload);
@@ -2210,11 +2213,11 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Début *</label>
-              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className={fieldCls} />
+              <input type="date" dir="ltr" value={dateStart} onChange={e => setDateStart(e.target.value)} className={`${fieldCls} text-left`} />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin *</label>
-              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className={fieldCls} />
+              <input type="date" dir="ltr" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className={`${fieldCls} text-left`} />
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="ad-link" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Lien cliquable (optionnel)</label>
@@ -2260,6 +2263,22 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 </button>
               </div>
             </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Positions d’affichage ({positions.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {AD_POSITION_SPECS.map(spec => {
+                const on = positions.includes(spec.id);
+                return (
+                  <button key={spec.id} type="button" title={spec.hint} onClick={() => togglePosition(spec.id)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border-2 transition cursor-pointer ${on ? 'border-[#257C86] bg-[#257C86]/10 text-[#257C86]' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                    {on ? '✓ ' : ''}{spec.label} <span className="font-black">· {spec.size}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Sans position choisie, la publicité utilise le carrousel standard de son emplacement.</p>
           </div>
 
           {showCenterPicker && <div>
@@ -3868,6 +3887,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     {ad.centerIds?.length > 0 && (
                       <span className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full">
                         {ad.centerIds.length} centre{ad.centerIds.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {(ad.positions?.length ?? 0) > 0 && (
+                      <span className="px-2 py-1 bg-[#257C86]/10 text-[#257C86] text-[10px] font-bold rounded-full"
+                        title={ad.positions!.map(adPositionLabel).join(', ')}>
+                        {ad.positions!.map(pid => AD_POSITION_SPECS.find(sp => sp.id === pid)?.size || pid).join(' · ')}
                       </span>
                     )}
                   </div>
