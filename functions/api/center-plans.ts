@@ -236,6 +236,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         `).bind(shift, centerId, liveEnd).run();
       }
 
+      // A scheduled plan lands at the end of the paid window — if the window
+      // just grew, the scheduled plan follows to the new end date so it can
+      // never apply before the offered days are consumed.
+      if (hasLive) {
+        try {
+          await env.DB.prepare(`
+            UPDATE center_plan_schedules SET apply_at = apply_at + ?
+            WHERE center_id = ? AND status = 'pending' AND apply_at = ?
+          `).bind(shift, centerId, liveEnd).run();
+        } catch { /* schedules table missing (migration 0027) */ }
+      }
+
       const message = trialOngoing && !hasLive
         ? `Essai prolongé de ${days} jour(s) — fin de l’essai reportée au ${fmtFr(newTrialEnd)} ; la facturation démarrera après.`
         : prepend

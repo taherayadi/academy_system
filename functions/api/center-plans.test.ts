@@ -239,6 +239,18 @@ describe('center-plans POST — add-trial (free days)', () => {
     // No new invoice, nothing cancelled — the period is just stretched.
     expect(db.calls.some((c: any) => c.sql.includes('INSERT INTO center_invoices'))).toBe(false);
     expect(db.calls.some((c: any) => c.sql.includes("SET status = 'cancelled'"))).toBe(false);
+    // A plan scheduled for the old period end follows the window to its new end.
+    const sched = db.calls.find((c: any) => c.sql.includes('UPDATE center_plan_schedules SET apply_at = apply_at + ?'));
+    expect(sched.args[0]).toBe(7 * DAY);
+    expect(sched.args[2]).toBe(ACTIVE_UNPAID.subscription_ends_at);
+  });
+
+  it('add-trial prepending also pushes a scheduled plan past the new end', async () => {
+    const db = makeDb(STARTS_TODAY);
+    await post({ action: 'add-trial', centerId: 'c1', days: 4 }, db);
+    const sched = db.calls.find((c: any) => c.sql.includes('UPDATE center_plan_schedules SET apply_at = apply_at + ?'));
+    expect(sched.args[0]).toBe(4 * DAY);
+    expect(sched.args[2]).toBe(STARTS_TODAY.subscription_ends_at);
   });
 
   it('plan starting today: days are added at the START — pending invoice pushed back', async () => {

@@ -827,160 +827,6 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   );
 }
 
-// ─── Edit Modules Modal ────────────────────────────────────────────────────
-function EditModulesModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
-  const toast = useToast();
-  const [saving, setSaving] = useState(false);
-  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
-  const [enabled, setEnabled] = useState<string[]>(() =>
-    center.plan === 'pro'
-      ? [...ALL_MODULE_KEYS]
-      : center.plan === 'starter'
-        ? [...BASIC_MODULE_KEYS]
-        : normalizeCenterModules(center.enabledModules as string[] || [])
-  );
-
-  useEffect(() => {
-    let mounted = true;
-    fetchModulePricesApi(currentSchoolYear()).then(prices => {
-      if (!mounted) return;
-      setModulePrices((prices || []).reduce<Record<string, number>>((result, price) => {
-        result[price.module_key] = Number(price.price) || 0;
-        return result;
-      }, {}));
-    }).catch(() => { /* backend remains authoritative */ });
-    return () => { mounted = false; };
-  }, []);
-
-  const displayedPlan = center.plan === 'starter' ? 'basic' : center.plan;
-  const basicPlan = displayedPlan === 'basic';
-  const calculatedTariff = center.status === 'trial'
-    ? 0
-    : calculatePlanTariff(displayedPlan, center.billingCycle || 'monthly', enabled, modulePrices, center.monthlyPrice || 0);
-
-  const toggle = (key: string) => {
-    if (isBaseModule(key)) return;
-    setEnabled(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await updateCenterApi(center.id, {
-        enabledModules: enabled,
-        autoCalculatePrice: true,
-        // Mid-period module additions are settled automatically by the backend.
-        settlementPolicy: 'auto'
-      });
-      const outcome = res.planChange;
-      if (outcome?.mode === 'mid_period_increase') {
-        const settlement = outcome.settlement;
-        if (settlement && !settlement.skipped && settlement.amount > 0) {
-          toast.success(
-            `Modules mis à jour. Solde à régler: ${formatTnd(settlement.amount)} ` +
-            `(${settlement.paid ? 'période déjà réglée — complément' : 'facture créée'}${settlement.invoiceNumber ? ` ${settlement.invoiceNumber}` : ''}).`
-          );
-        } else {
-          toast.success('Modules mis à jour. Fin d’abonnement inchangée.');
-        }
-      } else if (outcome?.mode === 'scheduled') {
-        toast.success(`Modules mis à jour — retrait appliqué le ${fmtDate(outcome.applyAt)} (fin de la période en cours).`);
-      } else {
-        toast.success('Modules mis à jour');
-      }
-      onSaved();
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 bg-[#257C86]/10 rounded-xl"><Layers className="h-4 w-4 text-[#257C86]" /></span>
-            <h2 className="font-black text-slate-900 text-base">Modules — {center.name}</h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-xl cursor-pointer"><X className="h-4 w-4" /></button>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {BASE_MODULE_KEYS.map(key => (
-            <span key={key} className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-[#257C86] text-white cursor-default">
-              <Lock className="h-3 w-3" />
-              {MODULE_LABEL(key)}
-              <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
-            </span>
-          ))}
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white cursor-default">
-            <Lock className="h-3 w-3" />
-            {MODULE_LABEL(BUNDLED_MODULE_KEY)}
-            <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
-          </span>
-        </div>
-
-        {basicPlan ? (
-          <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 mb-4">
-            Le plan Basic utilise uniquement les modules de base.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
-              const on = enabled.includes(m.key);
-              return (
-                <button key={m.key} onClick={() => toggle(m.key)}
-                  className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
-                    on ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
-                  }`}>
-                  {on && <Check className="h-3 w-3" />}
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 mb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-black text-slate-600">Tarif après sélection</span>
-            <span className="text-base font-black text-[#257C86]">
-              {center.status === 'trial' ? 'Gratuit' : center.plan === 'custom' ? `${formatTnd(center.monthlyPrice || 0)} · négocié` : formatTnd(calculatedTariff)}
-            </span>
-          </div>
-          <p className="text-[11px] font-semibold text-slate-500 mt-1">
-            {center.status === 'trial' ? 'Le centre d’essai reste gratuit.' : center.billingCycle === 'annual' ? 'Cycle annuel : total mensuel × 12 avec 20 % de remise.' : 'Cycle mensuel : total des modules sélectionnés.'}
-            {' '}La fin d’abonnement actuelle ne change pas lors d’une modification des modules.
-          </p>
-          {center.status === 'active' && center.subscriptionEndsAt && center.subscriptionEndsAt > Date.now() && (
-            <p className="text-[10px] font-semibold text-[#257C86] mt-1.5 leading-relaxed">
-              En cours de période : un ajout de module génère une facture de solde proratisée ; un retrait est appliqué automatiquement à la fin de la période ({fmtDate(center.subscriptionEndsAt)}).
-            </p>
-          )}
-        </div>
-        <p className="text-[11px] font-semibold text-slate-400 mb-5">La base Scolaire + Finance est toujours incluse, avec Jd. Horaires offert.</p>
-
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl cursor-pointer hover:bg-slate-200 transition">Annuler</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-lg shadow-[#257C86]/25 hover:shadow-[#257C86]/40 cursor-pointer disabled:opacity-60">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            Sauvegarder
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 // ─── Edit Invoice Modal (statut / paiement / chèque) ────────────────────────
 function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoice; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
@@ -2132,9 +1978,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 Historique des plans ({(view.history || []).length})
               </p>
               {(view.history || []).length === 0 ? (
-                <p className="text-[11px] font-semibold text-slate-400">
-                  Aucune activité enregistrée pour ce centre (la table d’historique est remplie dès la migration 0029 appliquée).
-                </p>
+                <p className="text-[11px] font-semibold text-slate-400">Aucune activité enregistrée.</p>
               ) : (
                 <div className="rounded-xl border border-slate-200 overflow-hidden">
                   <table className="w-full" dir="ltr">
@@ -2212,7 +2056,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [showNewCenter, setShowNewCenter] = useState(false);
   const [convertRequest, setConvertRequest] = useState<DemoRequest | null>(null);
   const [editCenter, setEditCenter] = useState<CenterTenant | null>(null);
-  const [editModulesCenter, setEditModulesCenter] = useState<CenterTenant | null>(null);
   // Plan manager (« Plans & factures ») — all subscription changes go through it.
   const [planCenter, setPlanCenter] = useState<CenterTenant | null>(null);
   const [deleteCenter, setDeleteCenter] = useState<CenterTenant | null>(null);
@@ -3044,11 +2887,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     title="Informations de base du centre">
                     <Edit className="h-3.5 w-3.5" /> Modifier
                   </button>
-                  <button onClick={() => setPlanCenter(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1.5"
-                    title="Gérer le plan, les factures et les changements programmés">
-                    <Receipt className="h-3.5 w-3.5" /> Plans &amp; factures
-                  </button>
                   <button onClick={() => handleToggleStatus(c)}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       c.status === 'suspended'
@@ -3057,9 +2895,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     }`}>
                     {c.status === 'suspended' ? <><CheckCircle2 className="h-3.5 w-3.5" /> Activer</> : <><PauseCircle className="h-3.5 w-3.5" /> Suspendre</>}
                   </button>
-                  <button onClick={() => setEditModulesCenter(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5" /> Modules
+                  <button onClick={() => setPlanCenter(c)}
+                    className="text-[11px] font-bold px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer flex items-center gap-1.5"
+                    title="Gérer le plan, les modules, les factures et les changements programmés">
+                    <Layers className="h-3.5 w-3.5" /> Plans &amp; factures
                   </button>
                   <button onClick={() => setDeleteCenter(c)}
                     className="ml-auto text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
@@ -3676,13 +3515,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           <EditCenterModal
             center={editCenter}
             onClose={() => setEditCenter(null)}
-            onSaved={load}
-          />
-        )}
-        {editModulesCenter && (
-          <EditModulesModal
-            center={editModulesCenter}
-            onClose={() => setEditModulesCenter(null)}
             onSaved={load}
           />
         )}

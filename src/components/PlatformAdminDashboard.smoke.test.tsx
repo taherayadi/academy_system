@@ -455,6 +455,27 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     expect(del.disabled).toBe(true);
   });
 
+  it('center cards: « Modules » became the single Plans & factures entry', async () => {
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+      id: 'cz', name: 'Centre Gamma', slug: 'gamma', status: 'active', plan: 'starter',
+      monthlyPrice: 75, billingCycle: 'monthly', trialEndsAt: null,
+      subscriptionEndsAt: Date.now() + 20 * 86400000, enabledModules: [],
+      studentCount: 1, adminEmail: 'g@g.tn', phoneNumber: '33333333', locationCity: 'Sfax',
+      centerType: 'formation', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
+    }]);
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Gamma')).toBeTruthy());
+
+    // The Modules shortcut is gone — and there is exactly ONE plan button.
+    expect(screen.queryByRole('button', { name: 'Modules' })).toBeNull();
+    const planBtns = screen.getAllByRole('button', { name: /Plans & factures/ });
+    expect(planBtns).toHaveLength(1);
+
+    // It opens the plan manager (same functionality as before, new look).
+    fireEvent.click(planBtns[0]);
+    await waitFor(() => expect(api.fetchCenterPlansApi).toHaveBeenCalledWith('cz'));
+  });
+
   it('plan manager: a center expired mid-window (plan just removed) blocks delete and relaunches via set-plan', async () => {
     const DAY = 86400000;
     (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
