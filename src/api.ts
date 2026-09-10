@@ -640,7 +640,9 @@ export interface CenterPlansView {
 
 export interface CenterPlanActionResult {
   success?: boolean;
-  mode?: 'scheduled' | 'replaced' | 'activated' | 'plan_removed' | 'schedule_cancelled';
+  mode?: 'scheduled' | 'replaced' | 'activated' | 'plan_removed' | 'schedule_cancelled' | 'trial_added';
+  placement?: 'start' | 'end';
+  days?: number;
   message?: string;
   applyAt?: number | null;
   amount?: number;
@@ -662,7 +664,7 @@ export async function fetchCenterPlansApi(centerId: string): Promise<CenterPlans
 
 /** Run a plan action (set-plan / remove-plan / remove-schedule) for a center. */
 export async function centerPlanActionApi(payload: {
-  action: 'set-plan' | 'remove-plan' | 'remove-schedule';
+  action: 'set-plan' | 'remove-plan' | 'remove-schedule' | 'add-trial';
   centerId: string;
   plan?: string;
   billingCycle?: 'monthly' | 'annual';
@@ -670,6 +672,7 @@ export async function centerPlanActionApi(payload: {
   monthlyPrice?: number | null;
   mode?: 'scheduled';
   scheduleId?: string;
+  days?: number;
 }): Promise<CenterPlanActionResult> {
   const res = await fetch(`${API_BASE}/center-plans`, {
     method: 'POST',

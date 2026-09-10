@@ -265,6 +265,29 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
   });
 });
 
+describe('PlatformAdminDashboard — New center free-days card', () => {
+  it('paid plans get a trial-styled free-days card (no yellow « Jours offerts » block)', async () => {
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouveau Centre/ }));
+
+    // Default plan is the trial — its card shows the trial input.
+    expect(screen.getByText('Durée de l’essai offert')).toBeTruthy();
+
+    // Switching to Basic must show the SAME component shape for free days.
+    const planSelect = Array.from(document.querySelectorAll('select'))
+      .find(s => Array.from(s.options).some(o => o.value === 'trial') && Array.from(s.options).some(o => o.value === 'growth'))!;
+    fireEvent.change(planSelect, { target: { value: 'basic' } });
+
+    expect(screen.getByText('Durée de l’essai avant l’abonnement')).toBeTruthy();
+    expect(screen.queryByText('Jours offerts')).toBeNull();
+    expect(screen.queryByText(/sans changer le plan/)).toBeNull();
+    // The date row mirrors « Fin de l'essai » from the trial card.
+    expect(screen.getByText(/Début de l’abonnement \(0 jour\)/)).toBeTruthy();
+    expect(planSelect.parentElement!.parentElement!.querySelector('#new-center-offer-days')).toBeTruthy();
+  });
+});
+
 describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
   const activeCenter = {
     id: 'c1', name: 'Centre Alpha', slug: 'alpha', status: 'active', plan: 'starter',
@@ -373,6 +396,27 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     expect(screen.getByText(/INV-FUT.* payée · 30\.00 TND/)).toBeTruthy();
   });
 
+  it('plan manager: add trial period submits the days and lands back on the view', async () => {
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /Ajouter une période d.essai/ }));
+    fireEvent.change(screen.getByLabelText('Nombre de jours'), { target: { value: '7' } });
+    // Window started 10 days ago → the offer is appended at the END.
+    expect(screen.getByText(/ajoutés à la FIN/)).toBeTruthy();
+    expect(screen.getByText(/nouvelle échéance le/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ajouter l.essai \(7 j\)/ }));
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith({
+      action: 'add-trial', centerId: 'c1', days: 7,
+    }));
+    // After saving, the form closes and the manager reloads.
+    await waitFor(() => expect(screen.queryByLabelText('Nombre de jours')).toBeNull());
+    expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy();
+  });
+
   it('plan manager: remove-plan asks for confirmation, expires the center and closes the dialog', async () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
@@ -405,6 +449,8 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
     await waitFor(() => expect(screen.getByText(/Abonnement expiré le/)).toBeTruthy());
     expect(screen.queryByText('Sans facture')).toBeNull();
+    // No trial offer without a live subscription; relaunch first.
+    expect(screen.queryByRole('button', { name: /Ajouter une période d.essai/ })).toBeNull();
     const del = screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement;
     expect(del.disabled).toBe(true);
   });

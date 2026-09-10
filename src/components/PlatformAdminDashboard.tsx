@@ -672,13 +672,23 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     <option value="annual">Annuel — 20 % de remise</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Jours offerts</label>
-                  <input type="number" min="0" max="3650" step="1" inputMode="numeric" value={form.offerDays}
-                    onChange={e => setForm(f => ({ ...f, offerDays: e.target.value }))}
-                    className="w-full border-2 border-amber-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-amber-50 focus:border-amber-400 focus:ring-0 outline-none transition"
-                    aria-describedby="new-center-offer-days-hint" />
-                  <p id="new-center-offer-days-hint" className="text-[10px] font-semibold text-amber-700 mt-1">Avant le début de l’abonnement, sans changer le plan.</p>
+                {/* Same presentation as the « Essai gratuit » card — free days
+                    are an trial before the billing starts, not a separate note. */}
+                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+                    <label htmlFor="new-center-offer-days" className="text-xs font-black text-slate-600">Durée de l’essai avant l’abonnement</label>
+                    <div className="flex items-center gap-2">
+                      <input id="new-center-offer-days" type="number" min="0" max="3650" step="1" inputMode="numeric" value={form.offerDays}
+                        onChange={e => setForm(f => ({ ...f, offerDays: e.target.value }))}
+                        className="w-20 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                      <span className="text-xs font-bold text-slate-500">jours</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-left">
+                    <span className="text-xs font-black text-slate-600">Début de l’abonnement ({offerDays} jour{offerDays > 1 ? 's' : ''})</span>
+                    <span className="text-sm font-black text-slate-800">{previewOfferEnd ? fmtDate(previewOfferEnd) : 'Aujourd’hui'}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-500 text-left">Gratuit pendant l’essai — la facturation ne démarre qu’ensuite, au tarif sélectionné.</p>
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -701,19 +711,13 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   )}
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="ltr">
-                  {previewOfferEnd && (
-                    <div className="flex items-center justify-between gap-3 text-left">
-                      <span className="text-xs font-black text-amber-700">Fin de l’offre / début abonnement</span>
-                      <span className="text-sm font-black text-slate-800">{fmtDate(previewOfferEnd)}</span>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between gap-3 text-left">
                     <span className="text-xs font-black text-slate-600">Fin d’abonnement calculée</span>
                     <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
                   </div>
                   <p className="text-[11px] font-semibold text-slate-500 text-left">
                     {offerDays > 0
-                      ? `${offerDays} jour${offerDays > 1 ? 's' : ''} offert${offerDays > 1 ? 's' : ''}, puis ${form.billingCycle === 'annual' ? '365 jours' : '30 jours'} d’abonnement.`
+                      ? `Essai gratuit de ${offerDays} jour${offerDays > 1 ? 's' : ''}, puis ${form.billingCycle === 'annual' ? '365 jours' : '30 jours'} facturés au tarif du plan.`
                       : `${form.billingCycle === 'annual' ? '365 jours' : '30 jours'} à partir de la création.`}
                   </p>
                 </div>
@@ -1497,8 +1501,9 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   const [view, setView] = useState<CenterPlansView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<'view' | 'edit' | 'schedule'>('view');
+  const [mode, setMode] = useState<'view' | 'edit' | 'schedule' | 'trial'>('view');
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [trialDaysInput, setTrialDaysInput] = useState('7');
   const [draft, setDraft] = useState<PlanDraft>({ plan: 'basic', billingCycle: 'monthly', monthlyPrice: '' });
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
   const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
@@ -1591,6 +1596,16 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   const effectiveApplyChoice = scheduleOnly ? 'schedule' : applyChoice;
   const billingCycleChanged = draft.billingCycle !== (view?.center.billingCycle || 'monthly');
   const extendsSubscription = !hasLiveWindow || billingCycleChanged || decision.kind === 'renewal';
+
+  // Trial placement (mirrors the add-trial endpoint): a trial, or a window
+  // that starts today / has not started yet, takes the free days BEFORE the
+  // billing; a running window takes them at the END.
+  const DAY_MS = 86400000;
+  const trialDaysNum = Math.floor(Number(trialDaysInput) || 0);
+  const windowCycleDays = view?.center.billingCycle === 'annual' ? 365 : 30;
+  const windowStartDate = liveEnd > 0 ? liveEnd - windowCycleDays * DAY_MS : 0;
+  const startOfToday = (() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const trialGoesToStart = isTrial || !hasLiveWindow || windowStartDate >= startOfToday;
 
   const handleDraftPlanChange = (plan: string) => {
     setDraft(d => ({ ...d, plan }));
@@ -1712,6 +1727,21 @@ function PlanManagerModal({ center, onClose, onSaved }: {
     if (view) draftFromView(view);
     setApplyChoice('settle');
     setMode(next);
+  };
+
+  // Jours offerts : ajoutés au début si l'abonnement ne court pas encore
+  // (essai en cours / période démarrant aujourd'hui), sinon à la fin.
+  // L'API décide de la placement réelle — cette règle est la sienne.
+  const submitTrial = async () => {
+    if (trialDaysNum < 1 || trialDaysNum > 3650) {
+      toast.error('Indiquez un nombre de jours valide (1 à 3650).');
+      return;
+    }
+    await runAction({
+      action: 'add-trial',
+      centerId: center.id,
+      days: trialDaysNum,
+    }, 'Période d’essai ajoutée');
   };
 
   const planTitle = view ? (PLAN_LABEL[view.center.plan] || view.center.plan || 'Aucun plan') : '—';
@@ -1886,6 +1916,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                     title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : 'Appliqué à la fin de la période en cours'}>
                     <CalendarClock className="h-3.5 w-3.5" /> Programmer un plan
                   </button>
+                  {(hasLiveWindow || isTrial) && (
+                    <button onClick={() => setMode('trial')} disabled={saving}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/25 rounded-xl hover:bg-[#257C86]/[0.12] transition cursor-pointer disabled:opacity-40"
+                      title="Offrir des jours : au début si l’abonnement ne court pas encore, sinon ajoutés à la fin de la période">
+                      <Clock className="h-3.5 w-3.5" /> Ajouter une période d’essai
+                    </button>
+                  )}
                   {!isTrial && (
                     <button onClick={() => setConfirmRemove(true)} disabled={!hasLiveWindow || saving}
                       className={`flex items-center gap-1.5 ml-auto px-3.5 py-2 text-xs font-bold rounded-xl border transition ${hasLiveWindow ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'}`}
@@ -1900,6 +1937,39 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   </p>
                 )}
               </>
+            )}
+
+            {/* ── Formulaire : ajouter une période d'essai ── */}
+            {mode === 'trial' && (
+              <div className="rounded-2xl border-2 border-[#257C86]/25 bg-[#257C86]/[0.04] p-4 space-y-3" dir="ltr">
+                <p className="text-xs font-black text-slate-700">Ajouter une période d’essai offerte</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label htmlFor="plan-manager-trial-days" className="text-xs font-black text-slate-600">Nombre de jours</label>
+                  <div className="flex items-center gap-2">
+                    <input id="plan-manager-trial-days" type="number" min={1} max={3650} step={1} inputMode="numeric"
+                      value={trialDaysInput} onChange={e => setTrialDaysInput(e.target.value)}
+                      className="w-24 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                    <span className="text-xs font-bold text-slate-500">jours</span>
+                  </div>
+                </div>
+                <p className="text-[11px] font-semibold text-slate-500 leading-relaxed">
+                  {isTrial && !hasLiveWindow &&
+                    <>L’essai est en cours — il est prolongé de {Math.max(1, trialDaysNum)} jour(s) et la facturation démarrera après.</>
+                  }
+                  {!isTrial && trialGoesToStart && hasLiveWindow &&
+                    <>L’abonnement démarre {windowStartDate > startOfToday ? `le ${fmtDate(windowStartDate)}` : 'aujourd’hui'} — les {Math.max(1, trialDaysNum)} jours sont offerts au DÉBUT : la facture en attente est décalée d’autant et la fin de l’abonnement est reportée au {fmtDate(liveEnd + Math.max(1, trialDaysNum) * DAY_MS)}.</>}
+                  {!trialGoesToStart &&
+                    <>La période est déjà entamée — les {Math.max(1, trialDaysNum)} jours sont ajoutés à la FIN : nouvelle échéance le {fmtDate(liveEnd + Math.max(1, trialDaysNum) * DAY_MS)} (au lieu du {fmtDate(liveEnd)}). Aucune facture payée n’est modifiée.</>}
+                </p>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
+                  <button onClick={submitTrial} disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+                    Ajouter l’essai ({Math.max(1, trialDaysNum)} j)
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* ── Formulaire : modifier le plan courant / programmer ── */}

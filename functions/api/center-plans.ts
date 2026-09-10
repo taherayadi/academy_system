@@ -103,11 +103,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         FROM center_invoices WHERE center_id = ?
         ORDER BY created_at DESC LIMIT 60
       `).bind(centerId).all<any>(),
+      // Degrade gracefully if migration 0027 is not applied yet.
       env.DB.prepare(`
         SELECT id, to_plan, to_billing_cycle, to_monthly_price, apply_at, notes, created_at
         FROM center_plan_schedules WHERE center_id = ? AND status = 'pending'
         ORDER BY created_at DESC
-      `).bind(centerId).all<any>(),
+      `).bind(centerId).all<any>().catch(() => ({ results: [] as any[] })),
     ]);
 
     return json({
@@ -178,15 +179,76 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ success: true, mode: 'schedule_cancelled' });
     }
 
+    if (action === 'add-trial') {
+      // Offer free days on top of the current subscription:
+      //   • trial running, or a plan that starts today / has not started yet
+      //     → days are added at the START: the pending invoice is pushed back
+      //       (nothing is billed during the free days);
+      //   • middle / end of a started period → days are added at the END:
+      //       the subscription end date moves out and the unpaid invoice
+      //       covering the window is stretched. Paid invoices are never
+      //       touched, so no paid day is ever discarded.
+      const days = Math.floor(Number(body.days));
+      if (!Number.isFinite(days) || days < 1 || days > 3650) {
+        return json({ error: 'Nombre de jours invalide (1 à 3650).' }, 400);
+      }
+      const nowTs = Date.now();
+      const oldTrialEnd = Number(center.trial_ends_at) || 0;
+      const trialOngoing = center.status === 'trial' && oldTrialEnd > nowTs;
+      const liveEnd = Number(center.subscription_ends_at) || 0;
+      const hasLive = liveEnd > nowTs;
+      if (!trialOngoing && !hasLive) {
+        return json({ error: 'Aucun abonnement ni essai en cours — activez d’abord un plan.' }, 400);
+      }
+      const cycleDays = String(center.billing_cycle) === 'annual' ? 365 : 30;
+      const windowStart = liveEnd - cycleDays * DAY_MS;
+      const startOfToday = new Date(nowTs);
+      startOfToday.setHours(0, 0, 0, 0);
+      const prepend = trialOngoing || !hasLive || windowStart >= startOfToday.getTime();
+      const shift = days * DAY_MS;
+      const newTrialEnd = trialOngoing ? oldTrialEnd + shift : oldTrialEnd;
+      const newEnd = hasLive ? liveEnd + shift : liveEnd;
+
+      await env.DB.prepare(
+        `UPDATE centers SET subscription_ends_at = ?, trial_ends_at = ? WHERE id = ?`
+      ).bind(newEnd || null, newTrialEnd || null, centerId).run();
+
+      if (prepend) {
+        // Not-yet-billed period (starts today or later, incl. future-start
+        // activation invoices created during a trial): push the whole
+        // unpaid window back by the free days.
+        await env.DB.prepare(`
+          UPDATE center_invoices SET period_start = period_start + ?, period_end = period_end + ?
+          WHERE center_id = ? AND status IN ('pending','overdue') AND period_start >= ?
+        `).bind(shift, shift, centerId, startOfToday.getTime()).run();
+      } else {
+        // Extend the unpaid invoice covering the window end (amount kept —
+        // the extra days are the offer). Paid invoices stay untouched.
+        await env.DB.prepare(`
+          UPDATE center_invoices SET period_end = period_end + ?
+          WHERE center_id = ? AND status IN ('pending','overdue') AND period_end = ?
+        `).bind(shift, centerId, liveEnd).run();
+      }
+
+      const message = trialOngoing && !hasLive
+        ? `Essai prolongé de ${days} jour(s) — fin de l’essai reportée au ${fmtFr(newTrialEnd)} ; la facturation démarrera après.`
+        : prepend
+          ? `${days} jour(s) offerts ajoutés au début de l’abonnement — la facture en attente est décalée d’autant, échéance ${fmtFr(newEnd)}.`
+          : `${days} jour(s) offerts ajoutés à la fin de l’abonnement — nouvelle échéance le ${fmtFr(newEnd)}.`;
+      return json({ success: true, mode: 'trial_added', placement: prepend ? 'start' : 'end', days, subscriptionEndsAt: newEnd, message });
+    }
+
     if (action === 'remove-plan') {
       // Void anything not yet collected, cancel scheduled plans, expire the
       // subscription. Paid invoices stay as-is (history + revenue).
       await env.DB.prepare(
         `UPDATE center_invoices SET status = 'cancelled' WHERE center_id = ? AND status IN ('pending','overdue')`
       ).bind(centerId).run();
-      await env.DB.prepare(
-        `UPDATE center_plan_schedules SET status = 'cancelled' WHERE center_id = ? AND status = 'pending'`
-      ).bind(centerId).run();
+      try {
+        await env.DB.prepare(
+          `UPDATE center_plan_schedules SET status = 'cancelled' WHERE center_id = ? AND status = 'pending'`
+        ).bind(centerId).run();
+      } catch { /* schedules table missing (migration 0027) — nothing pending to cancel */ }
       await env.DB.prepare(
         `UPDATE centers SET status = 'expired' WHERE id = ? AND status IN ('active','trial','suspended')`
       ).bind(centerId).run();
@@ -228,32 +290,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
       const forceScheduled = String(body.mode || '').trim() === 'scheduled';
       if (forceScheduled || (hasLiveWindow && windowPaid)) {
-        await env.DB.prepare(
-          `UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — superseded' WHERE center_id = ? AND status = 'pending'`
-        ).bind(centerId).run();
-        const applyAt = hasLiveWindow ? existingEnd : null;
-        await env.DB.prepare(`
-          INSERT INTO center_plan_schedules (id, center_id, to_plan, to_billing_cycle, to_enabled_modules, to_monthly_price, status, apply_at, notes, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-        `).bind(
-          crypto.randomUUID(), centerId, targetPlan, targetCycle, JSON.stringify(targetModules),
-          periodAmount || null,
-          applyAt,
-          forceScheduled
-            ? `Changement programmé par l'administrateur: ${planLabel(targetPlan)} (${targetCycle})`
-            : `Période déjà payée — ${planLabel(targetPlan)} (${targetCycle}) programmé pour la fin de la période`,
-          now
-        ).run();
-        return json({
-          success: true,
-          mode: 'scheduled',
-          applyAt,
-          amount: periodAmount,
-          reason: forceScheduled ? 'manual' : windowPaid ? 'window_paid' : 'active_window',
-          message: applyAt
-            ? `Changement programmé pour le ${fmtFr(applyAt)} — la période payée reste inchangée.`
-            : 'Changement programmé pour la prochaine reconduction.',
-        });
+        try {
+          await env.DB.prepare(
+            `UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — superseded' WHERE center_id = ? AND status = 'pending'`
+          ).bind(centerId).run();
+          const applyAt = hasLiveWindow ? existingEnd : null;
+          await env.DB.prepare(`
+            INSERT INTO center_plan_schedules (id, center_id, to_plan, to_billing_cycle, to_enabled_modules, to_monthly_price, status, apply_at, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+          `).bind(
+            crypto.randomUUID(), centerId, targetPlan, targetCycle, JSON.stringify(targetModules),
+            periodAmount || null,
+            applyAt,
+            forceScheduled
+              ? `Changement programmé par l'administrateur: ${planLabel(targetPlan)} (${targetCycle})`
+              : `Période déjà payée — ${planLabel(targetPlan)} (${targetCycle}) programmé pour la fin de la période`,
+            now
+          ).run();
+          return json({
+            success: true,
+            mode: 'scheduled',
+            applyAt,
+            amount: periodAmount,
+            reason: forceScheduled ? 'manual' : windowPaid ? 'window_paid' : 'active_window',
+            message: applyAt
+              ? `Changement programmé pour le ${fmtFr(applyAt)} — la période payée reste inchangée.`
+              : 'Changement programmé pour la prochaine reconduction.',
+          });
+        } catch {
+          // Never apply a paid-window change immediately as a fallback — that
+          // would discard paid days. Fail loudly instead.
+          return json({ error: 'Impossible d’enregistrer le changement programmé (table center_plan_schedules absente — appliquez la migration 0027).' }, 503);
+        }
       }
 
       // Immediate replacement: the window is NOT paid (or the center is in
@@ -263,9 +331,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       await env.DB.prepare(
         `UPDATE center_invoices SET status = 'cancelled' WHERE center_id = ? AND status IN ('pending','overdue')`
       ).bind(centerId).run();
-      await env.DB.prepare(
-        `UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — superseded' WHERE center_id = ? AND status = 'pending'`
-      ).bind(centerId).run();
+      try {
+        await env.DB.prepare(
+          `UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — superseded' WHERE center_id = ? AND status = 'pending'`
+        ).bind(centerId).run();
+      } catch { /* schedules table missing (migration 0027) */ }
 
       const base = center.status === 'trial' && Number(center.trial_ends_at) > now
         ? Number(center.trial_ends_at)

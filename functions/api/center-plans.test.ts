@@ -20,7 +20,7 @@ interface CenterRow {
   enabled_modules: string;
 }
 
-function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean } = {}) {
+function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedules?: boolean } = {}) {
   const calls: Array<{ sql: string; args: any[] }> = [];
   return {
     calls,
@@ -36,6 +36,9 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean } = {}) {
               return null;
             },
             async all(): Promise<{ results: any[] }> {
+              if (opts.noSchedules && sql.includes('center_plan_schedules')) {
+                throw new Error('D1_ERROR: no such table: center_plan_schedules');
+              }
               if (sql.includes('module_prices')) {
                 return { results: [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
               }
@@ -59,6 +62,9 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean } = {}) {
               return { results: [] };
             },
             async run() {
+              if (opts.noSchedules && sql.includes('center_plan_schedules')) {
+                throw new Error('D1_ERROR: no such table: center_plan_schedules');
+              }
               calls.push({ sql, args });
               return { meta: { changes: 1 } };
             },
@@ -84,6 +90,15 @@ const ACTIVE_UNPAID: CenterRow = {
   enabled_modules: '["scolaire","finance","studentTimeSheets"]',
 };
 const ACTIVE_PAID: CenterRow = { ...ACTIVE_UNPAID, monthly_price: 75 };
+const STARTS_TODAY: CenterRow = {
+  ...ACTIVE_UNPAID,
+  subscription_ends_at: Date.now() + 30 * DAY, // window start = today
+};
+const EXPIRED: CenterRow = {
+  id: 'c4', status: 'expired', plan: 'starter', billing_cycle: 'monthly', monthly_price: 60,
+  subscription_ends_at: Date.now() - 5 * DAY, trial_ends_at: null,
+  enabled_modules: '["scolaire","finance","studentTimeSheets"]',
+};
 const TRIAL: CenterRow = {
   id: 'c2', status: 'trial', plan: 'starter', billing_cycle: 'monthly', monthly_price: 0,
   subscription_ends_at: null, trial_ends_at: Date.now() + 5 * DAY,
@@ -197,5 +212,109 @@ describe('center-plans GET', () => {
     const request = new Request('https://example.test/api/center-plans?centerId=nope');
     const res = await onRequestGet({ env: { DB: db }, request } as any);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('center-plans POST — add-trial (free days)', () => {
+  it('mid-period: days are appended at the END and the unpaid invoice is stretched', async () => {
+    const db = makeDb(ACTIVE_UNPAID);
+    const res = await post({ action: 'add-trial', centerId: 'c1', days: 7 }, db);
+    const data = await res.json() as any;
+    expect(data.mode).toBe('trial_added');
+    expect(data.placement).toBe('end');
+
+    const centersUpd = db.calls.find((c: any) => c.sql.includes('UPDATE centers'));
+    expect(centersUpd.args[0]).toBe(ACTIVE_UNPAID.subscription_ends_at! + 7 * DAY);
+    // The pending invoice covering the window end gets the extra days, same amount.
+    const inv = db.calls.find((c: any) => c.sql.includes('UPDATE center_invoices SET period_end = period_end + ?'));
+    expect(inv).toBeTruthy();
+    expect(inv.args[0]).toBe(7 * DAY);
+    expect(inv.args[2]).toBe(ACTIVE_UNPAID.subscription_ends_at);
+    // No new invoice, nothing cancelled — the period is just stretched.
+    expect(db.calls.some((c: any) => c.sql.includes('INSERT INTO center_invoices'))).toBe(false);
+    expect(db.calls.some((c: any) => c.sql.includes("SET status = 'cancelled'"))).toBe(false);
+  });
+
+  it('plan starting today: days are added at the START — pending invoice pushed back', async () => {
+    const db = makeDb(STARTS_TODAY);
+    const res = await post({ action: 'add-trial', centerId: 'c1', days: 5 }, db);
+    const data = await res.json() as any;
+    expect(data.placement).toBe('start');
+
+    const inv = db.calls.find((c: any) => c.sql.includes('UPDATE center_invoices SET period_start = period_start + ?'));
+    expect(inv).toBeTruthy();
+    expect(inv.args[0]).toBe(5 * DAY);
+    expect(inv.args[1]).toBe(5 * DAY);
+    const centersUpd = db.calls.find((c: any) => c.sql.includes('UPDATE centers'));
+    expect(centersUpd.args[0]).toBe(STARTS_TODAY.subscription_ends_at! + 5 * DAY);
+    expect(data.message).toContain('au début');
+  });
+
+  it('trial center: the ongoing trial is extended, billing shifts later', async () => {
+    const db = makeDb(TRIAL);
+    const res = await post({ action: 'add-trial', centerId: 'c2', days: 10 }, db);
+    const data = await res.json() as any;
+    expect(data.placement).toBe('start');
+    expect(data.message).toContain('Essai prolongé');
+    const centersUpd = db.calls.find((c: any) => c.sql.includes('UPDATE centers'));
+    expect(centersUpd.args[1]).toBe(TRIAL.trial_ends_at! + 10 * DAY);
+  });
+
+  it('without a live subscription or trial → 400 (must activate a plan first)', async () => {
+    const db = makeDb(EXPIRED);
+    const res = await post({ action: 'add-trial', centerId: 'c4', days: 5 }, db);
+    expect(res.status).toBe(400);
+    expect(db.calls).toHaveLength(0);
+  });
+
+  it('rejects invalid day counts', async () => {
+    const db = makeDb(ACTIVE_UNPAID);
+    expect((await post({ action: 'add-trial', centerId: 'c1', days: 0 }, db)).status).toBe(400);
+    expect((await post({ action: 'add-trial', centerId: 'c1', days: 4000 }, db)).status).toBe(400);
+  });
+});
+
+describe('center-plans — expired center back to active', () => {
+  it('set-plan on an expired center re-activates it with a fresh window + one pending invoice', async () => {
+    const db = makeDb(EXPIRED, { windowPaid: false });
+    const res = await post({ action: 'set-plan', centerId: 'c4', plan: 'basic', billingCycle: 'monthly' }, db);
+    const data = await res.json() as any;
+    expect(data.success).toBe(true);
+    const centersUpd = db.calls.find((c: any) => c.sql.includes('UPDATE centers'));
+    expect(centersUpd.sql).toContain("status = 'active'");
+    expect(centersUpd.args[4]).toBeGreaterThan(Date.now()); // subscription ends in the future
+    const insert = db.calls.find((c: any) => c.sql.includes('INSERT INTO center_invoices'));
+    expect(insert).toBeTruthy();
+    expect(data.invoice).toBeTruthy();
+  });
+});
+
+describe('center-plans — resilience when migration 0027 is not applied', () => {
+  it('GET still answers (schedules list degrades to empty)', async () => {
+    const db = makeDb(ACTIVE_UNPAID, { noSchedules: true });
+    const request = new Request('https://example.test/api/center-plans?centerId=c1');
+    const res = await onRequestGet({ env: { DB: db }, request } as any);
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.schedules).toEqual([]);
+    expect(data.invoices.length).toBeGreaterThan(0);
+  });
+
+  it('remove-plan expires the center even though schedules cannot be cancelled', async () => {
+    const db = makeDb(ACTIVE_UNPAID, { noSchedules: true });
+    const res = await post({ action: 'remove-plan', centerId: 'c1' }, db);
+    expect(res.status).toBe(200);
+    expect(db.calls.some((c: any) => c.sql.includes("UPDATE centers SET status = 'expired'"))).toBe(true);
+  });
+
+  it('scheduling a paid-window change FAILS loudly instead of applying it and losing paid days', async () => {
+    const db = makeDb(ACTIVE_PAID, { windowPaid: true, noSchedules: true });
+    const res = await post({ action: 'set-plan', centerId: 'c1', plan: 'growth', billingCycle: 'annual' }, db);
+    expect(res.status).toBe(503);
+    const data = await res.json() as any;
+    expect(data.error).toContain('0027');
+    // No center write, no invoice write.
+    expect(db.calls.filter((c: any) => c.sql.includes('UPDATE centers'))).toHaveLength(0);
+    expect(db.calls.filter((c: any) => c.sql.includes('center_invoices'))).toHaveLength(0);
   });
 });
