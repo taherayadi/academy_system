@@ -67,6 +67,7 @@ export interface DemoRequest {
 export type AdvertisementLocation =
   | 'landing_page'
   | 'center_admin'
+  | 'both' // visible on the landing page AND in the selected centers' dashboards
   | string; // Allow custom locations
 
 export interface PlatformAdvertisement {

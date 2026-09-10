@@ -2034,13 +2034,47 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   );
 }
 
+// Emplacements connus → libellés français (une valeur inconnue s'affiche telle quelle).
+const AD_LOCATION_LABELS: Record<string, string> = {
+  landing_page: 'Page d’accueil',
+  center_admin: 'Tableau de bord des centres',
+  both: 'Accueil + tableaux de bord',
+};
+const adLocationLabel = (loc?: string) => (loc && AD_LOCATION_LABELS[loc]) || loc || '—';
+
+type AdStatus = 'live' | 'draft' | 'scheduled' | 'paused' | 'expired';
+function adStatusOf(ad: PlatformAdvertisement, now = Date.now()): AdStatus {
+  if (!ad.isActive) return 'paused';
+  const sod = new Date(now); sod.setHours(0, 0, 0, 0);
+  const eod = new Date(now); eod.setHours(23, 59, 59, 999);
+  if (ad.dateEnd < sod.getTime()) return 'expired';
+  if (ad.dateStart > eod.getTime()) return 'scheduled';
+  return ad.isPublished ? 'live' : 'draft';
+}
+const AD_STATUS_META: Record<AdStatus, { label: string; cls: string }> = {
+  live: { label: 'En ligne', cls: 'bg-emerald-100 text-emerald-700' },
+  draft: { label: 'Brouillon', cls: 'bg-amber-100 text-amber-700' },
+  scheduled: { label: 'Programmée', cls: 'bg-sky-100 text-sky-700' },
+  paused: { label: 'En pause', cls: 'bg-slate-200 text-slate-500' },
+  expired: { label: 'Expirée', cls: 'bg-red-100 text-red-600' },
+};
+const AD_STATUS_FILTERS: Array<{ value: 'all' | AdStatus; label: string }> = [
+  { value: 'all', label: 'Toutes' },
+  { value: 'live', label: 'En ligne' },
+  { value: 'draft', label: 'Brouillons' },
+  { value: 'scheduled', label: 'Programmées' },
+  { value: 'paused', label: 'En pause' },
+  { value: 'expired', label: 'Expirées' },
+];
+
 // ─── Advertisement create/edit modal ───────────────────────────────────────
 // The platform dashboard's « إعلان جديد » / « تعديل » buttons open this form.
 // One upload per file (same ImageKit path as the platform logo); at least one
 // image and one center are required — same rules as the backend.
 const AD_LOCATION_OPTIONS = [
   { value: 'landing_page', label: 'Page d’accueil (vitrine)' },
-  { value: 'center_admin', label: 'Tableau de bord du centre' },
+  { value: 'center_admin', label: 'Tableau de bord des centres' },
+  { value: 'both', label: 'Accueil + tableaux de bord' },
   { value: '__custom__', label: 'Emplacement personnalisé…' },
 ];
 
@@ -2059,7 +2093,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   const toast = useToast();
   const isEdit = !!ad;
   const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
-  const knownLocation = !ad || ad.location === 'landing_page' || ad.location === 'center_admin';
+  const knownLocation = !ad || ['landing_page', 'center_admin', 'both'].includes(String(ad.location));
 
   const [title, setTitle] = useState(ad?.title || '');
   const [locationSel, setLocationSel] = useState(knownLocation ? (ad?.location || 'landing_page') : '__custom__');
@@ -2077,6 +2111,9 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
 
   const location = locationSel === '__custom__' ? customLocation.trim() : locationSel;
+  // Une pub de vitrine ne cible aucun centre ; tableau de bord (+ both) en exigent un.
+  const centersRequired = locationSel === 'center_admin' || locationSel === 'both';
+  const showCenterPicker = locationSel !== 'landing_page';
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -2100,7 +2137,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
     if (!title.trim()) { toast.error('Le titre de l’annonce est requis.'); return; }
     if (!location) { toast.error('Choisissez (ou saisissez) un emplacement.'); return; }
     if (imageUrls.length === 0) { toast.error('Ajoutez au moins une image.'); return; }
-    if (centerIds.length === 0) { toast.error('Sélectionnez au moins un centre.'); return; }
+    if (centersRequired && centerIds.length === 0) { toast.error('Sélectionnez au moins un centre cible.'); return; }
     if (!startTs || !endTs || endTs < startTs) { toast.error('Dates invalides — la fin doit suivre le début.'); return; }
     setSaving(true);
     try {
@@ -2114,7 +2151,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
         priority: Number(priority) || 100,
         isActive,
         isPublished,
-        centerIds,
+        centerIds: locationSel === 'landing_page' ? [] : centerIds,
       };
       if (isEdit && ad) await updateAdvertisementApi(ad.id, payload);
       else await createAdvertisementApi(payload);
@@ -2158,8 +2195,8 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
               <input id="ad-title" value={title} onChange={e => setTitle(e.target.value)} className={fieldCls} />
             </div>
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Emplacement *</label>
-              <select value={locationSel} onChange={e => setLocationSel(e.target.value)} className={`${fieldCls} cursor-pointer`}>
+              <label htmlFor="ad-location" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Emplacement *</label>
+              <select id="ad-location" value={locationSel} onChange={e => setLocationSel(e.target.value)} className={`${fieldCls} cursor-pointer`}>
                 {AD_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               {locationSel === '__custom__' && (
@@ -2225,8 +2262,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             </div>
           </div>
 
-          <div>
-            <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Centres ciblés * ({centerIds.length})</p>
+          {showCenterPicker && <div>
+            <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">
+              Centres ciblés{centersRequired ? ' *' : ' (optionnel)'} ({centerIds.length})
+            </p>
             {centers.length === 0 ? (
               <p className="text-[11px] font-semibold text-slate-400">Aucun centre sur la plateforme.</p>
             ) : (
@@ -2240,7 +2279,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
+          {!showCenterPicker && (
+            <p className="text-[10px] font-semibold text-slate-400">Une publicité de vitrine ne cible aucun centre — elle s’affiche sur la page d’accueil.</p>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
@@ -2304,6 +2346,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [advertisements, setAdvertisements] = useState<PlatformAdvertisement[]>([]);
   const [adsLoading, setAdsLoading] = useState(false);
   const [adsPage, setAdsPage] = useState(1);
+  const [adsStatusFilter, setAdsStatusFilter] = useState<'all' | AdStatus>('all');
   const [showNewAd, setShowNewAd] = useState(false);
   const [editAd, setEditAd] = useState<PlatformAdvertisement | null>(null);
   const [deleteAd, setDeleteAd] = useState<PlatformAdvertisement | null>(null);
@@ -2314,7 +2357,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       const ads = await fetchAdvertisementsApi();
       setAdvertisements(ads);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطأ في تحميل الإعلانات');
+      toast.error(err instanceof Error ? err.message : 'Erreur de chargement des publicités');
     } finally {
       setAdsLoading(false);
     }
@@ -2325,6 +2368,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       loadAdvertisements();
     }
   }, [page, loadAdvertisements]);
+
+  const visibleAds = adsStatusFilter === 'all'
+    ? advertisements
+    : advertisements.filter(a => adStatusOf(a) === adsStatusFilter);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2348,6 +2395,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setReqTypeFilter('all'); setReqStatusFilter('new');
     setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); setInvoiceCentersPage(1);
     setCentersPage(1); setRequestsPage(1);
+    setAdsStatusFilter('all'); setAdsPage(1);
   }, [page]);
 
   // Finance data is loaded exactly once per entry into the Finance tab, and on
@@ -3755,24 +3803,37 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       {/* ─── Advertisements Page ───────────────────────────────────────── */}
       {page === 'advertisements' && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black text-slate-800">الإعلانات</h2>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-2xl font-black text-slate-800">Gestion des publicités</h2>
               {!adsLoading && (
                 <span className="px-3 py-1 bg-slate-100 border border-slate-200 rounded-full text-sm font-black text-slate-600">
                   {advertisements.length}
                 </span>
               )}
+              <div className="flex flex-wrap gap-1.5">
+                {AD_STATUS_FILTERS.map(f => {
+                  const count = f.value === 'all' ? advertisements.length : advertisements.filter(a => adStatusOf(a) === f.value).length;
+                  const on = adsStatusFilter === f.value;
+                  return (
+                    <button key={f.value}
+                      onClick={() => { setAdsStatusFilter(f.value); setAdsPage(1); }}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-black border transition cursor-pointer ${on ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'}`}>
+                      {f.label} <span className={on ? 'text-white/70' : 'text-slate-400'}>({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={loadAdvertisements} disabled={adsLoading}
-                className="p-2 hover:bg-slate-100 rounded-xl transition">
+              <button onClick={loadAdvertisements} disabled={adsLoading} title="Actualiser"
+                className="p-2 hover:bg-slate-100 rounded-xl transition cursor-pointer">
                 <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} />
               </button>
               <button onClick={() => setShowNewAd(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-md hover:shadow-lg transition">
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-md hover:shadow-lg transition cursor-pointer">
                 <Plus className="h-4 w-4" />
-                إعلان جديد
+                Nouvelle publicité
               </button>
             </div>
           </div>
@@ -3784,12 +3845,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           ) : advertisements.length === 0 ? (
             <div className="text-center py-20 text-slate-500">
               <ImagePlus className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-              <p className="font-bold">لا توجد إعلانات</p>
-              <p className="text-sm">أنشئ أول إعلان لك</p>
+              <p className="font-bold">{advertisements.length === 0 ? 'Aucune publicité' : 'Aucune publicité pour ce filtre'}</p>
+              <p className="text-sm">{advertisements.length === 0 ? 'Créez la première bannière de la vitrine ou des tableaux de bord.' : 'Changez de filtre pour voir d’autres statuts.'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {advertisements.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (
+              {visibleAds.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (
                 <div key={ad.id} className="border-2 border-slate-200 rounded-xl p-4 bg-white hover:border-[#257C86]/30 transition">
                   <div className="aspect-video bg-slate-100 rounded-lg mb-3 overflow-hidden">
                     {ad.imageUrls?.[0] && (
@@ -3798,18 +3859,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <h3 className="font-black text-slate-800 mb-2">{ad.title}</h3>
                   <div className="flex flex-wrap gap-2 mb-3">
+                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${AD_STATUS_META[adStatusOf(ad)].cls}`}>
+                      {AD_STATUS_META[adStatusOf(ad)].label}
+                    </span>
                     <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">
-                      {ad.location}
-                    </span>
-                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${ad.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {ad.isActive ? 'نشط' : 'غير نشط'}
-                    </span>
-                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${ad.isPublished ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {ad.isPublished ? 'منشور' : 'مسودة'}
+                      {adLocationLabel(ad.location)}
                     </span>
                     {ad.centerIds?.length > 0 && (
                       <span className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full">
-                        {ad.centerIds.length} مركز
+                        {ad.centerIds.length} centre{ad.centerIds.length > 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
@@ -3820,10 +3878,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <button onClick={() => setEditAd(ad)}
                       className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition">
                       <Edit className="h-4 w-4 inline mr-1" />
-                      تعديل
+                      Modifier
                     </button>
-                    <button onClick={() => setDeleteAd(ad)}
-                      className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition">
+                    <button onClick={() => setDeleteAd(ad)} title="Supprimer"
+                      className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition cursor-pointer">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -3833,7 +3891,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           )}
 
           {/* Pagination */}
-          {!adsLoading && advertisements.length > PAGE_SIZE && (
+          {!adsLoading && visibleAds.length > PAGE_SIZE && (
             <div className="flex items-center justify-center gap-2 pt-4">
               <button
                 onClick={() => setAdsPage(p => Math.max(1, p - 1))}
@@ -3842,11 +3900,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="px-4 py-2 text-sm font-bold text-slate-600">
-                {adsPage} / {Math.ceil(advertisements.length / PAGE_SIZE)}
+                {adsPage} / {Math.ceil(visibleAds.length / PAGE_SIZE)}
               </span>
               <button
-                onClick={() => setAdsPage(p => Math.min(Math.ceil(advertisements.length / PAGE_SIZE), p + 1))}
-                disabled={adsPage >= Math.ceil(advertisements.length / PAGE_SIZE)}
+                onClick={() => setAdsPage(p => Math.min(Math.ceil(visibleAds.length / PAGE_SIZE), p + 1))}
+                disabled={adsPage >= Math.ceil(visibleAds.length / PAGE_SIZE)}
                 className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -3912,17 +3970,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       />
       <ConfirmDialog
         open={!!deleteAd}
-        title="حذف الإعلان؟"
-        message={`هل أنت متأكد من حذف "${deleteAd?.title}"؟ هذا الإجراء لا يمكن التراجع عنه.`}
+        title="Supprimer cette publicité ?"
+        message={`Supprimer « ${deleteAd?.title} » ? Cette action est irréversible.`}
         onConfirm={async () => {
           if (!deleteAd) return;
           try {
             await deleteAdvertisementApi(deleteAd.id);
-            toast.success('تم حذف الإعلان بنجاح');
+            toast.success('Publicité supprimée');
             setDeleteAd(null);
             loadAdvertisements();
           } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'خطأ في حذف الإعلان');
+            toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression');
           }
         }}
         onCancel={() => setDeleteAd(null)}

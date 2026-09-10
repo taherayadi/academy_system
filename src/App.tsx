@@ -105,6 +105,7 @@ import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
+import AdvertisementCarousel from './components/AdvertisementCarousel';
 import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
@@ -1065,6 +1066,10 @@ export default function App() {
       {/* CORE CANVAS */}
       <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-5 xl:p-8 overflow-y-auto max-h-screen">
         <div className="max-w-7xl mx-auto">
+          {/* Bannière publicitaire du centre (campagnes « Tableau de bord » ou « Accueil + tableaux ») */}
+          {!isPlatformSuperAdmin && currentCenter && (
+            <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
+          )}
           
           <AnimatePresence mode="wait">
             <motion.div

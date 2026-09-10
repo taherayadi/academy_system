@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import AdvertisementCarousel from './AdvertisementCarousel';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
@@ -612,6 +613,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
           </div>
         </div>
       </section>
+
+      {/* ─── PUBLICITÉ — bannières actives de la vitrine (gérées dans l'admin SaaS) ─── */}
+      <AdvertisementCarousel location="landing_page" className="mx-auto mb-10 w-[min(1150px,94vw)] rounded-2xl shadow-xl" />
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">

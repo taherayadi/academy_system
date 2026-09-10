@@ -30,12 +30,19 @@ function formatAdvertisement(row: any, centerIds: string[] = []): any {
   };
 }
 
+// Landing-page ads target no center; center dashboard / both placements are
+// scoped to the selected centers (at least one).
+const CENTER_SCOPED_ADS_LOCATIONS = new Set(['center_admin', 'both']);
+function adsRequireCenters(location: unknown): boolean {
+  return CENTER_SCOPED_ADS_LOCATIONS.has(String(location || '').trim());
+}
+
 // GET /api/platform-advertisements - List all advertisements with center assignments
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح لك بالوصول إلى لوحة المنصة.' }, 403);
+      return json({ error: 'Accès refusé à la console plateforme.' }, 403);
     }
 
     // Fetch all advertisements with their assigned centers
@@ -66,7 +73,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح.' }, 403);
+      return json({ error: 'Accès refusé.' }, 403);
     }
 
     const body = await readBody(request);
@@ -79,26 +86,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const priority = Number(body.priority) || 100;
     const isActive = body.isActive !== undefined ? !!body.isActive : true;
     const isPublished = body.isPublished !== undefined ? !!body.isPublished : false;
-    const centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
+    let centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
 
     // Validation
     if (!title) {
-      return json({ error: 'عنوان الإعلان مطلوب.' }, 400);
+      return json({ error: 'Le titre de l’annonce est requis.' }, 400);
     }
     if (!location) {
-      return json({ error: 'موقع الإعلان مطلوب.' }, 400);
+      return json({ error: 'L’emplacement de l’annonce est requis.' }, 400);
     }
     if (imageUrls.length === 0) {
-      return json({ error: 'يجب إضافة صورة واحدة على الأقل.' }, 400);
+      return json({ error: 'Ajoutez au moins une image.' }, 400);
     }
-    if (centerIds.length === 0) {
-      return json({ error: 'يجب اختيار مركز واحد على الأقل.' }, 400);
+    // A landing-page ad belongs to no center — anything sent is ignored.
+    if (location === 'landing_page') {
+      centerIds = [];
+    } else if (adsRequireCenters(location) && centerIds.length === 0) {
+      return json({ error: 'Choisissez au moins un centre cible.' }, 400);
     }
     if (!dateStart || !dateEnd) {
-      return json({ error: 'تاريخ البداية والنهاية مطلوبان.' }, 400);
+      return json({ error: 'Dates de début et de fin requises.' }, 400);
     }
     if (dateEnd < dateStart) {
-      return json({ error: 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية.' }, 400);
+      return json({ error: 'La date de fin doit suivre la date de début.' }, 400);
     }
 
     const id = 'ADV_' + Date.now() + '_' + crypto.randomUUID().slice(0, 8);
@@ -140,23 +150,23 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح.' }, 403);
+      return json({ error: 'Accès refusé.' }, 403);
     }
 
     const body = await readBody(request);
     const id = String(body.id || '').trim();
 
     if (!id) {
-      return json({ error: 'معرف الإعلان مفقود.' }, 400);
+      return json({ error: 'Identifiant d’annonce manquant.' }, 400);
     }
 
     // Check if advertisement exists
     const existing = await env.DB.prepare(
-      'SELECT id FROM platform_advertisements WHERE id = ?'
+      'SELECT id, location FROM platform_advertisements WHERE id = ?'
     ).bind(id).first<any>();
 
     if (!existing) {
-      return json({ error: 'الإعلان غير موجود.' }, 404);
+      return json({ error: 'Annonce introuvable.' }, 404);
     }
 
     const statements = [];
@@ -168,7 +178,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.title !== undefined) {
       const title = String(body.title).trim();
       if (!title) {
-        return json({ error: 'عنوان الإعلان مطلوب.' }, 400);
+        return json({ error: 'Le titre de l’annonce est requis.' }, 400);
       }
       updates.push('title = ?');
       binds.push(title);
@@ -187,7 +197,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.location !== undefined) {
       const location = String(body.location).trim();
       if (!location) {
-        return json({ error: 'موقع الإعلان مطلوب.' }, 400);
+        return json({ error: 'L’emplacement de l’annonce est requis.' }, 400);
       }
       updates.push('location = ?');
       binds.push(location);
@@ -196,7 +206,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (body.imageUrls !== undefined) {
       const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
       if (imageUrls.length === 0) {
-        return json({ error: 'يجب إضافة صورة واحدة على الأقل.' }, 400);
+        return json({ error: 'Ajoutez au moins une image.' }, 400);
       }
       updates.push('image_urls = ?');
       binds.push(JSON.stringify(imageUrls));
@@ -238,23 +248,37 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     // Update center assignments if provided
     if (body.centerIds !== undefined) {
       const centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
-      if (centerIds.length === 0) {
-        return json({ error: 'يجب اختيار مركز واحد على الأقل.' }, 400);
-      }
+      const finalLocation = body.location !== undefined
+        ? String(body.location).trim()
+        : String(existing?.location || '');
 
-      // Delete existing assignments
+      if (finalLocation === 'landing_page') {
+        // Landing page ads are never center-scoped: drop the assignments.
+        statements.push(
+          env.DB.prepare('DELETE FROM advertisement_centers WHERE advertisement_id = ?').bind(id)
+        );
+      } else if (centerIds.length === 0) {
+        if (adsRequireCenters(finalLocation)) {
+          return json({ error: 'Choisissez au moins un centre cible.' }, 400);
+        }
+      } else {
+        // Replace assignments
+        statements.push(
+          env.DB.prepare('DELETE FROM advertisement_centers WHERE advertisement_id = ?').bind(id)
+        );
+        centerIds.forEach((centerId: string) => {
+          statements.push(
+            env.DB.prepare(
+              'INSERT INTO advertisement_centers (advertisement_id, center_id) VALUES (?, ?)'
+            ).bind(id, centerId)
+          );
+        });
+      }
+    } else if (body.location !== undefined && String(body.location).trim() === 'landing_page') {
+      // Switching an existing ad to the landing page clears its centers.
       statements.push(
         env.DB.prepare('DELETE FROM advertisement_centers WHERE advertisement_id = ?').bind(id)
       );
-
-      // Insert new assignments
-      centerIds.forEach((centerId: string) => {
-        statements.push(
-          env.DB.prepare(
-            'INSERT INTO advertisement_centers (advertisement_id, center_id) VALUES (?, ?)'
-          ).bind(id, centerId)
-        );
-      });
     }
 
     if (statements.length > 0) {
@@ -273,14 +297,14 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح.' }, 403);
+      return json({ error: 'Accès refusé.' }, 403);
     }
 
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
     if (!id) {
-      return json({ error: 'معرف الإعلان مفقود.' }, 400);
+      return json({ error: 'Identifiant d’annonce manquant.' }, 400);
     }
 
     // Delete advertisement (CASCADE will handle advertisement_centers)

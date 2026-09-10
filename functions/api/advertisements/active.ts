@@ -18,10 +18,19 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const centerId = url.searchParams.get('centerId');
 
     if (!location) {
-      return json({ error: 'موقع الإعلان مطلوب.' }, 400);
+      return json({ error: 'Emplacement d’annonce requis.' }, 400);
     }
 
     const now = Date.now();
+    // Ads placed on « both » are visible on the two known surfaces: the
+    // public landing page and the center dashboards.
+    const isPlatformSurface = location === 'landing_page' || location === 'center_admin';
+    const locationCond = isPlatformSurface ? `(a.location = ? OR a.location = 'both')` : 'a.location = ?';
+
+    if (location === 'center_admin' && !centerId) {
+      // Center-scoped placements need a center context to be resolved.
+      return json({ advertisements: [] });
+    }
 
     let query: string;
     let binds: any[];
@@ -34,7 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           a.image_urls, a.link_url, a.priority
         FROM platform_advertisements a
         INNER JOIN advertisement_centers ac ON a.id = ac.advertisement_id
-        WHERE a.location = ?
+        WHERE ${locationCond}
           AND ac.center_id = ?
           AND a.is_active = 1
           AND a.is_published = 1
@@ -50,7 +59,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           a.id, a.title, a.date_start, a.date_end, a.location,
           a.image_urls, a.link_url, a.priority
         FROM platform_advertisements a
-        WHERE a.location = ?
+        WHERE ${locationCond}
           AND a.is_active = 1
           AND a.is_published = 1
           AND a.date_start <= ?
@@ -76,6 +85,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     return json({ advertisements });
   } catch (err) {
     console.error('Error fetching active advertisements:', err);
-    return json({ error: 'خطأ في جلب الإعلانات.' }, 500);
+    return json({ error: 'Erreur lors du chargement des annonces.' }, 500);
   }
 };

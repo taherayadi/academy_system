@@ -619,32 +619,91 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
     await waitFor(() => expect(api.fetchAdvertisementsApi).toHaveBeenCalled());
     expect(screen.getByText('Publicité')).toBeTruthy();
-    expect(screen.getByText('لا توجد إعلانات')).toBeTruthy();
+    expect(screen.getByText('Aucune publicité')).toBeTruthy();
+    expect(screen.getByText('Gestion des publicités')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nouvelle publicité/ })).toBeTruthy();
   });
 
   it('« إعلان جديد » opens the form; submitting creates the advertisement', async () => {
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
     await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    // Landing page: the center picker is not even shown.
+    expect(screen.queryByText(/Centres ciblés/)).toBeNull();
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Promo rentrée' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/a.jpg' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Centre Alpha/ }));
     fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
 
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Promo rentrée',
       location: 'landing_page',
       imageUrls: ['https://cdn.test/a.jpg'],
-      centerIds: ['c1'],
+      centerIds: [],
       isActive: true,
       isPublished: false,
     })));
     await waitFor(() => expect(screen.queryByText('Nouvelle annonce')).toBeNull());
     // List is refreshed after create
     expect((api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('cards show French status/location labels and the status filter narrows the list', async () => {
+    const now = Date.now();
+    const DAY = 86400000;
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'a1', title: 'Rentrée', dateStart: now - 2 * DAY, dateEnd: now + 5 * DAY, location: 'landing_page', imageUrls: ['https://cdn.test/1.jpg'], linkUrl: '', priority: 10, isActive: true, isPublished: true, centerIds: [], createdAt: now, updatedAt: now },
+      { id: 'a2', title: 'Noël', dateStart: now - 30 * DAY, dateEnd: now - 2 * DAY, location: 'center_admin', imageUrls: ['https://cdn.test/2.jpg'], linkUrl: '', priority: 20, isActive: true, isPublished: true, centerIds: ['c1'], createdAt: now, updatedAt: now },
+    ]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Rentrée')).toBeTruthy());
+    expect(screen.getAllByText('En ligne')).toHaveLength(2); // pastille du filtre + badge de la carte
+    expect(screen.getByText('Expirée')).toBeTruthy();        // statut du second
+    expect(screen.getByText('Page d’accueil')).toBeTruthy(); // jamais la clé brute
+    expect(screen.queryByText('landing_page')).toBeNull();
+    expect(screen.getByText('Tableau de bord des centres')).toBeTruthy();
+
+    // Filtre : une seule carte restante.
+    fireEvent.click(screen.getByRole('button', { name: /Expirées/ }));
+    await waitFor(() => expect(screen.queryByText('Rentrée')).toBeNull());
+    expect(screen.getByText('Noël')).toBeTruthy();
+    // Et le compteur « Toutes » reflète la liste complète.
+    expect(screen.getByRole('button', { name: /Toutes \(2\)/ })).toBeTruthy();
+  });
+
+  it('modal: centers required for « Tableau de bord », optional for « both »+custom, never for landing', async () => {
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
+    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    const loc = () => document.getElementById('ad-location') as unknown as HTMLSelectElement;
+    expect(Array.from(loc().options).map(o => o.value)).toEqual(
+      expect.arrayContaining(['landing_page', 'center_admin', 'both', '__custom__'])
+    );
+
+    // → tableau de bord : le sélecteur apparaît et la validation exige un centre.
+    fireEvent.change(loc(), { target: { value: 'center_admin' } });
+    expect(screen.getByText(/Centres ciblés \* \(0\)/)).toBeTruthy();
+    fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'X' } });
+    fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/x.jpg' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    expect(api.createAdvertisementApi).not.toHaveBeenCalled();
+
+    // un centre coché → OK, et « both » garde le sélecteur
+    fireEvent.click(screen.getByRole('checkbox', { name: /Centre Alpha/ }));
+    fireEvent.change(loc(), { target: { value: 'both' } });
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
+      location: 'both',
+      centerIds: ['c1'],
+    })));
   });
 
   it('edit reuses the form prefilled and PATCHes the advertisement', async () => {
@@ -656,7 +715,7 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([ad]);
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /تعديل/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
     await waitFor(() => expect(screen.getByText('Modifier l’annonce')).toBeTruthy());
     expect((document.getElementById('ad-title') as HTMLInputElement).value).toBe('Cantine');
     fireEvent.click(screen.getByRole('button', { name: /Enregistrer les modifications/ }));
