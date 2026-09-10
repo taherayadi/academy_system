@@ -312,7 +312,12 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     expect(payload.autoCalculatePrice).toBeUndefined();
   });
 
-  it('plan manager edits the running plan and routes it through the plans API', async () => {
+  it('plan manager: mid-period increase shows the prorated settlement and submits via the plan-change engine', async () => {
+    // Growth = scolaire 40 + finance 40 → 80/mois > the center's stored 75: hausse.
+    (api.fetchModulePricesApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { module_key: 'scolaire', price: 40 },
+      { module_key: 'finance', price: 40 },
+    ]);
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
 
@@ -320,19 +325,91 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     await waitFor(() => expect(screen.getByText(/INV-PEND/)).toBeTruthy());
     expect(screen.getByText('Fenêtre non payée')).toBeTruthy();
 
+    // Growth with priced modules (80/mois) beats the stored 75 → hausse.
     fireEvent.click(screen.getByRole('button', { name: /Modifier le plan/ }));
-    // Unpaid window → the explanatory note promises the invoice replacement.
-    expect(screen.getByText(/sera ANNULÉE et remplacée/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+    // Growth = modules selectable, tariff computed live.
+    fireEvent.change(screen.getByTitle('Plan du centre'), { target: { value: 'growth' } });
+    expect(screen.getByText('Modules à activer')).toBeTruthy();
 
-    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'set-plan', centerId: 'c1', plan: 'basic', billingCycle: 'monthly',
+    // Price increase while the (unpaid) window runs → settlement panel.
+    await waitFor(() => expect(screen.getByText(/Changement en cours de période/)).toBeTruthy());
+    expect(screen.getByText(/Période pas encore payée/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+    await waitFor(() => expect(api.updateCenterApi).toHaveBeenCalledWith('c1', expect.objectContaining({
+      plan: 'growth',
+      autoCalculatePrice: true,
+      settlementPolicy: 'unpaid',
     })));
+    // The manager never calls the simple set-plan action for a live window.
+    expect(api.centerPlanActionApi).not.toHaveBeenCalled();
     // The center list is refreshed after the plan action.
     const centersCalls = (api.fetchCentersApi as ReturnType<typeof vi.fn>).mock.calls;
     expect(centersCalls.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('plan manager: a paid invoice covering the subscription (even future-starting) is shown as paid, not « Sans facture »', async () => {
+    const DAY = 86400000;
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'active', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 30, subscriptionEndsAt: Date.now() + 30 * DAY, trialEndsAt: null,
+        enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
+      },
+      // Activation during the trial → the paid window starts in 2 days.
+      invoices: [{
+        id: 'i2', centerId: 'c1', centerName: 'Centre Alpha', invoiceNumber: 'INV-FUT',
+        periodStart: Date.now() + 2 * DAY, periodEnd: Date.now() + 32 * DAY,
+        amount: 30, status: 'paid', paymentDate: Date.now(), notes: '', createdAt: Date.now(),
+      }],
+      schedules: [],
+    });
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+
+    await waitFor(() => expect(screen.getByText('Fenêtre payée')).toBeTruthy());
+    expect(screen.queryByText('Sans facture')).toBeNull();
+    expect(screen.getByText(/INV-FUT.* payée · 30\.00 TND/)).toBeTruthy();
+  });
+
+  it('plan manager: remove-plan asks for confirmation, expires the center and closes the dialog', async () => {
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /Supprimer le plan/ }));
+    // Custom confirmation dialog first.
+    expect(screen.getByText('Supprimer ce plan ?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Oui, supprimer le plan' }));
+
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith({ action: 'remove-plan', centerId: 'c1' }));
+    // After confirming, the whole Plans & factures dialog dismisses itself.
+    await waitFor(() => expect(screen.queryByText('Supprimer le plan')).toBeNull());
+    expect(screen.queryByText('Supprimer ce plan ?')).toBeNull();
+  });
+
+  it('plan manager: an expired center shows « Expiré » instead of « Sans facture », delete disabled', async () => {
+    const DAY = 86400000;
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'expired', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 75, subscriptionEndsAt: Date.now() - 5 * DAY, trialEndsAt: null, enabledModules: [],
+      },
+      invoices: [], schedules: [],
+    });
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+
+    await waitFor(() => expect(screen.getByText(/Abonnement expiré le/)).toBeTruthy());
+    expect(screen.queryByText('Sans facture')).toBeNull();
+    const del = screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement;
+    expect(del.disabled).toBe(true);
+  });
 });
+
 
 describe('PlatformAdminDashboard — Demo requests tab', () => {
   const reqNew = {

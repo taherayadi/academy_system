@@ -478,8 +478,12 @@ export async function createCenterApi(payload: {
     })
   });
   if (res.status === 401) throw new UnauthorizedError();
-  const data: { centerId?: string; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la création du centre.');
+  const data: { centerId?: string; error?: string; code?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || 'Erreur lors de la création du centre.') as Error & { code?: string };
+    (err as Error & { code?: string }).code = data.code;
+    throw err;
+  }
   return { centerId: data.centerId! };
 }
 
@@ -662,6 +666,7 @@ export async function centerPlanActionApi(payload: {
   centerId: string;
   plan?: string;
   billingCycle?: 'monthly' | 'annual';
+  enabledModules?: string[];
   monthlyPrice?: number | null;
   mode?: 'scheduled';
   scheduleId?: string;

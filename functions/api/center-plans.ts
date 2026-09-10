@@ -214,13 +214,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         customPrice,
       }));
 
-      // Was the running window already paid? Then paid days must never be
-      // discarded — schedule the change for the end of the period instead.
+      // Was the running window already paid? Paid days must never be
+      // discarded — schedule the change for the period end instead.
+      // (A future-starting invoice — activation during the trial — also
+      // covers the window, so match by overlap with the subscription, not
+      // strictly by "covers today".)
       let windowPaid = false;
       if (hasLiveWindow) {
         windowPaid = !!(await env.DB.prepare(
-          `SELECT id FROM center_invoices WHERE center_id = ? AND status = 'paid' AND period_start <= ? AND period_end > ? LIMIT 1`
-        ).bind(centerId, now, now).first());
+          `SELECT id FROM center_invoices WHERE center_id = ? AND status = 'paid' AND period_end > ? AND period_start <= ? LIMIT 1`
+        ).bind(centerId, now, existingEnd).first());
       }
 
       const forceScheduled = String(body.mode || '').trim() === 'scheduled';

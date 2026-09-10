@@ -415,7 +415,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const existingUser = await env.DB.prepare('SELECT email FROM users WHERE email = ?').bind(adminEmail).first();
     if (existingUser) {
-      return json({ error: 'البريد الإلكتروني مسجل مسبقاً لمستخدم آخر.' }, 400);
+      return json({ error: 'البريد الإلكتروني مسجل مسبقاً لمستخدم آخر.', code: 'duplicate_email' }, 409);
+    }
+
+    // Friendly duplicates — never leak the raw DB constraint error to the UI.
+    if (slug) {
+      const slugTaken = await env.DB.prepare('SELECT id FROM centers WHERE slug = ?').bind(slug).first();
+      if (slugTaken) {
+        return json({ error: 'Ce nom de centre existe déjà (identifiant/slug identique).', code: 'duplicate_slug' }, 409);
+      }
+    }
+    const nameTaken = await env.DB.prepare('SELECT id FROM centers WHERE lower(name) = lower(?)').bind(name.trim()).first();
+    if (nameTaken) {
+      return json({ error: 'Un centre porte déjà ce nom exact.', code: 'duplicate_name' }, 409);
     }
 
     // A demo request converts exactly once: refuse any second conversion
@@ -551,7 +563,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       message: `تم إنشاء مركز (${name}) وتعيين حساب المدير (${adminEmail}) بنجاح!`
     }, 201);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في إنشاء المركز.' }, 500);
+    const raw = err instanceof Error ? err.message : 'خطأ في إنشاء المركز.';
+    if (/UNIQUE constraint failed/i.test(raw)) {
+      // Race between the pre-check and the INSERT — map to the friendly code.
+      return json({ error: 'Ce nom de centre (slug) ou cet email administrateur est déjà utilisé.', code: 'duplicate' }, 409);
+    }
+    return json({ error: raw }, 500);
   }
 };
 

@@ -6,7 +6,7 @@ import {
   CalendarClock, Layers, Trash2, Check, X, Loader2, Upload,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
   Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
-  ChevronLeft, ChevronRight, ImagePlus, Printer, ChevronDown
+  ChevronLeft, ChevronRight, ImagePlus, Printer, ChevronDown, AlertTriangle
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
@@ -303,6 +303,49 @@ function Segmented<T extends string>({
   );
 }
 
+// ─── Dismissible notice dialog (duplicate name/slug/email, etc.) ───────────
+function NoticeDialog({ notice, onDismiss }: {
+  notice: { title: string; message: string } | null;
+  onDismiss: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {notice && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onDismiss}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200/80"
+          >
+            <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500">
+                  <AlertTriangle className="h-5 w-5 text-white" />
+                </div>
+                <h3 className="font-black text-sm">{notice.title}</h3>
+              </div>
+              <button onClick={onDismiss} aria-label="Fermer" className="p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer">
+                <X className="h-5 w-5 text-white/70" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm font-semibold text-slate-600 leading-relaxed">{notice.message}</p>
+              <div className="mt-6 flex justify-end">
+                <button onClick={onDismiss}
+                  className="px-6 py-2.5 bg-[#257C86] text-white font-black text-sm rounded-xl hover:bg-[#1e626b] transition cursor-pointer shadow-lg shadow-[#257C86]/25">
+                  Compris
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ─── New / Convert Center Modal ────────────────────────────────────────────
 interface NewCenterModalProps {
   initialData?: Partial<DemoRequest>;
@@ -313,6 +356,8 @@ interface NewCenterModalProps {
 
 function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: NewCenterModalProps) {
   const toast = useToast();
+  // Duplicate name/slug/email → custom dismissible dialog (no raw DB toast).
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -468,7 +513,24 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur création centre');
+      const code = (err as (Error & { code?: string }))?.code;
+      if (code === 'duplicate_email' || code === 'duplicate_slug' || code === 'duplicate_name' || code === 'duplicate') {
+        setNotice({
+          title: code === 'duplicate_email' ? 'Email administrateur déjà utilisé'
+            : code === 'duplicate_name' ? 'Nom de centre déjà pris'
+            : code === 'duplicate_slug' ? 'Nom de centre déjà pris'
+            : 'Nom de centre ou email déjà utilisé',
+          message: code === 'duplicate_email'
+            ? 'L’email du directeur saisi appartient déjà à un autre centre. Choisissez un autre email administrateur et réessayez.'
+            : code === 'duplicate_name'
+              ? 'Un centre porte déjà ce nom exact. Le nom sert aussi d’identifiant (slug) — choisissez un nom différent.'
+              : code === 'duplicate_slug'
+                ? 'Ce nom de centre génère un identifiant (slug) déjà utilisé par un autre centre. Choisissez un nom différent.'
+                : 'Un centre avec le même nom (slug) ou le même email administrateur existe déjà. Modifiez le nom ou l’email, puis réessayez.',
+        });
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Erreur création centre');
+      }
     } finally {
       setSaving(false);
     }
@@ -756,6 +818,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
           </div>
         </form>
       </motion.div>
+      <NoticeDialog notice={notice} onDismiss={() => setNotice(null)} />
     </div>
   );
 }
@@ -1407,49 +1470,17 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 }
 
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
-// Editing a center's basic info NEVER changes its plan anymore; all plan
-// operations live here: update the running plan (its unpaid invoice is
-// replaced — a PAID period is never discarded, the change is scheduled
-// instead), schedule a plan for the next renewal, or remove the plan.
+// All subscription operations live here (the center edit is basic info only).
+// Updating the CURRENT plan reuses the established mid-period rules:
+//   • window already PAID  → the paid invoice is never touched; the settlement
+//     (prorated difference for the remaining used days) or a schedule at the
+//     period end is proposed, and the end date never moves;
+//   • window NOT paid      → the old pending invoice is cancelled and replaced
+//     by the new one at the new plan price;
+//   • decrease / explicit 'Programmer' → scheduled for the period end.
+// Removing a plan asks for confirmation, then voids unpaid invoices, expires
+// the center and closes the dialog.
 interface PlanDraft { plan: string; billingCycle: 'monthly' | 'annual'; monthlyPrice: string }
-
-function PlanDraftFields({ draft, onChange }: {
-  draft: PlanDraft;
-  onChange: (d: PlanDraft) => void;
-}) {
-  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
-  return (
-    <div className="grid sm:grid-cols-3 gap-3">
-      <div>
-        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Plan</label>
-        <select value={draft.plan} onChange={e => onChange({ ...draft, plan: e.target.value })} className={`${fieldCls} cursor-pointer`}>
-          <option value="basic">Basic</option>
-          <option value="growth">Growth</option>
-          <option value="pro">Pro</option>
-          <option value="custom">Custom</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Cycle</label>
-        <select value={draft.billingCycle} onChange={e => onChange({ ...draft, billingCycle: e.target.value as 'monthly' | 'annual' })} className={`${fieldCls} cursor-pointer`}>
-          <option value="monthly">Mensuel</option>
-          <option value="annual">Annuel — 20 % de remise</option>
-        </select>
-      </div>
-      {draft.plan === 'custom' ? (
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Tarif mensuel (TND)</label>
-          <input type="number" min="0" step="0.01" value={draft.monthlyPrice}
-            onChange={e => onChange({ ...draft, monthlyPrice: e.target.value })} className={fieldCls} />
-        </div>
-      ) : (
-        <p className="text-[10px] font-semibold text-slate-400 leading-snug self-end pb-2">
-          Tarif calculé automatiquement d’après les tarifs des modules.
-        </p>
-      )}
-    </div>
-  );
-}
 
 function PlanManagerModal({ center, onClose, onSaved }: {
   center: CenterTenant;
@@ -1457,26 +1488,65 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const toast = useToast();
+  // useToast() may hand back a fresh object every render — referencing it from
+  // a useCallback dep list would recreate `reload` and loop the mount effect.
+  // Keep it in a ref so the effect deps stay stable.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [view, setView] = useState<CenterPlansView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'view' | 'edit' | 'schedule'>('view');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [draft, setDraft] = useState<PlanDraft>({ plan: 'basic', billingCycle: 'monthly', monthlyPrice: '' });
-  const [schedDraft, setSchedDraft] = useState<PlanDraft>({ plan: 'growth', billingCycle: 'monthly', monthlyPrice: '' });
+  const [enabledModules, setEnabledModules] = useState<string[]>([]);
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+  const [pricesReady, setPricesReady] = useState(false);
+  const [applyChoice, setApplyChoice] = useState<'settle' | 'schedule'>('settle');
+  const [paymentState, setPaymentState] = useState<'paid' | 'unpaid'>('unpaid');
+
+  // Module prices drive the live tariff preview (same convention as the
+  // Tarifs page: unknown modules default to 15, Jd. Horaires is free).
+  useEffect(() => {
+    let mounted = true;
+    fetchModulePricesApi(currentSchoolYear()).then(prices => {
+      if (!mounted) return;
+      const map: Record<string, number> = {};
+      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      (prices || []).forEach(p => { map[p.module_key] = Number(p.price) || 0; });
+      map[BUNDLED_MODULE_KEY] = 0;
+      setModulePrices(map);
+      setPricesReady(true);
+    }).catch(() => { if (mounted) setPricesReady(true); });
+    return () => { mounted = false; };
+  }, []);
+
+  const draftFromView = useCallback((v: CenterPlansView) => {
+    const plan = v.center.plan === 'starter' || !v.center.plan ? 'basic' : v.center.plan;
+    setDraft({ plan, billingCycle: v.center.billingCycle || 'monthly', monthlyPrice: String(v.center.monthlyPrice ?? '') });
+    setEnabledModules(normalizeCenterModules(v.center.enabledModules));
+  }, []);
 
   const reload = useCallback(async () => {
     try {
       const data = await fetchCenterPlansApi(center.id);
       setView(data);
-      const plan = data.center.plan === 'starter' || !data.center.plan ? 'basic' : data.center.plan;
-      setDraft({ plan, billingCycle: data.center.billingCycle || 'monthly', monthlyPrice: String(data.center.monthlyPrice ?? '') });
+      draftFromView(data);
+      // Paid detection covers invoices whose period starts in the future
+      // (activation chosen during the trial) — they DO cover the window.
+      const nowTs = Date.now();
+      const endTs = data.center.subscriptionEndsAt || 0;
+      const paid = (data.invoices || []).some(inv =>
+        inv.status === 'paid' && inv.periodEnd > nowTs && (!endTs || inv.periodStart <= endTs)
+      );
+      setPaymentState(paid ? 'paid' : 'unpaid');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur chargement de l’abonnement');
+      toastRef.current.error(err instanceof Error ? err.message : 'Erreur chargement de l’abonnement');
     } finally {
       setLoading(false);
     }
-  }, [center.id, toast]);
+  }, [center.id, draftFromView]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -1484,19 +1554,58 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   const liveEnd = view?.center.subscriptionEndsAt || 0;
   const hasLiveWindow = !!view && liveEnd > now;
   const isTrial = view?.center.status === 'trial';
-  // Does the RUNNING window already have a paid invoice? If yes, the plan
-  // edit cannot remove anything — it will be scheduled for the period end.
-  const windowPaid = view?.invoices.find(inv =>
-    inv.status === 'paid' && inv.periodStart <= now && inv.periodEnd > now
+  const expiredState = !!view && !isTrial && !hasLiveWindow
+    && (view.center.status === 'expired' || (liveEnd > 0 && liveEnd <= now));
+  const windowPaidInvoice = (view?.invoices || []).find(inv =>
+    inv.status === 'paid' && inv.periodEnd > now && (!liveEnd || inv.periodStart <= liveEnd)
   ) || null;
-  const pendingInvoice = view?.invoices.find(inv =>
+  const pendingInvoice = (view?.invoices || []).find(inv =>
     (inv.status === 'pending' || inv.status === 'overdue') && inv.periodEnd > now
   ) || null;
 
-  const runAction = async (
-    payload: Parameters<typeof centerPlanActionApi>[0],
-    fallbackMsg: string
-  ) => {
+  // ── Live decision (mid-period rules) shared with the plan-change engine ──
+  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(draft.plan);
+  const calculatedTariff = calculatePlanTariff(
+    draft.plan, draft.billingCycle, enabledModules, modulePrices, Number(draft.monthlyPrice) || 0
+  );
+  const decision: ClientPlanDecision = (pricesReady && view)
+    ? analyzePlanChange({
+      plan: view.center.plan,
+      billingCycle: view.center.billingCycle || 'monthly',
+      monthlyPrice: view.center.monthlyPrice,
+      enabledModules: normalizeCenterModules(view.center.enabledModules),
+      status: view.center.status,
+      subscriptionEndsAt: view.center.subscriptionEndsAt,
+    }, {
+      plan: draft.plan as 'basic' | 'growth' | 'pro' | 'custom',
+      billingCycle: draft.billingCycle,
+      enabledModules,
+      manualPrice: Number(draft.monthlyPrice) || 0,
+    }, modulePrices)
+    : { kind: 'no_change' };
+  const midPeriod = decision.kind === 'mid_period_increase'
+    || decision.kind === 'mid_period_decrease'
+    || decision.kind === 'mid_period_same_price';
+  const settlementRelevant = decision.kind === 'mid_period_increase';
+  const scheduleOnly = decision.kind === 'mid_period_decrease';
+  const effectiveApplyChoice = scheduleOnly ? 'schedule' : applyChoice;
+  const billingCycleChanged = draft.billingCycle !== (view?.center.billingCycle || 'monthly');
+  const extendsSubscription = !hasLiveWindow || billingCycleChanged || decision.kind === 'renewal';
+
+  const handleDraftPlanChange = (plan: string) => {
+    setDraft(d => ({ ...d, plan }));
+    if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+    if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
+  };
+
+  const toggleDraftModule = (key: string) => {
+    if (isBaseModule(key)) return;
+    setEnabledModules(current => current.includes(key)
+      ? current.filter(moduleKey => moduleKey !== key)
+      : [...current, key]);
+  };
+
+  const runAction = async (payload: Parameters<typeof centerPlanActionApi>[0], fallbackMsg: string) => {
     setSaving(true);
     try {
       const res = await centerPlanActionApi(payload);
@@ -1504,7 +1613,67 @@ function PlanManagerModal({ center, onClose, onSaved }: {
       onSaved();
       await reload();
       setMode('view');
-      setConfirmRemove(false);
+      return res;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur mise à jour du plan');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitPlan = async () => {
+    // Trial activation or relaunch of an expired/suspended center: fresh
+    // period starting now, ONE pending invoice (marked paid in Finance).
+    if (isTrial || !hasLiveWindow) {
+      await runAction({
+        action: 'set-plan',
+        centerId: center.id,
+        plan: draft.plan,
+        billingCycle: draft.billingCycle,
+        enabledModules,
+        ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
+      }, isTrial ? 'Abonnement activé' : 'Abonnement relancé');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (scheduleOnly || effectiveApplyChoice === 'schedule') {
+        const outcome = await updateCenterApi(center.id, {
+          scheduleChange: {
+            plan: draft.plan,
+            billingCycle: draft.billingCycle,
+            enabledModules,
+            ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
+          },
+        });
+        const applyAt = outcome?.planChange?.applyAt;
+        toast.success(applyAt
+          ? `Changement programmé pour le ${fmtDate(applyAt)} — la période payée reste inchangée.`
+          : 'Changement programmé pour la prochaine reconduction.');
+      } else {
+        const outcome = await updateCenterApi(center.id, {
+          plan: draft.plan,
+          billingCycle: draft.billingCycle,
+          enabledModules,
+          ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
+          autoCalculatePrice: true,
+          autoCalculateSubscription: extendsSubscription,
+          ...(settlementRelevant ? { settlementPolicy: paymentState } : {}),
+        });
+        const settlement = outcome?.planChange?.settlement;
+        if (settlement && !settlement.skipped && settlement.amount > 0) {
+          toast.success(
+            `Régularisation ${formatTnd(settlement.amount)} — ${settlement.paid ? 'complément (période déjà payée)' : 'nouvelle facture, l’ancienne en attente a été annulée'}`
+            + `${settlement.invoiceNumber ? ` (${settlement.invoiceNumber})` : ''}.`
+          );
+        } else {
+          toast.success('Plan mis à jour.');
+        }
+      }
+      onSaved();
+      await reload();
+      setMode('view');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur mise à jour du plan');
     } finally {
@@ -1512,24 +1681,114 @@ function PlanManagerModal({ center, onClose, onSaved }: {
     }
   };
 
-  const submitPlan = () => runAction({
-    action: 'set-plan',
-    centerId: center.id,
-    plan: draft.plan,
-    billingCycle: draft.billingCycle,
-    ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
-  }, isTrial ? 'Abonnement activé' : 'Plan mis à jour');
-
   const submitScheduled = () => runAction({
     action: 'set-plan',
     mode: 'scheduled',
     centerId: center.id,
-    plan: schedDraft.plan,
-    billingCycle: schedDraft.billingCycle,
-    ...(schedDraft.plan === 'custom' ? { monthlyPrice: Number(schedDraft.monthlyPrice) || 0 } : {}),
+    plan: draft.plan,
+    billingCycle: draft.billingCycle,
+    enabledModules,
+    ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
   }, 'Plan programmé pour la fin de période');
 
+  // Suppression du plan : confirmation → annulation des factures en attente
+  // + expiration du centre, puis fermeture du dialog.
+  const doRemovePlan = async () => {
+    setConfirmRemove(false);
+    setSaving(true);
+    try {
+      await centerPlanActionApi({ action: 'remove-plan', centerId: center.id });
+      toast.success('Abonnement supprimé — factures en attente annulées, centre marqué expiré.');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur suppression du plan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openForm = (next: 'edit' | 'schedule') => {
+    if (view) draftFromView(view);
+    setApplyChoice('settle');
+    setMode(next);
+  };
+
   const planTitle = view ? (PLAN_LABEL[view.center.plan] || view.center.plan || 'Aucun plan') : '—';
+
+  const renderFields = () => (
+    <div className="space-y-3">
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Plan</label>
+          <select
+            title="Plan du centre"
+            value={draft.plan}
+            onChange={e => handleDraftPlanChange(e.target.value)}
+            className={`${fieldCls} cursor-pointer`}
+          >
+            <option value="basic">Basic</option>
+            <option value="growth">Growth</option>
+            <option value="pro">Pro</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Cycle</label>
+          <select
+            value={draft.billingCycle}
+            onChange={e => setDraft(d => ({ ...d, billingCycle: e.target.value as 'monthly' | 'annual' }))}
+            className={`${fieldCls} cursor-pointer`}
+          >
+            <option value="monthly">Mensuel</option>
+            <option value="annual">Annuel — 20 % de remise</option>
+          </select>
+        </div>
+        {draft.plan === 'custom' ? (
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Tarif mensuel (TND)</label>
+            <input type="number" min="0" step="0.01" value={draft.monthlyPrice}
+              onChange={e => setDraft(d => ({ ...d, monthlyPrice: e.target.value }))} className={fieldCls} />
+          </div>
+        ) : (
+          <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Tarif {draft.billingCycle === 'annual' ? 'annuel' : 'mensuel'} calculé</span>
+            <span className="text-sm font-black text-[#257C86]">
+              {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'TND/an' : 'TND/mois'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Modules — sélectionnables pour Growth (Pro = tout, Basic = base) */}
+      {draft.plan === 'growth' && (
+        <div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Modules à activer</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY).map(module => {
+              const selected = enabledModules.includes(module.key);
+              return (
+                <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}
+                  className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'}`}>
+                  {selected && <Check className="h-3 w-3" />} {module.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {draft.plan === 'pro' && (
+        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+          Pro : tous les modules sont activés automatiquement.
+        </p>
+      )}
+      {draft.plan === 'basic' && (
+        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+          Basic : Scolaire + Finance (+ Jd. Horaires offert).
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -1547,7 +1806,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
             </h2>
             <p className="text-[11px] font-bold text-slate-400 truncate">{center.name}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
+          <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
             <X className="h-4 w-4 text-slate-500" />
           </button>
         </div>
@@ -1567,9 +1826,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   {isTrial ? 'Période d’essai' : 'Abonnement en cours'}
                 </p>
                 {hasLiveWindow && (
-                  <span className="ml-auto text-[10px] font-bold text-slate-500">
-                    {windowPaid ? 'Fenêtre payée' : pendingInvoice ? 'Fenêtre non payée' : 'Sans facture'}
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-emerald-100 text-emerald-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                    {windowPaidInvoice ? 'Fenêtre payée' : pendingInvoice ? 'Fenêtre non payée' : 'Sans facture'}
                   </span>
+                )}
+                {expiredState && (
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Expiré</span>
                 )}
               </div>
               {isTrial ? (
@@ -1587,18 +1849,24 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       {view.center.monthlyPrice > 0 ? ` · ${view.center.monthlyPrice.toFixed(2)} TND` : ''}
                     </span>
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
-                    Fin de l’abonnement : {liveEnd > 0 ? fmtDate(liveEnd) : '—'}
-                  </p>
-                  {pendingInvoice && (
+                  {expiredState ? (
+                    <p className="text-[11px] font-bold text-red-600 mt-1.5">
+                      Abonnement expiré{liveEnd > 0 ? ` le ${fmtDate(liveEnd)}` : ''} — relancez un plan pour facturer à nouveau.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
+                      Fin de l’abonnement : {liveEnd > 0 ? fmtDate(liveEnd) : '—'}
+                    </p>
+                  )}
+                  {!expiredState && pendingInvoice && (
                     <p className="text-[11px] font-bold text-amber-700 mt-1.5">
                       Facture {pendingInvoice.invoiceNumber} —{' '}
                       {pendingInvoice.status === 'overdue' ? 'en retard' : 'en attente'} · {pendingInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
-                  {windowPaid && (
+                  {windowPaidInvoice && (
                     <p className="text-[11px] font-bold text-emerald-700 mt-1.5">
-                      Facture {windowPaid.invoiceNumber} payée · {windowPaid.amount.toFixed(2)} TND
+                      Facture {windowPaidInvoice.invoiceNumber} payée · {windowPaidInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
                 </>
@@ -1607,82 +1875,130 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Actions ── */}
             {mode === 'view' && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => setMode('edit')} disabled={saving}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
-                  <Edit className="h-3.5 w-3.5" /> {isTrial ? 'Choisir un plan et activer' : 'Modifier le plan'}
-                </button>
-                <button onClick={() => { setSchedDraft({ plan: draft.plan === 'custom' ? 'growth' : draft.plan, billingCycle: draft.billingCycle, monthlyPrice: draft.monthlyPrice }); setMode('schedule'); }} disabled={saving || isTrial}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : 'Appliqué à la fin de la période en cours'}>
-                  <CalendarClock className="h-3.5 w-3.5" /> Programmer un plan
-                </button>
-                {!isTrial && (
-                  confirmRemove ? (
-                    <span className="flex items-center gap-1.5 ml-auto">
-                      <button onClick={() => runAction({ action: 'remove-plan', centerId: center.id }, 'Abonnement supprimé')}
-                        disabled={saving}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-black text-white bg-red-600 rounded-xl hover:bg-red-700 transition cursor-pointer disabled:opacity-60">
-                        <Trash2 className="h-3.5 w-3.5" /> Confirmer la suppression
-                      </button>
-                      <button onClick={() => setConfirmRemove(false)} className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer">
-                        Annuler
-                      </button>
-                    </span>
-                  ) : (
-                    <button onClick={() => setConfirmRemove(true)}
-                      className="flex items-center gap-1.5 ml-auto px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => openForm('edit')} disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+                    <Edit className="h-3.5 w-3.5" /> {isTrial ? 'Choisir un plan et activer' : hasLiveWindow ? 'Modifier le plan' : 'Relancer un abonnement'}
+                  </button>
+                  <button onClick={() => openForm('schedule')} disabled={saving || isTrial}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : 'Appliqué à la fin de la période en cours'}>
+                    <CalendarClock className="h-3.5 w-3.5" /> Programmer un plan
+                  </button>
+                  {!isTrial && (
+                    <button onClick={() => setConfirmRemove(true)} disabled={!hasLiveWindow || saving}
+                      className={`flex items-center gap-1.5 ml-auto px-3.5 py-2 text-xs font-bold rounded-xl border transition ${hasLiveWindow ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'}`}
+                      title={hasLiveWindow ? undefined : 'Aucun abonnement actif à supprimer'}>
                       <Trash2 className="h-3.5 w-3.5" /> Supprimer le plan
                     </button>
-                  )
-                )}
-              </div>
-            )}
-            {mode === 'view' && !isTrial && hasLiveWindow && windowPaid && (
-              <p className="text-[10px] font-semibold text-slate-400 -mt-2">
-                Période déjà payée : une modification de plan sera automatiquement programmée à la fin de la période — aucun jour payé n’est perdu.
-              </p>
-            )}
-
-            {/* ── Formulaire de modification du plan courant ── */}
-            {mode === 'edit' && (
-              <div className="rounded-2xl border-2 border-[#257C86]/20 bg-[#257C86]/[0.04] p-4 space-y-3">
-                <p className="text-xs font-black text-slate-700">
-                  {isTrial ? 'Activer l’abonnement' : 'Nouveau plan — remplace l’abonnement courant'}
-                </p>
-                <PlanDraftFields draft={draft} onChange={setDraft} />
-                <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
-                  {hasLiveWindow && !windowPaid
-                    ? `La facture ${pendingInvoice ? `en attente ${pendingInvoice.invoiceNumber} sera ANNULÉE et remplacée` : 'actuelle sera remplacée'} par une nouvelle facture au nouveau tarif, sur une période repartant d’aujourd’hui.`
-                    : hasLiveWindow && windowPaid
-                      ? 'La période en cours étant déjà payée : la facture payée reste intacte et le changement sera programmé pour la fin de la période.'
-                      : 'Une nouvelle facture « en attente » sera créée pour la première période. Marquez-la payée dans SaaS → Finance quand le client règle.'}
-                </p>
-                <div className="flex justify-end gap-2 pt-1">
-                  <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
-                  <button onClick={submitPlan} disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    {isTrial ? 'Activer l’abonnement' : 'Enregistrer le plan'}
-                  </button>
+                  )}
                 </div>
-              </div>
+                {hasLiveWindow && windowPaidInvoice && (
+                  <p className="text-[10px] font-semibold text-slate-400 -mt-2">
+                    Période déjà payée : aucune facture payée ne sera modifiée — les jours déjà réglés restent acquis et la différence éventuelle est régularisée au prorata ou programmée.
+                  </p>
+                )}
+              </>
             )}
 
-            {/* ── Formulaire de planification ── */}
-            {mode === 'schedule' && (
-              <div className="rounded-2xl border-2 border-amber-300/50 bg-amber-50/50 p-4 space-y-3">
-                <p className="text-xs font-black text-slate-700">Programmer un plan pour la prochaine reconduction</p>
-                <PlanDraftFields draft={schedDraft} onChange={setSchedDraft} />
-                <p className="text-[10px] font-semibold text-amber-800 leading-relaxed">
-                  Le plan actuel reste appliqué jusqu’au {hasLiveWindow ? fmtDate(liveEnd) : 'prochain renouvellement'}, puis la bascule est automatique (une facture « en attente » sera générée pour la nouvelle période).
+            {/* ── Formulaire : modifier le plan courant / programmer ── */}
+            {(mode === 'edit' || mode === 'schedule') && (
+              <div className={`rounded-2xl border-2 p-4 space-y-3 ${mode === 'edit' ? 'border-[#257C86]/20 bg-[#257C86]/[0.04]' : 'border-amber-300/50 bg-amber-50/50'}`}>
+                <p className="text-xs font-black text-slate-700">
+                  {mode === 'schedule'
+                    ? 'Programmer un plan pour la fin de la période en cours'
+                    : isTrial
+                      ? 'Activer l’abonnement'
+                      : !hasLiveWindow
+                        ? 'Nouvel abonnement — la période repart d’aujourd’hui'
+                        : 'Modifier le plan en cours'}
                 </p>
+                {renderFields()}
+
+                {/* Mid-period consequence — settlement (difference) vs schedule */}
+                {mode === 'edit' && midPeriod && decision.kind !== 'mid_period_same_price' && (
+                  <div className="rounded-xl bg-white border border-slate-200 px-3.5 py-3 space-y-2.5">
+                    <p className="text-[11px] font-black text-slate-700">
+                      Changement en cours de période —{' '}
+                      {decision.kind === 'mid_period_increase' ? 'à la hausse' : 'à la baisse'}
+                      {decision.kind === 'mid_period_increase' && (
+                        <> · {decision.remainingDays} jour{decision.remainingDays > 1 ? 's' : ''} restant{decision.remainingDays > 1 ? 's' : ''} sur la période payée</>
+                      )}
+                    </p>
+                    {settlementRelevant ? (
+                      <>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <button type="button" onClick={() => setApplyChoice('settle')}
+                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                            <div className="text-[10px] font-black text-slate-800">Appliquer maintenant</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-1">Fin d’abonnement inchangée · régularisation au prorata des jours déjà utilisés</div>
+                          </button>
+                          <button type="button" onClick={() => setApplyChoice('schedule')}
+                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                            <div className="text-[10px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'la reconduction'}</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-1">Le plan actuel reste appliqué jusqu’à la fin de la période</div>
+                          </button>
+                        </div>
+                        {effectiveApplyChoice === 'settle' && (
+                          <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5">
+                            <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              <button type="button" onClick={() => setPaymentState('paid')}
+                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
+                                <div className="text-[10px] font-black text-emerald-800">Période déjà payée</div>
+                                <div className="text-sm font-black text-emerald-700">+ {formatTnd(decision.paidAmount)}</div>
+                                <div className="text-[9px] font-semibold text-slate-500">complément = différence × jours restants</div>
+                              </button>
+                              <button type="button" onClick={() => setPaymentState('unpaid')}
+                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
+                                <div className="text-[10px] font-black text-amber-800">Période pas encore payée</div>
+                                <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
+                                <div className="text-[9px] font-semibold text-slate-500">l’ancienne facture en attente est annulée et remplacée</div>
+                              </button>
+                            </div>
+                            {!windowPaidInvoice && paymentState !== 'unpaid' && (
+                              <p className="text-[9px] font-semibold text-slate-500 mt-1.5">
+                                Détecté : aucune facture payée ne couvre la période — l’option « pas encore payée » correspond à votre cas.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-relaxed">
+                        La période en cours est déjà payée au tarif actuel : le passage à la baisse ne peut pas être remboursé — il sera appliqué à la fin de la période ({hasLiveWindow ? fmtDate(liveEnd) : 'prochaine reconduction'}), sans remboursement ni jour perdu.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {mode === 'edit' && !midPeriod && !isTrial && hasLiveWindow && (
+                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                    {windowPaidInvoice
+                      ? 'La facture payée de la période en cours ne bougera pas.'
+                      : pendingInvoice
+                        ? `La facture en attente ${pendingInvoice.invoiceNumber} sera remplacée par une nouvelle facture au tarif du plan choisi (aucun double prélèvement).`
+                        : 'Une facture « en attente » sera créée pour la période en cours.'}
+                  </p>
+                )}
+                {mode === 'edit' && (isTrial || !hasLiveWindow) && (
+                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                    Une nouvelle facture « en attente » sera créée pour la première période — marquez-la payée dans SaaS → Finance quand le client règle.
+                  </p>
+                )}
+                {mode === 'schedule' && (
+                  <p className="text-[10px] font-semibold text-amber-800 leading-relaxed">
+                    Le plan actuel reste appliqué jusqu’au {hasLiveWindow ? fmtDate(liveEnd) : 'prochain renouvellement'}, puis la bascule est automatique (facture « en attente » générée pour la nouvelle période).
+                  </p>
+                )}
+
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
-                  <button onClick={submitScheduled} disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl shadow-md shadow-amber-500/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
-                    Programmer
+                  <button onClick={mode === 'schedule' ? submitScheduled : submitPlan} disabled={saving}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white rounded-xl shadow-md transition cursor-pointer disabled:opacity-60 ${mode === 'schedule' ? 'bg-gradient-to-r from-amber-500 to-amber-600 shadow-amber-500/25 hover:shadow-lg' : 'bg-gradient-to-r from-[#257C86] to-[#1e626b] shadow-[#257C86]/25 hover:shadow-lg'}`}>
+                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mode === 'schedule' ? <CalendarClock className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                    {mode === 'schedule' ? 'Programmer' : isTrial ? 'Activer l’abonnement' : 'Enregistrer le plan'}
                   </button>
                 </div>
               </div>
@@ -1721,6 +2037,18 @@ function PlanManagerModal({ center, onClose, onSaved }: {
           </div>
         )}
       </motion.div>
+
+      {/* Confirmation avant suppression du plan (expiration du centre). */}
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Supprimer ce plan ?"
+        message="Le centre passera en « expiré » et toutes ses factures en attente seront annulées. Les factures déjà payées restent comptabilisées. Confirmez-vous ?"
+        confirmLabel="Oui, supprimer le plan"
+        cancelLabel="Annuler"
+        danger
+        onConfirm={doRemovePlan}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }
