@@ -27,6 +27,14 @@ vi.mock('../api', () => ({
   deleteInvoiceApi: vi.fn().mockResolvedValue({}),
   fetchModulePricesApi: vi.fn().mockResolvedValue([]),
   updateModulePricesApi: vi.fn().mockResolvedValue({}),
+  fetchCenterPlansApi: vi.fn().mockResolvedValue({
+    center: {
+      id: 'c1', name: 'Jardin Test', status: 'trial', plan: 'starter', billingCycle: 'monthly',
+      monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 5 * 86400000, enabledModules: [],
+    },
+    invoices: [], schedules: [],
+  }),
+  centerPlanActionApi: vi.fn().mockResolvedValue({ success: true, message: 'ok' }),
 }));
 
 import * as api from '../api';
@@ -234,11 +242,15 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
 
     render(<PlatformAdminDashboard page="pricing" onNavigate={() => {}} />);
 
-    // Tabs: the two existing years (nothing else is stored).
-    await waitFor(() => expect(screen.getByRole('button', { name: YEAR_CUR })).toBeTruthy());
-    expect(screen.getByRole('button', { name: YEAR_NEXT })).toBeTruthy();
+    // Compact selector: the two stored years are options of one select
+    // (no long pill row to clip or overflow, whatever the count).
+    const yearSelect = () => screen.getByRole('combobox') as unknown as HTMLSelectElement;
+    await waitFor(() =>
+      expect(Array.from(yearSelect().options).map(o => o.value))
+        .toEqual(expect.arrayContaining([YEAR_CUR, YEAR_NEXT]))
+    );
 
-    // Add-the-next-year button (the year right after the latest tab).
+    // Add-the-next-year button (the year right after the latest stored one).
     const addBtn = screen.getByRole('button', { name: new RegExp(`Ajouter l'année scolaire ${YEAR_ADDED.replace('/', '\\/')}`) });
     fireEvent.click(addBtn);
 
@@ -248,8 +260,77 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
       { module_key: 'etude', price: 12 },
       { module_key: 'studentTimeSheets', price: 0 }, // Jd. Horaires toujours offert
     ])));
-    // …and the new year becomes the active tab.
-    await waitFor(() => expect(screen.getByRole('button', { name: YEAR_ADDED })).toBeTruthy());
+    // …and the new year is selected in the dropdown.
+    await waitFor(() => expect(yearSelect().value).toBe(YEAR_ADDED));
+  });
+});
+
+describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
+  const activeCenter = {
+    id: 'c1', name: 'Centre Alpha', slug: 'alpha', status: 'active', plan: 'starter',
+    monthlyPrice: 75, billingCycle: 'monthly', trialEndsAt: null,
+    subscriptionEndsAt: Date.now() + 20 * 86400000, enabledModules: ['scolaire', 'finance'],
+    studentCount: 3, adminEmail: 'a@a.tn', phoneNumber: '11111111', locationCity: 'Tunis',
+    centerType: 'jardin', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
+  };
+  const plansView = {
+    center: {
+      id: 'c1', name: 'Centre Alpha', status: 'active', plan: 'starter', billingCycle: 'monthly',
+      monthlyPrice: 75, subscriptionEndsAt: Date.now() + 20 * 86400000, trialEndsAt: null, enabledModules: [],
+    },
+    invoices: [{
+      id: 'i1', centerId: 'c1', centerName: 'Centre Alpha', invoiceNumber: 'INV-PEND',
+      periodStart: Date.now() - 10 * 86400000, periodEnd: Date.now() + 20 * 86400000,
+      amount: 75, status: 'pending', notes: '', createdAt: Date.now(),
+    }],
+    schedules: [],
+  };
+
+  beforeEach(() => {
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([activeCenter]);
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValue(plansView);
+  });
+
+  it('the edit-center modal only keeps basic info — no plan fields, no invoice side effects', async () => {
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Modifier/ }));
+    await waitFor(() => expect(screen.getByText('Nom du centre *')).toBeTruthy());
+    expect(screen.queryByLabelText('Plan')).toBeNull();
+    expect(screen.queryByText('Cycle de facturation')).toBeNull();
+    expect(screen.queryByText('Modules activés')).toBeNull();
+    // The modal points to the plan manager instead.
+    expect(screen.getByText(/« Plans & factures »/)).toBeTruthy();
+
+    // Saving identity fields never sends plan fields.
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateCenterApi).toHaveBeenCalled());
+    const payload = (api.updateCenterApi as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.plan).toBeUndefined();
+    expect(payload.billingCycle).toBeUndefined();
+    expect(payload.autoCalculatePrice).toBeUndefined();
+  });
+
+  it('plan manager edits the running plan and routes it through the plans API', async () => {
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    await waitFor(() => expect(screen.getByText(/INV-PEND/)).toBeTruthy());
+    expect(screen.getByText('Fenêtre non payée')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Modifier le plan/ }));
+    // Unpaid window → the explanatory note promises the invoice replacement.
+    expect(screen.getByText(/sera ANNULÉE et remplacée/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'set-plan', centerId: 'c1', plan: 'basic', billingCycle: 'monthly',
+    })));
+    // The center list is refreshed after the plan action.
+    const centersCalls = (api.fetchCentersApi as ReturnType<typeof vi.fn>).mock.calls;
+    expect(centersCalls.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -264,36 +345,49 @@ describe('PlatformAdminDashboard — Demo requests tab', () => {
     email: 'zeta@test.tn', phone: '22222222', centerType: 'formation', status: 'converted' as const,
     createdAt: Date.now(),
   };
+  const reqContacted = {
+    id: 'r3', requestType: 'demo' as const, fullName: 'Old Rec', academyName: 'iota center',
+    email: 'iota@test.tn', phone: '33333333', centerType: 'jardin', status: 'contacted' as const,
+    createdAt: Date.now(),
+  };
 
   beforeEach(() => {
-    (api.fetchDemoRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue([reqNew, reqConverted]);
+    (api.fetchDemoRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue([reqNew, reqConverted, reqContacted]);
   });
 
-  it('starts on the New filter and never offers a status "Tous"', async () => {
+  it('starts on the New filter, has no "Tous" and no "Contacté" tab (legacy contacted stays visible under New)', async () => {
     render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
+    expect(screen.getByText('iota@test.tn')).toBeTruthy(); // contacted shows in the New bucket
     // Converted request is hidden until its status tab is selected.
     expect(screen.queryByText('zeta@test.tn')).toBeNull();
     // The only « Tous » left on the page is the establishment-type filter.
     expect(screen.getAllByRole('button', { name: 'Tous' })).toHaveLength(1);
+    // The « Contacté » filter no longer exists at all.
+    expect(screen.queryByRole('button', { name: 'Contacté' })).toBeNull();
   });
 
-  it('converted requests cannot be converted again', async () => {
+  it('converted requests can only be archived — never converted again', async () => {
     render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Converti' }));
 
     await waitFor(() => expect(screen.getByText('zeta@test.tn')).toBeTruthy());
     expect(screen.queryByText('Convertir en Centre')).toBeNull();
     expect(screen.getByText('Déjà converti')).toBeTruthy();
-    // Status is locked once converted — only converted cards carry the lock tooltip.
-    const lockedSelect = screen.getByTitle('Demande déjà convertie : le statut est verrouillé.') as unknown as HTMLSelectElement;
-    expect(lockedSelect.disabled).toBe(true);
+
+    // The locked select offers exactly two values: the current status and Archivé.
+    const sel = screen.getByTitle('Demande convertie : seule l’archivation est possible.') as unknown as HTMLSelectElement;
+    expect(Array.from(sel.options).map(o => o.value)).toEqual(['converted', 'archived']);
+
+    fireEvent.change(sel, { target: { value: 'archived' } });
+    await waitFor(() => expect(api.updateDemoRequestApi).toHaveBeenCalledWith('r2', { status: 'archived' }));
   });
 
-  it('a still-open request keeps its convert action', async () => {
+  it('a still-open request keeps its convert action (new and legacy contacted)', async () => {
     render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
-    expect(screen.getByText('Convertir en Centre')).toBeTruthy();
+    // Both the new request and the legacy contacted one (shown under New).
+    expect(screen.getAllByText('Convertir en Centre')).toHaveLength(2);
   });
 });

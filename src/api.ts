@@ -606,6 +606,78 @@ export interface ModulePrice {
   created_at: number;
 }
 
+// ─── Per-center plan manager (Plans & factures) ────────────────────────────
+
+export interface CenterPlanSchedule {
+  id: string;
+  plan: string;
+  billingCycle: 'monthly' | 'annual';
+  monthlyPrice: number | null;
+  applyAt: number | null;
+  notes: string;
+  createdAt: number;
+}
+
+export interface CenterPlansView {
+  center: {
+    id: string;
+    name: string;
+    status: string;
+    plan: string;
+    billingCycle: 'monthly' | 'annual';
+    monthlyPrice: number;
+    subscriptionEndsAt: number | null;
+    trialEndsAt: number | null;
+    enabledModules: string[];
+  };
+  invoices: CenterInvoice[];
+  schedules: CenterPlanSchedule[];
+}
+
+export interface CenterPlanActionResult {
+  success?: boolean;
+  mode?: 'scheduled' | 'replaced' | 'activated' | 'plan_removed' | 'schedule_cancelled';
+  message?: string;
+  applyAt?: number | null;
+  amount?: number;
+  subscriptionEndsAt?: number;
+  invoice?: { invoiceNumber: string; amount: number } | null;
+}
+
+/** Load the plan manager view for a center (current plan + invoices + schedules). */
+export async function fetchCenterPlansApi(centerId: string): Promise<CenterPlansView> {
+  const res = await fetch(`${API_BASE}/center-plans?centerId=${encodeURIComponent(centerId)}`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement des abonnements.');
+  return data as CenterPlansView;
+}
+
+/** Run a plan action (set-plan / remove-plan / remove-schedule) for a center. */
+export async function centerPlanActionApi(payload: {
+  action: 'set-plan' | 'remove-plan' | 'remove-schedule';
+  centerId: string;
+  plan?: string;
+  billingCycle?: 'monthly' | 'annual';
+  monthlyPrice?: number | null;
+  mode?: 'scheduled';
+  scheduleId?: string;
+}): Promise<CenterPlanActionResult> {
+  const res = await fetch(`${API_BASE}/center-plans`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du plan.');
+  return data as CenterPlanActionResult;
+}
+
 /** Fetch platform billing summary (MRR, collected, pending invoices). */
 export async function fetchPlatformBillingApi(): Promise<{
   summary: PlatformBillingSummary;

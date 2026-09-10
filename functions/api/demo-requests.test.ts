@@ -55,6 +55,12 @@ describe('demo-requests PATCH — converted is a one-way status', () => {
     expect(db.updates.some(u => u.includes('SET notes'))).toBe(true);
   });
 
+  it('allows archiving an already-converted request (the only permitted move)', async () => {
+    const { res, db } = await patch({ id: 'r1', status: 'archived' }, 'converted');
+    expect(res.status).toBe(200);
+    expect(db.updates.some(u => u.includes('SET status'))).toBe(true);
+  });
+
   it('allows normal status changes before conversion', async () => {
     const { res, db } = await patch({ id: 'r1', status: 'contacted' }, 'new');
     expect(res.status).toBe(200);
