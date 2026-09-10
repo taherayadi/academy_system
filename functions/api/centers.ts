@@ -418,6 +418,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'البريد الإلكتروني مسجل مسبقاً لمستخدم آخر.' }, 400);
     }
 
+    // A demo request converts exactly once: refuse any second conversion
+    // (stale tab, double click or replayed call).
+    if (demoRequestId) {
+      const demoReq = await env.DB.prepare('SELECT status FROM demo_requests WHERE id = ?').bind(demoRequestId).first<any>();
+      if (demoReq && demoReq.status === 'converted') {
+        return json({ error: 'تم تحويل هذا الطلب إلى مركز مسبقاً — لا يمكن تحويله مرة أخرى.' }, 409);
+      }
+    }
+
     const id = crypto.randomUUID();
     const createdAt = Date.now();
     // A paid offer is represented as a trial boundary without changing the

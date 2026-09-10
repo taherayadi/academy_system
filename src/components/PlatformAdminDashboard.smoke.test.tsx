@@ -252,3 +252,48 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: YEAR_ADDED })).toBeTruthy());
   });
 });
+
+describe('PlatformAdminDashboard — Demo requests tab', () => {
+  const reqNew = {
+    id: 'r1', requestType: 'demo' as const, fullName: 'Aya Ben', academyName: 'alpha center',
+    email: 'alpha@test.tn', phone: '11111111', centerType: 'jardin', status: 'new' as const,
+    createdAt: Date.now(),
+  };
+  const reqConverted = {
+    id: 'r2', requestType: 'trial' as const, fullName: 'Zied Kac', academyName: 'zeta center',
+    email: 'zeta@test.tn', phone: '22222222', centerType: 'formation', status: 'converted' as const,
+    createdAt: Date.now(),
+  };
+
+  beforeEach(() => {
+    (api.fetchDemoRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue([reqNew, reqConverted]);
+  });
+
+  it('starts on the New filter and never offers a status "Tous"', async () => {
+    render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
+    // Converted request is hidden until its status tab is selected.
+    expect(screen.queryByText('zeta@test.tn')).toBeNull();
+    // The only « Tous » left on the page is the establishment-type filter.
+    expect(screen.getAllByRole('button', { name: 'Tous' })).toHaveLength(1);
+  });
+
+  it('converted requests cannot be converted again', async () => {
+    render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Converti' }));
+
+    await waitFor(() => expect(screen.getByText('zeta@test.tn')).toBeTruthy());
+    expect(screen.queryByText('Convertir en Centre')).toBeNull();
+    expect(screen.getByText('Déjà converti')).toBeTruthy();
+    // Status is locked once converted — only converted cards carry the lock tooltip.
+    const lockedSelect = screen.getByTitle('Demande déjà convertie : le statut est verrouillé.') as unknown as HTMLSelectElement;
+    expect(lockedSelect.disabled).toBe(true);
+  });
+
+  it('a still-open request keeps its convert action', async () => {
+    render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
+    expect(screen.getByText('Convertir en Centre')).toBeTruthy();
+  });
+});

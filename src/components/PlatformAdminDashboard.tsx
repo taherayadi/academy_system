@@ -1612,9 +1612,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [centerTypeFilter, setCenterTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'trial' | 'active' | 'suspended' | 'expired'>('all');
   const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'growth' | 'pro' | 'custom'>('all');
-  // Filters — requests
+  // Filters — requests. Le statut « Tous » n'existe pas : la liste démarre
+  // toujours sur les demandes Nouvelles, et l'admin choisit un statut précis.
   const [reqTypeFilter, setReqTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
-  const [reqStatusFilter, setReqStatusFilter] = useState<'all' | 'new' | 'contacted' | 'converted' | 'archived'>('all');
+  const [reqStatusFilter, setReqStatusFilter] = useState<'new' | 'contacted' | 'converted' | 'archived'>('new');
   const [centersPage, setCentersPage] = useState(1);
   const [requestsPage, setRequestsPage] = useState(1);
   const listTopRef = useRef<HTMLDivElement>(null);
@@ -1660,7 +1661,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   useEffect(() => {
     setSearch('');
     setCenterTypeFilter('all'); setStatusFilter('all'); setPlanFilter('all');
-    setReqTypeFilter('all'); setReqStatusFilter('all');
+    setReqTypeFilter('all'); setReqStatusFilter('new');
     setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); setInvoiceCentersPage(1);
     setCentersPage(1); setRequestsPage(1);
   }, [page]);
@@ -1975,7 +1976,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const filteredRequests = requests.filter(r => {
     if (q && !`${r.fullName} ${r.academyName} ${r.email}`.toLowerCase().includes(q)) return false;
     if (reqTypeFilter !== 'all' && normalizeCenterType(r.centerType) !== reqTypeFilter) return false;
-    if (reqStatusFilter !== 'all' && r.status !== reqStatusFilter) return false;
+    if (r.status !== reqStatusFilter) return false;
     return true;
   });
 
@@ -2520,11 +2521,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Statut</div>
-              <Segmented<'all' | 'new' | 'contacted' | 'converted' | 'archived'>
+              <Segmented<'new' | 'contacted' | 'converted' | 'archived'>
                 value={reqStatusFilter}
                 onChange={setReqStatusFilter}
                 options={[
-                  { key: 'all', label: 'Tous' },
                   { key: 'new', label: 'Nouveau' },
                   { key: 'contacted', label: 'Contacté' },
                   { key: 'converted', label: 'Converti' },
@@ -2627,18 +2627,29 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <select
                     value={req.status}
                     onChange={e => handleReqStatus(req, e.target.value)}
-                    className="text-[11px] font-bold px-3 py-1.5 border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer">
+                    disabled={req.status === 'converted'}
+                    title={req.status === 'converted' ? 'Demande déjà convertie : le statut est verrouillé.' : undefined}
+                    className={`text-[11px] font-bold px-3 py-1.5 border-2 rounded-xl bg-white focus:ring-0 outline-none transition ${req.status === 'converted' ? 'border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-[#257C86] cursor-pointer'}`}>
                     <option value="new">Nouveau</option>
                     <option value="contacted">Contacté</option>
                     <option value="converted">Converti</option>
                     <option value="archived">Archivé</option>
                   </select>
 
-                  <button
-                    onClick={() => { setConvertRequest(req); setShowNewCenter(true); }}
-                    className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg hover:shadow-[#257C86]/30 transition cursor-pointer">
-                    <Building2 className="h-3.5 w-3.5" /> Convertir en Centre
-                  </button>
+                  {req.status !== 'converted' ? (
+                    <button
+                      onClick={() => { setConvertRequest(req); setShowNewCenter(true); }}
+                      className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg hover:shadow-[#257C86]/30 transition cursor-pointer">
+                      <Building2 className="h-3.5 w-3.5" /> Convertir en Centre
+                    </button>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl"
+                      title="Cette demande a déjà été convertie en centre — la conversion n'est possible qu'une seule fois."
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Déjà converti
+                    </span>
+                  )}
 
                   <button onClick={() => setDeleteRequest(req)}
                     className="ml-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
@@ -2944,13 +2955,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <span className="hidden sm:block text-[11px] font-black uppercase tracking-wider text-slate-400 flex-shrink-0">
                   Année scolaire
                 </span>
-                {/* Scroll horizontal sur petits écrans : les onglets ne cassent plus la grille */}
-                <div className="flex items-center gap-1 p-1.5 bg-slate-50 border-2 border-slate-200 rounded-2xl overflow-x-auto max-w-full">
+                {/* Les onglets passent à la ligne quand la liste est longue :
+                    la dernière année scolaire (et le bouton d'ajout) restent
+                    toujours visibles — rien n'est coupé. */}
+                <div className="flex flex-wrap items-center gap-1 p-1.5 bg-slate-50 border-2 border-slate-200 rounded-2xl min-w-0">
                   {priceYears.map(year => {
                     const active = priceYear === year;
                     return (
                       <button key={year} onClick={() => setPriceYear(year)}
-                        className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black whitespace-nowrap flex-shrink-0 transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
+                        className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black whitespace-nowrap transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
                         {year}
                       </button>
                     );
