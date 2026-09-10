@@ -1,5 +1,6 @@
 import { Env, json, readBody, validateSession } from './_lib';
 import { round2, planLabel, BillingCycle } from './planLogic';
+import { logPlanHistory, fetchPlanHistory } from './_planHistory';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
 // Editing a center's basic info must NEVER touch its plan or invoices.
@@ -144,6 +145,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         notes: s.notes || '',
         createdAt: s.created_at,
       })),
+      // Audit trail (migration 0029) — empty when the table is missing.
+      history: await fetchPlanHistory(env.DB, centerId),
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات الاشتراك.' }, 500);
@@ -176,6 +179,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       await env.DB.prepare(
         `UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — annulée par l’administrateur' WHERE id = ? AND center_id = ? AND status = 'pending'`
       ).bind(scheduleId, centerId).run();
+      await logPlanHistory(env.DB, {
+        centerId, action: 'schedule_cancelled', details: 'Plan programmé annulé par l’administrateur.',
+      });
       return json({ success: true, mode: 'schedule_cancelled' });
     }
 
@@ -235,10 +241,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         : prepend
           ? `${days} jour(s) offerts ajoutés au début de l’abonnement — la facture en attente est décalée d’autant, échéance ${fmtFr(newEnd)}.`
           : `${days} jour(s) offerts ajoutés à la fin de l’abonnement — nouvelle échéance le ${fmtFr(newEnd)}.`;
+      await logPlanHistory(env.DB, {
+        centerId, action: 'trial_added',
+        details: `Jours d’essai offerts (${days} jour(s), ${prepend ? 'au début de la période' : 'en fin de période'}) — ${message}`,
+      });
       return json({ success: true, mode: 'trial_added', placement: prepend ? 'start' : 'end', days, subscriptionEndsAt: newEnd, message });
     }
 
     if (action === 'remove-plan') {
+      if (center.status === 'expired') {
+        // Already expired — refuse so a stale UI can't re-run the removal.
+        return json({ error: 'Aucun abonnement actif à supprimer — ce centre est déjà expiré.' }, 400);
+      }
       // Void anything not yet collected, cancel scheduled plans, expire the
       // subscription. Paid invoices stay as-is (history + revenue).
       await env.DB.prepare(
@@ -252,6 +266,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       await env.DB.prepare(
         `UPDATE centers SET status = 'expired' WHERE id = ? AND status IN ('active','trial','suspended')`
       ).bind(centerId).run();
+      await logPlanHistory(env.DB, {
+        centerId, action: 'plan_removed',
+        details: `Abonnement supprimé — factures en attente annulées, centre marqué expiré (${fmtFr(now)}).`,
+      });
       return json({ success: true, mode: 'plan_removed' });
     }
 
@@ -307,6 +325,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
               : `Période déjà payée — ${planLabel(targetPlan)} (${targetCycle}) programmé pour la fin de la période`,
             now
           ).run();
+          await logPlanHistory(env.DB, {
+            centerId, action: 'plan_scheduled', amount: periodAmount || null,
+            details: `Plan ${planLabel(targetPlan)} (${targetCycle === 'annual' ? 'annuel' : 'mensuel'}) programmé`
+              + (applyAt ? ` pour le ${fmtFr(applyAt)} (fin de période en cours).` : ' pour la prochaine reconduction.')
+              + (windowPaid ? ' Période déjà payée : aucune facture payée n’est modifiée.' : ''),
+          });
           return json({
             success: true,
             mode: 'scheduled',
@@ -370,6 +394,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         `).bind(id, centerId, invoiceNumber, base, periodEnd, periodAmount, notes, createdAt).run();
         invoice = { invoiceNumber, amount: periodAmount };
       }
+
+      await logPlanHistory(env.DB, {
+        centerId, action: center.status === 'trial' ? 'plan_activated' : 'plan_set',
+        amount: periodAmount || null, invoiceNumber: invoice?.invoiceNumber || null,
+        details: `Plan ${planLabel(targetPlan)} (${targetCycle === 'annual' ? 'annuel' : 'mensuel'}) appliqué — ${fmtFr(base)} → ${fmtFr(periodEnd)}`
+          + (periodAmount > 0 ? ` · ${periodAmount.toFixed(2)} TND` : ' · gratuit')
+          + (invoice ? ` · facture ${invoice.invoiceNumber} en attente` : (center.status === 'active' ? ' · factures en attente annulées' : '')),
+      });
 
       return json({
         success: true,

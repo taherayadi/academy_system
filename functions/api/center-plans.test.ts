@@ -20,7 +20,7 @@ interface CenterRow {
   enabled_modules: string;
 }
 
-function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedules?: boolean } = {}) {
+function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedules?: boolean; noHistory?: boolean } = {}) {
   const calls: Array<{ sql: string; args: any[] }> = [];
   return {
     calls,
@@ -38,6 +38,9 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
             async all(): Promise<{ results: any[] }> {
               if (opts.noSchedules && sql.includes('center_plan_schedules')) {
                 throw new Error('D1_ERROR: no such table: center_plan_schedules');
+              }
+              if (opts.noHistory && sql.includes('center_plan_history')) {
+                throw new Error('D1_ERROR: no such table: center_plan_history');
               }
               if (sql.includes('module_prices')) {
                 return { results: [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
@@ -64,6 +67,9 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
             async run() {
               if (opts.noSchedules && sql.includes('center_plan_schedules')) {
                 throw new Error('D1_ERROR: no such table: center_plan_schedules');
+              }
+              if (opts.noHistory && sql.includes('center_plan_history')) {
+                throw new Error('D1_ERROR: no such table: center_plan_history');
               }
               calls.push({ sql, args });
               return { meta: { changes: 1 } };
@@ -316,5 +322,63 @@ describe('center-plans — resilience when migration 0027 is not applied', () =>
     // No center write, no invoice write.
     expect(db.calls.filter((c: any) => c.sql.includes('UPDATE centers'))).toHaveLength(0);
     expect(db.calls.filter((c: any) => c.sql.includes('center_invoices'))).toHaveLength(0);
+  });
+});
+
+const historyCalls = (db: any, action: string) => db.calls.filter(
+  (c: any) => c.sql.includes('INSERT INTO center_plan_history') && c.args.includes(action)
+);
+
+describe('center-plans — plan history audit trail', () => {
+  it('set-plan (immediate) logs plan_set with the invoice number', async () => {
+    const db = makeDb(ACTIVE_UNPAID, { windowPaid: false });
+    const res = await post({ action: 'set-plan', centerId: 'c1', plan: 'basic', billingCycle: 'monthly' }, db);
+    const data = await res.json() as any;
+    const hist = historyCalls(db, 'plan_set');
+    expect(hist).toHaveLength(1);
+    expect(hist[0].args.join(' ')).toContain(data.invoice.invoiceNumber);
+    expect(hist[0].args.join(' ')).toContain('75.00 TND');
+  });
+
+  it('trial activation logs plan_activated; scheduling logs plan_scheduled', async () => {
+    const db = makeDb(TRIAL, { windowPaid: false });
+    await post({ action: 'set-plan', centerId: 'c2', plan: 'growth', billingCycle: 'monthly' }, db);
+    expect(historyCalls(db, 'plan_activated')).toHaveLength(1);
+
+    const db2 = makeDb(ACTIVE_PAID, { windowPaid: true });
+    await post({ action: 'set-plan', centerId: 'c1', plan: 'pro', billingCycle: 'monthly' }, db2);
+    expect(historyCalls(db2, 'plan_scheduled')).toHaveLength(1);
+  });
+
+  it('remove-plan logs plan_removed…', async () => {
+    const db = makeDb(ACTIVE_UNPAID);
+    await post({ action: 'remove-plan', centerId: 'c1' }, db);
+    expect(historyCalls(db, 'plan_removed')).toHaveLength(1);
+  });
+
+  it('…but refuses to remove an already-expired center (stale UI protection)', async () => {
+    const db = makeDb(EXPIRED);
+    const res = await post({ action: 'remove-plan', centerId: 'c4' }, db);
+    expect(res.status).toBe(400);
+    expect(db.calls).toHaveLength(0);
+  });
+
+  it('add-trial logs trial_added with the placement', async () => {
+    const db = makeDb(ACTIVE_UNPAID);
+    await post({ action: 'add-trial', centerId: 'c1', days: 7 }, db);
+    const hist = historyCalls(db, 'trial_added');
+    expect(hist).toHaveLength(1);
+    expect(hist[0].args.join(' ')).toContain('en fin de période');
+  });
+
+  it('a missing history table never breaks the mutation, and GET degrades to []', async () => {
+    const db = makeDb(ACTIVE_UNPAID, { windowPaid: false, noHistory: true });
+    const res = await post({ action: 'set-plan', centerId: 'c1', plan: 'basic', billingCycle: 'monthly' }, db);
+    expect(res.status).toBe(200);
+
+    const request = new Request('https://example.test/api/center-plans?centerId=c1');
+    const get = await onRequestGet({ env: { DB: makeDb(ACTIVE_UNPAID, { noHistory: true }) }, request } as any);
+    expect(get.status).toBe(200);
+    expect((await get.json() as any).history).toEqual([]);
   });
 });

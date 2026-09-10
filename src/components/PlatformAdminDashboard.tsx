@@ -1473,6 +1473,20 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
   );
 }
 
+
+// Labels/badges for the per-center plan audit trail (center_plan_history).
+const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
+  center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
+  plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
+  plan_activated: { text: 'Abonnement activé', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_renewed: { text: 'Reconduction', cls: 'bg-sky-100 text-sky-700' },
+  plan_settled: { text: 'Régularisation', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
+  plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
+  schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
+  plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
+  trial_added: { text: 'Jours offerts', cls: 'bg-violet-100 text-violet-700' },
+};
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
 // All subscription operations live here (the center edit is basic info only).
 // Updating the CURRENT plan reuses the established mid-period rules:
@@ -1557,8 +1571,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
   const now = Date.now();
   const liveEnd = view?.center.subscriptionEndsAt || 0;
-  const hasLiveWindow = !!view && liveEnd > now;
-  const isTrial = view?.center.status === 'trial';
+  const centerStatus = view?.center.status || '';
+  // A removed plan keeps its (possibly future) end date in the DB — the
+  // 'expired' status must win, otherwise the delete button stays enabled
+  // and relaunches get mis-routed through the mid-period engine (which
+  // never re-activates).
+  const hasLiveWindow = !!view && liveEnd > now && centerStatus !== 'expired' && centerStatus !== 'trial';
+  const isTrial = centerStatus === 'trial';
   const expiredState = !!view && !isTrial && !hasLiveWindow
     && (view.center.status === 'expired' || (liveEnd > 0 && liveEnd <= now));
   const windowPaidInvoice = (view?.invoices || []).find(inv =>
@@ -1881,7 +1900,9 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   </div>
                   {expiredState ? (
                     <p className="text-[11px] font-bold text-red-600 mt-1.5">
-                      Abonnement expiré{liveEnd > 0 ? ` le ${fmtDate(liveEnd)}` : ''} — relancez un plan pour facturer à nouveau.
+                      {centerStatus === 'expired' && liveEnd > now
+                        ? `Abonnement supprimé le ${fmtDate(now)} — relancez un plan pour facturer à nouveau.`
+                        : <>Abonnement expiré{liveEnd > 0 ? ` le ${fmtDate(liveEnd)}` : ''} — relancez un plan pour facturer à nouveau.</>}
                     </p>
                   ) : (
                     <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
@@ -1894,7 +1915,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       {pendingInvoice.status === 'overdue' ? 'en retard' : 'en attente'} · {pendingInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
-                  {windowPaidInvoice && (
+                  {!expiredState && windowPaidInvoice && (
                     <p className="text-[11px] font-bold text-emerald-700 mt-1.5">
                       Facture {windowPaidInvoice.invoiceNumber} payée · {windowPaidInvoice.amount.toFixed(2)} TND
                     </p>
@@ -1911,9 +1932,9 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                     className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
                     <Edit className="h-3.5 w-3.5" /> {isTrial ? 'Choisir un plan et activer' : hasLiveWindow ? 'Modifier le plan' : 'Relancer un abonnement'}
                   </button>
-                  <button onClick={() => openForm('schedule')} disabled={saving || isTrial}
+                  <button onClick={() => openForm('schedule')} disabled={saving || isTrial || !hasLiveWindow}
                     className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : 'Appliqué à la fin de la période en cours'}>
+                    title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : !hasLiveWindow ? 'Aucune période en cours — relancez d’abord un abonnement.' : 'Appliqué à la fin de la période en cours'}>
                     <CalendarClock className="h-3.5 w-3.5" /> Programmer un plan
                   </button>
                   {(hasLiveWindow || isTrial) && (
@@ -2101,6 +2122,50 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Historique des plans (audit trail, migration 0029) ── */}
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2">
+                Historique des plans ({(view.history || []).length})
+              </p>
+              {(view.history || []).length === 0 ? (
+                <p className="text-[11px] font-semibold text-slate-400">
+                  Aucune activité enregistrée pour ce centre (la table d’historique est remplie dès la migration 0029 appliquée).
+                </p>
+              ) : (
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="w-full" dir="ltr">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Action</th>
+                        <th className="px-3 py-2">Détails</th>
+                        <th className="px-3 py-2 text-right">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(view.history || []).map(h => {
+                        const meta = PLAN_HISTORY_LABEL[h.action] || { text: h.action, cls: 'bg-slate-100 text-slate-500' };
+                        return (
+                          <tr key={h.id} className="border-t border-slate-100 align-top">
+                            <td className="px-3 py-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
+                            <td className="px-3 py-2">
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.text}</span>
+                            </td>
+                            <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
+                              {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
+                            </td>
+                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-right">
+                              {h.amount ? formatTnd(h.amount) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -2520,16 +2585,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const pagedRequests = filteredRequests.slice((safeRequestsPage - 1) * PAGE_SIZE, safeRequestsPage * PAGE_SIZE);
 
   // ── Handlers ──
-  const handleAddOfferDays = async (c: CenterTenant) => {
-    try {
-      await updateCenterApi(c.id, { addOfferDays: 14 });
-      toast.success('+14 jours d’essai ajoutés à la période initiale');
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur');
-    }
-  };
-
   const handleToggleStatus = async (c: CenterTenant) => {
     const newStatus = c.status === 'suspended' ? 'active' : 'suspended';
     try {
@@ -2994,13 +3049,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     title="Gérer le plan, les factures et les changements programmés">
                     <Receipt className="h-3.5 w-3.5" /> Plans &amp; factures
                   </button>
-                  {c.status === 'trial' && (
-                    <button onClick={() => handleAddOfferDays(c)}
-                      title="Prolonger la période d’essai (disponible uniquement pendant l’essai)"
-                      className="text-[11px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5">
-                      <CalendarClock className="h-3.5 w-3.5" /> +14 jours d’essai
-                    </button>
-                  )}
                   <button onClick={() => handleToggleStatus(c)}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       c.status === 'suspended'

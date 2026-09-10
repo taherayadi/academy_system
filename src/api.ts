@@ -622,6 +622,15 @@ export interface CenterPlanSchedule {
   createdAt: number;
 }
 
+export interface CenterPlanHistoryEntry {
+  id: string;
+  action: string;
+  details: string;
+  amount: number | null;
+  invoiceNumber: string | null;
+  createdAt: number;
+}
+
 export interface CenterPlansView {
   center: {
     id: string;
@@ -636,6 +645,8 @@ export interface CenterPlansView {
   };
   invoices: CenterInvoice[];
   schedules: CenterPlanSchedule[];
+  /** Audit trail (migration 0029) — empty when not yet applied. */
+  history?: CenterPlanHistoryEntry[];
 }
 
 export interface CenterPlanActionResult {

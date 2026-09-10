@@ -454,6 +454,78 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     const del = screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement;
     expect(del.disabled).toBe(true);
   });
+
+  it('plan manager: a center expired mid-window (plan just removed) blocks delete and relaunches via set-plan', async () => {
+    const DAY = 86400000;
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'expired', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 75, subscriptionEndsAt: Date.now() + 10 * DAY, trialEndsAt: null, enabledModules: [],
+      },
+      invoices: [{
+        id: 'i9', centerId: 'c1', centerName: 'Centre Alpha', invoiceNumber: 'INV-LATE',
+        periodStart: Date.now() - 3 * DAY, periodEnd: Date.now() + 10 * DAY,
+        amount: 75, status: 'pending', notes: '', createdAt: Date.now(),
+      }],
+      schedules: [],
+    });
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+
+    // The removal keeps the old future end date — 'expired' must win.
+    await waitFor(() => expect(screen.getByText(/Abonnement supprimé le/)).toBeTruthy());
+    expect(screen.queryByText('Fenêtre non payée')).toBeNull();
+    expect(screen.queryByText('Fenêtre payée')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ajouter une période d.essai/ })).toBeNull();
+    expect((screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Programmer un plan/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
+
+    // Relaunching must go through set-plan (which re-activates), never the
+    // mid-period engine (which would leave the center expired).
+    fireEvent.click(screen.getByRole('button', { name: /Relancer un abonnement/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'set-plan', centerId: 'c1' })
+    ));
+    expect(api.updateCenterApi).not.toHaveBeenCalled();
+  });
+
+  it('plan manager: the per-center plan history table renders audit entries', async () => {
+    const DAY = 86400000;
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...plansView,
+      history: [
+        { id: 'h1', action: 'plan_removed', details: 'Abonnement supprimé — factures en attente annulées.', amount: null, invoiceNumber: null, createdAt: Date.now() },
+        { id: 'h2', action: 'plan_set', details: 'Plan Growth (mensuel) appliqué', amount: 80, invoiceNumber: 'INV-2026-AB12', createdAt: Date.now() - 2 * DAY },
+      ],
+    });
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+
+    await waitFor(() => expect(screen.getByText(/Historique des plans \(2\)/)).toBeTruthy());
+    expect(screen.getByText('Abonnement annulé')).toBeTruthy();
+    expect(screen.getByText('Plan appliqué')).toBeTruthy();
+    expect(screen.getByText(/INV-2026-AB12/)).toBeTruthy();
+  });
+});
+
+describe('PlatformAdminDashboard — Center cards', () => {
+  it('a trial card no longer shows the amber « +14 jours d’essai » shortcut (handled in Plans & factures)', async () => {
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+      id: 'ct', name: 'Centre Beta', slug: 'beta', status: 'trial', plan: 'starter',
+      monthlyPrice: 0, billingCycle: 'monthly', trialEndsAt: Date.now() + 5 * 86400000,
+      subscriptionEndsAt: null, enabledModules: [], studentCount: 2,
+      adminEmail: 'b@b.tn', phoneNumber: '22222222', locationCity: 'Sousse',
+      centerType: 'jardin', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
+    }]);
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Beta')).toBeTruthy());
+
+    expect(screen.queryByRole('button', { name: /jours d.essai/ })).toBeNull();
+    expect(screen.queryByText('+14')).toBeNull();
+  });
 });
 
 

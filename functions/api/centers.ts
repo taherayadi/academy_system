@@ -3,6 +3,7 @@ import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
 } from './planLogic';
+import { logPlanHistory } from './_planHistory';
 
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
@@ -556,6 +557,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     await env.DB.batch(stmts);
 
+    await logPlanHistory(env.DB, {
+      centerId: id,
+      action: 'center_created',
+      amount: isTrial ? null : (monthlyPrice || null),
+      invoiceNumber: createdInvoice?.invoiceNumber || null,
+      details: isTrial
+        ? `Centre créé en période d’essai (${trialDays} j) — aucun plan facturé tant que l’essai court.`
+        : `Centre créé — plan ${planLabel(plan)} (${billingCycle}) du ${fmtFr(createdAt + offerDays * 86400000)} au ${fmtFr(subscriptionEndsAt || createdAt)}`
+          + (offerDays > 0 ? ` après ${offerDays} j offerts.` : '.'),
+    });
+
     return json({
       success: true,
       centerId: id,
@@ -861,6 +873,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(body.subscriptionEndsAt ? Number(body.subscriptionEndsAt) : null);
     }
 
+    // Audit trail entries for this PATCH — flushed after the writes succeed.
+    const historyEntries: Array<{ action: string; details: string; amount?: number | null; invoiceNumber?: string | null }> = [];
+
     // Add promotional/trial days — ONLY while the center is still in its trial
     // period. A center already inside a paid subscription window cannot be
     // granted a trial extension (a paid plan change must never silently give
@@ -876,6 +891,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         const baseTrialEnd = existingTrialEnd > now ? existingTrialEnd : now;
         updates.push('trial_ends_at = ?');
         binds.push(baseTrialEnd + extraDays * DAY_MS);
+        historyEntries.push({
+          action: 'trial_added',
+          details: `Essai prolongé de ${extraDays} jour(s) — fin reportée au ${fmtFr(baseTrialEnd + extraDays * DAY_MS)}.`,
+        });
       }
     }
 
@@ -928,6 +947,18 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       } else {
         settlementResult = { amount: 0, paid, remainingDays: settlement?.remainingDays || 0, skipped: true };
       }
+      if (settlementResult && !(settlementResult as any).skipped) {
+        historyEntries.push({
+          action: 'plan_settled',
+          amount: settlementResult.amount,
+          invoiceNumber: settlementResult.invoiceNumber || null,
+          details: `Changement en cours de période ${planLabel(currentPlan)} → ${planLabel(effectivePlan)} — `
+            + (settlementResult.paid
+              ? 'complément au prorata des jours restants (la facture payée reste intacte)'
+              : 'facture en attente annulée puis remplacée au nouveau tarif')
+            + ` · ${settlementResult.remainingDays} j restants, échéance inchangée.`,
+        });
+      }
       planChangeResponse.settlement = settlementResult;
       // A live change supersedes any pending scheduled change.
       if (pending && !foldSchedule) scheduleStmts.push(supersedePendingSchedules(env.DB, id));
@@ -951,6 +982,11 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       planChangeResponse.mode = 'scheduled';
       planChangeResponse.applyAt = applyAt;
       planChangeResponse.scheduledPlan = { plan: effectivePlan, billingCycle: effectiveBillingCycle, enabledModules: targetModules };
+      historyEntries.push({
+        action: 'plan_scheduled',
+        details: `Basse de plan programmée : ${planLabel(currentPlan)} → ${planLabel(effectivePlan)} (${effectiveBillingCycle}) pour le `
+          + (applyAt ? fmtFr(applyAt) : 'prochaine reconduction') + ' — période déjà payée conservée intégralement.',
+      });
     }
 
     // Folded/force-applied scheduled change → mark it as applied.
@@ -960,6 +996,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       planChangeResponse.mode = evaluation.mode === 'mid_period_increase' || evaluation.mode === 'mid_period_same_price'
         ? evaluation.mode : 'renewal';
       if (newSubscriptionEndsAt) planChangeResponse.newSubscriptionEndsAt = newSubscriptionEndsAt;
+      historyEntries.push({
+        action: 'plan_applied',
+        details: `Plan programmé appliqué : ${planLabel(currentPlan)} → ${planLabel(effectivePlan)} (${effectiveBillingCycle}).`,
+      });
     }
 
     if (updates.length > 0) {
@@ -997,6 +1037,13 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
           notes: `Abonnement ${planLabel(effectivePlan)} (${effectiveBillingCycle}) — ${fmtFr(extensionBase)} → ${fmtFr(newSubscriptionEndsAt)} · ${tag}`
         });
         autoInvoice = invoice ? { invoiceNumber: invoice.invoiceNumber, amount: invoice.amount } : null;
+        historyEntries.push({
+          action: statusChangedToPaid && current?.status === 'trial' ? 'plan_activated' : 'plan_renewed',
+          amount: autoInvoice ? autoInvoice.amount : null,
+          invoiceNumber: autoInvoice?.invoiceNumber || null,
+          details: `Abonnement ${planLabel(effectivePlan)} (${effectiveBillingCycle}) — ${fmtFr(extensionBase)} → ${fmtFr(newSubscriptionEndsAt)} · ${tag}`
+            + (autoInvoice ? ` · facture ${autoInvoice.invoiceNumber} en attente (${autoInvoice.amount.toFixed(2)} TND)` : ' · aucune facture (tarif nul ou période déjà réglée)'),
+        });
       }
     }
     planChangeResponse.invoice = autoInvoice;
@@ -1028,6 +1075,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       && !planChangeResponse.settlement) {
       await env.DB.prepare(`UPDATE center_plan_schedules SET status = 'cancelled', notes = COALESCE(notes, '') || ' — remplacé par un changement immédiat' WHERE id = ?`).bind(pending.id).run();
       planChangeResponse.cancelledScheduleId = pending.id;
+    }
+
+    for (const entry of historyEntries) {
+      await logPlanHistory(env.DB, { centerId: id, ...entry });
     }
 
     return json({ success: true, planChange: planChangeResponse });
