@@ -615,14 +615,23 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
-      {/* ─── PUBLICITÉ — bannières actives de la vitrine (gérées dans l'admin SaaS) ─── */}
+      {/* ─── PUBLICITÉ — formats aux dimensions exactes (gérés dans l'admin SaaS) ─── */}
       {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
           Les classes verticales vivent sur le carrousel (il rend null sans
           annonce → aucun espace fantôme sur la landing). */}
       <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
-        <AdvertisementCarousel location="landing_page" className="mb-10 rounded-2xl shadow-xl" />
+        {/* Leaderboard 728×90 — tout en haut, desktop/tablette */}
+        <AdvertisementCarousel location="landing_page" format="leaderboard_728x90" className="mb-8 rounded-2xl shadow-lg" />
+        {/* Mobile leaderboard 320×50 — téléphones uniquement */}
+        <AdvertisementCarousel location="landing_page" format="mobile_leaderboard_320x50" className="mb-6 rounded-xl shadow-md" />
+        {/* Carrousel standard (pubs sans position) */}
+        <AdvertisementCarousel location="landing_page" className="mb-8 rounded-2xl shadow-xl" />
+        {/* Medium rectangle 300×250 */}
+        <div className="flex justify-center">
+          <AdvertisementCarousel location="landing_page" format="medium_rectangle_300x250" className="mb-10 rounded-2xl shadow-lg" />
+        </div>
       </div>
-      {/* Format « Gratte-ciel » : bandeau vertical fixe dans la marge droite (grands écrans) */}
+      {/* Gratte-ciel 120×600 / 160×600 : bandeau vertical fixe dans la marge droite (grands écrans) */}
       <AdvertisementSkyscraper location="landing_page" side="right" />
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}

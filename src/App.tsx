@@ -1067,11 +1067,20 @@ export default function App() {
       {/* CORE CANVAS */}
       <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-5 xl:p-8 overflow-y-auto max-h-screen">
         <div className="max-w-7xl mx-auto">
-          {/* Bannière publicitaire du centre (campagnes « Tableau de bord » ou « Accueil + tableaux ») */}
+          {/* Publicité du centre — chaque format à ses dimensions exactes */}
           {!isPlatformSuperAdmin && currentCenter && (
             <>
-              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
-              {/* Format « Gratte-ciel » : bandeau vertical fixe à droite du tableau de bord */}
+              {/* Leaderboard 728×90 (desktop) / bandeau mobile 320×50 (téléphones) */}
+              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="leaderboard_728x90" className="mb-5" />
+              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="mobile_leaderboard_320x50" className="mb-5" />
+              {/* Carrousel standard + rectangle 300×250 aligné à droite */}
+              <div className="flex items-start gap-5">
+                <div className="min-w-0 flex-1">
+                  <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
+                </div>
+                <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="medium_rectangle_300x250" className="mb-5 shrink-0 hidden lg:block" />
+              </div>
+              {/* Gratte-ciel 160×600 : bandeau vertical fixe à droite du tableau de bord */}
               <AdvertisementSkyscraper location="center_admin" centerId={currentCenter.id} side="right" />
             </>
           )}

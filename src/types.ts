@@ -101,7 +101,7 @@ export function hasSkyscraperPosition(positions?: string[]): boolean {
   return (positions || []).includes(SKYSCRAPER_POSITION_ID);
 }
 
-/** Skyscraper-only ads never pollute the carousel. */
+/** @deprecated règle remplacée : TOUTE pub positionnée quitte le carrousel standard. */
 export function isSkyscraperOnly(positions?: string[]): boolean {
   const p = positions || [];
   return p.length > 0 && p.every(id => id === SKYSCRAPER_POSITION_ID);

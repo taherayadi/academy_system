@@ -28,7 +28,8 @@ describe('AdvertisementCarousel — multi-image indicators', () => {
 
     fireEvent.click(dots[1]);
     await waitFor(() => expect(screen.getByText('2 / 3')).toBeTruthy());
-    expect(screen.getByAltText('Promo rentrée').getAttribute('src')).toBe('https://cdn/2.jpg');
+    // L'ancienne image reste montée le temps de sa sortie (AnimatePresence)
+    await waitFor(() => expect(screen.getByAltText('Promo rentrée').getAttribute('src')).toBe('https://cdn/2.jpg'));
   });
 
   it('single-image ads carry no indicators (and no arrows)', async () => {
@@ -42,17 +43,35 @@ describe('AdvertisementCarousel — multi-image indicators', () => {
     expect(screen.queryByLabelText('Next image')).toBeNull();
   });
 
-  it('skyscraper-only ads skip the carousel; mixed positions stay', async () => {
-    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([ad(['https://cdn/sky.jpg'])].map(x => ({ ...x, positions: ['skyscraper_160x600'] })));
+  it('the standard carousel only serves ads WITHOUT positions', async () => {
+    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { ...ad(['https://cdn/sky.jpg']), positions: ['skyscraper_160x600'] },
+      { ...ad(['https://cdn/mix.jpg']), positions: ['leaderboard_728x90', 'skyscraper_160x600'] },
+    ]);
     const { container } = render(<AdvertisementCarousel location="landing_page" />);
     await waitFor(() => expect(api.fetchActiveAdvertisementsApi).toHaveBeenCalled());
-    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('img')).toBeNull(); // positionnées → créneaux dédiés
+  });
 
-    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([ad(['https://cdn/mix.jpg'])].map(x => ({ ...x, positions: ['leaderboard_728x90', 'skyscraper_160x600'] })));
-    render(<AdvertisementCarousel location="center_admin" centerId="c1" />);
-    await waitFor(() => expect(screen.getByAltText('Promo rentrée')).toBeTruthy());
+  it('format slots pick their own ads and render exact IAB dimensions', async () => {
+    const ads = [
+      { ...ad(['https://cdn/lb.jpg']), positions: ['leaderboard_728x90', 'skyscraper_160x600'] },
+      { ...ad(['https://cdn/sq.jpg']), positions: ['medium_rectangle_300x250'] },
+    ];
+    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue(ads);
+
+    const { container } = render(<AdvertisementCarousel location="landing_page" format="leaderboard_728x90" />);
+    await waitFor(() => expect(container.querySelector('img')).toBeTruthy());
+    const lbRoot = container.querySelector('div') as HTMLElement;
+    expect(lbRoot.className).toContain('max-w-[728px]'); // largeur leaderboard
+    expect(lbRoot.className).toContain('hidden');        // invisible sur mobile
+    expect(Array.from(container.querySelectorAll('div')).some(d => d.className.includes('aspect-[728/90]'))).toBe(true);
+
+    const rect = render(<AdvertisementCarousel location="center_admin" centerId="c1" format="medium_rectangle_300x250" />);
+    await waitFor(() => expect(rect.container.querySelector('img')).toBeTruthy());
+    const rectRoot = rect.container.querySelector('div') as HTMLElement;
+    expect(rectRoot.className).toContain('w-[300px]');
+    expect(Array.from(rect.container.querySelectorAll('div')).some(d => d.className.includes('aspect-[300/250]'))).toBe(true);
   });
 
   it('fetches with the requested location + center scope', async () => {

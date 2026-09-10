@@ -2,14 +2,28 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchActiveAdvertisementsApi } from '../api';
-import { isSkyscraperOnly } from '../types';
-import type { AdvertisementLocation } from '../types';
+import type { AdvertisementLocation, AdPositionId } from '../types';
 
 interface AdvertisementCarouselProps {
   location: AdvertisementLocation;
   centerId?: string;
   className?: string;
+  /**
+   * Rend une position exacte (leaderboard 728×90, rectangle 300×250,
+   * mobile 320×50) au lieu du carrousel 16:9. Les pubs SANS position
+   * alimentent le carrousel standard ; les pubs positionnées ne vivent
+   * que dans leurs créneaux aux dimensions exactes (skyscraper →
+   * bandeau latéral fixe, cf. AdvertisementSkyscraper).
+   */
+  format?: AdPositionId;
 }
+
+// Dimensions d'affichage par format IAB (le ratio porte la taille).
+const AD_FORMAT_PRESENTATION: Record<string, { container: string; frame: string }> = {
+  leaderboard_728x90: { container: 'mx-auto w-full max-w-[728px] hidden sm:block', frame: 'aspect-[728/90]' },
+  medium_rectangle_300x250: { container: 'w-[300px]', frame: 'aspect-[300/250]' },
+  mobile_leaderboard_320x50: { container: 'mx-auto w-full max-w-[320px] sm:hidden', frame: 'aspect-[320/50]' },
+};
 
 interface Advertisement {
   id: string;
@@ -20,7 +34,8 @@ interface Advertisement {
   positions?: string[];
 }
 
-export default function AdvertisementCarousel({ location, centerId, className = '' }: AdvertisementCarouselProps) {
+export default function AdvertisementCarousel({ location, centerId, className = '', format }: AdvertisementCarouselProps) {
+  const presentation = (format && AD_FORMAT_PRESENTATION[format]) || null;
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -38,9 +53,12 @@ export default function AdvertisementCarousel({ location, centerId, className = 
       try {
         setLoading(true);
         const fetchedAds = await fetchActiveAdvertisementsApi(location, centerId);
-        // Les pubs « gratte-ciel » seules vivent dans le bandeau latéral fixe,
-        // jamais dans le carrousel (les positions mixtes restent ici aussi).
-        const carouselAds = fetchedAds.filter((ad: { positions?: string[] }) => !isSkyscraperOnly(ad.positions));
+        // Créneaux formatés : uniquement les pubs qui portent cette position.
+        // Carrousel standard : uniquement les pubs SANS position.
+        const carouselAds = fetchedAds.filter((ad: { positions?: string[] }) => {
+          const positions = ad.positions || [];
+          return format ? positions.includes(format) : positions.length === 0;
+        });
         if (mounted) {
           setAds(carouselAds);
         }
@@ -53,7 +71,7 @@ export default function AdvertisementCarousel({ location, centerId, className = 
 
     loadAds();
     return () => { mounted = false; };
-  }, [location, centerId]);
+  }, [location, centerId, format]);
 
   // Auto-advance carousel every 5 seconds (if not paused)
   useEffect(() => {
@@ -87,12 +105,12 @@ export default function AdvertisementCarousel({ location, centerId, className = 
 
   const carouselContent = (
     <div
-      className={`group relative w-full overflow-hidden rounded-lg bg-gray-100 shadow-md ${className}`}
+      className={`group relative overflow-hidden rounded-lg bg-gray-100 shadow-md ${presentation ? presentation.container : 'w-full'} ${className}`}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
       {/* Image Display */}
-      <div className="relative aspect-[16/9] w-full">
+      <div className={`relative w-full ${presentation ? presentation.frame : 'aspect-[16/9]'}`}>
         <AnimatePresence mode="wait">
           <motion.img
             key={`${currentAd.id}-${currentImageIndex}`}
