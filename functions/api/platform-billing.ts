@@ -54,7 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     // Default: summary (MRR, collected revenue, pending invoices, centers by payment status)
-    const [centersRes, invoicesRes, monthInvoicesRes, yearInvoicesRes] = await Promise.all([
+    const [centersRes, invoicesRes, monthInvoicesRes, yearInvoicesRes, paidNowRes] = await Promise.all([
       env.DB.prepare(`
         SELECT id, name, status, monthly_price, billing_cycle, subscription_ends_at
         FROM centers WHERE status != 'trial'
@@ -67,7 +67,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       env.DB.prepare(`
         SELECT SUM(amount) as total FROM center_invoices
         WHERE status = 'paid' AND payment_date >= ? AND payment_date < ?
-      `).bind(yearStart(), yearEnd()).all<any>()
+      `).bind(yearStart(), yearEnd()).all<any>(),
+      // Paid invoices whose billing period covers today — the MRR base.
+      env.DB.prepare(`
+        SELECT amount, period_start, period_end FROM center_invoices
+        WHERE status = 'paid' AND period_start <= ? AND period_end > ?
+      `).bind(Date.now(), Date.now()).all<any>()
     ]);
 
     const centers = centersRes.results || [];
@@ -79,18 +84,19 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const collectedThisMonth = Number(monthInvoicesRes.results?.[0]?.total) || 0;
     const collectedThisYear = Number(yearInvoicesRes.results?.[0]?.total) || 0;
 
-    // MRR = sum of monthly_price for all active non-trial centers (annual centers contribute monthly_price / 12)
+    // MRR is computed from PAID invoices ONLY: each paid invoice whose period
+    // covers today contributes its monthly-normalised amount (annual invoices
+    // → amount / 12, monthly → amount). Pending invoices and pending cheques
+    // never count toward MRR.
     let mrr = 0;
+    const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
+    (paidNowRes.results || []).forEach((inv: { amount?: number | string; period_start?: number; period_end?: number }) => {
+      const months = Math.max(1, Math.round((Number(inv.period_end || 0) - Number(inv.period_start || 0)) / MONTH_MS));
+      mrr += (Number(inv.amount) || 0) / months;
+    });
     const activeCount = centers.filter(c => c.status === 'active').length;
     const suspendedCount = centers.filter(c => c.status === 'suspended').length;
     const expiredCount = centers.filter(c => c.status === 'expired').length;
-
-    centers.forEach(c => {
-      if (c.status === 'active') {
-        const price = Number(c.monthly_price) || 0;
-        mrr += c.billing_cycle === 'annual' ? price / 12 : price;
-      }
-    });
 
     // Centers by payment status (active with sub ending soon, overdue, suspended)
     const now = Date.now();

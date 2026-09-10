@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import PlatformAdminDashboard from './PlatformAdminDashboard';
 import type { CenterInvoice } from '../api';
 
@@ -114,5 +114,136 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     // Manual invoice creation and the Tarifs Modules shortcut are gone
     expect(screen.queryByText('Nouvelle Facture')).toBeNull();
     expect(screen.queryByText('Tarifs Modules')).toBeNull();
+  });
+
+  it('groups start expanded, collapse on header click, and print opens a printable window', async () => {
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getAllByText('INV-2026-0002').length).toBeGreaterThanOrEqual(1));
+
+    // Expanded by default: the invoice table of the centre is not hidden.
+    const row = screen.getAllByText('INV-2026-0002')[0].closest('tr')!;
+    const tableWrap = row.closest('div')!;
+    expect(tableWrap.className).not.toContain('hidden');
+
+    // Clicking the centre header collapses the group.
+    fireEvent.click(screen.getByRole('button', { name: /Centre Horizon/ }));
+    await waitFor(() => expect(tableWrap.className).toContain('hidden'));
+    fireEvent.click(screen.getByRole('button', { name: /Centre Horizon/ }));
+    await waitFor(() => expect(tableWrap.className).not.toContain('hidden'));
+
+    // Print: window.open is mocked; the printed HTML contains the invoice.
+    const written: string[] = [];
+    const fakeWin = {
+      document: { write: (html: string) => written.push(html), close: () => {} },
+      focus: () => {},
+      print: () => {},
+    };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
+    const printBtn = row.querySelector('button[title="Imprimer la facture"]') as HTMLElement;
+    fireEvent.click(printBtn);
+    expect(openSpy).toHaveBeenCalled();
+    expect(written.join('')).toContain('INV-2026-0002');
+    expect(written.join('')).toContain('Centre Horizon');
+    openSpy.mockRestore();
+  });
+
+  it('filters grouped invoices by month', async () => {
+    (api.fetchInvoicesApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: 'a1', centerId: 'ca', centerName: 'Centre Été', invoiceNumber: 'INV-JUL',
+        periodStart: new Date(2026, 6, 3).getTime(), periodEnd: new Date(2026, 6, 31).getTime(),
+        amount: 10, status: 'paid', paymentMethod: 'cash', paymentDate: new Date(2026, 6, 5).getTime(),
+        notes: '', createdAt: Date.now(),
+      },
+      {
+        id: 'b1', centerId: 'cb', centerName: 'Centre Rentré', invoiceNumber: 'INV-SEP',
+        periodStart: new Date(2026, 8, 2).getTime(), periodEnd: new Date(2026, 9, 1).getTime(),
+        amount: 20, status: 'paid', paymentMethod: 'cash', paymentDate: new Date(2026, 8, 2).getTime(),
+        notes: '', createdAt: Date.now(),
+      },
+    ]);
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getAllByText('Centre Été').length).toBeGreaterThanOrEqual(1));
+    expect(screen.getAllByText('Centre Rentré').length).toBeGreaterThanOrEqual(1);
+
+    const monthSelect = screen.getByTitle('Filtrer par mois de période facturée') as unknown as HTMLSelectElement;
+    expect(Array.from(monthSelect.options).map(o => o.value)).toEqual(expect.arrayContaining(['all', '2026-07', '2026-09']));
+
+    fireEvent.change(monthSelect, { target: { value: '2026-09' } });
+    await waitFor(() => expect(screen.queryByText('Centre Été')).toBeNull());
+    expect(screen.getAllByText('Centre Rentré').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('INV-SEP').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('paginates the centre groups 10 per page', async () => {
+    const many: CenterInvoice[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `id-${i}`, centerId: `c-${i}`, centerName: `Centre ${String(i + 1).padStart(2, '0')}`,
+      invoiceNumber: `INV-GRP-${i}`, periodStart: Date.now() - 2 * 86400000, periodEnd: Date.now() + 28 * 86400000,
+      amount: 30, status: 'paid' as const, paymentMethod: 'cash' as const, paymentDate: Date.now(),
+      notes: '', createdAt: Date.now(),
+    }));
+    (api.fetchInvoicesApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce(many);
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+
+    // Page 1 → 10 of the 12 centres, with the pagination range.
+    await waitFor(() => expect(screen.getByText('1–10 sur 12')).toBeTruthy());
+    expect(screen.getAllByText('Centre 01').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Centre 11')).toBeNull();
+    expect(screen.queryByText('Centre 12')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() => expect(screen.getByText('11–12 sur 12')).toBeTruthy());
+    expect(screen.getAllByText('Centre 11').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Centre 12').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Centre 01')).toBeNull();
+  });
+});
+
+describe('PlatformAdminDashboard — Pricing page (school years)', () => {
+  // Mirrors currentSchoolYear(): September-based. Years derived from "today" so
+  // the test is stable over time (DB holds exactly the current + next year).
+  const d = new Date();
+  const base = d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1;
+  const YEAR_CUR = `${base}/${base + 1}`;
+  const YEAR_NEXT = `${base + 1}/${base + 2}`;
+  const YEAR_ADDED = `${base + 2}/${base + 3}`;
+
+  it('lists the years of the database and adds the next school year with copied prices', async () => {
+    // Stateful store mimicking the module_prices upsert semantics.
+    const store: Array<{ id: string; school_year: string; module_key: string; price: number; created_at: number }> = [
+      { id: 'p1', school_year: YEAR_CUR, module_key: 'scolaire', price: 45, created_at: 0 },
+      { id: 'p2', school_year: YEAR_CUR, module_key: 'etude', price: 10, created_at: 0 },
+      { id: 'p3', school_year: YEAR_NEXT, module_key: 'scolaire', price: 50, created_at: 0 },
+      { id: 'p4', school_year: YEAR_NEXT, module_key: 'etude', price: 12, created_at: 0 },
+    ];
+    (api.fetchModulePricesApi as ReturnType<typeof vi.fn>).mockImplementation(async (year?: string) =>
+      (year ? store.filter(r => r.school_year === year) : store.slice())
+    );
+    (api.updateModulePricesApi as ReturnType<typeof vi.fn>).mockImplementation(async (year: string, prices: Array<{ module_key: string; price: number }>) => {
+      prices.forEach(p => {
+        const hit = store.find(r => r.school_year === year && r.module_key === p.module_key);
+        if (hit) hit.price = p.price;
+        else store.push({ id: `${year}-${p.module_key}`, school_year: year, module_key: p.module_key, price: p.price, created_at: 0 });
+      });
+    });
+
+    render(<PlatformAdminDashboard page="pricing" onNavigate={() => {}} />);
+
+    // Tabs: the two existing years (nothing else is stored).
+    await waitFor(() => expect(screen.getByRole('button', { name: YEAR_CUR })).toBeTruthy());
+    expect(screen.getByRole('button', { name: YEAR_NEXT })).toBeTruthy();
+
+    // Add-the-next-year button (the year right after the latest tab).
+    const addBtn = screen.getByRole('button', { name: new RegExp(`Ajouter l'année scolaire ${YEAR_ADDED.replace('/', '\\/')}`) });
+    fireEvent.click(addBtn);
+
+    // Persists the copied prices (50 for scolaire from the latest year) for the new year…
+    await waitFor(() => expect(api.updateModulePricesApi).toHaveBeenCalledWith(YEAR_ADDED, expect.arrayContaining([
+      { module_key: 'scolaire', price: 50 },
+      { module_key: 'etude', price: 12 },
+      { module_key: 'studentTimeSheets', price: 0 }, // Jd. Horaires toujours offert
+    ])));
+    // …and the new year becomes the active tab.
+    await waitFor(() => expect(screen.getByRole('button', { name: YEAR_ADDED })).toBeTruthy());
   });
 });

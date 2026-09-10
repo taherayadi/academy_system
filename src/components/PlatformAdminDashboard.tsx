@@ -6,7 +6,7 @@ import {
   CalendarClock, Layers, Trash2, Check, X, Loader2, Upload,
   Mail, Phone, FileText, DollarSign, TrendingUp, AlertCircle,
   Receipt, Edit, BarChart3, Lock, Search, GraduationCap, ArrowRight,
-  ChevronLeft, ChevronRight, ImagePlus
+  ChevronLeft, ChevronRight, ImagePlus, Printer, ChevronDown
 } from 'lucide-react';
 import {
   fetchCentersApi, createCenterApi, updateCenterApi, deleteCenterApi,
@@ -238,14 +238,14 @@ function pageNumbers(current: number, total: number): (number | '…')[] {
   return out;
 }
 
-function Pagination({ page, totalPages, total, onChange }: {
-  page: number; totalPages: number; total: number; onChange: (page: number) => void;
+function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
+  page: number; totalPages: number; total: number; onChange: (page: number) => void; size?: number;
 }) {
   if (totalPages <= 1) return null;
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-3">
       <span className="text-xs font-bold text-slate-400">
-        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} sur {total}
+        {(page - 1) * size + 1}–{Math.min(page * size, total)} sur {total}
       </span>
       <div className="flex items-center gap-1.5">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
@@ -1637,6 +1637,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [priceList, setPriceList] = useState<Record<string, number>>({});
   const [pricesLoading, setPricesLoading] = useState(false);
   const [savingPrices, setSavingPrices] = useState(false);
+  // School years that actually exist in the database (module_prices.school_year).
+  const [knownYears, setKnownYears] = useState<string[]>([]);
+  const [addingYear, setAddingYear] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1658,7 +1661,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setSearch('');
     setCenterTypeFilter('all'); setStatusFilter('all'); setPlanFilter('all');
     setReqTypeFilter('all'); setReqStatusFilter('all');
-    setInvoiceSearch(''); setInvoiceStatusFilter('all');
+    setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); setInvoiceCentersPage(1);
     setCentersPage(1); setRequestsPage(1);
   }, [page]);
 
@@ -1709,16 +1712,43 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // ── Invoice filters (center name + status) ──
+  // ── Invoice filters (center name + status + month) ──
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<'all' | CenterInvoice['status']>('all');
+  const [invoiceMonthFilter, setInvoiceMonthFilter] = useState<'all' | string>('all'); // 'YYYY-MM' | 'all'
+  const [invoiceCentersPage, setInvoiceCentersPage] = useState(1);
+  const INVOICE_GROUPS_PAGE_SIZE = 10; // 10 centres par page
+  // Group headers are expanded by default; clicking one toggles its collapse.
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Record<string, boolean>>({});
+
+  // Months that actually contain invoices (based on the billing period start).
+  const invoiceMonths = useMemo(() => {
+    const keys = new Set<string>();
+    invoices.forEach(inv => {
+      const d = new Date(inv.periodStart);
+      keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(keys).sort().reverse();
+  }, [invoices]);
+
+  const monthLabel = (key: string) => {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  };
+
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
-    return invoices.filter(inv =>
-      (invoiceStatusFilter === 'all' || inv.status === invoiceStatusFilter)
-      && (!q || inv.centerName.toLowerCase().includes(q))
-    );
-  }, [invoices, invoiceSearch, invoiceStatusFilter]);
+    return invoices.filter(inv => {
+      if (invoiceStatusFilter !== 'all' && inv.status !== invoiceStatusFilter) return false;
+      if (invoiceMonthFilter !== 'all') {
+        const d = new Date(inv.periodStart);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (key !== invoiceMonthFilter) return false;
+      }
+      if (q && !inv.centerName.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [invoices, invoiceSearch, invoiceStatusFilter, invoiceMonthFilter]);
 
   // Invoices paid by cheque but not encashed yet — tracked separately, they
   // are NEVER part of revenue until their status becomes 'paid'.
@@ -1726,7 +1756,65 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     inv.status === 'pending' && inv.paymentMethod === 'cheque' && !!inv.chequeNumber
   ), [invoices]);
 
-  // Group the filtered invoices by center (each center has its own list).
+  // Print a single invoice in a dedicated, print-ready window.
+  const handlePrintInvoice = useCallback((inv: CenterInvoice) => {
+    const frDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('fr-FR') : '—');
+    const statusText = inv.status === 'paid' ? 'PAYÉE'
+      : inv.status === 'overdue' ? 'EN RETARD'
+      : inv.status === 'cancelled' ? 'ANNULÉE' : 'EN ATTENTE';
+    const payLine = inv.paymentMethod === 'cheque'
+      ? `Chèque${inv.chequeNumber ? ` N° ${inv.chequeNumber}` : ''}${inv.chequeDate ? ` daté du ${frDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — en attente d’encaissement' : ''}`
+      : inv.paymentMethod === 'cash' ? 'Espèces'
+      : '—';
+    const w = window.open('', '_blank', 'width=820,height=920');
+    if (!w) { toast.error('Autorisez les fenêtres pop-up pour imprimer la facture.'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" />
+<title>Facture ${inv.invoiceNumber}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 40px; }
+  .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #257C86; padding-bottom: 18px; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.02em; }
+  .muted { color: #64748b; font-size: 12px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid ${inv.status === 'paid' ? '#059669' : '#d97706'}; color: ${inv.status === 'paid' ? '#059669' : '#d97706'}; }
+  .row { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; }
+  .row b { font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 13px; }
+  th { text-align: left; background: #f1f5f9; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
+  td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+  .total { text-align: right; font-size: 16px; font-weight: 800; margin-top: 10px; }
+  .notes { margin-top: 16px; font-size: 12px; color: #475569; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
+  footer { margin-top: 26px; font-size: 11px; color: #94a3b8; text-align: center; }
+  @media print { body { padding: 0; } .sheet { border: none; padding: 0; } .noprint { display: none; } }
+</style></head><body>
+<div class="sheet">
+  <div class="head">
+    <div><h1>Facture d'abonnement</h1><div class="muted">Plateforme SaaS — gestion de centres</div></div>
+    <div style="text-align:right"><div style="font-weight:800;font-size:14px">${inv.invoiceNumber || '—'}</div>
+      <div class="muted">Émise le ${frDate(inv.createdAt)}</div>
+      <div style="margin-top:8px"><span class="badge">${statusText}</span></div></div>
+  </div>
+  <div class="row"><span>Centre</span><b>${inv.centerName || '—'}</b></div>
+  <div class="row"><span>Période facturée</span><b>${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</b></div>
+  <div class="row"><span>Mode de paiement</span><b>${payLine}</b></div>
+  ${inv.paymentDate ? `<div class="row"><span>Payée le</span><b>${frDate(inv.paymentDate)}</b></div>` : ''}
+  <table><thead><tr><th>Désignation</th><th style="text-align:right">Montant</th></tr></thead>
+  <tbody><tr><td>Abonnement plateforme SaaS — ${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</td>
+  <td style="text-align:right;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
+  <div class="total">Total : ${inv.amount.toFixed(2)} TND</div>
+  ${inv.notes ? `<div class="notes"><b>Notes :</b> ${inv.notes}</div>` : ''}
+  <footer>Document généré depuis l'espace administrateur SaaS.</footer>
+  <div class="noprint" style="text-align:center;margin-top:18px">
+    <button onclick="window.print()" style="background:#257C86;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 Imprimer</button>
+  </div>
+</div>
+<script>window.onload = function () { setTimeout(function () { window.print(); }, 250); };</script>
+</body></html>`);
+    w.document.close();
+    w.focus();
+  }, [toast]);
+
   const invoiceGroups = useMemo(() => {
     const byCenter = new Map<string, { centerId: string; centerName: string; invoices: CenterInvoice[] }>();
     filteredInvoices.forEach(inv => {
@@ -1737,6 +1825,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     });
     return Array.from(byCenter.values()).sort((a, b) => a.centerName.localeCompare(b.centerName));
   }, [filteredInvoices]);
+
+  // Pagination — 10 centres par page (chaque centre affiche toutes ses factures).
+  const invoiceGroupsTotalPages = Math.max(1, Math.ceil(invoiceGroups.length / INVOICE_GROUPS_PAGE_SIZE));
+  const safeInvoiceGroupsPage = Math.min(invoiceCentersPage, invoiceGroupsTotalPages);
+  const pagedInvoiceGroups = invoiceGroups.slice(
+    (safeInvoiceGroupsPage - 1) * INVOICE_GROUPS_PAGE_SIZE,
+    safeInvoiceGroupsPage * INVOICE_GROUPS_PAGE_SIZE
+  );
+
+  // Revenir à la page 1 quand les filtres changent.
+  useEffect(() => { setInvoiceCentersPage(1); }, [invoiceSearch, invoiceStatusFilter, invoiceMonthFilter]);
 
   const loadPrices = useCallback(async (year: string) => {
     setPricesLoading(true);
@@ -1755,9 +1854,56 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     }
   }, [toast]);
 
+  // Years present in the database → tabs.
+  const loadPriceYears = useCallback(async () => {
+    try {
+      const rows = await fetchModulePricesApi(); // no year → all rows, all years
+      const years = Array.from(new Set((rows || []).map(r => String(r.school_year || '')).filter(Boolean)));
+      setKnownYears(years);
+    } catch { /* silencieux : les années par défaut restent affichées */ }
+  }, []);
+
   useEffect(() => {
-    if (page === 'pricing') loadPrices(priceYear);
-  }, [page, priceYear, loadPrices]);
+    if (page === 'pricing') { loadPrices(priceYear); loadPriceYears(); }
+  }, [page, priceYear, loadPrices, loadPriceYears]);
+
+  // Onglets d'années : celles de la base + l'année courante et la suivante.
+  const priceYears = useMemo(() => {
+    const d = new Date();
+    const base = d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1;
+    const set = new Set([...knownYears, `${base}/${base + 1}`, `${base + 1}/${base + 2}`]);
+    return Array.from(set).sort();
+  }, [knownYears]);
+
+  const nextSchoolYear = useMemo(() => {
+    const [startStr] = (priceYears[priceYears.length - 1] || currentSchoolYear()).split('/');
+    const start = Number(startStr);
+    return Number.isFinite(start) ? `${start + 1}/${start + 2}` : '';
+  }, [priceYears]);
+
+  // Ajouter une année scolaire : tarifs copiés depuis la dernière année,
+  // persistés immédiatement pour que l'année survive à un rechargement.
+  const addSchoolYear = async () => {
+    if (addingYear || !nextSchoolYear) return;
+    setAddingYear(true);
+    try {
+      const prevYear = priceYears[priceYears.length - 1];
+      const prices = await fetchModulePricesApi(prevYear);
+      const map: Record<string, number> = {};
+      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      (prices || []).forEach((p: ModulePrice) => { map[p.module_key] = p.price; });
+      map[BUNDLED_MODULE_KEY] = 0; // Jd. Horaires toujours offert
+      await updateModulePricesApi(nextSchoolYear, ALL_MODULES.map(m => ({ module_key: m.key, price: Number(map[m.key] || 0) })));
+      setKnownYears(ys => Array.from(new Set([...ys, nextSchoolYear])));
+      setPriceList(map);
+      setPriceYear(nextSchoolYear);
+      toast.success(`Année ${nextSchoolYear} ajoutée — tarifs copiés depuis ${prevYear}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur ajout année scolaire');
+    } finally {
+      setAddingYear(false);
+    }
+  };
 
   const savePrices = async () => {
     setSavingPrices(true);
@@ -2510,7 +2656,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               {billingSummary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'MRR (Revenue Mensuel)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-emerald-100 text-emerald-600' },
+                    { label: 'MRR (factures payées)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-emerald-100 text-emerald-600' },
                     { label: 'Encaissé ce mois', value: `${billingSummary.collectedThisMonth.toFixed(2)} TND`, icon: DollarSign, tint: 'bg-blue-100 text-blue-600' },
                     { label: 'Encaissé cette année', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-violet-100 text-violet-600' },
                     { label: 'Factures en attente', value: `${billingSummary.pendingInvoices.toFixed(2)} TND`, icon: AlertCircle, tint: 'bg-amber-100 text-amber-600' }
@@ -2576,6 +2722,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                 >
                                   <CheckCircle2 className="h-3.5 w-3.5" /> Encaisser
                                 </button>
+                                <button onClick={() => handlePrintInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture">
+                                  <Printer className="h-3.5 w-3.5 text-slate-500" />
+                                </button>
                                 <button onClick={() => setEditInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
                                   <Edit className="h-3.5 w-3.5 text-slate-500" />
                                 </button>
@@ -2620,9 +2769,20 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <option value="overdue">En retard</option>
                       <option value="cancelled">Annulée</option>
                     </select>
-                    {(invoiceSearch || invoiceStatusFilter !== 'all') && (
+                    <select
+                      value={invoiceMonthFilter}
+                      onChange={e => setInvoiceMonthFilter(e.target.value)}
+                      className="px-3 py-2 text-xs font-bold border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer capitalize"
+                      title="Filtrer par mois de période facturée"
+                    >
+                      <option value="all">Tous les mois</option>
+                      {invoiceMonths.map(key => (
+                        <option key={key} value={key}>{monthLabel(key)}</option>
+                      ))}
+                    </select>
+                    {(invoiceSearch || invoiceStatusFilter !== 'all' || invoiceMonthFilter !== 'all') && (
                       <button
-                        onClick={() => { setInvoiceSearch(''); setInvoiceStatusFilter('all'); }}
+                        onClick={() => { setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); }}
                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer"
                       >
                         <X className="h-3.5 w-3.5" /> Réinitialiser
@@ -2637,7 +2797,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <p className="text-center py-12 text-slate-400 text-sm font-bold">Aucune facture ne correspond aux filtres</p>
                 ) : (
                   <div className="space-y-5">
-                    {invoiceGroups.map(group => {
+                    {pagedInvoiceGroups.map(group => {
                       const paidTotal = group.invoices
                         .filter(inv => inv.status === 'paid')
                         .reduce((sum, inv) => sum + inv.amount, 0);
@@ -2646,9 +2806,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         .reduce((sum, inv) => sum + inv.amount, 0);
                       return (
                         <div key={group.centerId} className="rounded-2xl border border-slate-200/80 overflow-hidden">
-                          {/* Centre header */}
-                          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 border-b border-slate-200/70">
+                          {/* Centre header — cliquer pour replier / déplier */}
+                          <button type="button"
+                            onClick={() => setCollapsedGroupIds(prev => ({ ...prev, [group.centerId]: !prev[group.centerId] }))}
+                            className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-left cursor-pointer border-b border-slate-200/70">
                             <div className="flex items-center gap-2.5 min-w-0">
+                              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} />
                               <span className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
                                 {group.centerName.split(' ').map((word: string) => word[0]).join('').slice(0, 2).toUpperCase()}
                               </span>
@@ -2671,8 +2834,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                 </span>
                               )}
                             </div>
-                          </div>
-                          <div className="overflow-x-auto">
+                          </button>
+                          <div className={`overflow-x-auto${collapsedGroupIds[group.centerId] ? ' hidden' : ''}`}>
                             <table className="w-full text-sm text-left">
                               <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-white">
                                 <tr>
@@ -2700,6 +2863,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                       </td>
                                       <td className="py-3 px-3">
                                         <div className="flex items-center gap-1">
+                                          <button onClick={() => handlePrintInvoice(inv)}
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture">
+                                            <Printer className="h-3.5 w-3.5 text-slate-500" />
+                                          </button>
                                           <button onClick={() => setEditInvoice(inv)}
                                             className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
                                             <Edit className="h-3.5 w-3.5 text-slate-500" />
@@ -2729,6 +2896,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     })}
                   </div>
                 )}
+
+                {/* Pagination — 10 centres par page */}
+                {invoiceGroupsTotalPages > 1 && (
+                  <div className="mt-5">
+                    <Pagination
+                      page={safeInvoiceGroupsPage}
+                      totalPages={invoiceGroupsTotalPages}
+                      total={invoiceGroups.length}
+                      size={INVOICE_GROUPS_PAGE_SIZE}
+                      onChange={p => setInvoiceCentersPage(p)}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -2739,21 +2919,27 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       {page === 'pricing' && (
         <motion.div key="pricing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-5">
 
-          {/* Year selector */}
+          {/* Year selector — années de la base + ajout d'une nouvelle année scolaire */}
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="inline-flex items-center p-1.5 bg-white border-2 border-slate-200 rounded-2xl shadow-sm">
-              {[0, 1].map(offset => {
-                const y = new Date().getFullYear();
-                const base = new Date().getMonth() >= 8 ? y : y - 1;
-                const year = `${base + offset}/${base + offset + 1}`;
-                const active = priceYear === year;
-                return (
-                  <button key={year} onClick={() => setPriceYear(year)}
-                    className={`px-5 py-2 rounded-xl text-sm font-black transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
-                    {year}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center p-1.5 bg-white border-2 border-slate-200 rounded-2xl shadow-sm">
+                {priceYears.map(year => {
+                  const active = priceYear === year;
+                  return (
+                    <button key={year} onClick={() => setPriceYear(year)}
+                      className={`px-5 py-2 rounded-xl text-sm font-black transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
+                      {year}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={addSchoolYear} disabled={addingYear}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-dashed border-[#257C86]/50 text-[#257C86] text-sm font-black hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60"
+                title={`Crée ${nextSchoolYear} avec les tarifs copiés depuis ${priceYears[priceYears.length - 1] || ''}`}
+              >
+                {addingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Ajouter l'année scolaire {nextSchoolYear}
+              </button>
             </div>
             <button onClick={savePrices} disabled={savingPrices || pricesLoading}
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer disabled:opacity-60">

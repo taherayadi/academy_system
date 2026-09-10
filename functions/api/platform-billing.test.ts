@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { onRequestPatch } from './platform-billing';
+import { onRequestGet, onRequestPatch } from './platform-billing';
 
 vi.mock('./_lib', () => ({
   validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
@@ -141,5 +141,64 @@ describe('platform-billing PATCH — revenue & cheque rules', () => {
   it('returns 404 for an unknown invoice', async () => {
     const res = await patch({ id: 'nope', status: 'paid' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ── GET /api/platform-billing (summary): MRR from paid invoices only ────────
+describe('platform-billing GET summary — MRR only from paid invoices', () => {
+  const DAY = 86400000;
+
+  function makeSummaryDb(opts: { centers: any[]; paidNow: any[] }) {
+    const stmt = (sql: string) => ({
+      bind() { return this; },
+      async all() {
+        if (sql.includes('FROM centers')) return { results: opts.centers };
+        if (sql.includes("status = 'paid' AND period_start")) return { results: opts.paidNow };
+        if (sql.includes('GROUP BY status')) {
+          return { results: [{ status: 'pending', total: 100 }, { status: 'paid', total: 300 }] };
+        }
+        if (sql.includes('payment_date')) return { results: [{ total: 90 }] };
+        return { results: [] };
+      },
+    });
+    return { prepare: (sql: string) => stmt(sql) };
+  }
+
+  async function getSummary(opts: { centers: any[]; paidNow: any[] }) {
+    const request = new Request('https://example.test/api/platform-billing');
+    const res = await onRequestGet({ env: { DB: makeSummaryDb(opts) }, request } as any);
+    const data = await res.json() as any;
+    return data.summary as { mrr: number; pendingInvoices: number };
+  }
+
+  it('builds MRR from paid invoices covering today (monthly + annual normalised)', async () => {
+    const now = Date.now();
+    const { mrr } = await getSummary({
+      // Centers carry prices — but MRR must not read them anymore.
+      centers: [
+        { id: 'a', name: 'A', status: 'active', monthly_price: 90, billing_cycle: 'monthly', subscription_ends_at: now + 20 * DAY },
+        { id: 'b', name: 'B', status: 'active', monthly_price: 1200, billing_cycle: 'annual', subscription_ends_at: now + 300 * DAY },
+      ],
+      paidNow: [
+        // A: paid monthly invoice covering today → 90.
+        { amount: 90, period_start: now - 5 * DAY, period_end: now + 25 * DAY },
+        // B: paid annual invoice (365 days) → 1200 / 12 = 100.
+        { amount: 1200, period_start: now - 10 * DAY, period_end: now + 355 * DAY },
+      ],
+    });
+    expect(mrr).toBeCloseTo(190, 2);
+  });
+
+  it('a center without a paid invoice covering today contributes nothing to MRR', async () => {
+    const now = Date.now();
+    const { mrr } = await getSummary({
+      centers: [
+        { id: 'a', name: 'A', status: 'active', monthly_price: 90, billing_cycle: 'monthly', subscription_ends_at: now + 20 * DAY },
+      ],
+      // No paid invoice covering today: its 90 TND invoice is only pending
+      // (or its paid period already expired) → excluded by the SQL query.
+      paidNow: [],
+    });
+    expect(mrr).toBe(0);
   });
 });
