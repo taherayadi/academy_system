@@ -1771,8 +1771,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" />
 <title>Facture ${inv.invoiceNumber}</title>
 <style>
+  /* Margin 0 supprime l'en-tête/pied de page du navigateur (date, titre, URL « blank », n° de page). */
+  @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 40px; }
+  html, body { margin: 0; padding: 0; height: auto; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; padding: 40px 24px; background: #fff; }
   .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #257C86; padding-bottom: 18px; margin-bottom: 24px; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.02em; }
@@ -1785,8 +1788,18 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
   .total { text-align: right; font-size: 16px; font-weight: 800; margin-top: 10px; }
   .notes { margin-top: 16px; font-size: 12px; color: #475569; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
-  footer { margin-top: 26px; font-size: 11px; color: #94a3b8; text-align: center; }
-  @media print { body { padding: 0; } .sheet { border: none; padding: 0; } .noprint { display: none; } }
+  .sign { display: flex; justify-content: flex-end; margin-top: 46px; }
+  .signbox { text-align: center; }
+  .signspace { height: 46px; }
+  .signline { width: 230px; border-bottom: 1px solid #334155; }
+  .signcap { font-size: 11px; font-weight: 700; color: #334155; margin-top: 6px; }
+  footer { margin-top: 14px; font-size: 11px; color: #94a3b8; text-align: center; }
+  @media print {
+    body { padding: 0; }
+    /* Le contenu porte lui-même ses marges → pas de 2e page vide. */
+    .sheet { max-width: none; border: none; border-radius: 0; padding: 18mm 16mm; margin: 0; }
+    .noprint { display: none !important; }
+  }
 </style></head><body>
 <div class="sheet">
   <div class="head">
@@ -1804,6 +1817,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   <td style="text-align:right;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
   <div class="total">Total : ${inv.amount.toFixed(2)} TND</div>
   ${inv.notes ? `<div class="notes"><b>Notes :</b> ${inv.notes}</div>` : ''}
+  <div class="sign"><div class="signbox">
+    <div class="signspace"></div>
+    <div class="signline"></div>
+    <div class="signcap">Signature de la plateforme SaaS</div>
+  </div></div>
   <footer>Document généré depuis l'espace administrateur SaaS.</footer>
   <div class="noprint" style="text-align:center;margin-top:18px">
     <button onclick="window.print()" style="background:#257C86;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 Imprimer</button>
@@ -2920,32 +2938,33 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="pricing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-5">
 
           {/* Year selector — années de la base + ajout d'une nouvelle année scolaire */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center p-1.5 bg-white border-2 border-slate-200 rounded-2xl shadow-sm">
-                {priceYears.map(year => {
-                  const active = priceYear === year;
-                  return (
-                    <button key={year} onClick={() => setPriceYear(year)}
-                      className={`px-5 py-2 rounded-xl text-sm font-black transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
-                      {year}
-                    </button>
-                  );
-                })}
+          <div className="rounded-3xl border border-slate-200/70 bg-white p-3 sm:p-4 shadow-sm">
+            <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="hidden sm:block text-[11px] font-black uppercase tracking-wider text-slate-400 flex-shrink-0">
+                  Année scolaire
+                </span>
+                {/* Scroll horizontal sur petits écrans : les onglets ne cassent plus la grille */}
+                <div className="flex items-center gap-1 p-1.5 bg-slate-50 border-2 border-slate-200 rounded-2xl overflow-x-auto max-w-full">
+                  {priceYears.map(year => {
+                    const active = priceYear === year;
+                    return (
+                      <button key={year} onClick={() => setPriceYear(year)}
+                        className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black whitespace-nowrap flex-shrink-0 transition cursor-pointer ${active ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' : 'text-slate-500 hover:text-slate-800'}`}>
+                        {year}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <button onClick={addSchoolYear} disabled={addingYear}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-dashed border-[#257C86]/50 text-[#257C86] text-sm font-black hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 self-start xl:self-auto px-4 py-2.5 rounded-2xl border-2 border-dashed border-[#257C86]/50 text-[#257C86] text-xs sm:text-sm font-black whitespace-nowrap hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60 flex-shrink-0"
                 title={`Crée ${nextSchoolYear} avec les tarifs copiés depuis ${priceYears[priceYears.length - 1] || ''}`}
               >
                 {addingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Ajouter l'année scolaire {nextSchoolYear}
               </button>
             </div>
-            <button onClick={savePrices} disabled={savingPrices || pricesLoading}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer disabled:opacity-60">
-              {savingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Sauvegarder les tarifs
-            </button>
           </div>
 
           {pricesLoading ? (
@@ -3031,6 +3050,18 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               </div>
             </div>
           )}
+
+          {/* Sauvegarde — sous la grille des tarifs */}
+          <div className="flex items-center justify-between flex-wrap gap-3 pt-1">
+            <p className="text-[11px] font-bold text-slate-400">
+              Tarifs appliqués à l'année scolaire {priceYear}.
+            </p>
+            <button onClick={savePrices} disabled={savingPrices || pricesLoading}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-2xl shadow-md shadow-[#257C86]/25 transition cursor-pointer disabled:opacity-60">
+              {savingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Sauvegarder les tarifs
+            </button>
+          </div>
         </motion.div>
       )}
 

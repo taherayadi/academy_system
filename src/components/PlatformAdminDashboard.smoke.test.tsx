@@ -142,8 +142,13 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     const printBtn = row.querySelector('button[title="Imprimer la facture"]') as HTMLElement;
     fireEvent.click(printBtn);
     expect(openSpy).toHaveBeenCalled();
-    expect(written.join('')).toContain('INV-2026-0002');
-    expect(written.join('')).toContain('Centre Horizon');
+    const html = written.join('');
+    expect(html).toContain('INV-2026-0002');
+    expect(html).toContain('Centre Horizon');
+    // Browser header/footer (date, title, « blank », page number) suppressed + signature block.
+    expect(html).toContain('@page');
+    expect(html).toContain('margin: 0');
+    expect(html).toContain('Signature de la plateforme SaaS');
     openSpy.mockRestore();
   });
 

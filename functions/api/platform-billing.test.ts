@@ -148,12 +148,13 @@ describe('platform-billing PATCH — revenue & cheque rules', () => {
 describe('platform-billing GET summary — MRR only from paid invoices', () => {
   const DAY = 86400000;
 
-  function makeSummaryDb(opts: { centers: any[]; paidNow: any[] }) {
+  // Rows are pre-sorted like the real query (center_id, period_end DESC).
+  function makeSummaryDb(opts: { centers: any[]; paidRows: any[] }) {
     const stmt = (sql: string) => ({
       bind() { return this; },
       async all() {
         if (sql.includes('FROM centers')) return { results: opts.centers };
-        if (sql.includes("status = 'paid' AND period_start")) return { results: opts.paidNow };
+        if (sql.includes("WHERE status = 'paid'") && sql.includes('ORDER BY center_id')) return { results: opts.paidRows };
         if (sql.includes('GROUP BY status')) {
           return { results: [{ status: 'pending', total: 100 }, { status: 'paid', total: 300 }] };
         }
@@ -164,41 +165,56 @@ describe('platform-billing GET summary — MRR only from paid invoices', () => {
     return { prepare: (sql: string) => stmt(sql) };
   }
 
-  async function getSummary(opts: { centers: any[]; paidNow: any[] }) {
+  async function getSummary(opts: { centers: any[]; paidRows: any[] }) {
     const request = new Request('https://example.test/api/platform-billing');
     const res = await onRequestGet({ env: { DB: makeSummaryDb(opts) }, request } as any);
     const data = await res.json() as any;
     return data.summary as { mrr: number; pendingInvoices: number };
   }
 
-  it('builds MRR from paid invoices covering today (monthly + annual normalised)', async () => {
+  it('builds MRR from each center\'s latest paid invoice (monthly + annual normalised)', async () => {
     const now = Date.now();
     const { mrr } = await getSummary({
-      // Centers carry prices — but MRR must not read them anymore.
+      // Centers carry prices — but MRR must not read them.
       centers: [
-        { id: 'a', name: 'A', status: 'active', monthly_price: 90, billing_cycle: 'monthly', subscription_ends_at: now + 20 * DAY },
+        { id: 'a', name: 'A', status: 'active', monthly_price: 999, billing_cycle: 'monthly', subscription_ends_at: now + 20 * DAY },
         { id: 'b', name: 'B', status: 'active', monthly_price: 1200, billing_cycle: 'annual', subscription_ends_at: now + 300 * DAY },
       ],
-      paidNow: [
-        // A: paid monthly invoice covering today → 90.
-        { amount: 90, period_start: now - 5 * DAY, period_end: now + 25 * DAY },
-        // B: paid annual invoice (365 days) → 1200 / 12 = 100.
-        { amount: 1200, period_start: now - 10 * DAY, period_end: now + 355 * DAY },
+      paidRows: [
+        // A: latest paid monthly (90), superseded older one (60) ignored.
+        { center_id: 'a', amount: 90, period_start: now - 5 * DAY, period_end: now + 25 * DAY },
+        { center_id: 'a', amount: 60, period_start: now - 35 * DAY, period_end: now - 5 * DAY },
+        // B: latest paid annual (30 days × 12) → 1200 / 12 = 100.
+        { center_id: 'b', amount: 1200, period_start: now - 10 * DAY, period_end: now + 355 * DAY },
       ],
     });
     expect(mrr).toBeCloseTo(190, 2);
   });
 
-  it('a center without a paid invoice covering today contributes nothing to MRR', async () => {
+  it('a center with no paid invoice at all contributes nothing to MRR', async () => {
     const now = Date.now();
     const { mrr } = await getSummary({
       centers: [
         { id: 'a', name: 'A', status: 'active', monthly_price: 90, billing_cycle: 'monthly', subscription_ends_at: now + 20 * DAY },
       ],
-      // No paid invoice covering today: its 90 TND invoice is only pending
-      // (or its paid period already expired) → excluded by the SQL query.
-      paidNow: [],
+      // Its 90 TND invoice is only pending → excluded by status = 'paid'.
+      paidRows: [],
     });
     expect(mrr).toBe(0);
+  });
+
+  it('counts a paid invoice whose period lies in the past (activation after an expired trial)', async () => {
+    // Regression: MRR showed 0 although a paid invoice existed, because the
+    // invoice window was the old trial window ending before today.
+    const now = Date.now();
+    const { mrr } = await getSummary({
+      centers: [
+        { id: 'c', name: 'C', status: 'active', monthly_price: 90, billing_cycle: 'monthly', subscription_ends_at: now - 5 * DAY },
+      ],
+      paidRows: [
+        { center_id: 'c', amount: 90, period_start: now - 35 * DAY, period_end: now - 5 * DAY },
+      ],
+    });
+    expect(mrr).toBeCloseTo(90, 2);
   });
 });
