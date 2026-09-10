@@ -1,5 +1,16 @@
 import { Env, json } from '../_lib';
 
+// Migration 0031 resilience: without the positions column the query skips
+// it (ads still render; every ad then behaves as a standard-placement ad).
+async function hasAdPositionsColumn(db: D1Database): Promise<boolean> {
+  try {
+    await db.prepare('SELECT positions FROM platform_advertisements LIMIT 1').first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Helper to parse JSON safely
 function parseJson<T>(value: unknown, fallback: T): T {
   if (!value) return fallback;
@@ -21,7 +32,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'Emplacement d’annonce requis.' }, 400);
     }
 
-    const now = Date.now();
     // Ads placed on « both » are visible on the two known surfaces: the
     // public landing page and the center dashboards.
     const isPlatformSurface = location === 'landing_page' || location === 'center_admin';
@@ -32,6 +42,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       return json({ advertisements: [] });
     }
 
+    const now = Date.now();
+    const hasPositionsCol = await hasAdPositionsColumn(env.DB);
+    const positionsCol = hasPositionsCol ? ', a.positions' : '';
+
     let query: string;
     let binds: any[];
 
@@ -40,7 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       query = `
         SELECT DISTINCT
           a.id, a.title, a.date_start, a.date_end, a.location,
-          a.image_urls, a.link_url, a.priority, a.positions
+          a.image_urls, a.link_url, a.priority${positionsCol}
         FROM platform_advertisements a
         INNER JOIN advertisement_centers ac ON a.id = ac.advertisement_id
         WHERE ${locationCond}
@@ -57,7 +71,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       query = `
         SELECT
           a.id, a.title, a.date_start, a.date_end, a.location,
-          a.image_urls, a.link_url, a.priority, a.positions
+          a.image_urls, a.link_url, a.priority${positionsCol}
         FROM platform_advertisements a
         WHERE ${locationCond}
           AND a.is_active = 1
@@ -80,7 +94,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       imageUrls: parseJson(row.image_urls, []),
       linkUrl: row.link_url || '',
       priority: Number(row.priority),
-      positions: parseJson(row.positions, [] as string[])
+      positions: parseJson(row.positions ?? '[]', [] as string[])
     }));
 
     return json({ advertisements });

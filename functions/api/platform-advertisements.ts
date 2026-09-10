@@ -31,6 +31,17 @@ function formatAdvertisement(row: any, centerIds: string[] = []): any {
   };
 }
 
+// Degrade gracefully when migration 0031 (positions column) is not applied
+// yet — reads/writes simply skip the field instead of breaking the page.
+async function hasAdPositionsColumn(db: D1Database): Promise<boolean> {
+  try {
+    await db.prepare('SELECT positions FROM platform_advertisements LIMIT 1').first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Display formats (see migration 0031). Unknown ids are dropped, duplicates merged.
 const AD_POSITION_IDS = new Set([
   'leaderboard_728x90',
@@ -129,19 +140,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const now = Date.now();
 
     // Prepare batch statements for atomic transaction
+    const hasPositionsCol = await hasAdPositionsColumn(env.DB);
     const statements = [
-      // Insert advertisement
-      env.DB.prepare(`
-        INSERT INTO platform_advertisements (
-          id, title, date_start, date_end, location, image_urls,
-          link_url, priority, is_active, is_published, positions,
-          created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
-        linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0, JSON.stringify(positions),
-        session.email, now, now
-      ),
+      // Insert advertisement (positions only when the column exists — 0031)
+      hasPositionsCol
+        ? env.DB.prepare(`
+            INSERT INTO platform_advertisements (
+              id, title, date_start, date_end, location, image_urls,
+              link_url, priority, is_active, is_published, positions,
+              created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
+            linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0, JSON.stringify(positions),
+            session.email, now, now
+          )
+        : env.DB.prepare(`
+            INSERT INTO platform_advertisements (
+              id, title, date_start, date_end, location, image_urls,
+              link_url, priority, is_active, is_published,
+              created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
+            linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0,
+            session.email, now, now
+          ),
       // Insert center assignments
       ...centerIds.map((centerId: string) =>
         env.DB.prepare(
@@ -231,7 +255,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(String(body.linkUrl).trim());
     }
 
-    if (body.positions !== undefined) {
+    if (body.positions !== undefined && await hasAdPositionsColumn(env.DB)) {
       updates.push('positions = ?');
       binds.push(JSON.stringify(sanitizeAdPositions(body.positions)));
     }

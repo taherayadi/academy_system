@@ -8,18 +8,27 @@ vi.mock('./_lib', () => ({
   json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
 }));
 
-function makeDb(existing: any = null) {
+function makeDb(existing: any = null, opts: { noPositionsColumn?: boolean } = {}) {
   const calls: Array<{ sql: string; args: any[] }> = [];
   const record = (sql: string, args: any[]) => calls.push({ sql, args });
+  const probe = (sql: string) => {
+    if (opts.noPositionsColumn && sql.includes('SELECT positions FROM')) {
+      return (async () => { throw new Error('D1_ERROR: no such column: positions'); })();
+    }
+    return Promise.resolve(existing);
+  };
   const stmt = (sql: string, args: any[]) => ({
     async run() { record(sql, args); return { meta: { changes: 1 } }; },
-    async first() { return existing; },
+    async first() { return probe(sql); },
     async all() { return { results: [] }; },
   });
   return {
     calls,
     prepare(sql: string) {
-      return { bind(...args: any[]) { return stmt(sql, args); } };
+      return {
+        bind(...args: any[]) { return stmt(sql, args); },
+        async first() { return probe(sql); },
+      };
     },
     async batch(statements: any[]) {
       for (const st of statements) await st.run();
@@ -107,6 +116,25 @@ describe('platform-advertisements — positions', () => {
     expect(insert.args).toContain('[]');
   });
 
+  it('POST still works when migration 0031 is missing (legacy INSERT)', async () => {
+    const db = makeDb(null, { noPositionsColumn: true });
+    const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
+      ...base, location: 'landing_page', positions: ['leaderboard_728x90'],
+    }) } as any);
+    expect(res.status).toBe(201);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
+    expect(insert.sql).not.toContain('positions');
+  });
+
+  it('PATCH ignores positions when the column is missing', async () => {
+    const db = makeDb({ id: 'ADV_1', location: 'center_admin' }, { noPositionsColumn: true });
+    const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', {
+      id: 'ADV_1', positions: ['leaderboard_728x90'],
+    }) } as any);
+    expect(res.status).toBe(200);
+    expect(db.calls.some(c => c.sql.includes('positions = ?'))).toBe(false);
+  });
+
   it('PATCH replaces positions when provided', async () => {
     const db = makeDb({ id: 'ADV_1', location: 'center_admin' });
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', {
@@ -124,8 +152,11 @@ describe('advertisements/active — « both » visibility', () => {
     const seen: string[] = [];
     const spy: any = {
       prepare(sql: string) {
-        seen.push(sql);
-        return { bind() { return { all: async () => ({ results: [] }) }; } };
+        if (!sql.includes('SELECT positions FROM')) seen.push(sql);
+        return {
+          bind() { return { all: async () => ({ results: [] }) }; },
+          first: async () => null,
+        };
       },
     };
     await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=landing_page') } as any);
@@ -139,6 +170,7 @@ describe('advertisements/active — « both » visibility', () => {
 
   it('center_admin without a center context returns nothing (no leak across centers)', async () => {
     const spy: any = { prepare() { throw new Error('should not query'); } };
+    // (la sonde de colonnes est appelée après le retour anticipé → ne doit jamais être atteinte ici)
     const res = await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=center_admin') } as any);
     const data = await res.json() as any;
     expect(data.advertisements).toEqual([]);
