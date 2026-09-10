@@ -42,6 +42,19 @@ describe('AdvertisementCarousel — multi-image indicators', () => {
     expect(screen.queryByLabelText('Next image')).toBeNull();
   });
 
+  it('skyscraper-only ads skip the carousel; mixed positions stay', async () => {
+    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([ad(['https://cdn/sky.jpg'])].map(x => ({ ...x, positions: ['skyscraper_160x600'] })));
+    const { container } = render(<AdvertisementCarousel location="landing_page" />);
+    await waitFor(() => expect(api.fetchActiveAdvertisementsApi).toHaveBeenCalled());
+    expect(container.querySelector('img')).toBeNull();
+
+    (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([ad(['https://cdn/mix.jpg'])].map(x => ({ ...x, positions: ['leaderboard_728x90', 'skyscraper_160x600'] })));
+    render(<AdvertisementCarousel location="center_admin" centerId="c1" />);
+    await waitFor(() => expect(screen.getByAltText('Promo rentrée')).toBeTruthy());
+  });
+
   it('fetches with the requested location + center scope', async () => {
     (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     render(<AdvertisementCarousel location="center_admin" centerId="c9" />);

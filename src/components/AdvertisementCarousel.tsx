@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchActiveAdvertisementsApi } from '../api';
+import { isSkyscraperOnly } from '../types';
 import type { AdvertisementLocation } from '../types';
 
 interface AdvertisementCarouselProps {
@@ -16,6 +17,7 @@ interface Advertisement {
   imageUrls: string[];
   linkUrl?: string;
   priority: number;
+  positions?: string[];
 }
 
 export default function AdvertisementCarousel({ location, centerId, className = '' }: AdvertisementCarouselProps) {
@@ -36,8 +38,11 @@ export default function AdvertisementCarousel({ location, centerId, className = 
       try {
         setLoading(true);
         const fetchedAds = await fetchActiveAdvertisementsApi(location, centerId);
-        if (mounted && fetchedAds.length > 0) {
-          setAds(fetchedAds);
+        // Les pubs « gratte-ciel » seules vivent dans le bandeau latéral fixe,
+        // jamais dans le carrousel (les positions mixtes restent ici aussi).
+        const carouselAds = fetchedAds.filter((ad: { positions?: string[] }) => !isSkyscraperOnly(ad.positions));
+        if (mounted) {
+          setAds(carouselAds);
         }
       } catch (err) {
         console.error('Error loading advertisements:', err);

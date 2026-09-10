@@ -4,6 +4,7 @@ import LandingPage from './LandingPage';
 import { submitDemoRequestApi } from '../api';
 
 vi.mock('../api', () => ({
+  fetchActiveAdvertisementsApi: vi.fn().mockResolvedValue([]),
   fetchPublicModulePricesApi: vi.fn().mockResolvedValue({
     scolaire: 20,
     finance: 20,

@@ -93,6 +93,20 @@ export const AD_POSITION_SPECS: AdPositionSpec[] = [
 
 export const AD_POSITION_IDS: string[] = AD_POSITION_SPECS.map(s => s.id);
 
+// The skyscraper is rendered as its own fixed side banner (landing page &
+// center dashboards) instead of in the standard carousel.
+export const SKYSCRAPER_POSITION_ID = 'skyscraper_160x600';
+
+export function hasSkyscraperPosition(positions?: string[]): boolean {
+  return (positions || []).includes(SKYSCRAPER_POSITION_ID);
+}
+
+/** Skyscraper-only ads never pollute the carousel. */
+export function isSkyscraperOnly(positions?: string[]): boolean {
+  const p = positions || [];
+  return p.length > 0 && p.every(id => id === SKYSCRAPER_POSITION_ID);
+}
+
 export function adPositionLabel(id: string): string {
   const spec = AD_POSITION_SPECS.find(s => s.id === id);
   return spec ? `${spec.label} (${spec.size})` : id;

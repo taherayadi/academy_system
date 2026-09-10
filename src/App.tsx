@@ -106,6 +106,7 @@ import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
 import AdvertisementCarousel from './components/AdvertisementCarousel';
+import AdvertisementSkyscraper from './components/AdvertisementSkyscraper';
 import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
@@ -1068,7 +1069,11 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
           {/* Bannière publicitaire du centre (campagnes « Tableau de bord » ou « Accueil + tableaux ») */}
           {!isPlatformSuperAdmin && currentCenter && (
-            <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
+            <>
+              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
+              {/* Format « Gratte-ciel » : bandeau vertical fixe à droite du tableau de bord */}
+              <AdvertisementSkyscraper location="center_admin" centerId={currentCenter.id} side="right" />
+            </>
           )}
           
           <AnimatePresence mode="wait">

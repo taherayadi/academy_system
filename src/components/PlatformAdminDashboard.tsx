@@ -2278,7 +2278,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 );
               })}
             </div>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Sans position choisie, la publicité utilise le carrousel standard de son emplacement.</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Sans position choisie, la publicité utilise le carrousel standard de son emplacement. Le format <span className="font-black text-slate-500">Gratte-ciel</span> s’affiche en plus en bandeau vertical fixe sur la marge droite (vitrine et tableaux de bord) — une annonce Gratte-ciel seule n’apparaît pas dans le carrousel.</p>
           </div>
 
           {showCenterPicker && <div>

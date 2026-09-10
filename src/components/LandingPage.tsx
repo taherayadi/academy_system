@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AdvertisementCarousel from './AdvertisementCarousel';
+import AdvertisementSkyscraper from './AdvertisementSkyscraper';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
@@ -621,6 +622,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
         <AdvertisementCarousel location="landing_page" className="mb-10 rounded-2xl shadow-xl" />
       </div>
+      {/* Format « Gratte-ciel » : bandeau vertical fixe dans la marge droite (grands écrans) */}
+      <AdvertisementSkyscraper location="landing_page" side="right" />
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">
