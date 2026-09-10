@@ -35,6 +35,11 @@ vi.mock('../api', () => ({
     invoices: [], schedules: [],
   }),
   centerPlanActionApi: vi.fn().mockResolvedValue({ success: true, message: 'ok' }),
+  fetchAdvertisementsApi: vi.fn().mockResolvedValue([]),
+  createAdvertisementApi: vi.fn().mockResolvedValue({ success: true, id: 'ADV_1' }),
+  updateAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
+  deleteAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
+  uploadMultipleImagesApi: vi.fn().mockResolvedValue([]),
 }));
 
 import * as api from '../api';
@@ -456,15 +461,8 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
   });
 
   it('center cards: « Modules » became the single Plans & factures entry', async () => {
-    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
-      id: 'cz', name: 'Centre Gamma', slug: 'gamma', status: 'active', plan: 'starter',
-      monthlyPrice: 75, billingCycle: 'monthly', trialEndsAt: null,
-      subscriptionEndsAt: Date.now() + 20 * 86400000, enabledModules: [],
-      studentCount: 1, adminEmail: 'g@g.tn', phoneNumber: '33333333', locationCity: 'Sfax',
-      centerType: 'formation', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
-    }]);
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
-    await waitFor(() => expect(screen.getByText('Centre Gamma')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
 
     // The Modules shortcut is gone — and there is exactly ONE plan button.
     expect(screen.queryByRole('button', { name: 'Modules' })).toBeNull();
@@ -473,7 +471,7 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
     // It opens the plan manager (same functionality as before, new look).
     fireEvent.click(planBtns[0]);
-    await waitFor(() => expect(api.fetchCenterPlansApi).toHaveBeenCalledWith('cz'));
+    await waitFor(() => expect(api.fetchCenterPlansApi).toHaveBeenCalledWith('c1'));
   });
 
   it('plan manager: a center expired mid-window (plan just removed) blocks delete and relaunches via set-plan', async () => {
@@ -605,5 +603,65 @@ describe('PlatformAdminDashboard — Demo requests tab', () => {
     await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
     // Both the new request and the legacy contacted one (shown under New).
     expect(screen.getAllByText('Convertir en Centre')).toHaveLength(2);
+  });
+});
+
+describe('PlatformAdminDashboard — Advertisements page', () => {
+  const alphaCenter = {
+    id: 'c1', name: 'Centre Alpha', slug: 'alpha', status: 'active', plan: 'starter',
+    monthlyPrice: 75, billingCycle: 'monthly', trialEndsAt: null,
+    subscriptionEndsAt: Date.now() + 20 * 86400000, enabledModules: [],
+    studentCount: 3, adminEmail: 'a@a.tn', phoneNumber: '11111111', locationCity: 'Tunis',
+    centerType: 'jardin', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
+  };
+
+  it('opens without crashing — PAGE_META has the advertisements entry (was: undefined.title)', async () => {
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    await waitFor(() => expect(api.fetchAdvertisementsApi).toHaveBeenCalled());
+    expect(screen.getByText('Publicité')).toBeTruthy();
+    expect(screen.getByText('لا توجد إعلانات')).toBeTruthy();
+  });
+
+  it('« إعلان جديد » opens the form; submitting creates the advertisement', async () => {
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Promo rentrée' } });
+    fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/a.jpg' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Centre Alpha/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+
+    await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Promo rentrée',
+      location: 'landing_page',
+      imageUrls: ['https://cdn.test/a.jpg'],
+      centerIds: ['c1'],
+      isActive: true,
+      isPublished: false,
+    })));
+    await waitFor(() => expect(screen.queryByText('Nouvelle annonce')).toBeNull());
+    // List is refreshed after create
+    expect((api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('edit reuses the form prefilled and PATCHes the advertisement', async () => {
+    const ad = {
+      id: 'ADV_9', title: 'Cantine', dateStart: Date.now(), dateEnd: Date.now() + 10 * 86400000,
+      location: 'center_admin', imageUrls: ['https://cdn.test/b.jpg'], linkUrl: '', priority: 50,
+      isActive: true, isPublished: true, centerIds: ['c1'], createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([ad]);
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /تعديل/ }));
+    await waitFor(() => expect(screen.getByText('Modifier l’annonce')).toBeTruthy());
+    expect((document.getElementById('ad-title') as HTMLInputElement).value).toBe('Cantine');
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer les modifications/ }));
+    await waitFor(() => expect(api.updateAdvertisementApi).toHaveBeenCalledWith('ADV_9', expect.objectContaining({
+      title: 'Cantine', location: 'center_admin', isPublished: true,
+    })));
   });
 });

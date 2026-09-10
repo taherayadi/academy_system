@@ -2034,6 +2034,228 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   );
 }
 
+// ─── Advertisement create/edit modal ───────────────────────────────────────
+// The platform dashboard's « إعلان جديد » / « تعديل » buttons open this form.
+// One upload per file (same ImageKit path as the platform logo); at least one
+// image and one center are required — same rules as the backend.
+const AD_LOCATION_OPTIONS = [
+  { value: 'landing_page', label: 'Page d’accueil (vitrine)' },
+  { value: 'center_admin', label: 'Tableau de bord du centre' },
+  { value: '__custom__', label: 'Emplacement personnalisé…' },
+];
+
+function adDateInput(ts: number): string {
+  const d = new Date(ts || Date.now());
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
+  ad?: PlatformAdvertisement | null;
+  centers: CenterTenant[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const isEdit = !!ad;
+  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const knownLocation = !ad || ad.location === 'landing_page' || ad.location === 'center_admin';
+
+  const [title, setTitle] = useState(ad?.title || '');
+  const [locationSel, setLocationSel] = useState(knownLocation ? (ad?.location || 'landing_page') : '__custom__');
+  const [customLocation, setCustomLocation] = useState(knownLocation ? '' : String(ad?.location || ''));
+  const [dateStart, setDateStart] = useState(adDateInput(ad?.dateStart ?? Date.now()));
+  const [dateEnd, setDateEnd] = useState(adDateInput(ad?.dateEnd ?? Date.now() + 30 * 86400000));
+  const [imageUrls, setImageUrls] = useState<string[]>(ad?.imageUrls || []);
+  const [extraImageUrl, setExtraImageUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState(ad?.linkUrl || '');
+  const [priority, setPriority] = useState(String(ad?.priority ?? 100));
+  const [isActive, setIsActive] = useState(ad ? !!ad.isActive : true);
+  const [isPublished, setIsPublished] = useState(ad ? !!ad.isPublished : false);
+  const [centerIds, setCenterIds] = useState<string[]>(ad?.centerIds || []);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const location = locationSel === '__custom__' ? customLocation.trim() : locationSel;
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const urls = await uploadMultipleImagesApi(Array.from(files));
+      setImageUrls(current => [...current, ...urls.filter(Boolean)]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Échec du téléversement des images');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const toggleCenter = (id: string) => setCenterIds(cur => cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const startTs = new Date(`${dateStart}T00:00:00`).getTime();
+    const endTs = new Date(`${dateEnd}T23:59:59`).getTime();
+    if (!title.trim()) { toast.error('Le titre de l’annonce est requis.'); return; }
+    if (!location) { toast.error('Choisissez (ou saisissez) un emplacement.'); return; }
+    if (imageUrls.length === 0) { toast.error('Ajoutez au moins une image.'); return; }
+    if (centerIds.length === 0) { toast.error('Sélectionnez au moins un centre.'); return; }
+    if (!startTs || !endTs || endTs < startTs) { toast.error('Dates invalides — la fin doit suivre le début.'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        dateStart: startTs,
+        dateEnd: endTs,
+        location,
+        imageUrls,
+        linkUrl: linkUrl.trim(),
+        priority: Number(priority) || 100,
+        isActive,
+        isPublished,
+        centerIds,
+      };
+      if (isEdit && ad) await updateAdvertisementApi(ad.id, payload);
+      else await createAdvertisementApi(payload);
+      toast.success(isEdit ? 'Annonce mise à jour.' : 'Annonce créée.');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de l’enregistrement de l’annonce');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const togglePill = (on: boolean, set: (v: boolean) => void, labelOn: string, labelOff: string) => (
+    <button type="button" onClick={() => set(!on)}
+      className={`px-3 py-1.5 rounded-xl text-[11px] font-black border-2 transition cursor-pointer ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400'}`}>
+      {on ? labelOn : labelOff}
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+          <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+            <ImagePlus className="h-4 w-4 text-[#257C86]" /> {isEdit ? 'Modifier l’annonce' : 'Nouvelle annonce'}
+          </h2>
+          <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+            <X className="h-4 w-4 text-slate-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label htmlFor="ad-title" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Titre *</label>
+              <input id="ad-title" value={title} onChange={e => setTitle(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Emplacement *</label>
+              <select value={locationSel} onChange={e => setLocationSel(e.target.value)} className={`${fieldCls} cursor-pointer`}>
+                {AD_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              {locationSel === '__custom__' && (
+                <input value={customLocation} onChange={e => setCustomLocation(e.target.value)} placeholder="ex : factures, cantine…"
+                  className={`${fieldCls} mt-2`} />
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Priorité (petit = affiché en premier)</label>
+              <input type="number" min={1} max={9999} value={priority} onChange={e => setPriority(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Début *</label>
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Fin *</label>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className={fieldCls} />
+            </div>
+            <div className="sm:col-span-2">
+              <label htmlFor="ad-link" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Lien cliquable (optionnel)</label>
+              <input id="ad-link" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://…" className={fieldCls} dir="ltr" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {togglePill(isActive, setIsActive, 'Active', 'Inactive')}
+            {togglePill(isPublished, setIsPublished, 'Publiée', 'Brouillon')}
+            <span className="text-[10px] font-semibold text-slate-400">Une annonce inactive ou brouillon n’apparaît dans aucun carrousel.</span>
+          </div>
+
+          <div>
+            <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Images * (carrousel, dans l’ordre)</p>
+            {imageUrls.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
+                {imageUrls.map((url, i) => (
+                  <div key={`${url}-${i}`} className="relative group aspect-video rounded-xl overflow-hidden border-2 border-slate-200 bg-slate-50">
+                    <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
+                    <span className="absolute top-1 left-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
+                    <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
+                      className="absolute top-1 right-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="Retirer cette image">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
+                <ImagePlus className="h-4 w-4 text-[#257C86]" /> Choisir des images
+                <input type="file" accept="image/*" multiple className="hidden" onChange={e => handleFiles(e.target.files)} />
+              </label>
+              {uploading && <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin text-[#257C86]" /> Téléversement…</span>}
+              <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                <input id="ad-image-url" value={extraImageUrl} onChange={e => setExtraImageUrl(e.target.value)} placeholder="…ou coller une URL d’image"
+                  className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none" dir="ltr" />
+                <button type="button" disabled={!extraImageUrl.trim()}
+                  onClick={() => { setImageUrls(cur => [...cur, extraImageUrl.trim()]); setExtraImageUrl(''); }}
+                  className="px-3 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/20 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer disabled:opacity-40">
+                  Ajouter
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Centres ciblés * ({centerIds.length})</p>
+            {centers.length === 0 ? (
+              <p className="text-[11px] font-semibold text-slate-400">Aucun centre sur la plateforme.</p>
+            ) : (
+              <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
+                {centers.map(c => (
+                  <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-[#257C86]" />
+                    <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
+                    <span className="ml-auto text-[9px] font-black text-slate-400">{c.status}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
+            <button type="submit" disabled={saving || uploading}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {isEdit ? 'Enregistrer les modifications' : 'Créer l’annonce'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 export default function PlatformAdminDashboard({ page = 'overview', onNavigate }: PlatformAdminDashboardProps) {
   const toast = useToast();
@@ -2085,7 +2307,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [showNewAd, setShowNewAd] = useState(false);
   const [editAd, setEditAd] = useState<PlatformAdvertisement | null>(null);
   const [deleteAd, setDeleteAd] = useState<PlatformAdvertisement | null>(null);
-  const [selectedAds, setSelectedAds] = useState<Set<string>>(new Set());
 
   const loadAdvertisements = useCallback(async () => {
     setAdsLoading(true);
@@ -2537,6 +2758,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     requests: { title: 'Demandes d’essai', sub: `${newRequests} nouvelle${newRequests > 1 ? 's' : ''} demande${newRequests > 1 ? 's' : ''} à traiter` },
     finance: { title: 'Finance SaaS', sub: 'Facturation et revenus de la plateforme' },
     pricing: { title: 'Tarifs & Modules', sub: `Année scolaire ${priceYear}` },
+    advertisements: { title: 'Publicité', sub: 'Bannières et carrousels des centres et de la vitrine' },
   };
 
   const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
@@ -3662,6 +3884,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             invoice={editInvoice}
             onClose={() => setEditInvoice(null)}
             onSaved={loadFinanceData}
+          />
+        )}
+        {(showNewAd || editAd) && (
+          <AdvertisementFormModal
+            ad={editAd}
+            centers={centers}
+            onClose={() => { setShowNewAd(false); setEditAd(null); }}
+            onSaved={loadAdvertisements}
           />
         )}
       </AnimatePresence>
