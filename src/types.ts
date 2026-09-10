@@ -64,6 +64,28 @@ export interface DemoRequest {
   createdAt: number;
 }
 
+export type AdvertisementLocation =
+  | 'landing_page'
+  | 'center_admin'
+  | string; // Allow custom locations
+
+export interface PlatformAdvertisement {
+  id: string;
+  title: string;
+  dateStart: number;
+  dateEnd: number;
+  location: AdvertisementLocation;
+  imageUrls: string[]; // Array of ImageKit CDN URLs for carousel
+  linkUrl?: string;
+  priority: number;
+  isActive: boolean;
+  isPublished: boolean;
+  centerIds: string[]; // Selected center IDs
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface UserAccount {
   email: string;
   name: string;

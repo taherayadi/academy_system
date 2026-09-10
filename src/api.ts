@@ -830,4 +830,84 @@ export async function updateModulePricesApi(year: string, prices: Array<{ module
   if (!res.ok) throw new Error(data.error || 'Erreur mise à jour tarifs.');
 }
 
+// ========================================================================
+// Platform Advertisements API
+// ========================================================================
+
+/** Upload multiple images for advertisement carousel (sequential uploads). */
+export async function uploadMultipleImagesApi(files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const url = await uploadPlatformLogoApi(file);
+    urls.push(url);
+  }
+  return urls;
+}
+
+/** Fetch all advertisements with center assignments (platform admin only). */
+export async function fetchAdvertisementsApi(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
+  return data.advertisements || [];
+}
+
+/** Create new advertisement. */
+export async function createAdvertisementApi(payload: any): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; id?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في إنشاء الإعلان.');
+  return { success: data.success || false, id: data.id || '' };
+}
+
+/** Update advertisement. */
+export async function updateAdvertisementApi(id: string, payload: any): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في تحديث الإعلان.');
+  return { success: data.success || false };
+}
+
+/** Delete advertisement. */
+export async function deleteAdvertisementApi(id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في حذف الإعلان.');
+  return { success: data.success || false };
+}
+
+/** Fetch active advertisements by location and optional centerId (public endpoint). */
+export async function fetchActiveAdvertisementsApi(location: string, centerId?: string): Promise<any[]> {
+  const params = new URLSearchParams({ location });
+  if (centerId) params.set('centerId', centerId);
+
+  const res = await fetch(`${API_BASE}/advertisements/active?${params.toString()}`, {
+    credentials: 'same-origin'
+  });
+  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
+  return data.advertisements || [];
+}
+
 

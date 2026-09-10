@@ -14,9 +14,11 @@ import {
   fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi,
   fetchPlatformBillingApi, fetchInvoicesApi, updateInvoiceApi, deleteInvoiceApi,
   fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, PlanChangeOutcome,
-  fetchCenterPlansApi, centerPlanActionApi, CenterPlansView
+  fetchCenterPlansApi, centerPlanActionApi, CenterPlansView,
+  fetchAdvertisementsApi, createAdvertisementApi, updateAdvertisementApi, deleteAdvertisementApi,
+  uploadMultipleImagesApi
 } from '../api';
-import { CenterTenant, DemoRequest, ModuleKey } from '../types';
+import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement } from '../types';
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -57,7 +59,7 @@ function normalizeCenterModules(modules?: string[] | null): string[] {
   ]));
 }
 
-export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing';
+export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing' | 'advertisements';
 
 interface PlatformAdminDashboardProps {
   /** Page courante — pilotée par le menu de l'application (App.tsx) */
@@ -2075,6 +2077,33 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // School years that actually exist in the database (module_prices.school_year).
   const [knownYears, setKnownYears] = useState<string[]>([]);
   const [addingYear, setAddingYear] = useState(false);
+
+  // Advertisements
+  const [advertisements, setAdvertisements] = useState<PlatformAdvertisement[]>([]);
+  const [adsLoading, setAdsLoading] = useState(false);
+  const [adsPage, setAdsPage] = useState(1);
+  const [showNewAd, setShowNewAd] = useState(false);
+  const [editAd, setEditAd] = useState<PlatformAdvertisement | null>(null);
+  const [deleteAd, setDeleteAd] = useState<PlatformAdvertisement | null>(null);
+  const [selectedAds, setSelectedAds] = useState<Set<string>>(new Set());
+
+  const loadAdvertisements = useCallback(async () => {
+    setAdsLoading(true);
+    try {
+      const ads = await fetchAdvertisementsApi();
+      setAdvertisements(ads);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'خطأ في تحميل الإعلانات');
+    } finally {
+      setAdsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (page === 'advertisements') {
+      loadAdvertisements();
+    }
+  }, [page, loadAdvertisements]);
 
   const load = useCallback(async () => {
     setLoading(true);
