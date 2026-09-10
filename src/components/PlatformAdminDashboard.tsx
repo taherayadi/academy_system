@@ -3530,6 +3530,109 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         </motion.div>
       )}
 
+      {/* ─── Advertisements Page ───────────────────────────────────────── */}
+      {page === 'advertisements' && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-black text-slate-800">الإعلانات</h2>
+              {!adsLoading && (
+                <span className="px-3 py-1 bg-slate-100 border border-slate-200 rounded-full text-sm font-black text-slate-600">
+                  {advertisements.length}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={loadAdvertisements} disabled={adsLoading}
+                className="p-2 hover:bg-slate-100 rounded-xl transition">
+                <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={() => setShowNewAd(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-md hover:shadow-lg transition">
+                <Plus className="h-4 w-4" />
+                إعلان جديد
+              </button>
+            </div>
+          </div>
+
+          {adsLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-[#257C86]" />
+            </div>
+          ) : advertisements.length === 0 ? (
+            <div className="text-center py-20 text-slate-500">
+              <ImagePlus className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+              <p className="font-bold">لا توجد إعلانات</p>
+              <p className="text-sm">أنشئ أول إعلان لك</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {advertisements.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (
+                <div key={ad.id} className="border-2 border-slate-200 rounded-xl p-4 bg-white hover:border-[#257C86]/30 transition">
+                  <div className="aspect-video bg-slate-100 rounded-lg mb-3 overflow-hidden">
+                    {ad.imageUrls?.[0] && (
+                      <img src={ad.imageUrls[0]} alt={ad.title} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <h3 className="font-black text-slate-800 mb-2">{ad.title}</h3>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">
+                      {ad.location}
+                    </span>
+                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${ad.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {ad.isActive ? 'نشط' : 'غير نشط'}
+                    </span>
+                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${ad.isPublished ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {ad.isPublished ? 'منشور' : 'مسودة'}
+                    </span>
+                    {ad.centerIds?.length > 0 && (
+                      <span className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full">
+                        {ad.centerIds.length} مركز
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 mb-3">
+                    {fmtDate(ad.dateStart)} → {fmtDate(ad.dateEnd)}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditAd(ad)}
+                      className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition">
+                      <Edit className="h-4 w-4 inline mr-1" />
+                      تعديل
+                    </button>
+                    <button onClick={() => setDeleteAd(ad)}
+                      className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!adsLoading && advertisements.length > PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button
+                onClick={() => setAdsPage(p => Math.max(1, p - 1))}
+                disabled={adsPage === 1}
+                className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-4 py-2 text-sm font-bold text-slate-600">
+                {adsPage} / {Math.ceil(advertisements.length / PAGE_SIZE)}
+              </span>
+              <button
+                onClick={() => setAdsPage(p => Math.min(Math.ceil(advertisements.length / PAGE_SIZE), p + 1))}
+                disabled={adsPage >= Math.ceil(advertisements.length / PAGE_SIZE)}
+                className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* ─── Modals ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {showNewCenter && (
@@ -3576,6 +3679,23 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         message={`Supprimer la demande de "${titleCaseName(deleteRequest?.fullName)}" ?`}
         onConfirm={handleDeleteRequest}
         onCancel={() => setDeleteRequest(null)}
+      />
+      <ConfirmDialog
+        open={!!deleteAd}
+        title="حذف الإعلان؟"
+        message={`هل أنت متأكد من حذف "${deleteAd?.title}"؟ هذا الإجراء لا يمكن التراجع عنه.`}
+        onConfirm={async () => {
+          if (!deleteAd) return;
+          try {
+            await deleteAdvertisementApi(deleteAd.id);
+            toast.success('تم حذف الإعلان بنجاح');
+            setDeleteAd(null);
+            loadAdvertisements();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'خطأ في حذف الإعلان');
+          }
+        }}
+        onCancel={() => setDeleteAd(null)}
       />
     </div>
   );
