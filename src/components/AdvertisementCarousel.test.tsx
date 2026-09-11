@@ -63,11 +63,13 @@ describe('AdvertisementCarousel — multi-image indicators', () => {
     const rect = render(<AdvertisementCarousel location="center_admin" centerId="c1" format="rectangle" />);
     await waitFor(() => expect(rect.container.querySelector('img')).toBeTruthy());
     const rectRoot = rect.container.querySelector('div') as HTMLElement;
-    // Fluide : toute la largeur disponible, plafonnée à 480 px (bien plus
-    // large que l'ancien 300×250) — jamais de dimension figée.
+    // Fluide : toute la largeur disponible (plafonnée à 1100 px sur desktop)
+    // — jamais de dimension figée, contrairement à l'ancien 300×250.
     expect(rectRoot.className).toContain('w-full');
-    expect(rectRoot.className).toContain('max-w-[480px]');
-    expect(Array.from(rect.container.querySelectorAll('div')).some(d => d.className.includes('aspect-[6/5]'))).toBe(true);
+    expect(rectRoot.className).toContain('max-w-[1100px]');
+    // Hauteur pilotée par la largeur du viewport : compacte sur mobile,
+    // étirée sur grand écran (aucun ratio figé 480×400).
+    expect(Array.from(rect.container.querySelectorAll('div')).some(d => d.className.includes('h-[clamp(220px,30vw,420px)]'))).toBe(true);
 
     // L'emplacement ne sert QUE les pubs portant la position « rectangle ».
     const interstitial = render(<AdvertisementCarousel location="landing_page" format="rectangle" />);

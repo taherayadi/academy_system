@@ -18,12 +18,17 @@ interface AdvertisementCarouselProps {
 }
 
 /**
- * Le rectangle est fluide et responsive : il occupe toute la largeur
- * disponible jusqu'à 480 px (soit 480×400 en ratio 6:5 — nettement plus
- * grand que l'ancien 300×250) et se réduit tout seul sur mobile.
+ * Le rectangle est fluide et responsive, sans aucune dimension figée :
+ *  • largeur  — toute la place disponible, plafonnée à 1100 px (elle remplit
+ *               donc la colonne de contenu sur desktop, bien plus large que
+ *               l'ancien 300×250) ;
+ *  • hauteur  — clamp(220px, 30vw, 420px) : ~220 px sur mobile puis elle
+ *               grandit avec la fenêtre jusqu'à 420 px.
+ * Le format s'étire donc en rectangle large sur grand écran et reste compact
+ * sur téléphone, sans saut de mise en page.
  */
 const AD_FORMAT_PRESENTATION: Record<string, { container: string; frame: string }> = {
-  rectangle: { container: 'mx-auto w-full max-w-[480px]', frame: 'aspect-[6/5]' },
+  rectangle: { container: 'mx-auto w-full max-w-[1100px]', frame: 'h-[clamp(220px,30vw,420px)]' },
 };
 
 interface Advertisement {

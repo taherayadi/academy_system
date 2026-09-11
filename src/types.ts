@@ -90,7 +90,7 @@ export interface AdPositionSpec {
 }
 
 export const AD_POSITION_SPECS: AdPositionSpec[] = [
-  { id: 'rectangle', label: 'Rectangle', size: '480×400 max', hint: 'Rectangle responsive — grand format fluide (jusqu’à 480 px de large, bien plus grand que l’ancien 300×250), dans le flux des pages.' },
+  { id: 'rectangle', label: 'Rectangle', size: '1100×420 max', hint: 'Rectangle responsive — occupe toute la largeur disponible (jusqu’à 1100 px) avec une hauteur fluide de 220 à 420 px : compact sur mobile, large sur desktop.' },
   { id: 'interstitial', label: 'Interstitiel', size: 'Plein écran', hint: 'Interstitiel — overlay responsive plein écran, fermable en un clic, avec compte à rebours.' },
 ];
 
