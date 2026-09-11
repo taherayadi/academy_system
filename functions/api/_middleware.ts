@@ -9,7 +9,15 @@
 import { Env, validateSession, json } from './_lib';
 
 /** Paths that do NOT require an authenticated session. */
-const PUBLIC_PATHS: string[] = ['/api/auth/login', '/api/auth/logout', '/api/demo-requests'];
+const PUBLIC_PATHS: string[] = [
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/demo-requests',
+  '/api/public-pricing',
+  // Read-only, filtered to is_active+is_published+date window (and center
+  // assignments) by the handler itself — needed by the anonymous landing page.
+  '/api/advertisements/active',
+];
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next } = context;

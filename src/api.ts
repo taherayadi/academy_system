@@ -2,7 +2,7 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, Formation, CenterTenant, DemoRequest, MealForfaitClosure
+  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure
 } from './types';
 
 const API_BASE = '/api';
@@ -183,6 +183,16 @@ export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void>
   return putDomain('/student-timesheets', sheets, 'تعذر حفظ جداول التوقيت.');
 }
 
+/** Save daily student check-in records for jardin centers. */
+export function saveStudentAttendanceApi(records: StudentAttendanceRecord[]): Promise<void> {
+  return putDomain('/student-attendance', records, 'تعذر حفظ pointage التلاميذ.');
+}
+
+/** Fetch daily student check-in records for jardin centers. */
+export function fetchStudentAttendanceApi(): Promise<StudentAttendanceRecord[]> {
+  return getDomain<StudentAttendanceRecord[]>('/student-attendance', 'تعذر تحميل pointage التلاميذ.');
+}
+
 export async function saveFormations(formations: Formation[]): Promise<void> {
   return putDomain('/formations', formations, 'تعذر حفظ بيانات التكوينات.');
 }
@@ -320,6 +330,41 @@ export async function changePasswordRequest(
   }
 }
 
+/** Upload a logo image to ImageKit (via backend) — returns the CDN URL. */
+export async function uploadCenterLogoApi(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/upload-logo`, {
+    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
+  });
+  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
+  return data.url;
+}
+
+/** Upload a logo selected by the platform admin before creating a center. */
+export async function uploadPlatformLogoApi(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/platform-upload-logo`, {
+    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
+  });
+  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
+  return data.url;
+}
+
+/** Save (or clear with '') the connected center's logo URL. */
+export async function saveCenterLogoApi(logoUrl: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/center-logo`, {
+    method: 'POST', headers: authHeaders(true), credentials: 'include',
+    body: JSON.stringify({ logoUrl })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'تعذر حفظ الشعار.');
+}
+
 // ========================================================================
 // SaaS Platform API – Demo Requests
 // ========================================================================
@@ -403,17 +448,21 @@ export async function fetchCentersApi(): Promise<CenterTenant[]> {
 /** Create a new center with its director account (super-admin). */
 export async function createCenterApi(payload: {
   name: string;
-  slug?: string;
+  logoUrl?: string;
   phoneNumber?: string;
   locationCity?: string;
   plan: string;
   enabledModules: string[];
   centerType?: string;
+  billingCycle?: 'monthly' | 'annual';
+  monthlyPrice?: number | string | null;
+  trialDays?: number | string;
+  offerDays?: number | string;
   directorName: string;
   directorEmail: string;
   directorPassword: string;
   convertFromRequestId?: string;
-}): Promise<{ centerId: string }> {
+}): Promise<{ centerId: string; invoice?: { invoiceNumber: string; amount: number } | null }> {
   const res = await fetch(`${API_BASE}/centers`, {
     method: 'POST',
     headers: authHeaders(true),
@@ -422,29 +471,82 @@ export async function createCenterApi(payload: {
     // director* fields so the director account is created correctly.
     body: JSON.stringify({
       ...payload,
+      logoUrl: payload.logoUrl,
       adminName: payload.directorName,
       adminEmail: payload.directorEmail,
       adminPassword: payload.directorPassword
     })
   });
   if (res.status === 401) throw new UnauthorizedError();
-  const data: { centerId?: string; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la création du centre.');
+  const data: { centerId?: string; error?: string; code?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || 'Erreur lors de la création du centre.') as Error & { code?: string };
+    (err as Error & { code?: string }).code = data.code;
+    throw err;
+  }
   return { centerId: data.centerId! };
 }
 
-/** Update center properties (super-admin): status, plan, modules, trial dates, etc. */
+/** Outcome of a plan change, echoed by the backend so the UI can explain it. */
+export interface PlanChangeOutcome {
+  mode: string;
+  applyAt?: number | null;
+  newSubscriptionEndsAt?: number | null;
+  settlement?: {
+    amount: number;
+    paid: boolean;
+    remainingDays: number;
+    invoiceNumber?: string;
+    invoiceId?: string;
+    cancelledOld?: boolean;
+    skipped?: boolean;
+  } | null;
+  scheduledPlan?: { plan: string; billingCycle: string; enabledModules: string[] } | null;
+  /** Pending invoice automatically created for a new/renewed subscription window. */
+  invoice?: { invoiceNumber: string; amount: number } | null;
+}
+
+/**
+ * Update center properties (super-admin): status, plan, modules, trial dates,
+ * scheduled plan changes and prorated settlements.
+ *
+ * Response carries `planChange` so the platform admin UI can explain what the
+ * system did (invoice created / change scheduled / period extended…).
+ */
 export async function updateCenterApi(
   id: string,
   payload: {
+    name?: string;
+    logoUrl?: string;
+    phoneNumber?: string;
+    locationCity?: string;
+    centerType?: string;
     status?: string;
     plan?: string;
     enabledModules?: string[];
     trialEndsAt?: number | null;
     subscriptionEndsAt?: number | null;
+    billingCycle?: 'monthly' | 'annual';
+    monthlyPrice?: number | null;
+    autoCalculatePrice?: boolean;
+    autoCalculateSubscription?: boolean;
+    addOfferDays?: number;
     extendTrialDays?: number;
+    /** Store a plan change to apply at the end of the current period. */
+    scheduleChange?: {
+      plan: string;
+      billingCycle?: 'monthly' | 'annual';
+      enabledModules?: string[];
+      monthlyPrice?: number | null;
+    };
+    /** Cancel the pending scheduled plan change of this center. */
+    cancelScheduledChange?: boolean;
+    /** Force-apply the pending scheduled plan change now. */
+    applyScheduledPlan?: boolean;
+    /** How to settle an immediate mid-period price increase. */
+    settlementPolicy?: 'auto' | 'paid' | 'unpaid';
   }
-): Promise<void> {
+): Promise<{ planChange?: PlanChangeOutcome }> {
   const res = await fetch(`${API_BASE}/centers`, {
     method: 'PATCH',
     headers: authHeaders(true),
@@ -452,8 +554,9 @@ export async function updateCenterApi(
     body: JSON.stringify({ id, ...payload })
   });
   if (res.status === 401) throw new UnauthorizedError();
-  const data: { error?: string } = await res.json().catch(() => ({}));
+  const data: { error?: string; planChange?: PlanChangeOutcome } = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du centre.');
+  return data;
 }
 
 /** Delete a center (super-admin). Cannot delete the default center. */
@@ -493,6 +596,8 @@ export interface CenterInvoice {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   paymentMethod?: string | null;
   paymentDate?: number | null;
+  chequeNumber?: string | null;
+  chequeDate?: number | null;
   notes: string;
   createdAt: number;
 }
@@ -503,6 +608,93 @@ export interface ModulePrice {
   module_key: string;
   price: number;
   created_at: number;
+}
+
+// ─── Per-center plan manager (Plans & factures) ────────────────────────────
+
+export interface CenterPlanSchedule {
+  id: string;
+  plan: string;
+  billingCycle: 'monthly' | 'annual';
+  monthlyPrice: number | null;
+  applyAt: number | null;
+  notes: string;
+  createdAt: number;
+}
+
+export interface CenterPlanHistoryEntry {
+  id: string;
+  action: string;
+  details: string;
+  amount: number | null;
+  invoiceNumber: string | null;
+  createdAt: number;
+}
+
+export interface CenterPlansView {
+  center: {
+    id: string;
+    name: string;
+    status: string;
+    plan: string;
+    billingCycle: 'monthly' | 'annual';
+    monthlyPrice: number;
+    subscriptionEndsAt: number | null;
+    trialEndsAt: number | null;
+    enabledModules: string[];
+  };
+  invoices: CenterInvoice[];
+  schedules: CenterPlanSchedule[];
+  /** Audit trail (migration 0029) — empty when not yet applied. */
+  history?: CenterPlanHistoryEntry[];
+}
+
+export interface CenterPlanActionResult {
+  success?: boolean;
+  mode?: 'scheduled' | 'replaced' | 'activated' | 'plan_removed' | 'schedule_cancelled' | 'trial_added';
+  placement?: 'start' | 'end';
+  days?: number;
+  message?: string;
+  applyAt?: number | null;
+  amount?: number;
+  subscriptionEndsAt?: number;
+  invoice?: { invoiceNumber: string; amount: number } | null;
+}
+
+/** Load the plan manager view for a center (current plan + invoices + schedules). */
+export async function fetchCenterPlansApi(centerId: string): Promise<CenterPlansView> {
+  const res = await fetch(`${API_BASE}/center-plans?centerId=${encodeURIComponent(centerId)}`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement des abonnements.');
+  return data as CenterPlansView;
+}
+
+/** Run a plan action (set-plan / remove-plan / remove-schedule) for a center. */
+export async function centerPlanActionApi(payload: {
+  action: 'set-plan' | 'remove-plan' | 'remove-schedule' | 'add-trial';
+  centerId: string;
+  plan?: string;
+  billingCycle?: 'monthly' | 'annual';
+  enabledModules?: string[];
+  monthlyPrice?: number | null;
+  mode?: 'scheduled';
+  scheduleId?: string;
+  days?: number;
+}): Promise<CenterPlanActionResult> {
+  const res = await fetch(`${API_BASE}/center-plans`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du plan.');
+  return data as CenterPlanActionResult;
 }
 
 /** Fetch platform billing summary (MRR, collected, pending invoices). */
@@ -560,12 +752,14 @@ export async function createInvoiceApi(payload: {
   return data;
 }
 
-/** Update an invoice. */
+/** Update an invoice (status / payment method / cheque details / notes). */
 export async function updateInvoiceApi(id: string, payload: Partial<{
   status: string;
   amount: number;
-  paymentMethod: string;
+  paymentMethod: string | null;
   paymentDate: number | null;
+  chequeNumber: string | null;
+  chequeDate: number | null;
   notes: string;
   periodStart: number;
   periodEnd: number;
@@ -590,6 +784,22 @@ export async function deleteInvoiceApi(id: string): Promise<void> {
   });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new Error('Erreur suppression facture.');
+}
+
+/** Fetch public module prices for the landing page without a session. */
+export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
+  const params = new URLSearchParams();
+  if (year) params.set('year', year);
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/public-pricing${query ? `?${query}` : ''}`, {
+    credentials: 'same-origin'
+  });
+  const data: { prices?: Array<{ module_key?: string; price?: number }>; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement des tarifs publics.');
+  return (data.prices || []).reduce<Record<string, number>>((prices, row) => {
+    if (row.module_key) prices[row.module_key] = Number(row.price) || 0;
+    return prices;
+  }, {});
 }
 
 /** Fetch module prices for a school year. */
@@ -618,6 +828,86 @@ export async function updateModulePricesApi(year: string, prices: Array<{ module
   if (res.status === 401) throw new UnauthorizedError();
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Erreur mise à jour tarifs.');
+}
+
+// ========================================================================
+// Platform Advertisements API
+// ========================================================================
+
+/** Upload multiple images for advertisement carousel (sequential uploads). */
+export async function uploadMultipleImagesApi(files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const url = await uploadPlatformLogoApi(file);
+    urls.push(url);
+  }
+  return urls;
+}
+
+/** Fetch all advertisements with center assignments (platform admin only). */
+export async function fetchAdvertisementsApi(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
+  return data.advertisements || [];
+}
+
+/** Create new advertisement. */
+export async function createAdvertisementApi(payload: any): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; id?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في إنشاء الإعلان.');
+  return { success: data.success || false, id: data.id || '' };
+}
+
+/** Update advertisement. */
+export async function updateAdvertisementApi(id: string, payload: any): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, ...payload })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في تحديث الإعلان.');
+  return { success: data.success || false };
+}
+
+/** Delete advertisement. */
+export async function deleteAdvertisementApi(id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/platform-advertisements?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في حذف الإعلان.');
+  return { success: data.success || false };
+}
+
+/** Fetch active advertisements by location and optional centerId (public endpoint). */
+export async function fetchActiveAdvertisementsApi(location: string, centerId?: string): Promise<any[]> {
+  const params = new URLSearchParams({ location });
+  if (centerId) params.set('centerId', centerId);
+
+  const res = await fetch(`${API_BASE}/advertisements/active?${params.toString()}`, {
+    credentials: 'same-origin'
+  });
+  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
+  return data.advertisements || [];
 }
 
 

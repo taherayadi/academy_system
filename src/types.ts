@@ -1,6 +1,17 @@
 export type SaaSPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
 export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
 
+/** A plan change recorded to take effect at the end of the current period. */
+export interface ScheduledPlanChange {
+  id: string;
+  plan: string; // storage value: 'starter' (Basic) | 'growth' | 'pro' | 'custom'
+  billingCycle: 'monthly' | 'annual';
+  enabledModules: string[];
+  monthlyPrice: number | null;
+  applyAt: number | null; // eligible once subscription_ends_at passes
+  createdAt: number;
+}
+
 export type ModuleKey = 
   | 'scolaire' 
   | 'finance' 
@@ -30,9 +41,11 @@ export interface CenterTenant {
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
   centerType?: string; // 'jardin' | 'formation'
+  logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
   studentCount?: number;
   adminEmail?: string;
+  scheduledPlan?: ScheduledPlanChange | null;
 }
 
 export interface DemoRequest {
@@ -49,6 +62,72 @@ export interface DemoRequest {
   status: 'new' | 'contacted' | 'converted' | 'archived';
   notes?: string;
   createdAt: number;
+}
+
+export type AdvertisementLocation =
+  | 'landing_page'
+  | 'center_admin'
+  | 'both' // visible on the landing page AND in the selected centers' dashboards
+  | string; // Allow custom locations
+
+// Positions d'affichage (formats type IAB) — une annonce peut en cumuler plusieurs.
+export type AdPositionId =
+  | 'leaderboard_728x90'
+  | 'medium_rectangle_300x250'
+  | 'mobile_leaderboard_320x50'
+  | 'skyscraper_160x600';
+
+export interface AdPositionSpec {
+  id: AdPositionId;
+  label: string;
+  size: string;
+  hint: string;
+}
+
+export const AD_POSITION_SPECS: AdPositionSpec[] = [
+  { id: 'leaderboard_728x90', label: 'Bannière horizontale', size: '728×90', hint: 'Leaderboard — large bandeau tout en haut des pages desktop.' },
+  { id: 'medium_rectangle_300x250', label: 'Rectangle moyen', size: '300×250', hint: 'Medium Rectangle — format polyvalent, flux de contenu et barres latérales.' },
+  { id: 'mobile_leaderboard_320x50', label: 'Bannière mobile', size: '320×50', hint: 'Mobile Leaderboard — bandeau compact pour téléphone et tablette.' },
+  { id: 'skyscraper_160x600', label: 'Gratte-ciel', size: '120×600 / 160×600', hint: 'Skyscraper — bannière verticale haute pour les marges latérales.' },
+];
+
+export const AD_POSITION_IDS: string[] = AD_POSITION_SPECS.map(s => s.id);
+
+// The skyscraper is rendered as its own fixed side banner (landing page &
+// center dashboards) instead of in the standard carousel.
+export const SKYSCRAPER_POSITION_ID = 'skyscraper_160x600';
+
+export function hasSkyscraperPosition(positions?: string[]): boolean {
+  return (positions || []).includes(SKYSCRAPER_POSITION_ID);
+}
+
+/** @deprecated règle remplacée : TOUTE pub positionnée quitte le carrousel standard. */
+export function isSkyscraperOnly(positions?: string[]): boolean {
+  const p = positions || [];
+  return p.length > 0 && p.every(id => id === SKYSCRAPER_POSITION_ID);
+}
+
+export function adPositionLabel(id: string): string {
+  const spec = AD_POSITION_SPECS.find(s => s.id === id);
+  return spec ? `${spec.label} (${spec.size})` : id;
+}
+
+export interface PlatformAdvertisement {
+  id: string;
+  title: string;
+  dateStart: number;
+  dateEnd: number;
+  location: AdvertisementLocation;
+  imageUrls: string[]; // Array of ImageKit CDN URLs for carousel
+  linkUrl?: string;
+  priority: number;
+  isActive: boolean;
+  isPublished: boolean;
+  centerIds: string[]; // Selected center IDs
+  positions?: string[]; // AdPositionId list (empty = emplacements par défaut du carrousel)
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface UserAccount {
@@ -723,6 +802,19 @@ export interface StudentTimeSheet {
   branch?: string;
   className?: string;
   weeklySchedule: TimeSheetSlot[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StudentAttendanceStatus = 'present' | 'absent';
+
+/** Daily check-in record used by jardin centers (Pointage Élèves). */
+export interface StudentAttendanceRecord {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  status: StudentAttendanceStatus;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

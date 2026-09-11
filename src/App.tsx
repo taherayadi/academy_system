@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  GraduationCap, 
-  BookOpen, 
-  Clock, 
-  BookMarked, 
-  Utensils, 
-  DollarSign, 
-  Users, 
-  Bus, 
-  Menu, 
-  X, 
+import {
+  LayoutDashboard,
+  GraduationCap,
+  BookOpen,
+  Clock,
+  BookMarked,
+  Utensils,
+  DollarSign,
+  Users,
+  Bus,
+  Menu,
+  X,
   Sparkles,
   Settings as SettingsIcon,
   LogOut,
@@ -26,7 +26,8 @@ import {
   ShieldCheck,
   Building2,
   Inbox,
-  Tags
+  Tags,
+  ImagePlus
 } from 'lucide-react';
 
 import { 
@@ -43,6 +44,7 @@ import {
   RevisionSeance,
   UserAccount,
   StudentTimeSheet,
+  StudentAttendanceRecord,
   Formation,
   CenterTenant,
   MealForfaitClosure,
@@ -68,6 +70,8 @@ import {
   saveExternalStudents, 
   saveRevisionSeances, 
   saveStudentTimeSheets,
+  saveStudentAttendanceApi,
+  fetchStudentAttendanceApi,
   saveFormations,
   saveMealForfaitClosures,
   fetchMealForfaitClosures,
@@ -101,6 +105,8 @@ import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
 import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
+import AdvertisementCarousel from './components/AdvertisementCarousel';
+import AdvertisementSkyscraper from './components/AdvertisementSkyscraper';
 import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
@@ -187,10 +193,10 @@ export default function App() {
     return centerModuleKeys.includes(moduleKey);
   };
 
-  // ── Logo du menu ──
-  // Comme sur la page de connexion : si le slug du centre (lien de l'image)
-  // est vide on affiche l'icône de marque ; sinon on affiche l'image du lien.
-  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.slug ? brandIcon : currentCenter.slug;
+  // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
+  // (icône de marque, comme sur la page de connexion).
+  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
+  const hasCustomCenterLogo = !isPlatformSuperAdmin && Boolean(currentCenter?.logoUrl);
 
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
@@ -229,6 +235,7 @@ export default function App() {
   const [externalStudents, setExternalStudents] = useState<ExternalStudentRegister[]>([]);
   const [revisionSeances, setRevisionSeances] = useState<RevisionSeance[]>([]);
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
+  const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceRecord[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
   // Meal "forfait ferme" closures — loaded separately from the main DB snapshot because
   // they live in their own tables and are only read by the finance module.
@@ -255,8 +262,8 @@ export default function App() {
     courses: ExternalCourse[]; sessions: ExternalCourseSession[]; mealPlans: MealPlanDay[];
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
-    formations: Formation[];
-  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], formations: [] });
+    studentAttendance: StudentAttendanceRecord[]; formations: Formation[];
+  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [] });
 
   // Serializes full-state PUTs so concurrent module updates never overwrite each other.
   const commitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -293,6 +300,7 @@ export default function App() {
           externalStudents: db.externalStudents || [],
           revisionSeances: db.revisionSeances || [],
           studentTimeSheets: db.studentTimeSheets || [],
+          studentAttendance: stateRef.current.studentAttendance || [],
           formations: db.formations || []
         };
         setStudents(db.students || []);
@@ -330,6 +338,18 @@ export default function App() {
       })
       .catch(() => {
         if (!cancelled) setMealForfaitClosures([]);
+      });
+    // Jardin-only daily attendance is supplementary to the formation time-sheet data.
+    // Keep it non-blocking so older deployments without migration 0026 still boot.
+    fetchStudentAttendanceApi()
+      .then((records) => {
+        if (!cancelled) {
+          setStudentAttendance(records);
+          stateRef.current.studentAttendance = records;
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStudentAttendance([]);
       });
     return () => {
       cancelled = true;
@@ -502,6 +522,12 @@ export default function App() {
     commitDomain(() => saveStudentTimeSheets(updated));
   };
 
+  const handleUpdateStudentAttendance = (updated: StudentAttendanceRecord[]) => {
+    setStudentAttendance(updated);
+    stateRef.current.studentAttendance = updated;
+    commitDomain(() => saveStudentAttendanceApi(updated));
+  };
+
   const handleUpdateFormations = (updated: Formation[]) => {
     setFormations(updated);
     commitDomain(() => saveFormations(updated));
@@ -547,6 +573,7 @@ export default function App() {
       externalStudents: externalStudents.length > 0 ? externalStudents : (stateRef.current.externalStudents || []),
       revisionSeances: revisionSeances.length > 0 ? revisionSeances : (stateRef.current.revisionSeances || []),
       studentTimeSheets: studentTimeSheets.length > 0 ? studentTimeSheets : (stateRef.current.studentTimeSheets || []),
+      studentAttendance: studentAttendance.length > 0 ? studentAttendance : (stateRef.current.studentAttendance || []),
       formations: formations.length > 0 ? formations : (stateRef.current.formations || []),
       exportedAt: new Date().toISOString()
     };
@@ -562,7 +589,7 @@ export default function App() {
   // Import database backup
   const VALID_COLLECTION_KEYS = [
     'students', 'staff', 'slots', 'courses', 'sessions', 'mealPlans',
-    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'formations'
+    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations'
   ];
   const VALID_OBJECT_KEYS = ['settings'];
 
@@ -614,7 +641,7 @@ export default function App() {
           const currentSettings = settings || stateRef.current.settings || initialCenterSettings;
           const backup = {
             students, staff, slots, courses, sessions, mealPlans, expenses, timesheets,
-            externalStudents, revisionSeances, studentTimeSheets, settings: currentSettings,
+            externalStudents, revisionSeances, studentTimeSheets, studentAttendance, settings: currentSettings,
             exportedAt: new Date().toISOString(),
             _note: 'Auto-backup before import'
           };
@@ -712,6 +739,10 @@ export default function App() {
       if (!validateArray(next.studentTimeSheets as unknown[], ['id', 'establishmentName'], 'جداول التوقيت')) return;
       setStudentTimeSheets(next.studentTimeSheets as StudentTimeSheet[]);
     }
+    if (next.studentAttendance !== undefined) {
+      if (!validateArray(next.studentAttendance as unknown[], ['id', 'studentId', 'date', 'status'], 'pointage التلاميذ')) return;
+      setStudentAttendance(next.studentAttendance as StudentAttendanceRecord[]);
+    }
     if (next.formations !== undefined) {
       if (!validateArray(next.formations as unknown[], ['id', 'name'], 'التكوينات')) return;
       setFormations(next.formations as Formation[]);
@@ -739,12 +770,17 @@ export default function App() {
       externalStudents: next.externalStudents !== undefined ? (next.externalStudents as ExternalStudentRegister[]) : externalStudents,
       revisionSeances: next.revisionSeances !== undefined ? (next.revisionSeances as RevisionSeance[]) : revisionSeances,
       studentTimeSheets: next.studentTimeSheets !== undefined ? (next.studentTimeSheets as StudentTimeSheet[]) : studentTimeSheets,
+      studentAttendance: next.studentAttendance !== undefined ? (next.studentAttendance as StudentAttendanceRecord[]) : (stateRef.current.studentAttendance || []),
       formations: next.formations !== undefined ? (next.formations as Formation[]) : formations
     };
 
     commitDomain(async () => {
       await saveDatabase(next as any);
+      if (next.studentAttendance !== undefined) {
+        await saveStudentAttendanceApi(next.studentAttendance as StudentAttendanceRecord[]);
+      }
       const freshDb = await fetchDatabase();
+      const freshAttendance = await fetchStudentAttendanceApi().catch(() => stateRef.current.studentAttendance || []);
       setSettings(freshDb.settings);
       setStudents(freshDb.students || []);
       setStaff(freshDb.staff || []);
@@ -757,8 +793,9 @@ export default function App() {
       setExternalStudents(freshDb.externalStudents || []);
       setRevisionSeances(freshDb.revisionSeances || []);
       setStudentTimeSheets(freshDb.studentTimeSheets || []);
+      setStudentAttendance(freshAttendance);
       setFormations(freshDb.formations || []);
-      stateRef.current = freshDb;
+      stateRef.current = { ...freshDb, studentAttendance: freshAttendance };
     });
 
     toast.success('تم استرجاع البيانات بنجاح!');
@@ -797,7 +834,7 @@ export default function App() {
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
-            <span className="w-16 h-16 rounded-2xl bg-slate-100 p-1 shadow-md shadow-slate-900/10 overflow-hidden">
+            <span className={`w-16 h-16 rounded-2xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-md shadow-slate-900/10 overflow-hidden`}>
               <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
@@ -844,12 +881,13 @@ export default function App() {
         { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
         { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
         { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
+        { id: 'platformAdvertisements', label: 'الإعلانات', icon: ImagePlus },
       ]
     : [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-        !hideRestrictedModules && { id: 'studentTimeSheets', label: 'جداول التوقيت', icon: CalendarCheck },
+        !hideRestrictedModules && { id: 'studentTimeSheets', label: currentCenter?.centerType === 'jardin' ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
         { id: 'module3', label: 'تأطير Étude', icon: Clock },
         !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
@@ -872,7 +910,7 @@ export default function App() {
       {/* MOBILE HEADER */}
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
-          <span className="w-10 h-10 rounded-xl bg-slate-100 p-0.5 shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
+          <span className={`w-10 h-10 rounded-xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-0.5'} shadow-md shadow-slate-900/10 shrink-0 overflow-hidden`}>
             <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
           </span>
           <div>
@@ -936,7 +974,7 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
                 <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
@@ -1029,6 +1067,23 @@ export default function App() {
       {/* CORE CANVAS */}
       <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-5 xl:p-8 overflow-y-auto max-h-screen">
         <div className="max-w-7xl mx-auto">
+          {/* Publicité du centre — chaque format à ses dimensions exactes */}
+          {!isPlatformSuperAdmin && currentCenter && (
+            <>
+              {/* Leaderboard 728×90 (desktop) / bandeau mobile 320×50 (téléphones) */}
+              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="leaderboard_728x90" className="mb-5" />
+              <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="mobile_leaderboard_320x50" className="mb-5" />
+              {/* Carrousel standard + rectangle 300×250 aligné à droite */}
+              <div className="flex items-start gap-5">
+                <div className="min-w-0 flex-1">
+                  <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />
+                </div>
+                <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="medium_rectangle_300x250" className="mb-5 shrink-0 hidden lg:block" />
+              </div>
+              {/* Gratte-ciel 160×600 : bandeau vertical fixe à droite du tableau de bord */}
+              <AdvertisementSkyscraper location="center_admin" centerId={currentCenter.id} side="right" />
+            </>
+          )}
           
           <AnimatePresence mode="wait">
             <motion.div
@@ -1047,6 +1102,7 @@ export default function App() {
                   openAddStaff={() => setActiveTab('module8')}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
+                  centerType={currentCenter?.centerType}
                   isModuleAllowed={hasCenterModule}
                 />
               )}
@@ -1088,6 +1144,9 @@ export default function App() {
                   onUpdateStudentTimeSheets={handleUpdateStudentTimeSheets}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
+                  centerType={currentCenter?.centerType}
+                  studentAttendance={studentAttendance}
+                  onUpdateStudentAttendance={handleUpdateStudentAttendance}
                 />
               )}
 
@@ -1213,6 +1272,8 @@ export default function App() {
                   currentUserEmail={currentUser.email}
                   onExportDatabase={handleExportDatabase}
                   onImportDatabase={handleImportDatabase}
+                  centerLogoUrl={currentCenter?.logoUrl}
+                  onCenterLogoChange={(url) => setCurrentCenter(prev => prev ? { ...prev, logoUrl: url } : prev)}
                   enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
@@ -1224,6 +1285,7 @@ export default function App() {
                     : activeTab === 'platformRequests' ? 'requests'
                     : activeTab === 'platformFinance' ? 'finance'
                     : activeTab === 'platformPricing' ? 'pricing'
+                    : activeTab === 'platformAdvertisements' ? 'advertisements'
                     : 'overview'
                   }
                   onNavigate={(p) => setActiveTab(
@@ -1231,6 +1293,7 @@ export default function App() {
                     : p === 'requests' ? 'platformRequests'
                     : p === 'finance' ? 'platformFinance'
                     : p === 'pricing' ? 'platformPricing'
+                    : p === 'advertisements' ? 'platformAdvertisements'
                     : 'platformAdmin'
                   )}
                 />

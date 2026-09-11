@@ -45,6 +45,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         status: inv.status,
         paymentMethod: inv.payment_method || null,
         paymentDate: inv.payment_date || null,
+        chequeNumber: inv.cheque_number || null,
+        chequeDate: inv.cheque_date || null,
         notes: inv.notes || '',
         createdAt: inv.created_at
       }));
@@ -52,7 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     // Default: summary (MRR, collected revenue, pending invoices, centers by payment status)
-    const [centersRes, invoicesRes, monthInvoicesRes, yearInvoicesRes] = await Promise.all([
+    const [centersRes, invoicesRes, monthInvoicesRes, yearInvoicesRes, latestPaidRes] = await Promise.all([
       env.DB.prepare(`
         SELECT id, name, status, monthly_price, billing_cycle, subscription_ends_at
         FROM centers WHERE status != 'trial'
@@ -65,7 +67,17 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       env.DB.prepare(`
         SELECT SUM(amount) as total FROM center_invoices
         WHERE status = 'paid' AND payment_date >= ? AND payment_date < ?
-      `).bind(yearStart(), yearEnd()).all<any>()
+      `).bind(yearStart(), yearEnd()).all<any>(),
+      // Latest PAID invoice per center drives MRR (normalised per month).
+      // A center counts as soon as it has a paid invoice — even when its
+      // billing window lies in the past (e.g. activation after an expired
+      // trial), which is why a period-based filter used to show 0 TND.
+      env.DB.prepare(`
+        SELECT center_id, amount, period_start, period_end FROM center_invoices
+        WHERE status = 'paid'
+        ORDER BY center_id, period_end DESC
+        LIMIT 1000
+      `).all<any>()
     ]);
 
     const centers = centersRes.results || [];
@@ -77,18 +89,23 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const collectedThisMonth = Number(monthInvoicesRes.results?.[0]?.total) || 0;
     const collectedThisYear = Number(yearInvoicesRes.results?.[0]?.total) || 0;
 
-    // MRR = sum of monthly_price for all active non-trial centers (annual centers contribute monthly_price / 12)
+    // MRR is computed from PAID invoices ONLY: each center contributes its
+    // latest paid invoice, normalised to a month (annual invoices → /12,
+    // e.g. 30-day windows → amount). Pending invoices and pending cheques
+    // never count toward MRR.
     let mrr = 0;
+    const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
+    const countedCenters = new Set<string>();
+    (latestPaidRes.results || []).forEach((inv: { center_id?: string; amount?: number | string; period_start?: number; period_end?: number }) => {
+      const cid = String(inv.center_id || '');
+      if (countedCenters.has(cid)) return; // older paid invoices of this center are superseded
+      countedCenters.add(cid);
+      const months = Math.max(1, Math.round((Number(inv.period_end || 0) - Number(inv.period_start || 0)) / MONTH_MS));
+      mrr += (Number(inv.amount) || 0) / months;
+    });
     const activeCount = centers.filter(c => c.status === 'active').length;
     const suspendedCount = centers.filter(c => c.status === 'suspended').length;
     const expiredCount = centers.filter(c => c.status === 'expired').length;
-
-    centers.forEach(c => {
-      if (c.status === 'active') {
-        const price = Number(c.monthly_price) || 0;
-        mrr += c.billing_cycle === 'annual' ? price / 12 : price;
-      }
-    });
 
     // Centers by payment status (active with sub ending soon, overdue, suspended)
     const now = Date.now();
@@ -187,19 +204,47 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const id = String(body.id || '').trim();
     if (!id) return json({ error: 'معرف الفاتورة مطلوب.' }, 400);
 
+    const existing = await env.DB.prepare('SELECT status, payment_date FROM center_invoices WHERE id = ?').bind(id).first<any>();
+    if (!existing) return json({ error: 'الفاتورة غير موجودة.' }, 404);
+
     const updates: string[] = [];
     const binds: any[] = [];
 
     if (body.status !== undefined) {
+      const targetStatus = String(body.status).trim();
       updates.push('status = ?');
-      binds.push(String(body.status).trim());
-      if (body.status === 'paid' && !body.paymentDate) {
-        updates.push('payment_date = ?');
-        binds.push(Date.now());
+      binds.push(targetStatus);
+      // Revenue is recognised only for paid invoices: stamp the collection
+      // date when an invoice BECOMES paid, and clear it when it stops being
+      // paid. Editing an already-paid invoice must not move its payment date.
+      if (body.paymentDate === undefined) {
+        const wasPaid = existing.status === 'paid';
+        if (targetStatus === 'paid' && !wasPaid) {
+          updates.push('payment_date = ?');
+          binds.push(Date.now());
+        } else if (targetStatus !== 'paid' && wasPaid) {
+          updates.push('payment_date = ?');
+          binds.push(null);
+        }
       }
     }
     if (body.amount !== undefined) { updates.push('amount = ?'); binds.push(Number(body.amount)); }
-    if (body.paymentMethod !== undefined) { updates.push('payment_method = ?'); binds.push(String(body.paymentMethod).trim()); }
+    if (body.paymentMethod !== undefined) {
+      const method = String(body.paymentMethod ?? '').trim();
+      // Cheque payments are kept pending ("chèque en attente") until encashed
+      // — they are never counted as revenue. Encashing = status → 'paid'.
+      // Only 'cash' and 'cheque' are accepted; anything else is cleared.
+      updates.push('payment_method = ?');
+      binds.push(method === 'cash' || method === 'cheque' ? method : null);
+    }
+    if (body.chequeNumber !== undefined) {
+      updates.push('cheque_number = ?');
+      binds.push(body.chequeNumber ? String(body.chequeNumber).trim() : null);
+    }
+    if (body.chequeDate !== undefined) {
+      updates.push('cheque_date = ?');
+      binds.push(body.chequeDate ? Number(body.chequeDate) : null);
+    }
     if (body.paymentDate !== undefined) { updates.push('payment_date = ?'); binds.push(body.paymentDate ? Number(body.paymentDate) : null); }
     if (body.notes !== undefined) { updates.push('notes = ?'); binds.push(String(body.notes).trim()); }
     if (body.periodStart !== undefined) { updates.push('period_start = ?'); binds.push(Number(body.periodStart)); }

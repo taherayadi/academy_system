@@ -103,6 +103,15 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     const status = body.status ? String(body.status).trim() : null;
     const notes = body.notes !== undefined ? String(body.notes).trim() : null;
 
+    // 'converted' is one-way: a request that already became a center can only
+    // be archived afterwards (never reopened, never converted a second time).
+    if (status) {
+      const current = await env.DB.prepare('SELECT status FROM demo_requests WHERE id = ?').bind(id).first<any>();
+      if (current && current.status === 'converted' && status !== 'converted' && status !== 'archived') {
+        return json({ error: 'تم تحويل هذا الطلب إلى مركز مسبقاً — يمكن أرشفته فقط.' }, 409);
+      }
+    }
+
     if (status && notes !== null) {
       await env.DB.prepare('UPDATE demo_requests SET status = ?, notes = ? WHERE id = ?').bind(status, notes, id).run();
     } else if (status) {

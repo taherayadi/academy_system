@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { submitDemoRequestApi } from '../api';
+import AdvertisementCarousel from './AdvertisementCarousel';
+import AdvertisementSkyscraper from './AdvertisementSkyscraper';
+import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
   GraduationCap,
@@ -40,28 +42,28 @@ interface LandingPageProps {
   centerName?: string;
 }
 
-// ─── Module catalogue (landing only — bibliotheque & pointage élèves exclus) ──
+// ─── Module catalogue (prices are loaded from Platform Admin) ────────────────
 const BASE_KEYS = ['scolaire', 'studentTimeSheets', 'finance'] as const;
 
 const ALL_MODULES = [
-  { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, price: 20, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
-  { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, price: 20, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
-  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, price: 0, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
-  { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, price: 15, description: 'Planning hebdomadaire, présences, horaires.' },
-  { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, price: 15, description: 'Cours 1-à-1, tarification, enseignants.' },
-  { key: 'revision', label: 'Révision Examens', icon: Award, price: 15, description: 'Séances de révision, groupes, présences.' },
-  { key: 'formations', label: 'Formations', icon: Sparkles, price: 15, description: 'Ateliers, stages vacances, plannings.' },
-  { key: 'cantine', label: 'Cantine & Repas', icon: Utensils, price: 18, description: 'Menus hebdomadaires, abonnements, pointage.' },
-  { key: 'transport', label: 'Transport Scolaire', icon: Bus, price: 15, description: 'Circuits, feuilles de route, chauffeurs.' },
-  { key: 'events', label: 'Événements & Sorties', icon: Calendar, price: 15, description: 'Inscriptions, sorties scolaires.' },
-  { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, price: 12, description: 'Équipe, paie, pointages, congés.' }
+  { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
+  { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
+  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
+  { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, description: 'Planning hebdomadaire, présences, horaires.' },
+  { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, description: 'Cours 1-à-1, tarification, enseignants.' },
+  { key: 'revision', label: 'Révision Examens', icon: Award, description: 'Séances de révision, groupes, présences.' },
+  { key: 'formations', label: 'Formations', icon: Sparkles, description: 'Ateliers, stages vacances, plannings.' },
+  { key: 'cantine', label: 'Cantine & Repas', icon: Utensils, description: 'Menus hebdomadaires, abonnements, pointage.' },
+  { key: 'transport', label: 'Transport Scolaire', icon: Bus, description: 'Circuits, feuilles de route, chauffeurs.' },
+  { key: 'events', label: 'Événements & Sorties', icon: Calendar, description: 'Inscriptions, sorties scolaires.' },
+  { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, description: 'Équipe, paie, pointages, congés.' }
 ] as const;
 
 const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));
 const BASE_MODULES = ALL_MODULES.filter(m => (BASE_KEYS as readonly string[]).includes(m.key));
 
-const modulesPrice = (keys: readonly string[]) =>
-  keys.reduce((sum, key) => sum + (ALL_MODULES.find(m => m.key === key)?.price || 0), 0);
+const modulesPrice = (keys: readonly string[], prices: Record<string, number>) =>
+  keys.reduce((sum, key) => sum + (prices[key] || 0), 0);
 
 // ─── Animated counter (stats band) ─────────────────────────────────
 function Counter({ to, duration = 1500 }: { to: number; duration?: number }) {
@@ -91,12 +93,44 @@ const MOCK_BARS = [
   { m: 'Déc', v: 68 }, { m: 'Jan', v: 58 }, { m: 'Fév', v: 88 }
 ];
 
-const BASE_PRICE = modulesPrice(BASE_KEYS); // 40 TND
-
 export default function LandingPage({ onOpenLogin, centerName = 'System Academy' }: LandingPageProps) {
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
   const [selectedModules, setSelectedModules] = useState<string[]>([...BASE_KEYS]);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
+  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+  const [pricingLoading, setPricingLoading] = useState(true);
+  const [pricingError, setPricingError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPublicModulePricesApi()
+      .then(prices => {
+        if (!cancelled) setModulePrices(prices);
+      })
+      .catch(() => {
+        if (!cancelled) setPricingError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPricingLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const pricesReady = Object.keys(modulePrices).length > 0;
+  const pricedModules = useMemo(
+    () => ALL_MODULES.map(module => ({ ...module, price: modulePrices[module.key] ?? 0 })),
+    [modulePrices]
+  );
+  const pricedAddonModules = useMemo(
+    () => pricedModules.filter(module => !(BASE_KEYS as readonly string[]).includes(module.key)),
+    [pricedModules]
+  );
+  const pricedBaseModules = useMemo(
+    () => pricedModules.filter(module => (BASE_KEYS as readonly string[]).includes(module.key)),
+    [pricedModules]
+  );
+  const basePrice = modulesPrice(BASE_KEYS, modulePrices);
+  const priceLabel = (price: number): string => pricesReady ? String(price) : pricingLoading ? '…' : '—';
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
@@ -123,14 +157,14 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
   // ── Pricing math ──
   const addonKeys = useMemo(() => selectedModules.filter(k => !(BASE_KEYS as readonly string[]).includes(k)), [selectedModules]);
   const { monthlyPrice, annualMonthly, annualTotal, savings } = useMemo(() => {
-    const monthly = modulesPrice(selectedModules);
+    const monthly = modulesPrice(selectedModules, modulePrices);
     return {
       monthlyPrice: monthly,
       annualMonthly: monthly * 0.8,
       annualTotal: monthly * 12 * 0.8,
       savings: monthly * 12 * 0.2
     };
-  }, [selectedModules]);
+  }, [selectedModules, modulePrices]);
 
   // ── Selection logic : la base est verrouillée, on ne peut qu'ajouter ──
   const toggleModule = (key: string) => {
@@ -213,7 +247,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
   const faqs = [
     {
       q: 'Que contient le plan de base ?',
-      a: 'Chaque abonnement démarre avec la base Scolaire & Notes + Finance & Paiements (40 TND/mois) : fiches élèves, notes et bulletins, carnets de paiements, reçus et statistiques de revenus. Ces deux modules sont toujours inclus et ne peuvent pas être retirés.'
+      a: `Chaque abonnement démarre avec la base Scolaire & Notes + Finance & Paiements (${priceLabel(basePrice)} TND/mois) : fiches élèves, notes et bulletins, carnets de paiements, reçus et statistiques de revenus. Ces deux modules sont toujours inclus et ne peuvent pas être retirés.`
     },
     {
       q: 'Comment ajouter des modules ?',
@@ -335,7 +369,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#257C86] opacity-50"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#257C86]"></span>
                 </span>
-                <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance + Jd. Horaires offert — 40 TND/mois</span>
+                <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance + Jd. Horaires offert — {priceLabel(basePrice)} TND/mois</span>
               </motion.div>
 
               <motion.h1
@@ -546,7 +580,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <span className="text-[10px] font-black text-[#257C86] uppercase tracking-wider">Base incluse</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {BASE_MODULES.map(m => (
+                  {pricedBaseModules.map(m => (
                     <span key={m.key} className="flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 rounded-full px-2.5 py-1">
                       <m.icon className="h-3 w-3 text-[#257C86]" />
                       {m.label.split(' ')[0]}
@@ -572,7 +606,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         <Plus className="h-2.5 w-2.5 text-emerald-600" />
                       </span>
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400">+18 TND/mois</div>
+                    <div className="text-[10px] font-bold text-slate-400">+{pricesReady ? (modulePrices.cantine ?? 0) : pricingLoading ? '…' : '—'} TND/mois</div>
                   </div>
                 </div>
               </motion.div>
@@ -581,19 +615,38 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
+      {/* ─── PUBLICITÉ — formats aux dimensions exactes (gérés dans l'admin SaaS) ─── */}
+      {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
+          Les classes verticales vivent sur le carrousel (il rend null sans
+          annonce → aucun espace fantôme sur la landing). */}
+      <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
+        {/* Leaderboard 728×90 — tout en haut, desktop/tablette */}
+        <AdvertisementCarousel location="landing_page" format="leaderboard_728x90" className="mb-8 rounded-2xl shadow-lg" />
+        {/* Mobile leaderboard 320×50 — téléphones uniquement */}
+        <AdvertisementCarousel location="landing_page" format="mobile_leaderboard_320x50" className="mb-6 rounded-xl shadow-md" />
+        {/* Carrousel standard (pubs sans position) */}
+        <AdvertisementCarousel location="landing_page" className="mb-8 rounded-2xl shadow-xl" />
+        {/* Medium rectangle 300×250 */}
+        <div className="flex justify-center">
+          <AdvertisementCarousel location="landing_page" format="medium_rectangle_300x250" className="mb-10 rounded-2xl shadow-lg" />
+        </div>
+      </div>
+      {/* Gratte-ciel 120×600 / 160×600 : bandeau vertical fixe dans la marge droite (grands écrans) */}
+      <AdvertisementSkyscraper location="landing_page" side="right" />
+
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">
         <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-white to-transparent pointer-events-none" />
         <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
         <div className="flex w-max animate-marquee gap-3">
-          {[...ALL_MODULES, ...ALL_MODULES].map((m, i) => (
+          {[...pricedModules, ...pricedModules].map((m, i) => (
             <div
               key={`${m.key}-${i}`}
               className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-slate-50/70 px-5 py-2.5 whitespace-nowrap"
             >
               <m.icon className="h-4 w-4 text-[#257C86]" />
               <span className="text-sm font-bold text-slate-700">{m.label}</span>
-              <span className="text-xs font-black text-slate-400">{m.price === 0 ? 'Inclus' : `${m.price} TND`}</span>
+              <span className="text-xs font-black text-slate-400">{!pricesReady ? (pricingLoading ? 'Chargement…' : 'Tarif indisponible') : m.price === 0 ? 'Inclus' : `${m.price} TND`}</span>
             </div>
           ))}
         </div>
@@ -604,7 +657,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-2 lg:grid-cols-4 gap-10 text-center">
           {[
             { value: 10, label: 'Modules disponibles' },
-            { value: 40, label: 'TND — le plan de base / mois' },
+            { value: basePrice, label: 'TND — le plan de base / mois' },
             { value: 14, label: 'Jours d’essai gratuit' },
             { value: 0, label: 'Limite d’élèves & d’utilisateurs' }
           ].map(s => (
@@ -694,13 +747,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               Trois modules. Toujours inclus.
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
-              Le socle de chaque abonnement — <span className="text-slate-900 font-black">Scolaire &amp; Finance</span> pour 40 TND/mois,
+              Le socle de chaque abonnement — <span className="text-slate-900 font-black">Scolaire &amp; Finance</span> pour {priceLabel(basePrice)} TND/mois,
               avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
             </p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            {BASE_MODULES.filter(m => m.price > 0).map((mod, i) => (
+            {pricedBaseModules.filter(m => m.key !== 'studentTimeSheets').map((mod, i) => (
               <motion.div
                 key={mod.key}
                 initial={{ opacity: 0, y: 30 }}
@@ -851,7 +904,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             <div className="flex items-center gap-5">
               <div className="text-right">
                 <div className="text-3xl font-black text-slate-900">
-                  {BASE_PRICE} <span className="text-sm font-bold text-slate-500">TND/mois</span>
+                  {priceLabel(basePrice)} <span className="text-sm font-bold text-slate-500">TND/mois</span>
                 </div>
               </div>
               <button
@@ -884,7 +937,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {ADDON_MODULES.map((mod, i) => {
+            {pricedAddonModules.map((mod, i) => {
               const selected = selectedModules.includes(mod.key);
               return (
                 <motion.button
@@ -921,7 +974,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <p className="text-xs text-slate-500 leading-relaxed font-medium mb-4">{mod.description}</p>
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-slate-900">
-                      {mod.price}<span className="text-[10px] font-bold text-slate-400 ml-1">TND/mois</span>
+                      {priceLabel(mod.price)}<span className="text-[10px] font-bold text-slate-400 ml-1">TND/mois</span>
                     </span>
                     <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
                       selected ? 'bg-[#257C86]/15 text-[#257C86]' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
@@ -953,6 +1006,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
               La base est toujours incluse. Ajoutez ou retirez des modules — le prix s’adapte instantanément.
             </p>
+            {pricingError && (
+              <p className="mt-3 text-sm font-bold text-amber-700">Les tarifs sont momentanément indisponibles. Réessayez dans quelques instants.</p>
+            )}
           </div>
 
           {/* billing toggle */}
@@ -997,17 +1053,17 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {BASE_MODULES.filter(m => m.price > 0).map(mod => (
+                  {pricedBaseModules.filter(m => m.key !== 'studentTimeSheets').map(mod => (
                     <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl border border-[#257C86]/30 bg-white shadow-sm">
-                      <div className="p-2.5 rounded-xl bg-[#257C86]/10">
+                      <div className="p-2.5 rounded-xl bg-[#257C86]/10 flex-shrink-0">
                         <mod.icon className="h-5 w-5 text-[#257C86]" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-black text-slate-900 truncate">{mod.label}</div>
-                        <div className="text-[11px] font-semibold text-slate-500 truncate">{mod.description}</div>
+                        <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
+                        <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-base font-black text-[#257C86]">{mod.price}</div>
+                        <div className="text-base font-black text-[#257C86]">{priceLabel(mod.price)}</div>
                         <div className="text-[9px] font-bold text-slate-400">TND/mois</div>
                       </div>
                     </div>
@@ -1036,7 +1092,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   Modules additionnels — ajoutez à volonté
                 </h3>
                 <div className="space-y-2.5">
-                  {ADDON_MODULES.map(mod => {
+                  {pricedAddonModules.map(mod => {
                     const on = selectedModules.includes(mod.key);
                     return (
                       <button
@@ -1052,11 +1108,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                           <mod.icon className="h-4 w-4 text-[#257C86]" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-black text-slate-900 truncate">{mod.label}</div>
-                          <div className="text-[11px] font-semibold text-slate-500 truncate">{mod.description}</div>
+                          <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
+                          <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
-                          <div className={`text-sm font-black ${on ? 'text-[#257C86]' : 'text-slate-900'}`}>+{mod.price}</div>
+                          <div className={`text-sm font-black ${on ? 'text-[#257C86]' : 'text-slate-900'}`}>+{priceLabel(mod.price)}</div>
                           <div className="text-[9px] font-bold text-slate-400">TND/mois</div>
                         </div>
                         {/* switch */}
@@ -1073,7 +1129,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             {/* ── Right : summary ── */}
             <div className="lg:sticky lg:top-24">
               <div className="rounded-3xl bg-white border border-slate-200/70 shadow-xl shadow-slate-900/5 overflow-hidden">
-                <div className="p-7 bg-gradient-to-b from-[#257C86]/[0.06] to-white">
+                <div className="p-5 sm:p-7 bg-gradient-to-b from-[#257C86]/[0.06] to-white">
                   <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-5">Récapitulatif</div>
 
                   {/* base line */}
@@ -1082,7 +1138,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       <Lock className="h-3.5 w-3.5 text-[#257C86]" />
                       Base (3 modules)
                     </span>
-                    <span className="text-sm font-black text-slate-900">{BASE_PRICE} TND</span>
+                    <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND</span>
                   </div>
                   <div className="flex items-center justify-between mb-3 pl-6">
                     <span className="text-xs font-bold text-slate-400 flex items-center gap-2">
@@ -1101,11 +1157,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         exit={{ opacity: 0 }}
                         className="text-xs font-semibold text-slate-400 py-2 pl-6"
                       >
-                        Aucun module additionnel — ajoutez-en à gauche pour composer votre offre.
+                        Aucun module additionnel — ajoutez des modules pour composer votre offre.
                       </motion.div>
                     )}
                     {addonKeys.map(key => {
-                      const mod = ALL_MODULES.find(m => m.key === key)!;
+                      const mod = pricedModules.find(m => m.key === key)!;
                       return (
                         <motion.div
                           key={key}
@@ -1120,7 +1176,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                               <mod.icon className="h-3.5 w-3.5 text-slate-400" />
                               {mod.label}
                             </span>
-                            <span className="text-sm font-black text-slate-700">+{mod.price} TND</span>
+                            <span className="text-sm font-black text-slate-700">+{priceLabel(mod.price)} TND</span>
                           </div>
                         </motion.div>
                       );
@@ -1135,7 +1191,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       </span>
                       <div className="flex items-end gap-1.5">
                         <span className="text-5xl font-black text-slate-900 tracking-tight">
-                          {billingCycle === 'monthly' ? monthlyPrice : annualMonthly.toFixed(0)}
+                          {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)}
                         </span>
                         <span className="text-xs font-bold text-slate-500 pb-1.5">TND/mois</span>
                       </div>
@@ -1143,7 +1199,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     {billingCycle === 'annual' ? (
                       <div className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
                         <TrendingUp className="h-3.5 w-3.5" />
-                        {annualTotal.toFixed(0)} TND/an · économie de {savings.toFixed(0)} TND
+                        {priceLabel(annualTotal)} TND/an · économie de {priceLabel(savings)} TND
                       </div>
                     ) : (
                       <div className="text-xs font-bold text-slate-400">Sans engagement, résiliable à tout moment</div>
@@ -1312,7 +1368,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 Notre équipe vous contactera dans les 24h pour configurer votre essai gratuit.
               </p>
               <p className="text-sm font-black text-[#257C86] mb-8">
-                Configuration transmise : Base + {addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''} · {monthlyPrice} TND/mois
+                Configuration transmise : Base + {addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''} · {priceLabel(monthlyPrice)} TND/mois
               </p>
               <button
                 onClick={() => window.location.reload()}
@@ -1351,7 +1407,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   </div>
 
                   <div className="space-y-2 mb-4">
-                    {BASE_MODULES.map(mod => (
+                    {pricedBaseModules.map(mod => (
                       <div key={mod.key} className="flex items-center gap-2.5 rounded-xl bg-[#257C86]/[0.06] border border-[#257C86]/25 px-3.5 py-2.5">
                         <mod.icon className="h-4 w-4 text-[#257C86]" />
                         <span className="text-xs font-black text-slate-800 flex-1">{mod.label}</span>
@@ -1360,7 +1416,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     ))}
                     <AnimatePresence initial={false}>
                       {addonKeys.map(key => {
-                        const mod = ALL_MODULES.find(m => m.key === key)!;
+                        const mod = pricedModules.find(m => m.key === key)!;
                         return (
                           <motion.div
                             key={key}
@@ -1372,7 +1428,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                           >
                             <mod.icon className="h-4 w-4 text-slate-400" />
                             <span className="text-xs font-black text-slate-800 flex-1">{mod.label}</span>
-                            <span className="text-[10px] font-black text-slate-400">+{mod.price}</span>
+                            <span className="text-[10px] font-black text-slate-400">+{priceLabel(mod.price)}</span>
                             <button
                               onClick={() => toggleModule(key)}
                               className="p-0.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
@@ -1391,7 +1447,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       {selectedModules.length} modules au total
                     </span>
                     <span className="text-lg font-black text-slate-900">
-                      {billingCycle === 'monthly' ? monthlyPrice : annualMonthly.toFixed(0)} TND/mois
+                      {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)} TND/mois
                     </span>
                   </div>
                 </div>
@@ -1531,7 +1587,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 <p className="text-center text-[11px] font-semibold text-slate-400 mt-4 leading-relaxed">
                   Sera envoyé avec votre demande : <span className="text-slate-600">Base (Scolaire + Finance)</span>
                   {addonKeys.length > 0 && <> + <span className="text-[#257C86] font-bold">{addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''}</span></>}
-                  {' '}· {billingCycle === 'monthly' ? monthlyPrice : annualMonthly.toFixed(0)} TND/mois
+                  {' '}· {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)} TND/mois
                 </p>
               </form>
             </div>
@@ -1579,7 +1635,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               <div className="rounded-2xl border border-[#257C86]/25 bg-[#257C86]/[0.05] p-4">
                 <div className="flex items-center gap-2.5 mb-2">
                   <GraduationCap className="h-4 w-4 text-[#257C86]" />
-                  <span className="text-sm font-black text-slate-900">40 TND/mois</span>
+                  <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND/mois</span>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-medium">
                   Scolaire &amp; Notes + Finance &amp; Paiements. Élèves et utilisateurs illimités, support 7j/7.
@@ -1617,7 +1673,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     Base + {addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''}
                   </div>
                   <div className="text-[11px] font-bold text-[#257C86]">
-                    {billingCycle === 'monthly' ? monthlyPrice : annualMonthly.toFixed(0)} TND/mois
+                    {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)} TND/mois
                     {billingCycle === 'annual' && <span className="text-slate-400"> · annuel</span>}
                   </div>
                 </div>
