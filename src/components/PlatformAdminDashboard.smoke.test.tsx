@@ -843,9 +843,11 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
 
     fireEvent.click(review);
 
-    // La modale reprend la demande : plan Growth / mensuel présélectionnés.
+    // La modale affiche la demande en lecture seule : plan Growth / mensuel, non modifiables.
     await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
-    expect((screen.getByTitle('Plan du centre') as HTMLSelectElement).value).toBe('growth');
+    await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
+    expect(screen.getByTestId('review-apply-cycle').textContent).toBe('Mensuel');
+    expect(screen.queryByTitle('Plan du centre')).toBeNull();
   });
 
   it('accept applies the plan through the billing engine then records the decision', async () => {

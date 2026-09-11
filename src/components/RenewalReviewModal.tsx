@@ -12,7 +12,6 @@ import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 
 // ─── Catalogue & helpers — same values as Plans & factures ──────────────────
-const BASE_MODULE_KEYS = ['scolaire', 'finance'];
 const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'scolaire', label: 'Scolaire' },
@@ -28,11 +27,7 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'studentTimeSheets', label: 'Jd. Horaires' },
   { key: 'staff', label: 'Personnel' },
 ];
-const ALL_MODULE_KEYS = ALL_MODULES.map(m => m.key);
-const BASIC_MODULE_KEYS = [...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY];
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
-const isBaseModule = (key: string) =>
-  (BASE_MODULE_KEYS as string[]).includes(key) || key === BUNDLED_MODULE_KEY;
 
 function normalizeCenterModules(modules?: string[] | null): string[] {
   const set = new Set(['scolaire', 'finance', 'studentTimeSheets', ...(Array.isArray(modules) ? modules : [])]);
@@ -124,7 +119,6 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [view, setView] = useState<CenterPlansView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -245,97 +239,43 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
   const extendsSubscription = !hasLiveWindow || billingCycleChanged || decision.kind === 'renewal' || isPureRenewalExtension;
 
-  const handleDraftPlanChange = (plan: string) => {
-    setDraft(d => ({ ...d, plan }));
-    if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
-    if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
-  };
-
-  const toggleDraftModule = (key: string) => {
-    if (isBaseModule(key)) return;
-    setEnabledModules(current => current.includes(key)
-      ? current.filter(moduleKey => moduleKey !== key)
-      : [...current, key]);
-  };
-
   const planTitle = view ? (PLAN_LABEL[view.center.plan] || view.center.plan || 'Aucun plan') : '—';
 
-  const renderFields = () => (
+  /** Read-only recap of the requested plan/cycle/modules — the platform applies
+   *  the center's request as-is (the offer REPLACES the current plan). */
+  const renderRequestedPlan = () => (
     <div className="space-y-3">
       <div className="grid sm:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Plan</label>
-          <select
-            title="Plan du centre"
-            value={draft.plan}
-            onChange={e => handleDraftPlanChange(e.target.value)}
-            className={`${fieldCls} cursor-pointer`}
-          >
-            <option value="basic">Basic</option>
-            <option value="growth">Growth</option>
-            <option value="pro">Pro</option>
-            <option value="custom">Custom</option>
-          </select>
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Offre demandée</span>
+          <span data-testid="review-apply-plan" className="text-sm font-black text-slate-900">
+            {PLAN_LABEL[draft.plan] || draft.plan}
+          </span>
         </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Cycle</label>
-          <select
-            value={draft.billingCycle}
-            onChange={e => setDraft(d => ({ ...d, billingCycle: e.target.value as 'monthly' | 'annual' }))}
-            className={`${fieldCls} cursor-pointer`}
-          >
-            <option value="monthly">Mensuel</option>
-            <option value="annual">Annuel — 20 % de remise</option>
-          </select>
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Cycle demandé</span>
+          <span data-testid="review-apply-cycle" className="text-sm font-black text-slate-900">
+            {draft.billingCycle === 'annual' ? 'Annuel — 20 % de remise' : 'Mensuel'}
+          </span>
         </div>
-        {draft.plan === 'custom' ? (
-          <div>
-            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Tarif mensuel (TND)</label>
-            <input type="number" min="0" step="0.01" value={draft.monthlyPrice}
-              onChange={e => setDraft(d => ({ ...d, monthlyPrice: e.target.value }))} className={fieldCls} />
-          </div>
-        ) : (
-          <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Tarif {draft.billingCycle === 'annual' ? 'annuel' : 'mensuel'} calculé</span>
-            <span className="text-sm font-black text-[#257C86]">
-              {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'TND/an' : 'TND/mois'}
-            </span>
-          </div>
-        )}
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Tarif {draft.billingCycle === 'annual' ? 'annuel' : 'mensuel'} calculé</span>
+          <span data-testid="review-apply-tariff" className="text-sm font-black text-[#257C86]">
+            {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'TND/an' : 'TND/mois'}
+          </span>
+        </div>
       </div>
 
-      {/* Modules — sélectionnables pour Growth (Pro = tout, Basic = base) */}
-      {draft.plan === 'growth' && (
-        <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Modules à activer</p>
-          <div className="flex flex-wrap gap-1.5">
-            {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY).map(module => {
-              const selected = enabledModules.includes(module.key);
-              return (
-                <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}
-                  className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'}`}>
-                  {selected && <Check className="h-3 w-3" />} {module.label}
-                </button>
-              );
-            })}
-          </div>
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Modules demandés</p>
+        <div data-testid="review-apply-modules" className="flex flex-wrap gap-1.5">
+          {enabledModules.map(key => (
+            <span key={key} className="text-[10px] font-bold px-2.5 py-1.5 rounded-xl bg-[#257C86] text-white border border-[#257C86] inline-flex items-center gap-1">
+              {MODULE_LABEL(key)}
+            </span>
+          ))}
         </div>
-      )}
-      {draft.plan === 'pro' && (
-        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Pro : tous les modules sont activés automatiquement.
-        </p>
-      )}
-      {draft.plan === 'basic' && (
-        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Basic : Scolaire + Finance (+ Jd. Horaires offert).
-        </p>
-      )}
-      {draft.plan === 'custom' && (
-        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Custom : tarif manuel — les modules restent ceux du centre sauf modification via « Centres &amp; Abonnements ».
-        </p>
-      )}
+      </div>
     </div>
   );
 
@@ -461,7 +401,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     ? 'Activer l’abonnement'
     : !hasLiveWindow
       ? 'Nouvel abonnement — la période repart d’aujourd’hui'
-      : 'Modifier le plan en cours';
+      : 'Remplacer le plan en cours';
 
   const requestedModules = useMemo(
     () => normalizeCenterModules(request.requestedModules),
@@ -485,7 +425,6 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             <p className="text-[11px] font-bold text-slate-400 truncate">
               {request.centerName || request.centerId}
               {' · '}demande du {fmtDate(request.createdAt)}
-              {request.effectiveAt ? ` · effet souhaité : ${fmtDate(request.effectiveAt)}` : ''}
             </p>
           </div>
           <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
@@ -598,11 +537,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               )}
             </div>
 
-            {/* ── Offre à appliquer (pré-remplie depuis la demande) ── */}
+            {/* ── Offre à appliquer (demande du centre, affichée seule — non modifiable) ── */}
             {!isDecided && (
               <div className="rounded-2xl border-2 p-4 space-y-3 border-[#257C86]/20 bg-[#257C86]/[0.04]">
                 <p className="text-xs font-black text-slate-700">{formTitle}</p>
-                {renderFields()}
+                {renderRequestedPlan()}
 
                 {/* Mid-period consequence — settlement (difference) vs schedule */}
                 {midPeriod && decision.kind !== 'mid_period_same_price' && (
