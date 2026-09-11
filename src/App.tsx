@@ -1098,6 +1098,13 @@ export default function App() {
                   settings={settings}
                   centerType={currentCenter?.centerType}
                   isModuleAllowed={hasCenterModule}
+                  subscription={currentCenter ? {
+                    status: currentCenter.status,
+                    plan: currentCenter.plan,
+                    trialEndsAt: currentCenter.trialEndsAt,
+                    subscriptionEndsAt: currentCenter.subscriptionEndsAt,
+                    billingCycle: currentCenter.billingCycle,
+                  } : null}
                 />
               )}
 
