@@ -1091,3 +1091,43 @@ export function generateReceiptNumber(students: Student[], prefix: string): stri
   }
   return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }
+
+// ─── Demandes de renouvellement (migration 0033) ──────────────────────────
+// Un centre demande soit le renouvellement de son offre actuelle (appliqué à
+// la fin de la période en cours), soit un passage à une offre supérieure
+// (Basic → Growth → Pro), appliqué dès l'acceptation par la plateforme.
+
+export type RenewalRequestKind = 'renewal' | 'upgrade';
+export type RenewalRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface RenewalRequest {
+  id: string;
+  centerId: string;
+  centerName?: string;
+  kind: RenewalRequestKind;
+  currentPlan: string;
+  currentModules: string[];
+  requestedPlan: string;
+  requestedModules: string[];
+  billingCycle: 'monthly' | 'annual';
+  amount: number | null;
+  status: RenewalRequestStatus;
+  /** Date à laquelle la demande devrait prendre effet. */
+  effectiveAt: number | null;
+  note: string;
+  decisionNote: string;
+  decidedBy: string;
+  decidedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Ligne de l'historique des plans d'un centre (table center_plan_history). */
+export interface PlanHistoryEntry {
+  id: string;
+  action: string;
+  details: string;
+  amount: number | null;
+  invoiceNumber: string | null;
+  createdAt: number;
+}
