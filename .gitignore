@@ -15,3 +15,4 @@ logs/
 test-results/
 playwright-report/
 release/
+.dev.vars*

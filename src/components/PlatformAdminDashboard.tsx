@@ -29,6 +29,8 @@ const RENEWAL_STATUS_LABEL: Record<string, string> = {
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
+import { useLiveSync, LIVE_SYNC_INTERVAL_MS } from '../hooks/useLiveSync';
+import { usePubNubSync } from '../hooks/usePubNubSync';
 import icon from '../assets/icon.png';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -2445,13 +2447,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   }, [page, loadAdvertisements]);
 
   // ── Demandes de renouvellement (migration 0033) ──────────────────────────
-  const loadRenewals = useCallback(async () => {
+  /** Recharge les demandes ; renvoie la liste fraîche ([] si échec, déjà toasté). */
+  const loadRenewals = useCallback(async (): Promise<RenewalRequest[]> => {
     setRenewalsLoading(true);
     try {
       const data = await fetchRenewalRequestsApi();
-      setRenewalRequests(data.requests || []);
+      const list = data.requests || [];
+      setRenewalRequests(list);
+      return list;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur de chargement des demandes');
+      return [];
     } finally {
       setRenewalsLoading(false);
     }
@@ -2493,6 +2499,33 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   }, [loadRenewals, load]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Temps réel (PubNub) ──────────────────────────────────────────────────
+  // Comble le manque de synchro live du tableau de bord plateforme : un
+  // signal « refetch » sur le canal `platform` relance les MÊMES handlers de
+  // chargement (le payload poussé n'est jamais lu) et une nouvelle demande
+  // en attente déclenche un toast. Clés absentes, grant refusé ou déconnexion
+  // → `fallback` : un polling léger prend automatiquement le relais avec le
+  // même handler (jusqu'ici le dashboard n'avait AUCUNE synchro live).
+  const renewalRequestsRef = useRef<RenewalRequest[]>([]);
+  renewalRequestsRef.current = renewalRequests;
+
+  const syncLivePlatform = useCallback(async () => {
+    const prevPendingIds = new Set(
+      renewalRequestsRef.current.filter(r => r.status === 'pending').map(r => r.id)
+    );
+    const [list] = await Promise.all([loadRenewals(), load()]);
+    const incoming = list.filter(r => r.status === 'pending' && !prevPendingIds.has(r.id));
+    if (incoming.length > 0) {
+      const last = incoming[incoming.length - 1];
+      toast.info(
+        `Nouvelle demande de renouvellement${last.centerName ? ` — ${last.centerName}` : ''} — onglet « Renouvellements ».`
+      );
+    }
+  }, [loadRenewals, load, toast]);
+
+  const platformRealtime = usePubNubSync(true, syncLivePlatform);
+  useLiveSync(platformRealtime !== 'active', syncLivePlatform, LIVE_SYNC_INTERVAL_MS);
 
   // Reset filters when switching page
   useEffect(() => {

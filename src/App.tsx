@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
@@ -116,6 +116,7 @@ import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
 import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from './hooks/useLiveSync';
+import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
 
 
@@ -193,9 +194,10 @@ export default function App() {
 
   // ── Live subscription sync (center sessions) ──
   // The platform may accept a renewal / plan-change request at any moment.
-  // The tenant center row is re-checked live (poll + tab focus) and any new
-  // plan / modules / status / expiry is pushed into state with a toast, so
-  // the center sees it without refreshing the page.
+  // PubNub pushes "refetch" signals onto `center.{centerId}`; this SAME
+  // handler serves both the realtime path and the polling fallback
+  // (useLiveSync) used whenever PubNub is unavailable — the pushed payload is
+  // never trusted, only freshly fetched state is compared and applied.
   const centerBaselineRef = useRef<string | null>(null);
   // Fast cadence while one of the center's requests is still pending, so a
   // platform decision lands within seconds; slow cadence otherwise.
@@ -205,37 +207,48 @@ export default function App() {
     centerBaselineRef.current = null;
     setCenterSyncFast(false);
   }, [currentUser?.email]);
-  useLiveSync(
-    !!currentUser && !isPlatformSuperAdmin,
-    async () => {
-      if (!currentUser || isPlatformSuperAdmin) return;
-      try {
-        const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
-        const fresh = (centers || [])[0] ?? null;
-        if (!fresh) return;
-        setCenterSyncFast((renewal.requests || []).some(r => r.status === 'pending'));
-        const snap = subscriptionSnapshot(fresh);
-        const known = centerBaselineRef.current
-          ?? (currentCenter ? subscriptionSnapshot(currentCenter) : null);
-        centerBaselineRef.current = snap;
-        if (known === null) {
-          // First sight of this session with no local center: adopt silently.
-          if (!currentCenter) setCurrentCenter(fresh);
-          return;
-        }
-        if (known !== snap) {
-          setCurrentCenter(fresh);
-          toastRef.current.success('Votre abonnement a été mis à jour par la plateforme.');
-        }
-      } catch (err) {
-        if (err instanceof UnauthorizedError) {
-          // Session expired mid-session — force re-login.
-          setCurrentUser(null);
-          clearLocalSession();
-        }
-        // Network/D1 hiccup: stay silent, the next tick retries.
+  const syncCenterSubscription = useCallback(async () => {
+    if (!currentUser || isPlatformSuperAdmin) return;
+    try {
+      const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
+      const fresh = (centers || [])[0] ?? null;
+      if (!fresh) return;
+      setCenterSyncFast((renewal.requests || []).some(r => r.status === 'pending'));
+      const snap = subscriptionSnapshot(fresh);
+      const known = centerBaselineRef.current
+        ?? (currentCenter ? subscriptionSnapshot(currentCenter) : null);
+      centerBaselineRef.current = snap;
+      if (known === null) {
+        // First sight of this session with no local center: adopt silently.
+        if (!currentCenter) setCurrentCenter(fresh);
+        return;
       }
-    },
+      if (known !== snap) {
+        setCurrentCenter(fresh);
+        toastRef.current.success('Votre abonnement a été mis à jour par la plateforme.');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        // Session expired mid-session — force re-login.
+        setCurrentUser(null);
+        clearLocalSession();
+      }
+      // Network/D1 hiccup: stay silent, the next tick retries.
+    }
+  }, [currentUser, isPlatformSuperAdmin, currentCenter]);
+
+  // PubNub realtime — while it is `active` the polling below pauses, so a
+  // decision lands in ~2 s with zero polling traffic; any PubNub failure
+  // (missing keys, grant refused, disconnect) flips the state back and
+  // polling resumes exactly as before.
+  const centerRealtime = usePubNubSync(
+    !!currentUser && !isPlatformSuperAdmin,
+    syncCenterSubscription,
+    currentUser?.email
+  );
+  useLiveSync(
+    !!currentUser && !isPlatformSuperAdmin && centerRealtime !== 'active',
+    syncCenterSubscription,
     centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
 

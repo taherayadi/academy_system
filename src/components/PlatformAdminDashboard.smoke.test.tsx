@@ -534,13 +534,18 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
 describe('PlatformAdminDashboard — Center cards', () => {
   it('a trial card no longer shows the amber « +14 jours d’essai » shortcut (handled in Plans & factures)', async () => {
-    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+    // StrictMode invoque deux fois l'effet de chargement : la liste est
+    // mise en file deux fois pour que la 2e charge ne l'écrase pas avec [].
+    const trialCenters = [{
       id: 'ct', name: 'Centre Beta', slug: 'beta', status: 'trial', plan: 'starter',
       monthlyPrice: 0, billingCycle: 'monthly', trialEndsAt: Date.now() + 5 * 86400000,
       subscriptionEndsAt: null, enabledModules: [], studentCount: 2,
       adminEmail: 'b@b.tn', phoneNumber: '22222222', locationCity: 'Sousse',
       centerType: 'jardin', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
-    }]);
+    }];
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(trialCenters)
+      .mockResolvedValueOnce(trialCenters);
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Beta')).toBeTruthy());
 

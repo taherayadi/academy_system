@@ -4,6 +4,7 @@ import {
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
 } from './planLogic';
 import { logPlanHistory } from './_planHistory';
+import { publishOnResponse } from './_pubnub';
 
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
@@ -376,7 +377,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   }
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
@@ -572,6 +574,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           + (offerDays > 0 ? ` après ${offerDays} j offerts.` : '.'),
     });
 
+    // Signal temps réel (fire-and-forget) — plateforme + canal du centre.
+    publishOnResponse(context, env, ['center.' + id, 'platform'], {
+      type: 'refetch',
+      topic: 'center_created',
+      centerId: id,
+      at: Date.now(),
+    });
+
     return json({
       success: true,
       centerId: id,
@@ -588,7 +598,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   }
 };
 
-export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
@@ -641,6 +652,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       const res = await env.DB.prepare(
         `UPDATE center_plan_schedules SET status = 'cancelled', applied_at = NULL WHERE center_id = ? AND status = 'pending'`
       ).bind(id).run();
+      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({ success: true, planChange: { mode: 'schedule_cancelled', cancelled: (res.meta.changes || 0) > 0 } });
     }
 
@@ -706,6 +718,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         await env.DB.prepare(`UPDATE center_settings SET ${scheduleSettingsUpdates.join(', ')} WHERE center_id = ?`).bind(...scheduleSettingsBinds).run();
       }
 
+      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({
         success: true,
         planChange: {
@@ -1085,6 +1098,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       await logPlanHistory(env.DB, { centerId: id, ...entry });
     }
 
+    // Platform edit published to the center's channel (fire-and-forget).
+    publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
     return json({ success: true, planChange: planChangeResponse });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث المركز.' }, 500);

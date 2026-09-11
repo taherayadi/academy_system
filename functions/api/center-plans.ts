@@ -1,6 +1,7 @@
 import { Env, json, readBody, validateSession } from './_lib';
 import { round2, planLabel, BillingCycle } from './planLogic';
 import { logPlanHistory, fetchPlanHistory } from './_planHistory';
+import { publishOnResponse } from './_pubnub';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
 // Editing a center's basic info must NEVER touch its plan or invoices.
@@ -158,7 +159,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 };
 
 // POST /api/center-plans — plan operations for one center
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     if (!(await isAuthorized(env, request))) return json({ error: 'غير مصرح.' }, 403);
 
@@ -177,6 +179,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const existingEnd = Number(center.subscription_ends_at) || 0;
     const hasLiveWindow = center.status === 'active' && existingEnd > now;
 
+    // Signal temps réel pour le centre (et la plateforme) après chaque action
+    // qui modifie son abonnement — fire-and-forget, jamais bloquant.
+    const signalCenterUpdated = (action: string) => publishOnResponse(
+      context,
+      env,
+      ['center.' + centerId, 'platform'],
+      { type: 'refetch', topic: 'center_plan_updated', centerId, action, at: Date.now() }
+    );
+
     if (action === 'remove-schedule') {
       const scheduleId = String(body.scheduleId || '').trim();
       if (!scheduleId) return json({ error: 'معرف الخطة المبرمجة مطلوب.' }, 400);
@@ -186,6 +197,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       await logPlanHistory(env.DB, {
         centerId, action: 'schedule_cancelled', details: 'Plan programmé annulé par l’administrateur.',
       });
+      signalCenterUpdated('remove-schedule');
       return json({ success: true, mode: 'schedule_cancelled' });
     }
 
@@ -261,6 +273,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         centerId, action: 'trial_added',
         details: `Jours d’essai offerts (${days} jour(s), ${prepend ? 'au début de la période' : 'en fin de période'}) — ${message}`,
       });
+      signalCenterUpdated('add-trial');
       return json({ success: true, mode: 'trial_added', placement: prepend ? 'start' : 'end', days, subscriptionEndsAt: newEnd, message });
     }
 
@@ -286,6 +299,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         centerId, action: 'plan_removed',
         details: `Abonnement supprimé — factures en attente annulées, centre marqué expiré (${fmtFr(now)}).`,
       });
+      signalCenterUpdated('remove-plan');
       return json({ success: true, mode: 'plan_removed' });
     }
 
@@ -347,6 +361,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
               + (applyAt ? ` pour le ${fmtFr(applyAt)} (fin de période en cours).` : ' pour la prochaine reconduction.')
               + (windowPaid ? ' Période déjà payée : aucune facture payée n’est modifiée.' : ''),
           });
+          signalCenterUpdated('set-plan');
           return json({
             success: true,
             mode: 'scheduled',
@@ -418,6 +433,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           + (periodAmount > 0 ? ` · ${periodAmount.toFixed(2)} TND` : ' · gratuit')
           + (invoice ? ` · facture ${invoice.invoiceNumber} en attente` : (center.status === 'active' ? ' · factures en attente annulées' : '')),
       });
+
+      signalCenterUpdated('set-plan');
 
       return json({
         success: true,

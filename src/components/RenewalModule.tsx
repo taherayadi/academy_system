@@ -13,6 +13,7 @@ import {
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
 import { useLiveSync, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from '../hooks/useLiveSync';
+import { usePubNubSync } from '../hooks/usePubNubSync';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
@@ -132,8 +133,12 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   // Fast cadence while one of my requests is still pending (the decision
   // lands within seconds), slow cadence otherwise.
   const hasPendingRequest = requests.some(r => r.status === 'pending');
+  // PubNub realtime — when connected (`active`) the polling above pauses and
+  // the SAME syncRequests handler runs on each "refetch" signal; any PubNub
+  // failure resumes the polling cadence automatically.
+  const realtimeState = usePubNubSync(true, syncRequests);
   useLiveSync(
-    true,
+    realtimeState !== 'active',
     syncRequests,
     hasPendingRequest ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
