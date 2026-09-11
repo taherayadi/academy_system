@@ -2278,7 +2278,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 );
               })}
             </div>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Chaque position cochée affiche la pub à ses dimensions exactes&nbsp;: bannière <span className="font-black text-slate-500">728×90</span> en haut, rectangle <span className="font-black text-slate-500">300×250</span>, bandeau mobile <span className="font-black text-slate-500">320×50</span>, et <span className="font-black text-slate-500">Gratte-ciel</span> en bandeau vertical fixe sur la marge droite — sur la vitrine comme sur les tableaux de bord. Sans position, c’est le carrousel standard de l’emplacement.</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Chaque position cochée affiche la pub dans son format responsive&nbsp;: le <span className="font-black text-slate-500">Rectangle</span> (jusqu’à <span className="font-black text-slate-500">480×400</span>, bien plus grand que l’ancien 300×250) dans le flux des pages, et l’<span className="font-black text-slate-500">Interstitiel</span> en overlay plein écran fermable — sur mobile comme sur desktop, sur la vitrine comme sur les tableaux de bord. Sans position, c’est le carrousel standard de l’emplacement.</p>
           </div>
 
           {showCenterPicker && <div>

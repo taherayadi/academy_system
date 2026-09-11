@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AdvertisementCarousel from './AdvertisementCarousel';
-import AdvertisementSkyscraper from './AdvertisementSkyscraper';
+import AdvertisementInterstitial from './AdvertisementInterstitial';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
@@ -615,24 +615,20 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
-      {/* ─── PUBLICITÉ — formats aux dimensions exactes (gérés dans l'admin SaaS) ─── */}
+      {/* ─── PUBLICITÉ — formats responsives (gérés dans l'admin SaaS) ─── */}
       {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
           Les classes verticales vivent sur le carrousel (il rend null sans
           annonce → aucun espace fantôme sur la landing). */}
       <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
-        {/* Leaderboard 728×90 — tout en haut, desktop/tablette */}
-        <AdvertisementCarousel location="landing_page" format="leaderboard_728x90" className="mb-8 rounded-2xl shadow-lg" />
-        {/* Mobile leaderboard 320×50 — téléphones uniquement */}
-        <AdvertisementCarousel location="landing_page" format="mobile_leaderboard_320x50" className="mb-6 rounded-xl shadow-md" />
         {/* Carrousel standard (pubs sans position) */}
         <AdvertisementCarousel location="landing_page" className="mb-8 rounded-2xl shadow-xl" />
-        {/* Medium rectangle 300×250 */}
+        {/* Rectangle responsive : jusqu'à 480×400, centré, fluide sur mobile */}
         <div className="flex justify-center">
-          <AdvertisementCarousel location="landing_page" format="medium_rectangle_300x250" className="mb-10 rounded-2xl shadow-lg" />
+          <AdvertisementCarousel location="landing_page" format="rectangle" className="mb-10 w-full rounded-2xl shadow-lg" />
         </div>
       </div>
-      {/* Gratte-ciel 120×600 / 160×600 : bandeau vertical fixe dans la marge droite (grands écrans) */}
-      <AdvertisementSkyscraper location="landing_page" side="right" />
+      {/* Interstitiel : overlay responsive plein écran, fermable, une fois par session */}
+      <AdvertisementInterstitial location="landing_page" />
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">

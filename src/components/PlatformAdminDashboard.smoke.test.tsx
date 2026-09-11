@@ -718,13 +718,13 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     expect(dates.length).toBeGreaterThanOrEqual(2);
     for (const d of dates) { expect(d.getAttribute('dir')).toBe('ltr'); expect(d.className).toContain('text-left'); }
 
-    // Les quatre formats connus sont proposés.
-    const lb = screen.getByRole('button', { name: /Bannière horizontale/ });
-    const rect = screen.getByRole('button', { name: /Rectangle moyen/ });
-    expect(screen.getByRole('button', { name: /Bannière mobile/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Gratte-ciel/ })).toBeTruthy();
-    fireEvent.click(lb);
+    // Les deux formats responsives sont proposés.
+    const rect = screen.getByRole('button', { name: /^Rectangle/ });
+    const interstitial = screen.getByRole('button', { name: /Interstitiel/ });
+    expect(rect).toBeTruthy();
+    expect(interstitial).toBeTruthy();
     fireEvent.click(rect);
+    fireEvent.click(interstitial);
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Soldes' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/s.jpg' } });
@@ -732,7 +732,7 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
 
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
-      positions: ['leaderboard_728x90', 'medium_rectangle_300x250'],
+      positions: ['rectangle', 'interstitial'],
     })));
   });
 

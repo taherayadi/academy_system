@@ -70,12 +70,17 @@ export type AdvertisementLocation =
   | 'both' // visible on the landing page AND in the selected centers' dashboards
   | string; // Allow custom locations
 
-// Positions d'affichage (formats type IAB) — une annonce peut en cumuler plusieurs.
+/**
+ * Positions d'affichage — une annonce peut en cumuler plusieurs.
+ *
+ * Depuis la migration 0032, les formats IAB figés (728×90, 300×250, 320×50,
+ * 160×600) sont remplacés par deux formats responsives :
+ *   • rectangle    — bloc fluide, nettement plus grand que l'ancien 300×250
+ *   • interstitial — overlay plein écran (mobile compris), fermable
+ */
 export type AdPositionId =
-  | 'leaderboard_728x90'
-  | 'medium_rectangle_300x250'
-  | 'mobile_leaderboard_320x50'
-  | 'skyscraper_160x600';
+  | 'rectangle'
+  | 'interstitial';
 
 export interface AdPositionSpec {
   id: AdPositionId;
@@ -85,26 +90,18 @@ export interface AdPositionSpec {
 }
 
 export const AD_POSITION_SPECS: AdPositionSpec[] = [
-  { id: 'leaderboard_728x90', label: 'Bannière horizontale', size: '728×90', hint: 'Leaderboard — large bandeau tout en haut des pages desktop.' },
-  { id: 'medium_rectangle_300x250', label: 'Rectangle moyen', size: '300×250', hint: 'Medium Rectangle — format polyvalent, flux de contenu et barres latérales.' },
-  { id: 'mobile_leaderboard_320x50', label: 'Bannière mobile', size: '320×50', hint: 'Mobile Leaderboard — bandeau compact pour téléphone et tablette.' },
-  { id: 'skyscraper_160x600', label: 'Gratte-ciel', size: '120×600 / 160×600', hint: 'Skyscraper — bannière verticale haute pour les marges latérales.' },
+  { id: 'rectangle', label: 'Rectangle', size: '480×400 max', hint: 'Rectangle responsive — grand format fluide (jusqu’à 480 px de large, bien plus grand que l’ancien 300×250), dans le flux des pages.' },
+  { id: 'interstitial', label: 'Interstitiel', size: 'Plein écran', hint: 'Interstitiel — overlay responsive plein écran, fermable en un clic, avec compte à rebours.' },
 ];
 
 export const AD_POSITION_IDS: string[] = AD_POSITION_SPECS.map(s => s.id);
 
-// The skyscraper is rendered as its own fixed side banner (landing page &
-// center dashboards) instead of in the standard carousel.
-export const SKYSCRAPER_POSITION_ID = 'skyscraper_160x600';
+// L'interstitiel se rend en overlay plein écran (vitrine + tableaux de bord)
+// au lieu du carrousel standard.
+export const INTERSTITIAL_POSITION_ID = 'interstitial';
 
-export function hasSkyscraperPosition(positions?: string[]): boolean {
-  return (positions || []).includes(SKYSCRAPER_POSITION_ID);
-}
-
-/** @deprecated règle remplacée : TOUTE pub positionnée quitte le carrousel standard. */
-export function isSkyscraperOnly(positions?: string[]): boolean {
-  const p = positions || [];
-  return p.length > 0 && p.every(id => id === SKYSCRAPER_POSITION_ID);
+export function hasInterstitialPosition(positions?: string[]): boolean {
+  return (positions || []).includes(INTERSTITIAL_POSITION_ID);
 }
 
 export function adPositionLabel(id: string): string {
