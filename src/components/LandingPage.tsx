@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AdvertisementCarousel from './AdvertisementCarousel';
-import AdvertisementSkyscraper from './AdvertisementSkyscraper';
+import AdvertisementInterstitial from './AdvertisementInterstitial';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
+import { ALL_MODULES, ADDON_MODULES, BASE_MODULES, BASE_KEYS, modulesPrice } from '../utils/pricing';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
   GraduationCap,
@@ -42,28 +43,8 @@ interface LandingPageProps {
   centerName?: string;
 }
 
-// ─── Module catalogue (prices are loaded from Platform Admin) ────────────────
-const BASE_KEYS = ['scolaire', 'studentTimeSheets', 'finance'] as const;
-
-const ALL_MODULES = [
-  { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
-  { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
-  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
-  { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, description: 'Planning hebdomadaire, présences, horaires.' },
-  { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, description: 'Cours 1-à-1, tarification, enseignants.' },
-  { key: 'revision', label: 'Révision Examens', icon: Award, description: 'Séances de révision, groupes, présences.' },
-  { key: 'formations', label: 'Formations', icon: Sparkles, description: 'Ateliers, stages vacances, plannings.' },
-  { key: 'cantine', label: 'Cantine & Repas', icon: Utensils, description: 'Menus hebdomadaires, abonnements, pointage.' },
-  { key: 'transport', label: 'Transport Scolaire', icon: Bus, description: 'Circuits, feuilles de route, chauffeurs.' },
-  { key: 'events', label: 'Événements & Sorties', icon: Calendar, description: 'Inscriptions, sorties scolaires.' },
-  { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, description: 'Équipe, paie, pointages, congés.' }
-] as const;
-
-const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));
-const BASE_MODULES = ALL_MODULES.filter(m => (BASE_KEYS as readonly string[]).includes(m.key));
-
-const modulesPrice = (keys: readonly string[], prices: Record<string, number>) =>
-  keys.reduce((sum, key) => sum + (prices[key] || 0), 0);
+// ─── Module catalogue — shared with the center « Renouvellement » module ─────
+// (see src/utils/pricing.ts : prices are loaded from Platform Admin)
 
 // ─── Animated counter (stats band) ─────────────────────────────────
 function Counter({ to, duration = 1500 }: { to: number; duration?: number }) {
@@ -615,24 +596,20 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
-      {/* ─── PUBLICITÉ — formats aux dimensions exactes (gérés dans l'admin SaaS) ─── */}
+      {/* ─── PUBLICITÉ — formats responsives (gérés dans l'admin SaaS) ─── */}
       {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
           Les classes verticales vivent sur le carrousel (il rend null sans
           annonce → aucun espace fantôme sur la landing). */}
       <div className="mx-auto max-w-6xl px-6 sm:px-10 lg:px-16">
-        {/* Leaderboard 728×90 — tout en haut, desktop/tablette */}
-        <AdvertisementCarousel location="landing_page" format="leaderboard_728x90" className="mb-8 rounded-2xl shadow-lg" />
-        {/* Mobile leaderboard 320×50 — téléphones uniquement */}
-        <AdvertisementCarousel location="landing_page" format="mobile_leaderboard_320x50" className="mb-6 rounded-xl shadow-md" />
         {/* Carrousel standard (pubs sans position) */}
         <AdvertisementCarousel location="landing_page" className="mb-8 rounded-2xl shadow-xl" />
-        {/* Medium rectangle 300×250 */}
+        {/* Rectangle responsive : jusqu'à 480×400, centré, fluide sur mobile */}
         <div className="flex justify-center">
-          <AdvertisementCarousel location="landing_page" format="medium_rectangle_300x250" className="mb-10 rounded-2xl shadow-lg" />
+          <AdvertisementCarousel location="landing_page" format="rectangle" className="mb-10 w-full rounded-2xl shadow-lg" />
         </div>
       </div>
-      {/* Gratte-ciel 120×600 / 160×600 : bandeau vertical fixe dans la marge droite (grands écrans) */}
-      <AdvertisementSkyscraper location="landing_page" side="right" />
+      {/* Interstitiel : overlay responsive plein écran, fermable, une fois par session */}
+      <AdvertisementInterstitial location="landing_page" />
 
       {/* ─── MARQUEE ───────────────────────────────────────────────── */}
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">

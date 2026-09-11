@@ -16,9 +16,15 @@ import {
   fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, PlanChangeOutcome,
   fetchCenterPlansApi, centerPlanActionApi, CenterPlansView,
   fetchAdvertisementsApi, createAdvertisementApi, updateAdvertisementApi, deleteAdvertisementApi,
-  uploadMultipleImagesApi
+  uploadMultipleImagesApi,
+  fetchRenewalRequestsApi, decideRenewalRequestApi
 } from '../api';
-import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel } from '../types';
+import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
+import { planLabel } from '../utils/pricing';
+
+const RENEWAL_STATUS_LABEL: Record<string, string> = {
+  trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
+};
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -59,7 +65,7 @@ function normalizeCenterModules(modules?: string[] | null): string[] {
   ]));
 }
 
-export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing' | 'advertisements';
+export type PlatformAdminPage = 'overview' | 'centers' | 'requests' | 'finance' | 'pricing' | 'advertisements' | 'renewals';
 
 interface PlatformAdminDashboardProps {
   /** Page courante — pilotée par le menu de l'application (App.tsx) */
@@ -125,6 +131,11 @@ function titleCaseName(value?: string): string {
     .split(/([\s-])/)
     .map(p => (p ? p.charAt(0).toUpperCase() + p.slice(1) : p))
     .join('');
+}
+
+// Recherche insensible à la casse et aux accents (« école » trouve « École »).
+function normalizeText(value?: string): string {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
@@ -2107,6 +2118,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   const [isActive, setIsActive] = useState(ad ? !!ad.isActive : true);
   const [isPublished, setIsPublished] = useState(ad ? !!ad.isPublished : false);
   const [centerIds, setCenterIds] = useState<string[]>(ad?.centerIds || []);
+  const [centerQuery, setCenterQuery] = useState('');
   const [positions, setPositions] = useState<string[]>(ad?.positions || []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2115,6 +2127,14 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   // Une pub de vitrine ne cible aucun centre ; tableau de bord (+ both) en exigent un.
   const centersRequired = locationSel === 'center_admin' || locationSel === 'both';
   const showCenterPicker = locationSel !== 'landing_page';
+
+  // Filtre par nom : avec des dizaines de centres, la liste défilante seule
+  // est inutilisable. La sélection déjà faite n'est jamais perdue en filtrant.
+  const filteredCenters = useMemo(() => {
+    const q = normalizeText(centerQuery.trim());
+    if (!q) return centers;
+    return centers.filter(c => normalizeText((c as any).name).includes(q));
+  }, [centers, centerQuery]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -2278,7 +2298,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 );
               })}
             </div>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Chaque position cochée affiche la pub à ses dimensions exactes&nbsp;: bannière <span className="font-black text-slate-500">728×90</span> en haut, rectangle <span className="font-black text-slate-500">300×250</span>, bandeau mobile <span className="font-black text-slate-500">320×50</span>, et <span className="font-black text-slate-500">Gratte-ciel</span> en bandeau vertical fixe sur la marge droite — sur la vitrine comme sur les tableaux de bord. Sans position, c’est le carrousel standard de l’emplacement.</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">Chaque position cochée affiche la pub dans son format responsive&nbsp;: le <span className="font-black text-slate-500">Rectangle</span> occupe toute la largeur disponible (<span className="font-black text-slate-500">jusqu’à 1100 px</span>, hauteur fluide 220 à 420 px — bien plus grand que l’ancien 300×250) dans le flux des pages, et l’<span className="font-black text-slate-500">Interstitiel</span> en overlay plein écran fermable — sur mobile comme sur desktop, sur la vitrine comme sur les tableaux de bord. Sans position, c’est le carrousel standard de l’emplacement.</p>
           </div>
 
           {showCenterPicker && <div>
@@ -2288,15 +2308,37 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             {centers.length === 0 ? (
               <p className="text-[11px] font-semibold text-slate-400">Aucun centre sur la plateforme.</p>
             ) : (
-              <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
-                {centers.map(c => (
-                  <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
-                    <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-[#257C86]" />
-                    <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
-                    <span className="ml-auto text-[9px] font-black text-slate-400">{c.status}</span>
-                  </label>
-                ))}
-              </div>
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    id="ad-center-search"
+                    value={centerQuery}
+                    onChange={e => setCenterQuery(e.target.value)}
+                    placeholder="Rechercher un centre par nom…"
+                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
+                  />
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
+                  {filteredCenters.length === 0 ? (
+                    <p className="px-3 py-2.5 text-[11px] font-semibold text-slate-400">
+                      Aucun centre ne correspond à « {centerQuery.trim()} ».
+                    </p>
+                  ) : filteredCenters.map(c => (
+                    <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                      <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-[#257C86]" />
+                      <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
+                      <span className="ml-auto text-[9px] font-black text-slate-400">{c.status}</span>
+                    </label>
+                  ))}
+                </div>
+                {centerQuery.trim() !== '' && filteredCenters.length > 0 && (
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                    {filteredCenters.length} centre{filteredCenters.length > 1 ? 's' : ''} sur {centers.length}
+                    {centerIds.length > 0 ? ` · ${centerIds.length} sélectionné${centerIds.length > 1 ? 's' : ''}` : ''}
+                  </p>
+                )}
+              </>
             )}
           </div>}
           {!showCenterPicker && (
@@ -2363,6 +2405,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
   // Advertisements
   const [advertisements, setAdvertisements] = useState<PlatformAdvertisement[]>([]);
+  // Demandes de renouvellement / changement d'offre envoyées par les centres.
+  const [renewalRequests, setRenewalRequests] = useState<RenewalRequest[]>([]);
+  const [renewalsLoading, setRenewalsLoading] = useState(false);
+  const [renewalDeciding, setRenewalDeciding] = useState<string | null>(null);
+  const [renewalNote, setRenewalNote] = useState<Record<string, string>>({});
   const [adsLoading, setAdsLoading] = useState(false);
   const [adsPage, setAdsPage] = useState(1);
   const [adsStatusFilter, setAdsStatusFilter] = useState<'all' | AdStatus>('all');
@@ -2387,6 +2434,42 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       loadAdvertisements();
     }
   }, [page, loadAdvertisements]);
+
+  // ── Demandes de renouvellement (migration 0033) ──────────────────────────
+  const loadRenewals = useCallback(async () => {
+    setRenewalsLoading(true);
+    try {
+      const data = await fetchRenewalRequestsApi();
+      setRenewalRequests(data.requests || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur de chargement des demandes');
+    } finally {
+      setRenewalsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (page === 'renewals') {
+      loadRenewals();
+    }
+  }, [page, loadRenewals]);
+
+  const pendingRenewals = renewalRequests.filter(r => r.status === 'pending').length;
+
+  const decideRenewal = async (id: string, status: 'approved' | 'rejected') => {
+    setRenewalDeciding(id);
+    try {
+      await decideRenewalRequestApi(id, status, renewalNote[id] || '');
+      toast.success(status === 'approved' ? 'Demande acceptée — le plan a été appliqué.' : 'Demande refusée.');
+      await loadRenewals();
+      // Le centre peut avoir changé d'offre : rafraîchit la liste des centres.
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors du traitement');
+    } finally {
+      setRenewalDeciding(null);
+    }
+  };
 
   const visibleAds = adsStatusFilter === 'all'
     ? advertisements
@@ -2826,6 +2909,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     finance: { title: 'Finance SaaS', sub: 'Facturation et revenus de la plateforme' },
     pricing: { title: 'Tarifs & Modules', sub: `Année scolaire ${priceYear}` },
     advertisements: { title: 'Publicité', sub: 'Bannières et carrousels des centres et de la vitrine' },
+    renewals: { title: 'Demandes de renouvellement', sub: `${pendingRenewals} demande${pendingRenewals > 1 ? 's' : ''} en attente` },
   };
 
   const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
@@ -3933,6 +4017,120 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
                 <ChevronRight className="h-4 w-4" />
               </button>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ─── Renewal Requests Page ───────────────────────────────────────── */}
+      {page === 'renewals' && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-2xl font-black text-slate-800">Demandes de renouvellement</h2>
+              {!renewalsLoading && (
+                <span className="px-3 py-1 bg-slate-100 border border-slate-200 rounded-full text-sm font-black text-slate-600">
+                  {renewalRequests.length}
+                </span>
+              )}
+              {pendingRenewals > 0 && (
+                <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-sm font-black">
+                  {pendingRenewals} en attente
+                </span>
+              )}
+            </div>
+            <button onClick={loadRenewals} title="Actualiser"
+              className="p-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
+              <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {renewalsLoading ? (
+            <p className="flex items-center gap-2 text-sm font-bold text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin text-[#257C86]" /> Chargement…
+            </p>
+          ) : renewalRequests.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
+              <p className="text-sm font-black text-slate-500">Aucune demande</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Les centres soumettent ici leurs demandes de renouvellement et de changement d’offre.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {renewalRequests.map(r => (
+                <div key={r.id} className={`rounded-2xl border-2 bg-white p-4 ${r.status === 'pending' ? 'border-amber-200' : 'border-slate-200'}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-black text-slate-900">{r.centerName || r.centerId}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                      r.kind === 'upgrade' ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20' : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {r.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                      r.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : r.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-red-50 text-red-700 border-red-200'
+                    }`}>
+                      {r.status === 'pending' ? 'En attente' : r.status === 'approved' ? 'Acceptée' : 'Refusée'}
+                    </span>
+                    <span className="ml-auto text-[10px] font-bold text-slate-400">
+                      {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
+                    <span>
+                      {r.currentStatus && (
+                        <span className="text-slate-500">{RENEWAL_STATUS_LABEL[r.currentStatus] || r.currentStatus} · </span>
+                      )}
+                      {planLabel(r.currentPlan)} <span className="text-slate-400">→</span>{' '}
+                      <span className="font-black text-[#257C86]">{planLabel(r.requestedPlan)}</span>
+                    </span>
+                    <span>{r.requestedModules.length} module{r.requestedModules.length > 1 ? 's' : ''}</span>
+                    <span>{r.billingCycle === 'annual' ? 'annuel' : 'mensuel'}</span>
+                    {r.amount !== null && <span className="font-black text-slate-900">{r.amount} TND</span>}
+                  </div>
+
+                  {r.note && (
+                    <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">« {r.note} »</p>
+                  )}
+
+                  {r.status === 'pending' ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={renewalNote[r.id] || ''}
+                        onChange={e => setRenewalNote(cur => ({ ...cur, [r.id]: e.target.value }))}
+                        placeholder="Note envoyée au centre (optionnel)"
+                        className="flex-1 min-w-[200px] border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={renewalDeciding === r.id}
+                        onClick={() => decideRenewal(r.id, 'approved')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60"
+                      >
+                        {renewalDeciding === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        Accepter
+                      </button>
+                      <button
+                        type="button"
+                        disabled={renewalDeciding === r.id}
+                        onClick={() => decideRenewal(r.id, 'rejected')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 rounded-xl transition cursor-pointer disabled:opacity-60"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Refuser
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] font-semibold text-slate-500">
+                      Traité{r.decidedBy ? ` par ${r.decidedBy}` : ''}{r.decidedAt ? ` le ${new Date(r.decidedAt).toLocaleDateString('fr-FR')}` : ''}
+                      {r.decisionNote ? ` — « ${r.decisionNote} »` : ''}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </motion.div>

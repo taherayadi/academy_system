@@ -9,20 +9,26 @@ interface AdvertisementCarouselProps {
   centerId?: string;
   className?: string;
   /**
-   * Rend une position exacte (leaderboard 728×90, rectangle 300×250,
-   * mobile 320×50) au lieu du carrousel 16:9. Les pubs SANS position
-   * alimentent le carrousel standard ; les pubs positionnées ne vivent
-   * que dans leurs créneaux aux dimensions exactes (skyscraper →
-   * bandeau latéral fixe, cf. AdvertisementSkyscraper).
+   * Rend le format « rectangle » au lieu du carrousel 16:9. Les pubs SANS
+   * position alimentent le carrousel standard ; les pubs positionnées ne
+   * vivent que dans leurs créneaux (interstitiel → overlay plein écran,
+   * cf. AdvertisementInterstitial).
    */
   format?: AdPositionId;
 }
 
-// Dimensions d'affichage par format IAB (le ratio porte la taille).
+/**
+ * Le rectangle est fluide et responsive, sans aucune dimension figée :
+ *  • largeur  — toute la place disponible, plafonnée à 1100 px (elle remplit
+ *               donc la colonne de contenu sur desktop, bien plus large que
+ *               l'ancien 300×250) ;
+ *  • hauteur  — clamp(220px, 30vw, 420px) : ~220 px sur mobile puis elle
+ *               grandit avec la fenêtre jusqu'à 420 px.
+ * Le format s'étire donc en rectangle large sur grand écran et reste compact
+ * sur téléphone, sans saut de mise en page.
+ */
 const AD_FORMAT_PRESENTATION: Record<string, { container: string; frame: string }> = {
-  leaderboard_728x90: { container: 'mx-auto w-full max-w-[728px] hidden sm:block', frame: 'aspect-[728/90]' },
-  medium_rectangle_300x250: { container: 'w-[300px]', frame: 'aspect-[300/250]' },
-  mobile_leaderboard_320x50: { container: 'mx-auto w-full max-w-[320px] sm:hidden', frame: 'aspect-[320/50]' },
+  rectangle: { container: 'mx-auto w-full max-w-[1100px]', frame: 'h-[clamp(220px,30vw,420px)]' },
 };
 
 interface Advertisement {

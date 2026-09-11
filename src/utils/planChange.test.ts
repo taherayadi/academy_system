@@ -7,6 +7,7 @@ import {
   round2,
   storagePlan,
 } from './planChange';
+import { ANNUAL_DISCOUNT, derivePlanFromModules, totalForCycle, modulesPrice } from './pricing';
 
 const start = Date.UTC(2026, 8, 14); // 14 Sep 2026
 const end = start + 30 * DAY_MS; // 14 Oct 2026
@@ -108,5 +109,32 @@ describe('planChange utils (frontend mirror)', () => {
 
   it('rounds to two decimals', () => {
     expect(round2(11.505)).toBe(11.51);
+  });
+});
+
+describe('periodAmount — cohérence avec le simulateur et la console', () => {
+  const prices: Record<string, number> = { scolaire: 50, finance: 40, etude: 30 };
+
+  it('applies the same 20 % annual discount as the renewal simulator', () => {
+    const monthly = periodAmount('basic', 'monthly', ['scolaire', 'finance'], prices);
+    expect(monthly).toBe(90);
+    // 90 × 12 = 1080, remisé de 20 % → 864. Le montant réellement facturé
+    // doit être exactement celui que le simulateur a annoncé au centre.
+    expect(periodAmount('basic', 'annual', ['scolaire', 'finance'], prices)).toBe(864);
+    expect(totalForCycle(monthly, 'annual')).toBe(864);
+    expect(ANNUAL_DISCOUNT).toBe(0.2);
+  });
+
+  it('prices the offer the simulator derives from the ticked modules', () => {
+    // Base seule → Basic ; un module de plus → Growth ; tous → Pro.
+    expect(derivePlanFromModules(['scolaire', 'finance'])).toBe('starter');
+    expect(derivePlanFromModules(['scolaire', 'finance', 'etude'])).toBe('growth');
+    expect(periodAmount('growth', 'monthly', ['scolaire', 'finance', 'etude'], prices))
+      .toBe(modulesPrice(['scolaire', 'finance', 'etude'], prices));
+  });
+
+  it('never discounts a monthly period', () => {
+    expect(periodAmount('basic', 'monthly', ['scolaire', 'finance'], prices))
+      .toBe(totalForCycle(90, 'monthly'));
   });
 });

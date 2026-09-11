@@ -1,4 +1,5 @@
 import { Env, json, readBody, validateSession } from './_lib';
+import { normalizeAdPositions } from './_adPositions';
 
 // Helper to parse JSON safely
 function parseJson<T>(value: unknown, fallback: T): T {
@@ -42,16 +43,11 @@ async function hasAdPositionsColumn(db: D1Database): Promise<boolean> {
   }
 }
 
-// Display formats (see migration 0031). Unknown ids are dropped, duplicates merged.
-const AD_POSITION_IDS = new Set([
-  'leaderboard_728x90',
-  'medium_rectangle_300x250',
-  'mobile_leaderboard_320x50',
-  'skyscraper_160x600',
-]);
+// Display formats (see migrations 0031 → 0032): the legacy IAB ids stored by
+// 0031 are mapped onto the two responsive formats, unknown ids dropped and
+// duplicates merged — see _adPositions.ts.
 function sanitizeAdPositions(raw: unknown): string[] {
-  const list = Array.isArray(raw) ? raw.map(p => String(p)) : [];
-  return Array.from(new Set(list.filter(p => AD_POSITION_IDS.has(p))));
+  return normalizeAdPositions(raw);
 }
 
 // Landing-page ads target no center; center dashboard / both placements are

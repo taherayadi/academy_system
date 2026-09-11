@@ -1,4 +1,5 @@
 import { Env, json } from '../_lib';
+import { normalizeAdPositions } from '../_adPositions';
 
 // Migration 0031 resilience: without the positions column the query skips
 // it (ads still render; every ad then behaves as a standard-placement ad).
@@ -94,7 +95,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       imageUrls: parseJson(row.image_urls, []),
       linkUrl: row.link_url || '',
       priority: Number(row.priority),
-      positions: parseJson(row.positions ?? '[]', [] as string[])
+      // Migration 0032 : les anciens formats IAB sont traduits à la volée vers
+      // `rectangle` / `interstitial` (doublons fusionnés, inconnus ignorés).
+      positions: normalizeAdPositions(parseJson(row.positions ?? '[]', [] as string[]))
     }));
 
     return json({ advertisements });

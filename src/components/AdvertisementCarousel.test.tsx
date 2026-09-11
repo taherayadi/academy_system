@@ -45,33 +45,36 @@ describe('AdvertisementCarousel — multi-image indicators', () => {
 
   it('the standard carousel only serves ads WITHOUT positions', async () => {
     (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { ...ad(['https://cdn/sky.jpg']), positions: ['skyscraper_160x600'] },
-      { ...ad(['https://cdn/mix.jpg']), positions: ['leaderboard_728x90', 'skyscraper_160x600'] },
+      { ...ad(['https://cdn/sky.jpg']), positions: ['interstitial'] },
+      { ...ad(['https://cdn/mix.jpg']), positions: ['rectangle', 'interstitial'] },
     ]);
     const { container } = render(<AdvertisementCarousel location="landing_page" />);
     await waitFor(() => expect(api.fetchActiveAdvertisementsApi).toHaveBeenCalled());
     expect(container.querySelector('img')).toBeNull(); // positionnées → créneaux dédiés
   });
 
-  it('format slots pick their own ads and render exact IAB dimensions', async () => {
+  it('the rectangle slot picks its own ads and renders a fluid, larger frame', async () => {
     const ads = [
-      { ...ad(['https://cdn/lb.jpg']), positions: ['leaderboard_728x90', 'skyscraper_160x600'] },
-      { ...ad(['https://cdn/sq.jpg']), positions: ['medium_rectangle_300x250'] },
+      { ...ad(['https://cdn/lb.jpg']), positions: ['interstitial'] },
+      { ...ad(['https://cdn/sq.jpg']), positions: ['rectangle'] },
     ];
     (api.fetchActiveAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue(ads);
 
-    const { container } = render(<AdvertisementCarousel location="landing_page" format="leaderboard_728x90" />);
-    await waitFor(() => expect(container.querySelector('img')).toBeTruthy());
-    const lbRoot = container.querySelector('div') as HTMLElement;
-    expect(lbRoot.className).toContain('max-w-[728px]'); // largeur leaderboard
-    expect(lbRoot.className).toContain('hidden');        // invisible sur mobile
-    expect(Array.from(container.querySelectorAll('div')).some(d => d.className.includes('aspect-[728/90]'))).toBe(true);
-
-    const rect = render(<AdvertisementCarousel location="center_admin" centerId="c1" format="medium_rectangle_300x250" />);
+    const rect = render(<AdvertisementCarousel location="center_admin" centerId="c1" format="rectangle" />);
     await waitFor(() => expect(rect.container.querySelector('img')).toBeTruthy());
     const rectRoot = rect.container.querySelector('div') as HTMLElement;
-    expect(rectRoot.className).toContain('w-[300px]');
-    expect(Array.from(rect.container.querySelectorAll('div')).some(d => d.className.includes('aspect-[300/250]'))).toBe(true);
+    // Fluide : toute la largeur disponible (plafonnée à 1100 px sur desktop)
+    // — jamais de dimension figée, contrairement à l'ancien 300×250.
+    expect(rectRoot.className).toContain('w-full');
+    expect(rectRoot.className).toContain('max-w-[1100px]');
+    // Hauteur pilotée par la largeur du viewport : compacte sur mobile,
+    // étirée sur grand écran (aucun ratio figé 480×400).
+    expect(Array.from(rect.container.querySelectorAll('div')).some(d => d.className.includes('h-[clamp(220px,30vw,420px)]'))).toBe(true);
+
+    // L'emplacement ne sert QUE les pubs portant la position « rectangle ».
+    const interstitial = render(<AdvertisementCarousel location="landing_page" format="rectangle" />);
+    await waitFor(() => expect(interstitial.container.querySelector('img')).toBeTruthy());
+    expect((interstitial.container.querySelector('img') as HTMLImageElement).getAttribute('src')).toBe('https://cdn/sq.jpg');
   });
 
   it('fetches with the requested location + center scope', async () => {

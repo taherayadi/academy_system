@@ -1,3 +1,5 @@
+import { ANNUAL_DISCOUNT } from './pricing';
+
 // Client-side mirror of the backend plan-change rules (functions/api/planLogic.ts).
 // Kept in src because the frontend cannot import from functions/. The backend
 // stays the source of truth — this only drives what the platform admin sees
@@ -82,7 +84,8 @@ export function periodAmount(
 ): number {
   if (plan === 'custom') return Math.max(0, Number(manualPrice) || 0);
   const monthly = moduleTotal(enabledModules, modulePrices);
-  return cycle === 'annual' ? monthly * 12 * (1 - 0.2) : monthly; // 20 % annual discount
+  // Même remise que le simulateur et que la grille tarifaire de la console.
+  return cycle === 'annual' ? monthly * 12 * (1 - ANNUAL_DISCOUNT) : monthly;
 }
 
 export function analyzePlanChange(

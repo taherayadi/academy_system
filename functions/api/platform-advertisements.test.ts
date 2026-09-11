@@ -102,11 +102,24 @@ describe('platform-advertisements — positions', () => {
     const db = makeDb();
     const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
       ...base, location: 'landing_page',
-      positions: ['leaderboard_728x90', 'leaderboard_728x90', 'fake_size_9999', 'skyscraper_160x600'],
+      positions: ['rectangle', 'rectangle', 'fake_size_9999', 'interstitial'],
     }) } as any);
     expect(res.status).toBe(201);
     const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
-    expect(insert.args).toContain(JSON.stringify(['leaderboard_728x90', 'skyscraper_160x600']));
+    expect(insert.args).toContain(JSON.stringify(['rectangle', 'interstitial']));
+  });
+
+  it('POST migrates legacy IAB ids onto the responsive formats', async () => {
+    const db = makeDb();
+    const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
+      ...base, location: 'landing_page',
+      positions: ['leaderboard_728x90', 'medium_rectangle_300x250', 'mobile_leaderboard_320x50', 'skyscraper_160x600'],
+    }) } as any);
+    expect(res.status).toBe(201);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
+    // Les trois bandeaux fusionnent en un seul « rectangle », le gratte-ciel
+    // devient l'interstitiel, et les doublons sont supprimés.
+    expect(insert.args).toContain(JSON.stringify(['rectangle', 'interstitial']));
   });
 
   it('POST without positions stores an empty array (carousel default)', async () => {
@@ -119,7 +132,7 @@ describe('platform-advertisements — positions', () => {
   it('POST still works when migration 0031 is missing (legacy INSERT)', async () => {
     const db = makeDb(null, { noPositionsColumn: true });
     const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
-      ...base, location: 'landing_page', positions: ['leaderboard_728x90'],
+      ...base, location: 'landing_page', positions: ['rectangle'],
     }) } as any);
     expect(res.status).toBe(201);
     const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
@@ -129,7 +142,7 @@ describe('platform-advertisements — positions', () => {
   it('PATCH ignores positions when the column is missing', async () => {
     const db = makeDb({ id: 'ADV_1', location: 'center_admin' }, { noPositionsColumn: true });
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', {
-      id: 'ADV_1', positions: ['leaderboard_728x90'],
+      id: 'ADV_1', positions: ['rectangle'],
     }) } as any);
     expect(res.status).toBe(200);
     expect(db.calls.some(c => c.sql.includes('positions = ?'))).toBe(false);
@@ -138,12 +151,12 @@ describe('platform-advertisements — positions', () => {
   it('PATCH replaces positions when provided', async () => {
     const db = makeDb({ id: 'ADV_1', location: 'center_admin' });
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', {
-      id: 'ADV_1', positions: ['medium_rectangle_300x250', 'nope'],
+      id: 'ADV_1', positions: ['rectangle', 'nope', 'skyscraper_160x600'],
     }) } as any);
     expect(res.status).toBe(200);
     const upd = db.calls.find(c => c.sql.includes('UPDATE platform_advertisements'));
     expect(upd.sql).toContain('positions = ?');
-    expect(upd.args).toContain(JSON.stringify(['medium_rectangle_300x250']));
+    expect(upd.args).toContain(JSON.stringify(['rectangle', 'interstitial']));
   });
 });
 

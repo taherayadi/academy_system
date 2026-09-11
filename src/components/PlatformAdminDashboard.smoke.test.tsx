@@ -38,6 +38,8 @@ vi.mock('../api', () => ({
   fetchAdvertisementsApi: vi.fn().mockResolvedValue([]),
   createAdvertisementApi: vi.fn().mockResolvedValue({ success: true, id: 'ADV_1' }),
   updateAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
+  fetchRenewalRequestsApi: vi.fn().mockResolvedValue({ requests: [], history: [] }),
+  decideRenewalRequestApi: vi.fn().mockResolvedValue({ success: true }),
   deleteAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
   uploadMultipleImagesApi: vi.fn().mockResolvedValue([]),
 }));
@@ -718,13 +720,13 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     expect(dates.length).toBeGreaterThanOrEqual(2);
     for (const d of dates) { expect(d.getAttribute('dir')).toBe('ltr'); expect(d.className).toContain('text-left'); }
 
-    // Les quatre formats connus sont proposés.
-    const lb = screen.getByRole('button', { name: /Bannière horizontale/ });
-    const rect = screen.getByRole('button', { name: /Rectangle moyen/ });
-    expect(screen.getByRole('button', { name: /Bannière mobile/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Gratte-ciel/ })).toBeTruthy();
-    fireEvent.click(lb);
+    // Les deux formats responsives sont proposés.
+    const rect = screen.getByRole('button', { name: /^Rectangle/ });
+    const interstitial = screen.getByRole('button', { name: /Interstitiel/ });
+    expect(rect).toBeTruthy();
+    expect(interstitial).toBeTruthy();
     fireEvent.click(rect);
+    fireEvent.click(interstitial);
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Soldes' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/s.jpg' } });
@@ -732,7 +734,50 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
 
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
-      positions: ['leaderboard_728x90', 'medium_rectangle_300x250'],
+      positions: ['rectangle', 'interstitial'],
+    })));
+  });
+
+  it('modal: the centre picker filters by centre name (case/accent insensitive)', async () => {
+    const betaCenter = { ...alphaCenter, id: 'c2', name: 'École Beta', slug: 'beta' };
+    const gammaCenter = { ...alphaCenter, id: 'c3', name: 'Institut Gamma', slug: 'gamma' };
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter, betaCenter, gammaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
+    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    const loc = () => document.getElementById('ad-location') as unknown as HTMLSelectElement;
+    const search = () => document.getElementById('ad-center-search') as HTMLInputElement;
+    fireEvent.change(loc(), { target: { value: 'both' } });
+
+    // Les trois centres sont listés.
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Centre Alpha/ })).toBeTruthy());
+    expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Institut Gamma/ })).toBeTruthy();
+
+    // « ecole », sans accent ni majuscule, trouve « École Beta ».
+    fireEvent.change(search(), { target: { value: 'ecole' } });
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Centre Alpha/ })).toBeNull());
+    expect(screen.queryByRole('checkbox', { name: /Institut Gamma/ })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy();
+    expect(screen.getByText(/1 centre sur 3/)).toBeTruthy();
+
+    // Aucun résultat → message explicite plutôt qu'une liste vide.
+    fireEvent.change(search(), { target: { value: 'zzz' } });
+    await waitFor(() => expect(screen.getByText(/Aucun centre ne correspond/)).toBeTruthy());
+
+    // Le filtre se remet à vide et la sélection filtrée part bien à l'API.
+    fireEvent.change(search(), { target: { value: 'ecole' } });
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('checkbox', { name: /École Beta/ }));
+
+    fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Campagne Beta' } });
+    fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/b.jpg' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
+      centerIds: ['c2'],
     })));
   });
 
@@ -752,5 +797,49 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     await waitFor(() => expect(api.updateAdvertisementApi).toHaveBeenCalledWith('ADV_9', expect.objectContaining({
       title: 'Cantine', location: 'center_admin', isPublished: true,
     })));
+  });
+});
+
+describe('PlatformAdminDashboard — Renewal requests page', () => {
+  const pendingRequest = {
+    id: 'r1', centerId: 'c1', centerName: 'Centre Alpha', kind: 'upgrade',
+    currentPlan: 'starter', currentStatus: 'trial', currentModules: ['scolaire'], requestedPlan: 'growth',
+    requestedModules: ['scolaire', 'finance', 'etude'], billingCycle: 'monthly',
+    amount: 165, status: 'pending', effectiveAt: Date.now(), note: 'On passe à Growth',
+    decisionNote: '', decidedBy: '', decidedAt: null,
+    createdAt: Date.now() - 86400000, updatedAt: Date.now(),
+  };
+
+  it('lists the requests and lets the platform accept one', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    expect(screen.getByText('En attente')).toBeTruthy();
+    expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
+    // « Essai · Basic → Growth »
+    expect(screen.getByText(/Essai/)).toBeTruthy();
+    expect(screen.getByText('Basic')).toBeTruthy();
+    expect(screen.getByText('Growth')).toBeTruthy();
+
+    // Boutons habillés aux couleurs de l'application (#257C86), pas vert/rouge.
+    const accept = screen.getByRole('button', { name: /Accepter/ });
+    const refuse = screen.getByRole('button', { name: /Refuser/ });
+    expect(accept.className).toContain('#257C86');
+    expect(refuse.className).toContain('#257C86');
+    expect(accept.className).not.toMatch(/emerald/);
+    expect(refuse.className).not.toMatch(/red-/);
+
+    fireEvent.click(accept);
+
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', ''));
+  });
+
+  it('shows an empty state when no center has asked yet', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({ requests: [], history: [] });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Aucune demande')).toBeTruthy());
   });
 });
