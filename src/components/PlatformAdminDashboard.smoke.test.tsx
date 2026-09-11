@@ -824,7 +824,15 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Accepter/ }));
+    // Boutons habillés aux couleurs de l'application (#257C86), pas vert/rouge.
+    const accept = screen.getByRole('button', { name: /Accepter/ });
+    const refuse = screen.getByRole('button', { name: /Refuser/ });
+    expect(accept.className).toContain('#257C86');
+    expect(refuse.className).toContain('#257C86');
+    expect(accept.className).not.toMatch(/emerald/);
+    expect(refuse.className).not.toMatch(/red-/);
+
+    fireEvent.click(accept);
 
     await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', ''));
   });
