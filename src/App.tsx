@@ -137,6 +137,10 @@ const TAB_MODULE: Record<string, string> = {
   module8: 'staff'                // إدارة الموظفين
 };
 
+// Bibliothèque désactivée pour l'instant : masquée du menu centre.
+// (Remettre à true pour réactiver le module.)
+const LIBRARY_ENABLED = false;
+
 export default function App() {
   const toast = useToast();
   const toastRef = useRef(toast);
@@ -948,7 +952,7 @@ export default function App() {
         !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
         !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
-        { id: 'module5', label: 'المكتبة', icon: BookOpen },
+        LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
         { id: 'module8', label: 'إدارة الموظفين', icon: Users },
@@ -1268,7 +1272,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'module5' && (
+              {LIBRARY_ENABLED && activeTab === 'module5' && (
                 <LibraryModule 
                   students={students}
                   settings={settings}

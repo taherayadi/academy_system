@@ -83,8 +83,9 @@ function formatTnd(value: number): string {
 }
 
 function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
+  // Bibliothèque désactivée pour l'instant : jamais facturée.
   return enabledModules.reduce((total, key) => (
-    total + (key === BUNDLED_MODULE_KEY ? 0 : (Number(modulePrices[key]) || 0))
+    total + (key === BUNDLED_MODULE_KEY || key === 'bibliotheque' ? 0 : (Number(modulePrices[key]) || 0))
   ), 0);
 }
 

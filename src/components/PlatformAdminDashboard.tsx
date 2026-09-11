@@ -52,6 +52,10 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'staff', label: 'Personnel' },
 ];
 const ALL_MODULE_KEYS = ALL_MODULES.map(module => module.key);
+// Bibliothèque désactivée pour l'instant : masquée des sélections de modules
+// (création / édition / Plans & factures) — la page Tarifs garde son prix.
+const isModuleHidden = (key: string) => key === 'bibliotheque';
+const SELECTABLE_MODULE_KEYS = ALL_MODULE_KEYS.filter(k => !isModuleHidden(k as string));
 const BASIC_MODULE_KEYS = [...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY];
 
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
@@ -190,8 +194,9 @@ const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
 const ANNUAL_DISCOUNT = 0.2;
 
 function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
+  // Bibliothèque désactivée pour l'instant : jamais facturée.
   return enabledModules.reduce((total, key) => (
-    total + (key === BUNDLED_MODULE_KEY ? 0 : (Number(modulePrices[key]) || 0))
+    total + (key === BUNDLED_MODULE_KEY || key === 'bibliotheque' ? 0 : (Number(modulePrices[key]) || 0))
   ), 0);
 }
 
@@ -474,7 +479,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       plan,
       offerDays: plan === 'trial' ? '0' : current.offerDays,
       enabledModules: plan === 'pro'
-        ? [...ALL_MODULE_KEYS]
+        ? [...SELECTABLE_MODULE_KEYS]
         : plan === 'basic'
           ? [...BASIC_MODULE_KEYS]
           : current.enabledModules
@@ -484,8 +489,8 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   // Keep the Pro preset true even when the form is opened or updated from
   // another flow instead of through the plan select change handler.
   React.useEffect(() => {
-    if (form.plan === 'pro' && form.enabledModules.length !== ALL_MODULE_KEYS.length) {
-      setForm(current => ({ ...current, enabledModules: [...ALL_MODULE_KEYS] }));
+    if (form.plan === 'pro' && form.enabledModules.length !== SELECTABLE_MODULE_KEYS.length) {
+      setForm(current => ({ ...current, enabledModules: [...SELECTABLE_MODULE_KEYS] }));
     } else if (
       form.plan === 'basic'
       && (form.enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => form.enabledModules.includes(key)))
@@ -804,7 +809,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {ALL_MODULES.filter(m => !isBaseModule(m.key)).map(m => {
+                {ALL_MODULES.filter(m => !isBaseModule(m.key) && !isModuleHidden(m.key)).map(m => {
                   const on = form.enabledModules.includes(m.key);
                   return (
                     <button key={m.key} type="button" onClick={() => toggle(m.key)}
@@ -1131,7 +1136,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
   useEffect(() => {
     if (form.plan === 'pro') {
-      setEnabledModules([...ALL_MODULE_KEYS]);
+      setEnabledModules([...SELECTABLE_MODULE_KEYS]);
     } else if (
       form.plan === 'basic'
       && (enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => enabledModules.includes(key)))
@@ -1142,7 +1147,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
   const handleEditPlanChange = (plan: string) => {
     setForm(current => ({ ...current, plan }));
-    if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS]);
     if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
   };
 
@@ -1490,7 +1495,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
   const handleDraftPlanChange = (plan: string) => {
     setDraft(d => ({ ...d, plan }));
-    if (plan === 'pro') setEnabledModules([...ALL_MODULE_KEYS]);
+    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS]);
     if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
   };
 
@@ -1676,7 +1681,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         <div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Modules à activer</p>
           <div className="flex flex-wrap gap-1.5">
-            {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY).map(module => {
+            {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(module => {
               const selected = enabledModules.includes(module.key);
               return (
                 <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}

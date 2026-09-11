@@ -20,9 +20,13 @@ const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
 const ALL_MODULE_KEYS = [
   'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-  'formations', 'cantine', 'transport', 'events', 'bibliotheque',
+  'formations', 'cantine', 'transport', 'events',
   BUNDLED_MODULE_KEY, 'staff',
 ];
+// Bibliothèque désactivée pour l'instant : hors preset Pro (11 modules comme
+// le simulateur) et jamais facturée, même si un centre l'a encore en stock.
+// Pour réactiver : remettre 'bibliotheque' ici et retirer le filtre prix.
+const UNBILLED_MODULE_KEYS = new Set([BUNDLED_MODULE_KEY, 'bibliotheque']);
 const ANNUAL_DISCOUNT = 0.2;
 const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 const VALID_PLANS = new Set(['starter', 'basic', 'growth', 'pro', 'custom']);
@@ -69,7 +73,7 @@ async function computePeriodAmount(
     `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
   ).bind(currentSchoolYear(), ...args.modules).all<any>();
   let total = (results || []).reduce(
-    (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
+    (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
     0
   );
   if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
