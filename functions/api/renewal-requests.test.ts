@@ -204,6 +204,16 @@ describe('renewal-requests PATCH — the platform decides', () => {
     expect(loggedHistory[0].action).toBe('renewal_approved');
   });
 
+  it('skipApply records an approval without re-applying the plan (already applied via Plans & factures)', async () => {
+    const db = makeDb(rowsFor('platform_super_admin'));
+    const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'approved', skipApply: true }) } as any);
+    expect(res.status).toBe(200);
+    expect(db.calls.some(c => c.sql.includes('UPDATE centers'))).toBe(false);
+    expect(loggedHistory).toHaveLength(0);
+    const upd = db.calls.find(c => c.sql.includes('UPDATE renewal_requests'))!;
+    expect(upd.args).toContain('approved');
+  });
+
   it('rejecting records the decision without touching the center', async () => {
     const db = makeDb(rowsFor('platform_super_admin'));
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'rejected', decisionNote: 'Dossier incomplet' }) } as any);

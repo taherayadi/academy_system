@@ -249,8 +249,12 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     const now = Date.now();
     const decisionNote = String(body.decisionNote || '').slice(0, 500);
+    // Modal « Examiner et appliquer » : le plan a déjà été appliqué via le
+    // moteur « Plans & factures » (régularisation / programmation / facture).
+    // On enregistre seulement la décision pour éviter une double application.
+    const skipApply = body.skipApply === true || String(body.skipApply || '') === 'true';
 
-    if (status === 'approved') {
+    if (status === 'approved' && !skipApply) {
       const center = await env.DB.prepare(
         `SELECT id, status, plan, billing_cycle, subscription_ends_at, trial_ends_at, enabled_modules
          FROM centers WHERE id = ?`

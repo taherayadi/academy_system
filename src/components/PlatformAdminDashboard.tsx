@@ -17,8 +17,9 @@ import {
   fetchCenterPlansApi, centerPlanActionApi, CenterPlansView,
   fetchAdvertisementsApi, createAdvertisementApi, updateAdvertisementApi, deleteAdvertisementApi,
   uploadMultipleImagesApi,
-  fetchRenewalRequestsApi, decideRenewalRequestApi
+  fetchRenewalRequestsApi
 } from '../api';
+import RenewalReviewModal from './RenewalReviewModal';
 import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
 import { planLabel } from '../utils/pricing';
 
@@ -1345,6 +1346,8 @@ const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
   schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
   plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
   trial_added: { text: 'Jours offerts', cls: 'bg-violet-100 text-violet-700' },
+  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-emerald-100 text-emerald-700' },
+  renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
 };
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
 // All subscription operations live here (the center edit is basic info only).
@@ -2408,8 +2411,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // Demandes de renouvellement / changement d'offre envoyées par les centres.
   const [renewalRequests, setRenewalRequests] = useState<RenewalRequest[]>([]);
   const [renewalsLoading, setRenewalsLoading] = useState(false);
-  const [renewalDeciding, setRenewalDeciding] = useState<string | null>(null);
-  const [renewalNote, setRenewalNote] = useState<Record<string, string>>({});
+  const [reviewRenewal, setReviewRenewal] = useState<RenewalRequest | null>(null);
   const [adsLoading, setAdsLoading] = useState(false);
   const [adsPage, setAdsPage] = useState(1);
   const [adsStatusFilter, setAdsStatusFilter] = useState<'all' | AdStatus>('all');
@@ -2456,21 +2458,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
   const pendingRenewals = renewalRequests.filter(r => r.status === 'pending').length;
 
-  const decideRenewal = async (id: string, status: 'approved' | 'rejected') => {
-    setRenewalDeciding(id);
-    try {
-      await decideRenewalRequestApi(id, status, renewalNote[id] || '');
-      toast.success(status === 'approved' ? 'Demande acceptée — le plan a été appliqué.' : 'Demande refusée.');
-      await loadRenewals();
-      // Le centre peut avoir changé d'offre : rafraîchit la liste des centres.
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur lors du traitement');
-    } finally {
-      setRenewalDeciding(null);
-    }
-  };
-
   const visibleAds = adsStatusFilter === 'all'
     ? advertisements
     : advertisements.filter(a => adStatusOf(a) === adsStatusFilter);
@@ -2487,6 +2474,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       setLoading(false);
     }
   }, [toast]);
+
+  /** Après acceptation/refus via « Examiner et appliquer » : le plan et les
+   *  factures peuvent avoir changé — on rafraîchit demandes + centres. */
+  const onRenewalDecided = useCallback(async () => {
+    await loadRenewals();
+    load();
+  }, [loadRenewals, load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -4098,36 +4092,30 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
                   {r.status === 'pending' ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <input
-                        value={renewalNote[r.id] || ''}
-                        onChange={e => setRenewalNote(cur => ({ ...cur, [r.id]: e.target.value }))}
-                        placeholder="Note envoyée au centre (optionnel)"
-                        className="flex-1 min-w-[200px] border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none"
-                      />
                       <button
                         type="button"
-                        disabled={renewalDeciding === r.id}
-                        onClick={() => decideRenewal(r.id, 'approved')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60"
+                        onClick={() => setReviewRenewal(r)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer"
                       >
-                        {renewalDeciding === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                        Accepter
-                      </button>
-                      <button
-                        type="button"
-                        disabled={renewalDeciding === r.id}
-                        onClick={() => decideRenewal(r.id, 'rejected')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 rounded-xl transition cursor-pointer disabled:opacity-60"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Refuser
+                        <FileText className="h-3.5 w-3.5" />
+                        Examiner et appliquer
                       </button>
                     </div>
                   ) : (
-                    <p className="mt-2 text-[11px] font-semibold text-slate-500">
-                      Traité{r.decidedBy ? ` par ${r.decidedBy}` : ''}{r.decidedAt ? ` le ${new Date(r.decidedAt).toLocaleDateString('fr-FR')}` : ''}
-                      {r.decisionNote ? ` — « ${r.decisionNote} »` : ''}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Traité{r.decidedBy ? ` par ${r.decidedBy}` : ''}{r.decidedAt ? ` le ${new Date(r.decidedAt).toLocaleDateString('fr-FR')}` : ''}
+                        {r.decisionNote ? ` — « ${r.decisionNote} »` : ''}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setReviewRenewal(r)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 rounded-xl transition cursor-pointer"
+                      >
+                        <FileText className="h-3 w-3" />
+                        Voir le détail
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -4158,6 +4146,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             center={planCenter}
             onClose={() => setPlanCenter(null)}
             onSaved={load}
+          />
+        )}
+        {reviewRenewal && (
+          <RenewalReviewModal
+            request={reviewRenewal}
+            onClose={() => setReviewRenewal(null)}
+            onDecided={onRenewalDecided}
           />
         )}
         {editInvoice && (

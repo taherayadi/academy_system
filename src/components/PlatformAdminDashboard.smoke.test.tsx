@@ -810,7 +810,19 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     createdAt: Date.now() - 86400000, updatedAt: Date.now(),
   };
 
-  it('lists the requests and lets the platform accept one', async () => {
+  // Pinned explicitly: earlier suites leave their own fetchCenterPlansApi
+  // implementation behind (clearAllMocks keeps implementations).
+  beforeEach(() => {
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'trial', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 5 * 86400000, enabledModules: [],
+      },
+      invoices: [], schedules: [],
+    });
+  });
+
+  it('lists the requests and opens « Examiner et appliquer » prefilled from the request', async () => {
     (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
       requests: [pendingRequest], history: [],
     });
@@ -824,17 +836,49 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
 
-    // Boutons habillés aux couleurs de l'application (#257C86), pas vert/rouge.
-    const accept = screen.getByRole('button', { name: /Accepter/ });
-    const refuse = screen.getByRole('button', { name: /Refuser/ });
-    expect(accept.className).toContain('#257C86');
-    expect(refuse.className).toContain('#257C86');
-    expect(accept.className).not.toMatch(/emerald/);
-    expect(refuse.className).not.toMatch(/red-/);
+    // Bouton habillé aux couleurs de l'application (#257C86), pas vert/rouge.
+    const review = screen.getByRole('button', { name: /Examiner et appliquer/ });
+    expect(review.className).toContain('#257C86');
+    expect(review.className).not.toMatch(/emerald/);
 
-    fireEvent.click(accept);
+    fireEvent.click(review);
 
-    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', ''));
+    // La modale reprend la demande : plan Growth / mensuel présélectionnés.
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+    expect((screen.getByTitle('Plan du centre') as HTMLSelectElement).value).toBe('growth');
+  });
+
+  it('accept applies the plan through the billing engine then records the decision', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+
+    // Centre en essai → activation immédiate via set-plan (moteur Plans & factures).
+    fireEvent.click(await screen.findByRole('button', { name: /Accepter et appliquer/ }));
+
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'set-plan', centerId: 'c1', plan: 'growth', billingCycle: 'monthly',
+    })));
+    // … puis la décision est actée sans ré-appliquer le plan (skipApply).
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', '', { skipApply: true }));
+  });
+
+  it('reject only records the decision without touching the plan', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Refuser$/ }));
+
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'rejected', ''));
+    expect(api.centerPlanActionApi).not.toHaveBeenCalled();
+    expect(api.updateCenterApi).not.toHaveBeenCalled();
   });
 
   it('shows an empty state when no center has asked yet', async () => {
