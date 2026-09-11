@@ -12,6 +12,7 @@ import {
 } from '../utils/pricing';
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
+import { useLiveSync } from '../hooks/useLiveSync';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
@@ -70,12 +71,19 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
+  // Last known status per request: lets the live sync announce only real
+  // platform decisions (pending → approved / rejected), never repeats.
+  const requestStatusRef = useRef<Record<string, string> | null>(null);
+  const statusMap = (list: RenewalRequest[]) =>
+    Object.fromEntries(list.map(r => [r.id, r.status]));
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchRenewalRequestsApi();
       setRequests(data.requests || []);
       setHistory(data.history || []);
+      requestStatusRef.current = statusMap(data.requests || []);
     } catch (err) {
       toastRef.current.error(err instanceof Error ? err.message : 'خطأ في جلب الطلبات.');
     } finally {
@@ -90,6 +98,38 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       .catch(() => setPrices({}))
       .finally(() => setPricingLoading(false));
   }, [load]);
+
+  // Live sync of my requests: when the platform accepts or refuses, the list
+  // (+ plan history) refreshes by itself and a toast announces the decision —
+  // no manual refresh needed.
+  const syncRequests = useCallback(async () => {
+    try {
+      const data = await fetchRenewalRequestsApi();
+      const list = data.requests || [];
+      const prev = requestStatusRef.current;
+      if (prev) {
+        for (const r of list) {
+          if (prev[r.id] !== 'pending') continue;
+          if (r.status === 'approved') {
+            toastRef.current.success(
+              r.kind === 'upgrade'
+                ? 'Changement d’offre accepté — votre abonnement est mis à jour.'
+                : 'Renouvellement accepté — votre abonnement est mis à jour.'
+            );
+          } else if (r.status === 'rejected') {
+            toastRef.current.error('Votre demande a été refusée par la plateforme.');
+          }
+        }
+      }
+      requestStatusRef.current = statusMap(list);
+      setRequests(list);
+      setHistory(data.history || []);
+    } catch {
+      // Silent: the session expiry is handled globally by App, anything else
+      // is retried on the next tick.
+    }
+  }, []);
+  useLiveSync(true, syncRequests);
 
   const renewalDate = center?.status === 'trial' ? center?.trialEndsAt : center?.subscriptionEndsAt;
   const daysLeft = daysUntil(renewalDate);

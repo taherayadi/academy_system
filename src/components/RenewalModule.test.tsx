@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as api from '../api';
 
 vi.mock('../api', () => ({
@@ -7,6 +7,22 @@ vi.mock('../api', () => ({
   fetchRenewalRequestsApi: vi.fn(),
   createRenewalRequestApi: vi.fn(),
 }));
+
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock('./Toast', () => ({
+  useToast: () => ({
+    success: toastSuccess,
+    error: toastError,
+    info: vi.fn(),
+    warning: vi.fn(),
+    showToast: vi.fn(),
+  }),
+}));
+
+import { LIVE_SYNC_INTERVAL_MS } from '../hooks/useLiveSync';
 
 import RenewalModule from './RenewalModule';
 import type { CenterTenant } from '../types';
@@ -205,5 +221,50 @@ describe('RenewalModule — requests and history', () => {
     render(<RenewalModule center={center()} />);
     await waitFor(() => expect(screen.getByText('Aucune demande pour le moment.')).toBeTruthy());
     expect(screen.getByText('Aucun historique pour le moment.')).toBeTruthy();
+  });
+});
+
+describe('RenewalModule — live sync of platform decisions', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a platform approval lands by itself: list refreshes and a toast announces it', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ requests: [request({ status: 'pending' })], history: [] })
+      .mockResolvedValue({
+        requests: [request({ status: 'approved', decidedAt: NOW, decisionNote: 'OK' })],
+        history: [{ id: 'h1', action: 'renewal_approved', details: 'Offre Basic reconduite', amount: 90, invoiceNumber: null, createdAt: NOW }],
+      });
+    render(<RenewalModule center={center()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText('En attente')).toBeTruthy();
+
+    // Le passage suivant du polling ramène la décision : pas de refresh manuel.
+    await act(async () => { await vi.advanceTimersByTimeAsync(LIVE_SYNC_INTERVAL_MS); });
+    expect(screen.getByText('Acceptée')).toBeTruthy();
+    expect(screen.getByText('Offre Basic reconduite')).toBeTruthy();
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/accepté/i));
+  });
+
+  it('a platform refusal lands by itself with an error toast', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ requests: [request({ status: 'pending' })], history: [] })
+      .mockResolvedValue({
+        requests: [request({ status: 'rejected', decidedAt: NOW, decisionNote: 'Dossier incomplet' })],
+        history: [],
+      });
+    render(<RenewalModule center={center()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText('En attente')).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(LIVE_SYNC_INTERVAL_MS); });
+    expect(screen.getByText('Refusée')).toBeTruthy();
+    expect(screen.getByText(/Dossier incomplet/)).toBeTruthy();
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/refusée/i));
   });
 });

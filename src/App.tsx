@@ -84,6 +84,7 @@ import {
   deleteStaffApi,
   createExpenseApi,
   deleteExpenseApi,
+  fetchCentersApi,
   UnauthorizedError 
 } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
@@ -113,6 +114,7 @@ import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
+import { useLiveSync, subscriptionSnapshot } from './hooks/useLiveSync';
 import brandIcon from './assets/icon.png';
 
 
@@ -136,6 +138,8 @@ const TAB_MODULE: Record<string, string> = {
 
 export default function App() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -181,6 +185,48 @@ export default function App() {
     setAuthView('landing');
     toast.info('تم تسجيل الخروج.');
   };
+
+  // ── Live subscription sync (center sessions) ──
+  // The platform may accept a renewal / plan-change request at any moment.
+  // The tenant center row is re-checked live (poll + tab focus) and any new
+  // plan / modules / status / expiry is pushed into state with a toast, so
+  // the center sees it without refreshing the page.
+  const centerBaselineRef = useRef<string | null>(null);
+  useEffect(() => {
+    // New session (or logout): forget the previous baseline.
+    centerBaselineRef.current = null;
+  }, [currentUser?.email]);
+  useLiveSync(
+    !!currentUser && !isPlatformSuperAdmin,
+    async () => {
+      if (!currentUser || isPlatformSuperAdmin) return;
+      try {
+        const centers = await fetchCentersApi();
+        const fresh = (centers || [])[0] ?? null;
+        if (!fresh) return;
+        const snap = subscriptionSnapshot(fresh);
+        const known = centerBaselineRef.current
+          ?? (currentCenter ? subscriptionSnapshot(currentCenter) : null);
+        centerBaselineRef.current = snap;
+        if (known === null) {
+          // First sight of this session with no local center: adopt silently.
+          if (!currentCenter) setCurrentCenter(fresh);
+          return;
+        }
+        if (known !== snap) {
+          setCurrentCenter(fresh);
+          toastRef.current.success('Votre abonnement a été mis à jour par la plateforme.');
+        }
+      } catch (err) {
+        if (err instanceof UnauthorizedError) {
+          // Session expired mid-session — force re-login.
+          setCurrentUser(null);
+          clearLocalSession();
+        }
+        // Network/D1 hiccup: stay silent, the next tick retries.
+      }
+    }
+  );
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
