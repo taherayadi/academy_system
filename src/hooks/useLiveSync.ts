@@ -3,6 +3,8 @@ import type { CenterTenant } from '../types';
 
 /** How often a center session re-checks its subscription state (30 s). */
 export const LIVE_SYNC_INTERVAL_MS = 30000;
+/** Fast cadence while one of the center's requests is still pending (5 s). */
+export const LIVE_SYNC_FAST_INTERVAL_MS = 5000;
 
 /**
  * Runs `handler` every `intervalMs`, plus whenever the tab regains focus,

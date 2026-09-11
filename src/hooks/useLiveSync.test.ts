@@ -102,6 +102,21 @@ describe('useLiveSync', () => {
     unmount();
   });
 
+  it('switches cadence when the interval changes', async () => {
+    const handler = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = renderHook(({ ms }: { ms: number }) => useLiveSync(true, handler, ms), {
+      initialProps: { ms: 10000 },
+    });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    rerender({ ms: 2000 });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(handler).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(handler).toHaveBeenCalledTimes(4);
+  });
+
   it('uses the default 30 s interval', () => {
     expect(LIVE_SYNC_INTERVAL_MS).toBe(30000);
   });

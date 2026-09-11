@@ -85,6 +85,7 @@ import {
   createExpenseApi,
   deleteExpenseApi,
   fetchCentersApi,
+  fetchRenewalRequestsApi,
   UnauthorizedError 
 } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
@@ -114,7 +115,7 @@ import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
-import { useLiveSync, subscriptionSnapshot } from './hooks/useLiveSync';
+import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from './hooks/useLiveSync';
 import brandIcon from './assets/icon.png';
 
 
@@ -192,18 +193,23 @@ export default function App() {
   // plan / modules / status / expiry is pushed into state with a toast, so
   // the center sees it without refreshing the page.
   const centerBaselineRef = useRef<string | null>(null);
+  // Fast cadence while one of the center's requests is still pending, so a
+  // platform decision lands within seconds; slow cadence otherwise.
+  const [centerSyncFast, setCenterSyncFast] = useState(false);
   useEffect(() => {
     // New session (or logout): forget the previous baseline.
     centerBaselineRef.current = null;
+    setCenterSyncFast(false);
   }, [currentUser?.email]);
   useLiveSync(
     !!currentUser && !isPlatformSuperAdmin,
     async () => {
       if (!currentUser || isPlatformSuperAdmin) return;
       try {
-        const centers = await fetchCentersApi();
+        const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
         const fresh = (centers || [])[0] ?? null;
         if (!fresh) return;
+        setCenterSyncFast((renewal.requests || []).some(r => r.status === 'pending'));
         const snap = subscriptionSnapshot(fresh);
         const known = centerBaselineRef.current
           ?? (currentCenter ? subscriptionSnapshot(currentCenter) : null);
@@ -225,7 +231,8 @@ export default function App() {
         }
         // Network/D1 hiccup: stay silent, the next tick retries.
       }
-    }
+    },
+    centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';

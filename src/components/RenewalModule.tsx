@@ -12,7 +12,7 @@ import {
 } from '../utils/pricing';
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
-import { useLiveSync } from '../hooks/useLiveSync';
+import { useLiveSync, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from '../hooks/useLiveSync';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
@@ -129,7 +129,14 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       // is retried on the next tick.
     }
   }, []);
-  useLiveSync(true, syncRequests);
+  // Fast cadence while one of my requests is still pending (the decision
+  // lands within seconds), slow cadence otherwise.
+  const hasPendingRequest = requests.some(r => r.status === 'pending');
+  useLiveSync(
+    true,
+    syncRequests,
+    hasPendingRequest ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
+  );
 
   const renewalDate = center?.status === 'trial' ? center?.trialEndsAt : center?.subscriptionEndsAt;
   const daysLeft = daysUntil(renewalDate);

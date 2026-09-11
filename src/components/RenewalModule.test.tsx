@@ -22,7 +22,7 @@ vi.mock('./Toast', () => ({
   }),
 }));
 
-import { LIVE_SYNC_INTERVAL_MS } from '../hooks/useLiveSync';
+import { LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from '../hooks/useLiveSync';
 
 import RenewalModule from './RenewalModule';
 import type { CenterTenant } from '../types';
@@ -266,5 +266,33 @@ describe('RenewalModule — live sync of platform decisions', () => {
     expect(screen.getByText('Refusée')).toBeTruthy();
     expect(screen.getByText(/Dossier incomplet/)).toBeTruthy();
     expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/refusée/i));
+  });
+
+  it('polls on the fast cadence while a request is pending', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({ requests: [request({ status: 'pending' })], history: [] });
+    render(<RenewalModule center={center()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(LIVE_SYNC_FAST_INTERVAL_MS + 500); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stays on the slow cadence with no pending request', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({ requests: [], history: [] });
+    render(<RenewalModule center={center()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(LIVE_SYNC_FAST_INTERVAL_MS + 500); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(LIVE_SYNC_INTERVAL_MS); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
