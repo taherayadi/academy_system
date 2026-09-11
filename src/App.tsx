@@ -1070,7 +1070,7 @@ export default function App() {
           {/* Publicité du centre — formats responsives (rectangle + interstitiel) */}
           {!isPlatformSuperAdmin && currentCenter && (
             <>
-              {/* Rectangle responsive : jusqu'à 480×400, centré, fluide sur mobile */}
+              {/* Rectangle responsive : toute la largeur dispo (1100 px max), hauteur fluide */}
               <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="rectangle" className="mb-5" />
               {/* Carrousel standard (pubs sans position) */}
               <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} className="mb-5" />

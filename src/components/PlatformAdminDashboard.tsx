@@ -127,6 +127,11 @@ function titleCaseName(value?: string): string {
     .join('');
 }
 
+// Recherche insensible à la casse et aux accents (« école » trouve « École »).
+function normalizeText(value?: string): string {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
   { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
   { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
@@ -2107,6 +2112,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   const [isActive, setIsActive] = useState(ad ? !!ad.isActive : true);
   const [isPublished, setIsPublished] = useState(ad ? !!ad.isPublished : false);
   const [centerIds, setCenterIds] = useState<string[]>(ad?.centerIds || []);
+  const [centerQuery, setCenterQuery] = useState('');
   const [positions, setPositions] = useState<string[]>(ad?.positions || []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2115,6 +2121,14 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
   // Une pub de vitrine ne cible aucun centre ; tableau de bord (+ both) en exigent un.
   const centersRequired = locationSel === 'center_admin' || locationSel === 'both';
   const showCenterPicker = locationSel !== 'landing_page';
+
+  // Filtre par nom : avec des dizaines de centres, la liste défilante seule
+  // est inutilisable. La sélection déjà faite n'est jamais perdue en filtrant.
+  const filteredCenters = useMemo(() => {
+    const q = normalizeText(centerQuery.trim());
+    if (!q) return centers;
+    return centers.filter(c => normalizeText((c as any).name).includes(q));
+  }, [centers, centerQuery]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -2288,15 +2302,37 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             {centers.length === 0 ? (
               <p className="text-[11px] font-semibold text-slate-400">Aucun centre sur la plateforme.</p>
             ) : (
-              <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
-                {centers.map(c => (
-                  <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
-                    <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-[#257C86]" />
-                    <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
-                    <span className="ml-auto text-[9px] font-black text-slate-400">{c.status}</span>
-                  </label>
-                ))}
-              </div>
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    id="ad-center-search"
+                    value={centerQuery}
+                    onChange={e => setCenterQuery(e.target.value)}
+                    placeholder="Rechercher un centre par nom…"
+                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
+                  />
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
+                  {filteredCenters.length === 0 ? (
+                    <p className="px-3 py-2.5 text-[11px] font-semibold text-slate-400">
+                      Aucun centre ne correspond à « {centerQuery.trim()} ».
+                    </p>
+                  ) : filteredCenters.map(c => (
+                    <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                      <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-[#257C86]" />
+                      <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
+                      <span className="ml-auto text-[9px] font-black text-slate-400">{c.status}</span>
+                    </label>
+                  ))}
+                </div>
+                {centerQuery.trim() !== '' && filteredCenters.length > 0 && (
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                    {filteredCenters.length} centre{filteredCenters.length > 1 ? 's' : ''} sur {centers.length}
+                    {centerIds.length > 0 ? ` · ${centerIds.length} sélectionné${centerIds.length > 1 ? 's' : ''}` : ''}
+                  </p>
+                )}
+              </>
             )}
           </div>}
           {!showCenterPicker && (

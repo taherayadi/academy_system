@@ -736,6 +736,49 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     })));
   });
 
+  it('modal: the centre picker filters by centre name (case/accent insensitive)', async () => {
+    const betaCenter = { ...alphaCenter, id: 'c2', name: 'École Beta', slug: 'beta' };
+    const gammaCenter = { ...alphaCenter, id: 'c3', name: 'Institut Gamma', slug: 'gamma' };
+    (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter, betaCenter, gammaCenter]);
+    render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
+    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+
+    const loc = () => document.getElementById('ad-location') as unknown as HTMLSelectElement;
+    const search = () => document.getElementById('ad-center-search') as HTMLInputElement;
+    fireEvent.change(loc(), { target: { value: 'both' } });
+
+    // Les trois centres sont listés.
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Centre Alpha/ })).toBeTruthy());
+    expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Institut Gamma/ })).toBeTruthy();
+
+    // « ecole », sans accent ni majuscule, trouve « École Beta ».
+    fireEvent.change(search(), { target: { value: 'ecole' } });
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Centre Alpha/ })).toBeNull());
+    expect(screen.queryByRole('checkbox', { name: /Institut Gamma/ })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy();
+    expect(screen.getByText(/1 centre sur 3/)).toBeTruthy();
+
+    // Aucun résultat → message explicite plutôt qu'une liste vide.
+    fireEvent.change(search(), { target: { value: 'zzz' } });
+    await waitFor(() => expect(screen.getByText(/Aucun centre ne correspond/)).toBeTruthy());
+
+    // Le filtre se remet à vide et la sélection filtrée part bien à l'API.
+    fireEvent.change(search(), { target: { value: 'ecole' } });
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('checkbox', { name: /École Beta/ }));
+
+    fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Campagne Beta' } });
+    fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/b.jpg' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
+      centerIds: ['c2'],
+    })));
+  });
+
   it('edit reuses the form prefilled and PATCHes the advertisement', async () => {
     const ad = {
       id: 'ADV_9', title: 'Cantine', dateStart: Date.now(), dateEnd: Date.now() + 10 * 86400000,
