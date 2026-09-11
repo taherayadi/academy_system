@@ -71,8 +71,8 @@ describe('SubscriptionStatusCard', () => {
     expect(screen.getByText(/2 jours restants/)).toBeTruthy();
     // Sous-titre arabe de la branche « essai bientôt terminé ».
     expect(screen.getByText(/الفترة التجريبية/)).toBeTruthy();
-    // Le badge de jours restants est bien affiché.
-    expect(screen.getByText('2 j')).toBeTruthy();
+    // Aucun badge « 2 j » : le compteur n'est plus affiché sur la carte.
+    expect(screen.queryByText('2 j')).toBeNull();
   });
 
   it('renders red for a suspended subscription', () => {

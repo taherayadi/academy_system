@@ -803,7 +803,7 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
 describe('PlatformAdminDashboard — Renewal requests page', () => {
   const pendingRequest = {
     id: 'r1', centerId: 'c1', centerName: 'Centre Alpha', kind: 'upgrade',
-    currentPlan: 'starter', currentModules: ['scolaire'], requestedPlan: 'growth',
+    currentPlan: 'starter', currentStatus: 'trial', currentModules: ['scolaire'], requestedPlan: 'growth',
     requestedModules: ['scolaire', 'finance', 'etude'], billingCycle: 'monthly',
     amount: 165, status: 'pending', effectiveAt: Date.now(), note: 'On passe à Growth',
     decisionNote: '', decidedBy: '', decidedAt: null,
@@ -819,7 +819,8 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
     expect(screen.getByText('En attente')).toBeTruthy();
     expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
-    // Basic → Growth
+    // « Essai · Basic → Growth »
+    expect(screen.getByText(/Essai/)).toBeTruthy();
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
 

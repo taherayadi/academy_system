@@ -1106,6 +1106,8 @@ export interface RenewalRequest {
   centerName?: string;
   kind: RenewalRequestKind;
   currentPlan: string;
+  /** Statut du centre au moment de la demande ('trial' | 'active' | …). */
+  currentStatus: string;
   currentModules: string[];
   requestedPlan: string;
   requestedModules: string[];

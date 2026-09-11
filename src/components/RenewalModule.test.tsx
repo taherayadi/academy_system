@@ -34,7 +34,7 @@ const center = (over: Partial<CenterTenant> = {}): CenterTenant => ({
 } as CenterTenant);
 
 const request = (over: Record<string, unknown> = {}) => ({
-  id: 'r1', centerId: 'c1', kind: 'renewal', currentPlan: 'starter',
+  id: 'r1', centerId: 'c1', kind: 'renewal', currentPlan: 'starter', currentStatus: 'active',
   currentModules: ['scolaire'], requestedPlan: 'starter',
   requestedModules: ['scolaire', 'finance'], billingCycle: 'monthly',
   amount: 90, status: 'pending', effectiveAt: NOW + 12 * DAY, note: '',
@@ -92,11 +92,35 @@ describe('RenewalModule — plan simulator', () => {
     await waitFor(() => expect(screen.getByText('165 TND')).toBeTruthy());
   });
 
-  it('switching to annual multiplies the monthly total by 12', async () => {
+  it('switching to annual applies the 20 % discount (12 months −20 %)', async () => {
     render(<RenewalModule center={center()} />);
     await waitFor(() => expect(screen.getByText('90 TND')).toBeTruthy());
     fireEvent.click(screen.getByText('Annuel'));
-    await waitFor(() => expect(screen.getByText('1080 TND')).toBeTruthy());
+    // 90 × 12 = 1080, remisé de 20 % → 864 TND.
+    await waitFor(() => expect(screen.getByText('864 TND')).toBeTruthy());
+    expect(screen.getByText('1080 TND')).toBeTruthy(); // prix barré
+    expect(screen.getByText('−20 %')).toBeTruthy();
+  });
+
+  it('the offer follows the modules actually ticked', async () => {
+    render(<RenewalModule center={center()} />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+
+    // « Basic » apparaît aussi dans l'en-tête → on cible le bouton d'offre.
+    const tier = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
+
+    // Base seule → Basic.
+    fireEvent.click(tier('Basic'));
+    await waitFor(() => expect(screen.getByText('90 TND')).toBeTruthy());
+
+    // Un module de plus → l'offre passe à Growth (+30).
+    const etude = screen.getByText('Étude Surveillée').closest('label') as HTMLLabelElement;
+    fireEvent.click(etude.querySelector('input[type="checkbox"]') as HTMLInputElement);
+    await waitFor(() => expect(screen.getByText('120 TND')).toBeTruthy());
+
+    // Tous les modules → Pro.
+    fireEvent.click(tier('Pro'));
+    await waitFor(() => expect(screen.getByText('330 TND')).toBeTruthy());
   });
 });
 
@@ -170,7 +194,9 @@ describe('RenewalModule — requests and history', () => {
 
     render(<RenewalModule center={center()} />);
 
-    await waitFor(() => expect(screen.getByText('plan_set')).toBeTruthy());
+    // Jamais la clé technique brute : un libellé lisible est affiché.
+    await waitFor(() => expect(screen.getByText('Plan défini')).toBeTruthy());
+    expect(screen.queryByText('plan_set')).toBeNull();
     expect(screen.getByText('Passage à Growth')).toBeTruthy();
     expect(screen.getByText('165 TND')).toBeTruthy();
   });

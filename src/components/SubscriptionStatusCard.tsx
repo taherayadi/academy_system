@@ -145,17 +145,15 @@ export function resolveSubscriptionStatus(
   return null;
 }
 
-const TONE_CLASSES: Record<'amber' | 'red', { card: string; icon: string; badge: string; button: string }> = {
+const TONE_CLASSES: Record<'amber' | 'red', { card: string; icon: string; button: string }> = {
   amber: {
     card: 'bg-amber-50 border-amber-200',
     icon: 'bg-amber-100 text-amber-600',
-    badge: 'bg-amber-100 text-amber-800',
     button: 'bg-amber-500 text-white hover:bg-amber-600',
   },
   red: {
     card: 'bg-red-50 border-red-200',
     icon: 'bg-red-100 text-red-600',
-    badge: 'bg-red-100 text-red-800',
     button: 'bg-red-600 text-white hover:bg-red-700',
   },
 };
@@ -208,11 +206,6 @@ export default function SubscriptionStatusCard({
           </button>
         )}
       </div>
-      {view.daysLeft !== null && (
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black tabular-nums ${tone.badge}`}>
-          {view.daysLeft > 0 ? `${view.daysLeft} j` : view.daysLeft === 0 ? "aujourd’hui" : 'échu'}
-        </span>
-      )}
     </div>
   );
 }

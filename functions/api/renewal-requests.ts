@@ -58,6 +58,7 @@ function mapRequest(row: any): any {
     centerName: row.center_name ? String(row.center_name) : undefined,
     kind: String(row.kind || 'renewal'),
     currentPlan: String(row.current_plan || ''),
+    currentStatus: String(row.current_status || ''),
     currentModules: parseJson(row.current_modules, [] as string[]),
     requestedPlan: String(row.requested_plan || ''),
     requestedModules: parseJson(row.requested_modules, [] as string[]),
@@ -195,15 +196,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const id = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO renewal_requests
-         (id, center_id, kind, current_plan, current_modules, requested_plan, requested_modules,
+         (id, center_id, kind, current_plan, current_status, current_modules, requested_plan, requested_modules,
           billing_cycle, amount, status, effective_at, note, decision_note, decided_by, decided_at,
           created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, '', '', NULL, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, '', '', NULL, ?, ?)`
     ).bind(
       id,
       centerId,
       kind,
       String(center.plan || ''),
+      String(center.status || ''),
       currentModulesJson,
       requestedPlan,
       modulesJson,

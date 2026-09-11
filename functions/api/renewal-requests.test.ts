@@ -98,6 +98,7 @@ describe('renewal-requests POST — the center asks for a renewal', () => {
     expect(insert!.args).toContain(NOW + 10 * DAY);              // effectiveAt = échéance en cours
     expect(insert!.args).toContain(JSON.stringify(['scolaire', 'finance', 'etude']));
     expect(insert!.args).toContain(CENTER.enabled_modules);      // photographie des modules actuels
+    expect(insert!.args).toContain('active');                    // statut du centre au moment de la demande
   });
 
   it('an upgrade takes effect immediately', async () => {
@@ -120,6 +121,18 @@ describe('renewal-requests POST — the center asks for a renewal', () => {
     }) } as any);
     const insert = db.calls.find(c => c.sql.includes('INSERT INTO renewal_requests'))!;
     expect(insert.args).toContain(NOW);
+  });
+
+  it('records whether the center was on trial or active', async () => {
+    const db = makeDb({
+      ...sessionRows(),
+      'FROM centers WHERE id = ?': { ...CENTER, status: 'trial' },
+    });
+    await onRequestPost({ env: { DB: db }, request: req('POST', {
+      kind: 'renewal', requestedPlan: 'starter', requestedModules: [], billingCycle: 'monthly',
+    }) } as any);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO renewal_requests'))!;
+    expect(insert.args).toContain('trial');
   });
 
   it('rejects an unknown plan or cycle', async () => {

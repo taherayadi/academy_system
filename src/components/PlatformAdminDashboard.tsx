@@ -21,6 +21,10 @@ import {
 } from '../api';
 import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
 import { planLabel } from '../utils/pricing';
+
+const RENEWAL_STATUS_LABEL: Record<string, string> = {
+  trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
+};
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -4076,7 +4080,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
-                    <span>{planLabel(r.currentPlan)} <span className="text-slate-400">→</span> <span className="font-black text-[#257C86]">{planLabel(r.requestedPlan)}</span></span>
+                    <span>
+                      {r.currentStatus && (
+                        <span className="text-slate-500">{RENEWAL_STATUS_LABEL[r.currentStatus] || r.currentStatus} · </span>
+                      )}
+                      {planLabel(r.currentPlan)} <span className="text-slate-400">→</span>{' '}
+                      <span className="font-black text-[#257C86]">{planLabel(r.requestedPlan)}</span>
+                    </span>
                     <span>{r.requestedModules.length} module{r.requestedModules.length > 1 ? 's' : ''}</span>
                     <span>{r.billingCycle === 'annual' ? 'annuel' : 'mensuel'}</span>
                     {r.amount !== null && <span className="font-black text-slate-900">{r.amount} TND</span>}
@@ -4098,7 +4108,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         type="button"
                         disabled={renewalDeciding === r.id}
                         onClick={() => decideRenewal(r.id, 'approved')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition cursor-pointer disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60"
                       >
                         {renewalDeciding === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Accepter
@@ -4107,7 +4117,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         type="button"
                         disabled={renewalDeciding === r.id}
                         onClick={() => decideRenewal(r.id, 'rejected')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition cursor-pointer disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 rounded-xl transition cursor-pointer disabled:opacity-60"
                       >
                         <X className="h-3.5 w-3.5" />
                         Refuser

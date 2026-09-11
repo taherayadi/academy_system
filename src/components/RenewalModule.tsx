@@ -7,8 +7,8 @@ import {
 import { fetchPublicModulePricesApi, fetchRenewalRequestsApi, createRenewalRequestApi } from '../api';
 import type { CenterTenant, PlanHistoryEntry, RenewalRequest } from '../types';
 import {
-  ADDON_MODULES, BASE_KEYS, BASE_MODULES, PLAN_TIERS, isPlanUpgrade,
-  modulesForPlan, modulesPrice, planLabel
+  ADDON_MODULES, BASE_MODULES, PLAN_TIERS, ANNUAL_DISCOUNT, isPlanUpgrade,
+  derivePlanFromModules, modulesForPlan, modulesPrice, planLabel, totalForCycle
 } from '../utils/pricing';
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
@@ -20,6 +20,21 @@ const STATUS_META: Record<string, { label: string; labelAr: string; cls: string;
 };
 
 const STATUS_ORDER: Record<string, string> = { trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré' };
+
+/** Libellés lisibles de l'historique des plans (jamais la clé technique brute). */
+const HISTORY_LABELS: Record<string, string> = {
+  center_created: 'Création du centre',
+  plan_set: 'Plan défini',
+  plan_applied: 'Plan appliqué',
+  plan_scheduled: 'Plan programmé',
+  schedule_cancelled: 'Programmation annulée',
+  plan_settled: 'Facture réglée',
+  plan_removed: 'Plan retiré',
+  trial_added: 'Jours d’essai ajoutés',
+  renewal_approved: 'Renouvellement accepté',
+  renewal_upgrade: 'Changement d’offre accepté',
+};
+const historyLabel = (action: string) => HISTORY_LABELS[action] || action.replace(/_/g, ' ');
 
 /**
  * Module « Renouvellement » du centre :
@@ -39,7 +54,6 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   const [loading, setLoading] = useState(true);
 
   const currentPlan = String(center?.plan || 'starter');
-  const [tier, setTier] = useState<string>(currentPlan);
   const [cycle, setCycle] = useState<'monthly' | 'annual'>(
     String(center?.billingCycle) === 'annual' ? 'annual' : 'monthly'
   );
@@ -82,7 +96,11 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   const pricesReady = Object.keys(prices).length > 0;
 
   const monthly = useMemo(() => modulesPrice(selected, prices), [selected, prices]);
-  const total = cycle === 'annual' ? monthly * 12 : monthly;
+  // L'offre se déduit des modules cochés : base seule → Basic, un module de
+  // plus → Growth, tous les modules → Pro.
+  const tier = useMemo(() => derivePlanFromModules(selected), [selected]);
+  // Règlement annuel : 12 mois moins 20 %.
+  const total = totalForCycle(monthly, cycle);
 
   const isUpgrade = isPlanUpgrade(currentPlan, tier);
   const now = Date.now();
@@ -92,10 +110,9 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   const toggleModule = (key: string) =>
     setSelected(cur => (cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key]));
 
-  const chooseTier = (key: string) => {
-    setTier(key);
-    setSelected(modulesForPlan(key));
-  };
+  // Choisir une offre charge son préréglage ; l'offre affichée est ensuite
+  // recalculée à partir des modules réellement cochés.
+  const chooseTier = (key: string) => setSelected(modulesForPlan(key));
 
   const submit = async () => {
     setSubmitting(true);
@@ -271,6 +288,15 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                 {cycle === 'annual' ? '/ an' : '/ mois'}
               </span>
             </p>
+            {cycle === 'annual' && pricesReady && monthly > 0 && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                <span className="line-through">{monthly * 12} TND</span>
+                <span className="rounded-full bg-[#257C86]/10 px-1.5 py-0.5 text-[10px] font-black text-[#257C86]">
+                  −{Math.round(ANNUAL_DISCOUNT * 100)} %
+                </span>
+                soit {Math.round(total / 12)} TND/mois
+              </p>
+            )}
             <p className="mt-1 text-[11px] font-semibold text-slate-500">
               {isUpgrade
                 ? 'Passage à une offre supérieure — appliqué dès l’acceptation.'
@@ -362,7 +388,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
           <ul className="mt-4 space-y-2">
             {history.map(h => (
               <li key={h.id} className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2">
-                <span className="text-xs font-black text-slate-700">{h.action}</span>
+                <span className="text-xs font-black text-slate-700">{historyLabel(h.action)}</span>
                 <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
                 {h.amount !== null && (
                   <span className="shrink-0 text-[10px] font-black text-[#257C86]">{h.amount} TND</span>

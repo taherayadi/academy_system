@@ -103,3 +103,28 @@ export const PLAN_PRESET_MODULES: Record<string, string[]> = {
 export function modulesForPlan(plan?: string | null): string[] {
   return PLAN_PRESET_MODULES[String(plan || '')] || PLAN_PRESET_MODULES.starter;
 }
+
+/** Remise appliquée au règlement annuel (2 mois offerts ≈ −20 %). */
+export const ANNUAL_DISCOUNT = 0.2;
+
+/**
+ * L'offre se déduit des modules cochés dans le simulateur :
+ *   • la base seule                → Basic
+ *   • au moins un module en plus   → Growth
+ *   • tous les modules             → Pro
+ * Ainsi cocher un module fait évoluer l'offre affichée et envoyée.
+ */
+export function derivePlanFromModules(selected: readonly string[]): SaaSPlan {
+  const all = ALL_MODULES.map(m => m.key);
+  if (all.length > 0 && all.every(k => selected.includes(k))) return 'pro';
+  const hasExtra = selected.some(k => !(BASE_KEYS as readonly string[]).includes(k));
+  return hasExtra ? 'growth' : 'starter';
+}
+
+/** Total dû pour la période choisie (annuel = 12 mois remisés). */
+export function totalForCycle(monthly: number, cycle?: string | null): number {
+  if (String(cycle) === 'annual') {
+    return Math.round(monthly * 12 * (1 - ANNUAL_DISCOUNT));
+  }
+  return monthly;
+}
