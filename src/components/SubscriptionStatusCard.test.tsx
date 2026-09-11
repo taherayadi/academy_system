@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import SubscriptionStatusCard, { resolveSubscriptionStatus, daysUntil } from './SubscriptionStatusCard';
 import type { SubscriptionStatusInfo } from './SubscriptionStatusCard';
 
@@ -81,6 +81,23 @@ describe('SubscriptionStatusCard', () => {
     expect(card.getAttribute('data-tone')).toBe('red');
     expect(card.className).toContain('bg-red-50');
     expect(screen.getByText('Abonnement suspendu')).toBeTruthy();
+  });
+
+  it('the CTA opens the renewal module (renew vs reactivate)', () => {
+    const onRenew = vi.fn();
+    const trial = render(<SubscriptionStatusCard subscription={info({ status: 'trial', trialEndsAt: NOW + 2 * DAY })} now={NOW} onRenew={onRenew} />);
+    fireEvent.click(screen.getByRole('button', { name: /Renouveler mon abonnement/ }));
+    expect(onRenew).toHaveBeenCalledTimes(1);
+    trial.unmount();
+
+    const suspended = render(<SubscriptionStatusCard subscription={info({ status: 'suspended' })} now={NOW} onRenew={onRenew} />);
+    expect(screen.getByRole('button', { name: /Réactiver mon compte/ })).toBeTruthy();
+    suspended.unmount();
+  });
+
+  it('stays purely informative without an onRenew handler', () => {
+    render(<SubscriptionStatusCard subscription={info({ status: 'trial', trialEndsAt: NOW + 2 * DAY })} now={NOW} />);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('renders nothing when there is no alert and no subscription', () => {

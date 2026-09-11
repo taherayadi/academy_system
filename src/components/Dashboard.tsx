@@ -19,7 +19,6 @@ import {
   Bus
 } from 'lucide-react';
 import { StaffMember, Student, ACADEMIC_MONTHS, CenterSettings } from '../types';
-import SubscriptionStatusCard, { SubscriptionStatusInfo } from './SubscriptionStatusCard';
 
 interface DashboardProps {
   staff: StaffMember[];
@@ -33,14 +32,9 @@ interface DashboardProps {
   centerType?: string;
   /** SaaS gating: returns false when the tab's module is not enabled for this center. */
   isModuleAllowed?: (tabId: string) => boolean;
-  /**
-   * Statut d'abonnement du centre (essai / échéance / suspension). Alimente la
-   * carte d'alerte affichée en haut du tableau de bord ; absent → pas de carte.
-   */
-  subscription?: SubscriptionStatusInfo | null;
 }
 
-export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed, subscription }: DashboardProps) {
+export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed }: DashboardProps) {
   // SaaS module gating (default: everything allowed).
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
   const totalStaff = staff.length;
@@ -90,9 +84,6 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
 
   return (
     <div className="space-y-8" dir="rtl">
-      {/* Alerte abonnement — toujours en première position du tableau de bord */}
-      <SubscriptionStatusCard subscription={subscription} />
-
       {/* Welcome Banner */}
       <div className="relative overflow-hidden bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-[#257C86] rounded-full opacity-5 blur-3xl"></div>

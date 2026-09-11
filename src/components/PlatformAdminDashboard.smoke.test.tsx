@@ -38,6 +38,8 @@ vi.mock('../api', () => ({
   fetchAdvertisementsApi: vi.fn().mockResolvedValue([]),
   createAdvertisementApi: vi.fn().mockResolvedValue({ success: true, id: 'ADV_1' }),
   updateAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
+  fetchRenewalRequestsApi: vi.fn().mockResolvedValue({ requests: [], history: [] }),
+  decideRenewalRequestApi: vi.fn().mockResolvedValue({ success: true }),
   deleteAdvertisementApi: vi.fn().mockResolvedValue({ success: true }),
   uploadMultipleImagesApi: vi.fn().mockResolvedValue([]),
 }));
@@ -795,5 +797,40 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     await waitFor(() => expect(api.updateAdvertisementApi).toHaveBeenCalledWith('ADV_9', expect.objectContaining({
       title: 'Cantine', location: 'center_admin', isPublished: true,
     })));
+  });
+});
+
+describe('PlatformAdminDashboard — Renewal requests page', () => {
+  const pendingRequest = {
+    id: 'r1', centerId: 'c1', centerName: 'Centre Alpha', kind: 'upgrade',
+    currentPlan: 'starter', currentModules: ['scolaire'], requestedPlan: 'growth',
+    requestedModules: ['scolaire', 'finance', 'etude'], billingCycle: 'monthly',
+    amount: 165, status: 'pending', effectiveAt: Date.now(), note: 'On passe à Growth',
+    decisionNote: '', decidedBy: '', decidedAt: null,
+    createdAt: Date.now() - 86400000, updatedAt: Date.now(),
+  };
+
+  it('lists the requests and lets the platform accept one', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    expect(screen.getByText('En attente')).toBeTruthy();
+    expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
+    // Basic → Growth
+    expect(screen.getByText('Basic')).toBeTruthy();
+    expect(screen.getByText('Growth')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Accepter/ }));
+
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', ''));
+  });
+
+  it('shows an empty state when no center has asked yet', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({ requests: [], history: [] });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Aucune demande')).toBeTruthy());
   });
 });

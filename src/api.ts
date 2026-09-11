@@ -2,7 +2,8 @@ import {
   CenterSettings, Student, StaffMember, EtudeSlot,
   ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
   TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure
+  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure,
+  RenewalRequest, PlanHistoryEntry
 } from './types';
 
 const API_BASE = '/api';
@@ -911,3 +912,66 @@ export async function fetchActiveAdvertisementsApi(location: string, centerId?: 
 }
 
 
+
+// ─── Demandes de renouvellement (migration 0033) ───────────────────────────
+
+export interface RenewalRequestsPayload {
+  requests: RenewalRequest[];
+  history: PlanHistoryEntry[];
+}
+
+/** Demandes du centre connecté (ou de toutes les demandes pour la plateforme). */
+export async function fetchRenewalRequestsApi(centerId?: string): Promise<RenewalRequestsPayload> {
+  const params = new URLSearchParams();
+  if (centerId) params.set('centerId', centerId);
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/renewal-requests${query ? `?${query}` : ''}`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data = await res.json().catch(() => ({})) as RenewalRequestsPayload & { error?: string };
+  if (!res.ok) throw new Error(data.error || 'خطأ في جلب طلبات التجديد.');
+  return { requests: data.requests || [], history: data.history || [] };
+}
+
+export interface CreateRenewalRequestInput {
+  kind: 'renewal' | 'upgrade';
+  requestedPlan: string;
+  requestedModules: string[];
+  billingCycle: 'monthly' | 'annual';
+  amount: number | null;
+  note?: string;
+}
+
+/** Dépose une demande de renouvellement / de passage à une offre supérieure. */
+export async function createRenewalRequestApi(payload: CreateRenewalRequestInput): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/renewal-requests`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; id?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في إرسال طلب التجديد.');
+  return { success: data.success || false, id: data.id || '' };
+}
+
+/** Accepter ou refuser une demande — réservé à la plateforme. */
+export async function decideRenewalRequestApi(
+  id: string,
+  status: 'approved' | 'rejected',
+  decisionNote = ''
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/renewal-requests`, {
+    method: 'PATCH',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ id, status, decisionNote })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'خطأ في معالجة طلب التجديد.');
+  return { success: data.success || false };
+}

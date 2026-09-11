@@ -88,3 +88,18 @@ export function isPlanUpgrade(from?: string | null, to?: string | null): boolean
 
 /** Durée d'une période de facturation, en jours. */
 export const cycleDays = (cycle?: string | null): number => (String(cycle) === 'annual' ? 365 : 30);
+
+/**
+ * Modules inclus par offre. Une offre agit comme un préréglage du simulateur :
+ * le centre peut ensuite affiner en cochant / décochant des modules, exactement
+ * comme sur la page d'accueil.
+ */
+export const PLAN_PRESET_MODULES: Record<string, string[]> = {
+  starter: ['scolaire', 'studentTimeSheets', 'finance'],
+  growth: ['scolaire', 'studentTimeSheets', 'finance', 'etude', 'coursParticuliers', 'revision'],
+  pro: ALL_MODULES.map(m => m.key),
+};
+
+export function modulesForPlan(plan?: string | null): string[] {
+  return PLAN_PRESET_MODULES[String(plan || '')] || PLAN_PRESET_MODULES.starter;
+}

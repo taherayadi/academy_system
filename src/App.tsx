@@ -90,6 +90,8 @@ import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
 import Dashboard from './components/Dashboard';
+import RenewalModule from './components/RenewalModule';
+import SubscriptionStatusCard from './components/SubscriptionStatusCard';
 import StudentRegistrationModule from './components/StudentRegistrationModule';
 import SuiviScolaireModule from './components/SuiviScolaireModule';
 import StudentTimeSheetModule from './components/StudentTimeSheetModule';
@@ -882,6 +884,7 @@ export default function App() {
         { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
         { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
         { id: 'platformAdvertisements', label: 'الإعلانات', icon: ImagePlus },
+        { id: 'platformRenewals', label: 'طلبات التجديد', icon: RefreshCw },
       ]
     : [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
@@ -898,6 +901,7 @@ export default function App() {
         { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
+        { id: 'renewal', label: 'التجديد', icon: RefreshCw },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
   // SaaS gating: keep only the tabs allowed for this center's subscription.
@@ -1067,6 +1071,24 @@ export default function App() {
       {/* CORE CANVAS */}
       <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-5 xl:p-8 overflow-y-auto max-h-screen">
         <div className="max-w-7xl mx-auto">
+          {/* Alerte abonnement — affichée dans TOUS les modules du centre,
+              pas seulement sur le tableau de bord, avec un raccourci vers le
+              module « Renouvellement ». */}
+          {!isPlatformSuperAdmin && currentCenter && (
+            <div className="mb-5">
+              <SubscriptionStatusCard
+                subscription={{
+                  status: currentCenter.status,
+                  plan: currentCenter.plan,
+                  trialEndsAt: currentCenter.trialEndsAt,
+                  subscriptionEndsAt: currentCenter.subscriptionEndsAt,
+                  billingCycle: currentCenter.billingCycle,
+                }}
+                onRenew={() => setActiveTab('renewal')}
+              />
+            </div>
+          )}
+
           {/* Publicité du centre — formats responsives (rectangle + interstitiel) */}
           {!isPlatformSuperAdmin && currentCenter && (
             <>
@@ -1098,13 +1120,6 @@ export default function App() {
                   settings={settings}
                   centerType={currentCenter?.centerType}
                   isModuleAllowed={hasCenterModule}
-                  subscription={currentCenter ? {
-                    status: currentCenter.status,
-                    plan: currentCenter.plan,
-                    trialEndsAt: currentCenter.trialEndsAt,
-                    subscriptionEndsAt: currentCenter.subscriptionEndsAt,
-                    billingCycle: currentCenter.billingCycle,
-                  } : null}
                 />
               )}
 
@@ -1279,6 +1294,10 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'renewal' && (
+                <RenewalModule center={currentCenter} />
+              )}
+
               {activeTab.startsWith('platform') && (
                 <PlatformAdminDashboard
                   page={
@@ -1286,6 +1305,7 @@ export default function App() {
                     : activeTab === 'platformRequests' ? 'requests'
                     : activeTab === 'platformFinance' ? 'finance'
                     : activeTab === 'platformPricing' ? 'pricing'
+                    : activeTab === 'platformRenewals' ? 'renewals'
                     : activeTab === 'platformAdvertisements' ? 'advertisements'
                     : 'overview'
                   }
@@ -1294,6 +1314,7 @@ export default function App() {
                     : p === 'requests' ? 'platformRequests'
                     : p === 'finance' ? 'platformFinance'
                     : p === 'pricing' ? 'platformPricing'
+                    : p === 'renewals' ? 'platformRenewals'
                     : p === 'advertisements' ? 'platformAdvertisements'
                     : 'platformAdmin'
                   )}

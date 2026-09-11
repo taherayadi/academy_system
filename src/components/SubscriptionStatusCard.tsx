@@ -1,6 +1,9 @@
 import React from 'react';
-import { AlertTriangle, CalendarClock, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CalendarClock, RefreshCw, ShieldAlert } from 'lucide-react';
 import type { CenterStatus, SaaSPlan } from '../types';
+import { daysUntil, formatDate } from '../utils/dates';
+
+export { daysUntil };
 
 export interface SubscriptionStatusInfo {
   status: CenterStatus;
@@ -9,17 +12,6 @@ export interface SubscriptionStatusInfo {
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';
 }
-
-const DAY_MS = 86400000;
-
-/** Jours entiers restants avant l'échéance (0 = aujourd'hui, négatif = dépassé). */
-export function daysUntil(ts?: number | null, now: number = Date.now()): number | null {
-  if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
-  return Math.ceil((ts - now) / DAY_MS);
-}
-
-const formatDate = (ts: number) =>
-  new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
 const plural = (n: number) => `${n} jour${n > 1 ? 's' : ''}`;
 
@@ -153,31 +145,39 @@ export function resolveSubscriptionStatus(
   return null;
 }
 
-const TONE_CLASSES: Record<'amber' | 'red', { card: string; icon: string; badge: string }> = {
+const TONE_CLASSES: Record<'amber' | 'red', { card: string; icon: string; badge: string; button: string }> = {
   amber: {
     card: 'bg-amber-50 border-amber-200',
     icon: 'bg-amber-100 text-amber-600',
     badge: 'bg-amber-100 text-amber-800',
+    button: 'bg-amber-500 text-white hover:bg-amber-600',
   },
   red: {
     card: 'bg-red-50 border-red-200',
     icon: 'bg-red-100 text-red-600',
     badge: 'bg-red-100 text-red-800',
+    button: 'bg-red-600 text-white hover:bg-red-700',
   },
 };
 
 export default function SubscriptionStatusCard({
   subscription,
   now = Date.now(),
+  onRenew,
 }: {
   subscription?: SubscriptionStatusInfo | null;
   now?: number;
+  /** Ouvre le module « Renouvellement » (une nouvelle demande de renouvellement). */
+  onRenew?: () => void;
 }) {
   const view = subscription ? resolveSubscriptionStatus(subscription, now) : null;
   if (!view) return null;
 
   const tone = TONE_CLASSES[view.tone];
   const Icon = view.icon;
+  // Compte expiré / suspendu → on réactive ; sinon on anticipe le renouvellement.
+  const ctaLabel = view.tone === 'red' ? 'Réactiver mon compte' : 'Renouveler mon abonnement';
+  const ctaLabelAr = view.tone === 'red' ? 'إعادة تفعيل الحساب' : 'تجديد الاشتراك';
 
   return (
     <div
@@ -196,6 +196,17 @@ export default function SubscriptionStatusCard({
           <span className="text-[11px] font-bold text-slate-500" dir="rtl">{view.subtitle}</span>
         </div>
         <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">{view.message}</p>
+        {onRenew && (
+          <button
+            type="button"
+            onClick={onRenew}
+            className={`mt-2.5 inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-black transition ${tone.button}`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {ctaLabel}
+            <span className="font-bold opacity-75" dir="rtl">{ctaLabelAr}</span>
+          </button>
+        )}
       </div>
       {view.daysLeft !== null && (
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black tabular-nums ${tone.badge}`}>
