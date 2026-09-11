@@ -2412,6 +2412,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const [renewalRequests, setRenewalRequests] = useState<RenewalRequest[]>([]);
   const [renewalsLoading, setRenewalsLoading] = useState(false);
   const [reviewRenewal, setReviewRenewal] = useState<RenewalRequest | null>(null);
+  const [renewalKindFilter, setRenewalKindFilter] = useState<'all' | 'renewal' | 'upgrade'>('all');
+  const [renewalStatusFilter, setRenewalStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [adsLoading, setAdsLoading] = useState(false);
   const [adsPage, setAdsPage] = useState(1);
   const [adsStatusFilter, setAdsStatusFilter] = useState<'all' | AdStatus>('all');
@@ -2456,7 +2458,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     }
   }, [page, loadRenewals]);
 
-  const pendingRenewals = renewalRequests.filter(r => r.status === 'pending').length;
+  const filteredRenewals = renewalRequests.filter(r =>
+    (renewalKindFilter === 'all' || r.kind === renewalKindFilter) &&
+    (renewalStatusFilter === 'all' || r.status === renewalStatusFilter)
+  );
 
   const visibleAds = adsStatusFilter === 'all'
     ? advertisements
@@ -2489,6 +2494,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     setSearch('');
     setCenterTypeFilter('all'); setStatusFilter('all'); setPlanFilter('all');
     setReqTypeFilter('all'); setReqStatusFilter('new');
+    setRenewalKindFilter('all'); setRenewalStatusFilter('all');
     setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); setInvoiceCentersPage(1);
     setCentersPage(1); setRequestsPage(1);
     setAdsStatusFilter('all'); setAdsPage(1);
@@ -2903,7 +2909,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     finance: { title: 'Finance SaaS', sub: 'Facturation et revenus de la plateforme' },
     pricing: { title: 'Tarifs & Modules', sub: `Année scolaire ${priceYear}` },
     advertisements: { title: 'Publicité', sub: 'Bannières et carrousels des centres et de la vitrine' },
-    renewals: { title: 'Demandes de renouvellement', sub: `${pendingRenewals} demande${pendingRenewals > 1 ? 's' : ''} en attente` },
+    renewals: { title: 'Demandes de renouvellement', sub: 'Renouvellements et changements d’offre des centres' },
   };
 
   const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
@@ -4019,22 +4025,35 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       {/* ─── Renewal Requests Page ───────────────────────────────────────── */}
       {page === 'renewals' && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-2xl font-black text-slate-800">Demandes de renouvellement</h2>
-              {!renewalsLoading && (
-                <span className="px-3 py-1 bg-slate-100 border border-slate-200 rounded-full text-sm font-black text-slate-600">
-                  {renewalRequests.length}
-                </span>
-              )}
-              {pendingRenewals > 0 && (
-                <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-sm font-black">
-                  {pendingRenewals} en attente
-                </span>
-              )}
+          {/* Filters — type / statut */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4">
+            <div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type</div>
+              <Segmented<'all' | 'renewal' | 'upgrade'>
+                value={renewalKindFilter}
+                onChange={setRenewalKindFilter}
+                options={[
+                  { key: 'all', label: 'Tous' },
+                  { key: 'renewal', label: 'Renouvellement' },
+                  { key: 'upgrade', label: 'Changement d’offre' }
+                ]}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Statut</div>
+              <Segmented<'all' | 'pending' | 'approved' | 'rejected'>
+                value={renewalStatusFilter}
+                onChange={setRenewalStatusFilter}
+                options={[
+                  { key: 'all', label: 'Tous' },
+                  { key: 'pending', label: 'En attente' },
+                  { key: 'approved', label: 'Acceptée' },
+                  { key: 'rejected', label: 'Refusée' }
+                ]}
+              />
             </div>
             <button onClick={loadRenewals} title="Actualiser"
-              className="p-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
+              className="ml-auto p-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
               <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -4050,9 +4069,16 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 Les centres soumettent ici leurs demandes de renouvellement et de changement d’offre.
               </p>
             </div>
+          ) : filteredRenewals.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
+              <p className="text-sm font-black text-slate-500">Aucun résultat pour ces filtres</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Modifiez le type ou le statut pour voir d’autres demandes.
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
-              {renewalRequests.map(r => (
+              {filteredRenewals.map(r => (
                 <div key={r.id} className={`rounded-2xl border-2 bg-white p-4 ${r.status === 'pending' ? 'border-amber-200' : 'border-slate-200'}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-black text-slate-900">{r.centerName || r.centerId}</span>

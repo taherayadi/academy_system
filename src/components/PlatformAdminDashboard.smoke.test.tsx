@@ -829,7 +829,7 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    expect(screen.getByText('En attente')).toBeTruthy();
+    expect(screen.getAllByText('En attente').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
     // « Essai · Basic → Growth »
     expect(screen.getByText(/Essai/)).toBeTruthy();
@@ -848,6 +848,40 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
     expect(screen.getByTestId('review-apply-cycle').textContent).toBe('Mensuel');
     expect(screen.queryByTitle('Plan du centre')).toBeNull();
+  });
+
+  it('filters the list by type and by status', async () => {
+    const renewalPending = {
+      ...pendingRequest, id: 'r1', kind: 'renewal', requestedPlan: 'starter',
+      status: 'pending', centerName: 'Centre Alpha', note: '',
+    };
+    const upgradeApproved = {
+      ...pendingRequest, id: 'r2', kind: 'upgrade', requestedPlan: 'growth',
+      status: 'approved', centerName: 'Centre Beta', note: '',
+    };
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [renewalPending, upgradeApproved], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Filtre par type : seul le changement d'offre reste visible.
+    fireEvent.click(screen.getByRole('button', { name: 'Changement d’offre' }));
+    await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Retour à Tous (type), puis filtre par statut : seule la demande acceptée reste.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tous' })[0]);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Acceptée' }));
+    await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Combinaison sans résultat : message dédié, pas de carte.
+    fireEvent.click(screen.getByRole('button', { name: 'Renouvellement' }));
+    await waitFor(() => expect(screen.getByText('Aucun résultat pour ces filtres')).toBeTruthy());
+    expect(screen.queryByText('Centre Beta')).toBeNull();
   });
 
   it('accept applies the plan through the billing engine then records the decision', async () => {
