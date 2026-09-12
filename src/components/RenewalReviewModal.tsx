@@ -739,7 +739,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   <button
                     onClick={submitApprove}
                     disabled={saving || rejecting}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#257C86] to-[#1b3a4b] px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-[#257C86]/25 transition hover:shadow-xl hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-[#257C86] px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-[#257C86]/25 transition hover:shadow-xl hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                     {effectiveApplyChoice === 'schedule' && !isTrial && hasLiveWindow

@@ -1260,7 +1260,7 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">
@@ -1426,7 +1426,7 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black">Pointage & خلاص الشهر — {selectedCourse.subject}</h3>
                   <p className="text-xs text-slate-300">الأستاذ: {selectedCourse.teacherName} {editingSessionId ? '— تعديل حصة' : ''}</p>
@@ -1627,7 +1627,7 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">سجل التلاميذ الخارجيين</h3>
@@ -1776,7 +1776,7 @@ export default function ExternalCoursesModule({
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
               >
-                <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print">
+                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
                   <span className="font-bold text-sm">وصل خلاص التأمين المدرسي</span>
                   <div className="flex gap-2">
                     <button
@@ -1877,7 +1877,7 @@ export default function ExternalCoursesModule({
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
               >
-                <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print">
+                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
                   <span className="font-bold text-sm">وصل خلاص الشهر</span>
                   <div className="flex gap-2">
                     <button
@@ -1973,7 +1973,7 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>

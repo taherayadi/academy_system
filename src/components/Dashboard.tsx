@@ -85,7 +85,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   return (
     <div className="space-y-8" dir="rtl">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
+      <div className="relative overflow-hidden bg-[#257C86] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-[#257C86] rounded-full opacity-5 blur-3xl"></div>
         <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-emerald-300 rounded-full opacity-15 blur-3xl"></div>
         

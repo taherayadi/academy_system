@@ -1170,7 +1170,7 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Modal Header */}
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-base font-black">
@@ -1375,7 +1375,7 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Header */}
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -1427,7 +1427,7 @@ export default function FormationModule({
                 {/* Enrollment Type (Pack vs Selection) */}
                 <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
                   <label className="text-xs font-black text-[#1e626b] block">نوع التسجيل في التكوين *</label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                       <input
                         type="radio"
@@ -1553,7 +1553,7 @@ export default function FormationModule({
                 {/* Payment Method */}
                 <div className="space-y-3">
                   <label className="text-xs font-black text-slate-700 block">طريقة الدفع *</label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                       <input
                         type="radio"
@@ -1688,7 +1688,7 @@ export default function FormationModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <RotateCcw className="h-5 w-5 text-[#257C86]" />
                 <div>
@@ -1764,7 +1764,7 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">وصل تسجيل في تكوين</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -1910,7 +1910,7 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">طباعة جدول الحصص</h3>
                 <div className="flex items-center gap-2">
                   <button

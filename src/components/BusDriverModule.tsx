@@ -542,7 +542,7 @@ export default function BusDriverModule({
       {/* TOP HEADER & DRIVER SUMMARY CARD */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white flex items-center justify-center shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-[#257C86] text-white flex items-center justify-center shadow-md">
             <Bus className="h-7 w-7 text-emerald-600" />
           </div>
           <div>

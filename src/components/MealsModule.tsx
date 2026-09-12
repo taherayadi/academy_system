@@ -1409,7 +1409,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">إلحاق تلميذ بمطعم السنتر</h3>
@@ -1655,7 +1655,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">{printingReceipt.payment.service === 'Goûter' ? 'وصل خلاص رسمي لخدمة اللمجة (Goûter)' : 'وصل خلاص رسمي للمطعم'}</span>
                 <div className="flex gap-2">
                   <button
@@ -2233,7 +2233,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     {paymentService === 'Goûter' ? (
@@ -2508,7 +2508,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Utensils className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">تحديد طبق يوم {ARABIC_WEEKDAYS[selectedDay]}</h3>
@@ -2571,7 +2571,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-emerald-400" />
                   <div>
@@ -2688,7 +2688,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Undo2 className="h-5 w-5 text-red-400" />
                   <div>

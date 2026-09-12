@@ -783,7 +783,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-[#257C86] rounded-xl text-white font-bold">
                     <UserPlus className="h-5 w-5" />
@@ -1000,7 +1000,7 @@ export default function StudentRegistrationModule({
                                 setMother({ ...mother, extraPhones: updated });
                               }}
                               placeholder={`رقم هاتف للأم #${idx + 1}`}
-                              className="input-phone flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                              className="input-phone min-w-0 flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                             />
                             <button
                               type="button"
@@ -1084,7 +1084,7 @@ export default function StudentRegistrationModule({
                                 setFather({ ...father, extraPhones: updated });
                               }}
                               placeholder={`رقم هاتف للأب #${idx + 1}`}
-                              className="input-phone flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                              className="input-phone min-w-0 flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                             />
                             <button
                               type="button"
@@ -1158,7 +1158,7 @@ export default function StudentRegistrationModule({
                       ) : (
                         <div className="space-y-2">
                           {siblings.map((sib, i) => (
-                            <div key={sib.id} className="flex gap-2 items-center">
+                            <div key={sib.id} className="grid grid-cols-[minmax(0,1fr)_5rem] sm:grid-cols-[minmax(0,1fr)_5rem_8rem_2rem] gap-2 items-center">
                               <input 
                                 type="text" placeholder="اسم الأخ / الاخت" value={sib.name}
                                 onChange={(e) => {
@@ -1189,7 +1189,7 @@ export default function StudentRegistrationModule({
                                   updated[i].grade = e.target.value;
                                   setSiblings(updated);
                                 }}
-                                className="w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
+                                className="col-span-2 w-full sm:col-span-1 sm:w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
                               />
                               <button 
                                 type="button" onClick={() => setDeleteConfirm({
@@ -1197,7 +1197,7 @@ export default function StudentRegistrationModule({
                                   message: <>هل أنت متأكد من حذف الأخ/الأخت <strong>{sib.name || `#${i + 1}`}</strong>؟</>,
                                   action: () => handleRemoveSibling(sib.id)
                                 })}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="col-span-2 sm:col-span-1 justify-self-start sm:justify-self-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -1224,7 +1224,7 @@ export default function StudentRegistrationModule({
                       ) : (
                         <div className="space-y-2">
                           {authorizedPersons.map((auth, i) => (
-                            <div key={auth.id} className="flex gap-2 items-center">
+                            <div key={auth.id} className="grid grid-cols-[minmax(0,1fr)_9rem] sm:grid-cols-[minmax(0,1fr)_9rem_8rem_8rem_2rem] gap-2 items-center">
                               <input 
                                 type="text" placeholder="الاسم واللقب للمأذون" value={auth.name}
                                 onChange={(e) => {
@@ -1246,7 +1246,7 @@ export default function StudentRegistrationModule({
                                   updated[i].phone = e.target.value.replace(/\D/g, '').slice(0, 8);
                                   setAuthorizedPersons(updated);
                                 }}
-                                className="input-phone w-36 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                                className="input-phone w-full px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                               />
                               <input 
                                 type="text" placeholder="صلة القرابة (خال، جدة)" value={auth.relation}
@@ -1255,7 +1255,7 @@ export default function StudentRegistrationModule({
                                   updated[i].relation = e.target.value;
                                   setAuthorizedPersons(updated);
                                 }}
-                                className="w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
+                                className="col-span-2 w-full sm:col-span-1 sm:w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
                               />
                               <button 
                                 type="button" onClick={() => setDeleteConfirm({
@@ -1263,7 +1263,7 @@ export default function StudentRegistrationModule({
                                   message: <>هل أنت متأكد من حذف المأذون <strong>{auth.name || `#${i + 1}`}</strong> من قائمة المأذونين بالمغادرة؟</>,
                                   action: () => handleRemoveAuthPerson(auth.id)
                                 })}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="col-span-2 sm:col-span-1 justify-self-start sm:justify-self-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -1577,7 +1577,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <span className="text-[10px] font-bold text-[#257C86] bg-[#257C86]/20 px-2.5 py-1 rounded-md">
                     بطاقة تلميذ — {selectedStudent.grade}
@@ -1713,7 +1713,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] overflow-hidden"
             >
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <span className="font-bold text-sm">معاينة بطاقة التسجيل قبل الطباعة</span>
                 <div className="flex gap-2">
                   <button
@@ -1917,7 +1917,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">استيراد ملف تلميذ من سنة سابقة</h3>

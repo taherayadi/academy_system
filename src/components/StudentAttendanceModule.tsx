@@ -215,7 +215,7 @@ export default function StudentAttendanceModule({ students, attendance, onUpdate
             type="button"
             onClick={savePointage}
             disabled={saving || students.length === 0}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Check className="h-4 w-4" />
             حفظ pointage اليوم

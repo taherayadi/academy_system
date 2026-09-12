@@ -905,7 +905,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* FILTERED METRIC CARDS (ACCORDING TO SELECTED FILTERS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
-        <div className="bg-gradient-to-br from-[#257C86] to-[#1e626b] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
+        <div className="bg-[#257C86] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
           <span className="text-xs font-bold text-white/80 block">الإيرادات الكلية (السنة)</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(yearTotalRevenue)} د.ت</p>
           <span className="text-[10px] text-white/60 font-bold">كل الإيرادات دون فيلتر الشهر</span>
@@ -951,7 +951,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <span className="text-[10px] text-red-500 font-bold">فواتير الفترة المختارة</span>
         </div>
 
-        <div className="bg-gradient-to-br from-[#257C86] to-[#1e626b] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
+        <div className="bg-[#257C86] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
           <span className="text-xs font-bold text-white/80 block">الصافي المالي للفترة</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(netProfit)} د.ت</p>
           <span className="text-[10px] text-white/60 font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
@@ -2055,7 +2055,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">تسجيل فاتورة / مصاريف للسنتر</h3>

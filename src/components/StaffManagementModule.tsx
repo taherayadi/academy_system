@@ -1140,7 +1140,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                <p className="text-xs text-slate-500">اختر الشهر ثم اضغط على يوم لعرض وتسجيل الحضور.</p>
              </div>
  
-             <div className="flex items-center gap-3">
+             <div className="flex flex-wrap items-center gap-3">
                <label className="text-xs font-bold text-slate-600">الشهر:</label>
 <select value={calendarMonth} onChange={(e) => { setSelectedCalendarDay(null); setCalendarMonth(Number(e.target.value)); }} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer">
                   {Object.values(MONTH_BY_CALENDAR_INDEX).map((label, idx) => <option key={idx} value={idx}>{label}</option>)}
@@ -1296,7 +1296,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">
@@ -1540,7 +1540,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center shrink-0">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">إعداد بطاقة الأجر</h3>
@@ -1560,7 +1560,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                   <div className="flex gap-2">
                     <select
                       required value={payMonthLabel} onChange={(e) => setPayMonthPart(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                      className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold"
                     >
                       {Object.values(MONTH_BY_CALENDAR_INDEX).map((label) => (
                         <option key={label} value={label}>{label}</option>
@@ -1694,7 +1694,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             <span className="font-mono">-{absenceDed.toFixed(2)} د.ت</span>
                           </div>
                         )}
-                        <div className="px-3 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between text-sm font-black">
+                        <div className="px-3 py-2.5 bg-[#257C86] text-white flex justify-between text-sm font-black">
                           <span>الصافي الواجب دفعه:</span>
                           <span className="font-mono text-[#257C86]">{netPrev.toFixed(2)} د.ت</span>
                         </div>
@@ -1739,7 +1739,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">كشف راتب رسمي</span>
                 <div className="flex gap-2">
                   <button
@@ -1820,7 +1820,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       </div>
                     )}
 
-                    <div className="p-3 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between text-sm font-black">
+                    <div className="p-3 bg-[#257C86] text-white flex justify-between text-sm font-black">
                       <span>الصافي الواجب دفعه:</span>
                       <span className="font-mono text-[#257C86]">{printedPayslip.netSalary.toFixed(2)} د.ت</span>
                     </div>
@@ -1859,7 +1859,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">تقديم طلب رخصة / إجازة</h3>
@@ -1943,7 +1943,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
           >
-            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-[#257C86]" />
                 <h3 className="text-lg font-black">طلب سلفة</h3>

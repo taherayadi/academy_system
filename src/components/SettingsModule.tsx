@@ -186,7 +186,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-6 shadow-lg shadow-[#257C86]/25 border border-white/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-[#257C86] text-white rounded-3xl p-6 shadow-lg shadow-[#257C86]/25 border border-white/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-6 w-6 text-[#257C86]" />
@@ -272,7 +272,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
           </h3>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0">
+            <div className="w-24 h-24 rounded-2xl bg-[#257C86] p-1 shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0">
               <img
                 src={logoPreview || centerLogoUrl || defaultLogo}
                 alt="شعار المركز"
@@ -298,7 +298,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   type="button"
                   onClick={handleLogoUpload}
                   disabled={!logoFile || logoUploading}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   رفع وحفظ الشعار

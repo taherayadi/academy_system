@@ -1028,7 +1028,7 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' 
+                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
                       : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
@@ -1048,7 +1048,7 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+              <span className={`rounded-2xl bg-[#257C86] ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
                 <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
               </span>
               {!sidebarCollapsed && (
@@ -1093,7 +1093,7 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/30' 
+                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/30' 
                       : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >

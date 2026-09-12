@@ -616,13 +616,13 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
       {/* STUDENTS ACADEMIC MONTH GRID TABLE (Module 2 Grid Septembre -> Mai) */}
       <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-slate-50/50">
           <div>
             <h3 className="font-extrabold text-slate-900 text-base">شبكة المتابعة والمدفوعات ({schoolYear})</h3>
             <p className="text-xs text-slate-500">اضغط على شهر لتنزيل دفعة أو معاينة الوصل.</p>
           </div>
           
-          <div className="flex items-center gap-4 text-xs font-bold">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-bold whitespace-nowrap">
             <div className="flex items-center gap-1.5 text-emerald-700">
               <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
               <span>Payé</span>
@@ -816,7 +816,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">إلحاق تلميذ بالمتابعة الدراسية</h3>
@@ -900,7 +900,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -1166,7 +1166,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">وصل خلاص رسمي</span>
                 <div className="flex gap-2">
                   <button
@@ -1323,7 +1323,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Undo2 className="h-5 w-5 text-red-400" />
                   <div>
@@ -1409,7 +1409,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center shrink-0">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
                   <NotebookPen className="h-5 w-5 text-[#257C86]" />
                   <div>

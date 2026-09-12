@@ -532,7 +532,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -710,7 +710,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -790,7 +790,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black">تسجيل الحضور والدفع — {selected.subject}</h3>
                   <p className="text-xs text-slate-300">الأستاذ: {selected.teacherName}</p>

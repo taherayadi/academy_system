@@ -194,7 +194,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   return (
     <div className="space-y-6" dir="rtl">
       {/* ─── En-tête ─────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-[#257C86] to-[#1e626b] p-6 text-white shadow-lg shadow-[#257C86]/25">
+      <div className="relative overflow-hidden rounded-3xl bg-[#257C86] p-6 text-white shadow-lg shadow-[#257C86]/25">
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-black">
@@ -366,7 +366,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#257C86] to-[#1e626b] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-[#257C86]/25 transition hover:shadow-lg disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#257C86] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-[#257C86]/25 transition hover:shadow-lg disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {isUpgrade ? 'Demander le changement d’offre' : 'Demander le renouvellement'}
@@ -406,7 +406,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                     {meta.label}
                     <span dir="rtl" className="font-bold opacity-75">{meta.labelAr}</span>
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 w-full sm:w-auto sm:flex-1 order-last sm:order-none">
                     <p className="text-xs font-black text-slate-800">
                       {r.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'} · {planLabel(r.requestedPlan)}
                     </p>
@@ -419,7 +419,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">Réponse : {r.decisionNote}</p>
                     )}
                   </div>
-                  <span className="shrink-0 text-[10px] font-bold text-slate-400">{formatDate(r.createdAt)}</span>
+                  <span dir="ltr" className="ms-auto sm:ms-0 shrink-0 text-[10px] font-bold text-slate-400">{formatDate(r.createdAt)}</span>
                 </motion.div>
               );
             })}
@@ -441,11 +441,11 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
             {history.map(h => (
               <li key={h.id} className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2">
                 <span className="text-xs font-black text-slate-700">{historyLabel(h.action)}</span>
-                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
+                <span className="order-last w-full sm:order-none sm:w-auto sm:min-w-0 sm:flex-1 sm:truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
                 {h.amount !== null && (
                   <span className="shrink-0 text-[10px] font-black text-[#257C86]">{h.amount} TND</span>
                 )}
-                <span className="shrink-0 text-[10px] font-bold text-slate-400">{relativeDays(h.createdAt)}</span>
+                <span className="ms-auto sm:ms-0 shrink-0 text-[10px] font-bold text-slate-400">{relativeDays(h.createdAt)}</span>
               </li>
             ))}
           </ul>
