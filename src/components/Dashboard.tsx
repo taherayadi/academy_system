@@ -44,16 +44,16 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6'];
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
     { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
     { tab: 'studentTimeSheets', title: centerType === 'jardin' ? 'Pointage Élèves' : 'Jd. Horaires', desc: centerType === 'jardin' ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'module3', title: `Étude ${settings?.centerName || 'المركز'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'module4', title: `Études Hors ${settings?.centerName || 'المركز'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
-    { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
     { tab: 'formations', title: 'Formations & Cours', desc: 'التكوينات والدورات', icon: Award, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
     { tab: 'module6', title: 'Gestion des Repas', desc: 'وجبة اليوم وتعويض الإلغاء', icon: Utensils, tile: 'bg-[#257C86]/10 text-[#257C86]' },
     { tab: 'moduleBus', title: 'Plan de Bus', desc: 'خطة الحافلة والتوصيل', icon: Bus, tile: 'bg-slate-100 text-slate-500' },
-    { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-emerald-50 text-emerald-600' },
+    { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
     { tab: 'module8', title: 'Gestion du Personnel', desc: 'بطاقات المعلمين وكشوفات الرواتب', icon: Users, tile: 'bg-slate-100 text-slate-500' }
   ];
   const quickModules = QUICK_MODULES.filter(m =>
@@ -85,22 +85,22 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   return (
     <div className="space-y-8" dir="rtl">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
+      <div className="relative overflow-hidden bg-[#257C86] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-[#257C86] rounded-full opacity-5 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-emerald-300 rounded-full opacity-15 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="text-teal-50 font-extrabold text-xs uppercase tracking-widest bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'المركز'}</span>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">{settings?.centerName || 'المركز'}</h1>
+            <span className="text-white/90 font-extrabold text-xs bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'المركز'}</span>
+            <h1 className="text-3xl md:text-4xl font-black mt-3">{settings?.centerName || 'المركز'}</h1>
             <p className="mt-2 text-slate-300 text-base max-w-xl font-light leading-relaxed">
               مرحباً بك في لوحة قيادة {settings?.centerName || 'المركز'} الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
             </p>
           </div>
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center min-w-[210px] shadow-lg">
-            <CalendarDays className="h-6 w-6 text-emerald-300 mx-auto mb-1" />
+            <CalendarDays className="h-6 w-6 text-white/70 mx-auto mb-1" />
             <span className="block text-[11px] text-slate-400">تاريخ اليوم</span>
-            <span className="block text-xl font-black text-emerald-200 mt-1">
+            <span className="block text-xl font-black text-white mt-1">
               {new Date().toLocaleDateString('ar-TN', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
@@ -148,7 +148,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
               إدارة الموظفين <span>←</span>
             </button>
           </div>
-          <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
+          <div className="p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl">
             <Users className="h-7 w-7" />
           </div>
         </motion.div>
@@ -161,7 +161,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         >
           <div className="space-y-2">
             <span className="text-xs font-bold text-slate-400 block">مجموع المقبوضات</span>
-            <span className="text-xl font-black text-emerald-700 block whitespace-nowrap font-mono">{finances.toLocaleString()} د.ت</span>
+            <span className="text-xl font-black text-[#1e626b] block whitespace-nowrap font-mono">{finances.toLocaleString()} د.ت</span>
             {allowed('module7') && (
             <button 
               onClick={() => setActiveTab('module7')}
@@ -171,7 +171,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
             </button>
             )}
           </div>
-          <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
+          <div className="p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl">
             <DollarSign className="h-7 w-7" />
           </div>
         </motion.div>

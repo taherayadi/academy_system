@@ -4,17 +4,22 @@ import {
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
 } from './planLogic';
 import { logPlanHistory } from './_planHistory';
+import { publishOnResponse } from './_pubnub';
 
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
 const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
+// Bibliothèque désactivée pour l'instant : hors preset Pro (11 modules comme
+// le simulateur) et jamais facturée, même si un centre l'a encore en stock.
+// Pour réactiver : remettre 'bibliotheque' ici et retirer le filtre prix.
 const ALL_MODULE_KEYS = [
   'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-  'formations', 'cantine', 'transport', 'events', 'bibliotheque',
+  'formations', 'cantine', 'transport', 'events',
   BUNDLED_MODULE_KEY, 'staff'
 ];
+const UNBILLED_MODULE_KEYS = new Set([BUNDLED_MODULE_KEY, 'bibliotheque']);
 const ANNUAL_DISCOUNT = 0.2;
 const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 
@@ -212,7 +217,7 @@ async function computePeriodAmount(
     `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
   ).bind(currentSchoolYear(), ...args.modules).all<any>();
   let total = (results || []).reduce(
-    (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
+    (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
     0
   );
   if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
@@ -271,7 +276,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           ? 0
           : Number(c.monthly_price) || 0;
         const calculatedMonthlyPrice = modules.reduce(
-          (total, moduleKey) => total + (moduleKey === BUNDLED_MODULE_KEY ? 0 : (modulePrices.get(moduleKey) || 0)),
+          (total, moduleKey) => total + (UNBILLED_MODULE_KEYS.has(moduleKey) ? 0 : (modulePrices.get(moduleKey) || 0)),
           0
         );
         const storedStatus = c.status || 'active';
@@ -372,7 +377,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   }
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
@@ -470,7 +476,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
       ).bind(currentSchoolYear, ...enabledModules).all<any>();
       monthlyPrice = priceRows.reduce(
-        (sum, r) => sum + (r.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(r.price) || 0)),
+        (sum, r) => sum + (UNBILLED_MODULE_KEYS.has(r.module_key) ? 0 : (Number(r.price) || 0)),
         0
       );
       if (billingCycle === 'annual') {
@@ -568,6 +574,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           + (offerDays > 0 ? ` après ${offerDays} j offerts.` : '.'),
     });
 
+    // Signal temps réel (fire-and-forget) — plateforme + canal du centre.
+    publishOnResponse(context, env, ['center.' + id, 'platform'], {
+      type: 'refetch',
+      topic: 'center_created',
+      centerId: id,
+      at: Date.now(),
+    });
+
     return json({
       success: true,
       centerId: id,
@@ -584,7 +598,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   }
 };
 
-export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
     if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
@@ -637,6 +652,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       const res = await env.DB.prepare(
         `UPDATE center_plan_schedules SET status = 'cancelled', applied_at = NULL WHERE center_id = ? AND status = 'pending'`
       ).bind(id).run();
+      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({ success: true, planChange: { mode: 'schedule_cancelled', cancelled: (res.meta.changes || 0) > 0 } });
     }
 
@@ -702,6 +718,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         await env.DB.prepare(`UPDATE center_settings SET ${scheduleSettingsUpdates.join(', ')} WHERE center_id = ?`).bind(...scheduleSettingsBinds).run();
       }
 
+      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({
         success: true,
         planChange: {
@@ -1081,6 +1098,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       await logPlanHistory(env.DB, { centerId: id, ...entry });
     }
 
+    // Platform edit published to the center's channel (fire-and-forget).
+    publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
     return json({ success: true, planChange: planChangeResponse });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث المركز.' }, 500);

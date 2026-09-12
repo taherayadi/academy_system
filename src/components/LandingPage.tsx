@@ -284,12 +284,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-[#257C86]/5 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
 
       {/* ─── SCROLL PROGRESS ───────────────────────────────────────── */}
       <motion.div
         style={{ scaleX: progress }}
-        className="fixed top-0 left-0 right-0 h-[3px] z-[70] origin-left bg-gradient-to-r from-[#257C86] to-blue-500"
+        className="fixed top-0 left-0 right-0 h-[3px] z-[70] origin-left bg-gradient-to-r from-[#257C86] to-[#257C86]"
       />
 
       {/* ─── NAVIGATION ────────────────────────────────────────────── */}
@@ -332,7 +332,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       {/* ─── HERO ──────────────────────────────────────────────────── */}
       <section className="relative pt-14 sm:pt-20 pb-14 overflow-hidden">
         {/* soft light washes, same spirit as master */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-blue-500/[0.05] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-[#257C86]/[0.05] pointer-events-none" />
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-[#257C86]/[0.07] blur-[120px] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
@@ -344,7 +344,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55 }}
-                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#257C86]/10 to-blue-500/10 border border-[#257C86]/20 mb-7"
+                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#257C86]/10 to-[#257C86]/10 border border-[#257C86]/20 mb-7"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#257C86] opacity-50"></span>
@@ -361,7 +361,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               >
                 Votre académie,
                 <br />
-                <span className="bg-gradient-to-r from-[#257C86] to-blue-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-[#257C86] to-[#257C86] bg-clip-text text-transparent">
                   sous contrôle total.
                 </span>
               </motion.h1>
@@ -424,7 +424,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               transition={{ duration: 0.85, delay: 0.3 }}
               className="relative mx-auto w-full max-w-[520px]"
             >
-              <div className="absolute -inset-6 bg-gradient-to-tr from-[#257C86]/15 via-blue-400/10 to-transparent blur-3xl rounded-[3rem] pointer-events-none" />
+              <div className="absolute -inset-6 bg-gradient-to-tr from-[#257C86]/15 via-[#257C86]/10 to-transparent blur-3xl rounded-[3rem] pointer-events-none" />
 
               <motion.div
                 animate={{ y: [0, -7, 0] }}
@@ -433,7 +433,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               >
                 {/* window chrome */}
                 <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/80">
-                  <span className="h-3 w-3 rounded-full bg-rose-400/80" />
+                  <span className="h-3 w-3 rounded-full bg-red-400" />
                   <span className="h-3 w-3 rounded-full bg-amber-400/80" />
                   <span className="h-3 w-3 rounded-full bg-emerald-400/80" />
                   <div className="ml-3 hidden sm:flex items-center gap-2 text-[11px] text-slate-400 font-bold">
@@ -443,7 +443,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <div className="ml-auto flex items-center gap-3.5 text-slate-400">
                     <Search className="h-4 w-4" />
                     <Bell className="h-4 w-4" />
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-[#257C86] to-blue-500" />
+                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-[#257C86] to-[#257C86]" />
                   </div>
                 </div>
 
@@ -577,8 +577,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 className="absolute -bottom-6 -left-2 sm:-left-8 rounded-2xl bg-white border border-slate-200 shadow-xl shadow-slate-900/10 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-orange-50 border border-orange-100">
-                    <Utensils className="h-4 w-4 text-orange-500" />
+                  <div className="p-2 rounded-xl bg-amber-50 border border-amber-100">
+                    <Utensils className="h-4 w-4 text-amber-500" />
                   </div>
                   <div>
                     <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
@@ -639,7 +639,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             { value: 0, label: 'Limite d’élèves & d’utilisateurs' }
           ].map(s => (
             <div key={s.label}>
-              <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-[#257C86] to-blue-600 bg-clip-text text-transparent mb-2 tracking-tight">
+              <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-[#257C86] to-[#257C86] bg-clip-text text-transparent mb-2 tracking-tight">
                 <Counter to={s.value} />
               </div>
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider leading-relaxed">{s.label}</div>
@@ -867,7 +867,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-5 rounded-3xl border border-[#257C86]/25 bg-gradient-to-r from-[#257C86]/10 via-[#257C86]/5 to-blue-50/50 px-7 py-6"
+            className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-5 rounded-3xl border border-[#257C86]/25 bg-gradient-to-r from-[#257C86]/10 via-[#257C86]/5 to-[#257C86]/5 px-7 py-6"
           >
             <div className="flex items-center gap-4 text-center sm:text-left">
               <div className="p-3 rounded-2xl bg-white border border-[#257C86]/20 shadow-sm">
@@ -973,7 +973,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-10">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#257C86]/10 to-blue-500/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#257C86]/10 to-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
               <Zap className="h-3.5 w-3.5" />
               Calculateur d’abonnement
             </span>

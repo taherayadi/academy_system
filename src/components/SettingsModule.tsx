@@ -186,7 +186,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-3xl p-6 shadow-lg shadow-[#257C86]/25 border border-white/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-[#257C86] text-white rounded-3xl p-6 shadow-lg shadow-[#257C86]/25 border border-white/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-6 w-6 text-[#257C86]" />
@@ -198,7 +198,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
         </div>
 
         {isSaved && (
-          <div className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold animate-pulse">
+          <div className="flex items-center gap-2 bg-[#257C86] text-white px-4 py-2 rounded-xl text-xs font-bold animate-pulse">
             <Check className="h-4 w-4" />
             تم الحفظ بنجاح!
           </div>
@@ -272,11 +272,11 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
           </h3>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0">
+            <div className="w-24 h-24 rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0 overflow-hidden">
               <img
                 src={logoPreview || centerLogoUrl || defaultLogo}
                 alt="شعار المركز"
-                className="w-full h-full rounded-xl object-cover bg-white"
+                className="center-logo-img w-full h-full object-cover"
               />
             </div>
             <div className="space-y-3 min-w-0">
@@ -298,7 +298,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   type="button"
                   onClick={handleLogoUpload}
                   disabled={!logoFile || logoUploading}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   رفع وحفظ الشعار
@@ -388,8 +388,8 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
             {/* Bibliotheque — uniquement si le module est au plan */}
             {hasModule('bibliotheque') && (
-            <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-200/60 space-y-3">
-              <span className="text-xs font-extrabold text-emerald-900 block border-b border-emerald-200/60 pb-1">
+            <div className="bg-[#257C86]/[0.06]/40 p-4 rounded-2xl border border-[#257C86]/20/60 space-y-3">
+              <span className="text-xs font-extrabold text-[#14464e] block border-b border-[#257C86]/20/60 pb-1">
                 المكتبة
               </span>
               
@@ -452,7 +452,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                         setFormData(prev => ({ ...prev, mealOperatingMode: 'in_house_kitchen' }));
                         updateFee('prixPlatTraiteur', 0);
                       }}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-emerald-600 text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-[#257C86] text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
                     >
                       👨‍🍳 مطبخ داخلي (طباخ قار)
                     </button>
@@ -513,11 +513,11 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       <span className="text-[10px] text-slate-500 font-medium block mt-1">تخصم كدين للـ Traiteur في وحدة المالية</span>
                     </div>
                   ) : (
-                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-col justify-center">
-                      <span className="text-[11px] font-black text-emerald-800 flex items-center gap-1">
+                    <div className="p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20 flex flex-col justify-center">
+                      <span className="text-[11px] font-black text-[#1e626b] flex items-center gap-1">
                         ✓ نظام المطبخ الداخلي مفعّل
                       </span>
-                      <span className="text-[10px] text-emerald-700 mt-0.5">
+                      <span className="text-[10px] text-[#1e626b] mt-0.5">
                         حصة الـ Traiteur معطلة (0 د.ت). 100% من مداخيل الوجبات تسجل كأرباح للمركز.
                       </span>
                     </div>
@@ -625,8 +625,8 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
             {/* Étude — uniquement si le module est au plan */}
             {hasModule('etude') && (
-            <div className="bg-teal-50/40 p-4 rounded-2xl border border-teal-200/60 space-y-3">
-              <span className="text-xs font-extrabold text-teal-900 block border-b border-teal-200/60 pb-1">
+            <div className="bg-[#257C86]/5 p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
+              <span className="text-xs font-extrabold text-[#14464e] block border-b border-[#257C86]/20 pb-1">
                 تأطير Étude
               </span>
               
@@ -668,8 +668,8 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
             {/* Cours Particuliers — module requis au plan */}
             {!hideRestrictedModules && hasModule('coursParticuliers') && (
-              <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-200/60 space-y-3 lg:col-span-2">
-                <span className="text-xs font-extrabold text-emerald-900 block border-b border-emerald-200/60 pb-1">
+              <div className="bg-[#257C86]/[0.06]/40 p-4 rounded-2xl border border-[#257C86]/20/60 space-y-3 lg:col-span-2">
+                <span className="text-xs font-extrabold text-[#14464e] block border-b border-[#257C86]/20/60 pb-1">
                   الدروس الخصوصية
                 </span>
                 
@@ -692,7 +692,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                   </div>
 
                   <div className="flex items-end">
-                    <p className="text-[11px] text-slate-500 leading-relaxed bg-white/80 p-2 rounded-xl border border-emerald-200/50">
+                    <p className="text-[11px] text-slate-500 leading-relaxed bg-white/80 p-2 rounded-xl border border-[#257C86]/20/50">
                       تُطبق تلقائياً عند تسجيل المقبوضات الجديدة.
                     </p>
                   </div>

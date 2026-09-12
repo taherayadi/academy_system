@@ -690,17 +690,17 @@ export default function StudentRegistrationModule({
               {/* Badges of Enrolled Services */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {st.enrolledServices?.suivi && (
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                     Suivi Scolaire
                   </span>
                 )}
                 {st.enrolledServices?.etude && (
-                  <span className="text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md border border-teal-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/5 text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20">
                     Étude {centerName}
                   </span>
                 )}
                 {st.enrolledServices?.library && (
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                     Bibliothèque
                   </span>
                 )}
@@ -712,15 +712,15 @@ export default function StudentRegistrationModule({
                 {!hideRestrictedModules && (
                   <>
                     {(st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir)) ? (
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#14464e] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                         اللمجتان معاً
                       </span>
                     ) : st.enrolledServices?.gouterMatin ? (
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                         لمجة الصباح
                       </span>
                     ) : st.enrolledServices?.gouterSoir ? (
-                      <span className="text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md border border-teal-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/5 text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20">
                         لمجة المساء
                       </span>
                     ) : null}
@@ -783,7 +783,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-[#257C86] rounded-xl text-white font-bold">
                     <UserPlus className="h-5 w-5" />
@@ -949,7 +949,7 @@ export default function StudentRegistrationModule({
                           const currentExtras = mother.extraPhones || [];
                           setMother({ ...mother, extraPhones: [...currentExtras, ''] });
                         }}
-                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10/80 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
+                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
                       >
                         إضافة رقم هاتف للأم
                       </button>
@@ -1000,7 +1000,7 @@ export default function StudentRegistrationModule({
                                 setMother({ ...mother, extraPhones: updated });
                               }}
                               placeholder={`رقم هاتف للأم #${idx + 1}`}
-                              className="input-phone flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                              className="input-phone min-w-0 flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                             />
                             <button
                               type="button"
@@ -1033,7 +1033,7 @@ export default function StudentRegistrationModule({
                           const currentExtras = father.extraPhones || [];
                           setFather({ ...father, extraPhones: [...currentExtras, ''] });
                         }}
-                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10/80 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
+                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
                       >
                         إضافة رقم هاتف للأب
                       </button>
@@ -1084,7 +1084,7 @@ export default function StudentRegistrationModule({
                                 setFather({ ...father, extraPhones: updated });
                               }}
                               placeholder={`رقم هاتف للأب #${idx + 1}`}
-                              className="input-phone flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                              className="input-phone min-w-0 flex-1 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                             />
                             <button
                               type="button"
@@ -1158,7 +1158,7 @@ export default function StudentRegistrationModule({
                       ) : (
                         <div className="space-y-2">
                           {siblings.map((sib, i) => (
-                            <div key={sib.id} className="flex gap-2 items-center">
+                            <div key={sib.id} className="grid grid-cols-[minmax(0,1fr)_5rem] sm:grid-cols-[minmax(0,1fr)_5rem_8rem_2rem] gap-2 items-center">
                               <input 
                                 type="text" placeholder="اسم الأخ / الاخت" value={sib.name}
                                 onChange={(e) => {
@@ -1189,7 +1189,7 @@ export default function StudentRegistrationModule({
                                   updated[i].grade = e.target.value;
                                   setSiblings(updated);
                                 }}
-                                className="w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
+                                className="col-span-2 w-full sm:col-span-1 sm:w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
                               />
                               <button 
                                 type="button" onClick={() => setDeleteConfirm({
@@ -1197,7 +1197,7 @@ export default function StudentRegistrationModule({
                                   message: <>هل أنت متأكد من حذف الأخ/الأخت <strong>{sib.name || `#${i + 1}`}</strong>؟</>,
                                   action: () => handleRemoveSibling(sib.id)
                                 })}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="col-span-2 sm:col-span-1 justify-self-start sm:justify-self-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -1224,7 +1224,7 @@ export default function StudentRegistrationModule({
                       ) : (
                         <div className="space-y-2">
                           {authorizedPersons.map((auth, i) => (
-                            <div key={auth.id} className="flex gap-2 items-center">
+                            <div key={auth.id} className="grid grid-cols-[minmax(0,1fr)_9rem] sm:grid-cols-[minmax(0,1fr)_9rem_8rem_8rem_2rem] gap-2 items-center">
                               <input 
                                 type="text" placeholder="الاسم واللقب للمأذون" value={auth.name}
                                 onChange={(e) => {
@@ -1246,7 +1246,7 @@ export default function StudentRegistrationModule({
                                   updated[i].phone = e.target.value.replace(/\D/g, '').slice(0, 8);
                                   setAuthorizedPersons(updated);
                                 }}
-                                className="input-phone w-36 px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
+                                className="input-phone w-full px-3 py-1.5 bg-white border rounded-xl text-xs font-mono" maxLength={8}
                               />
                               <input 
                                 type="text" placeholder="صلة القرابة (خال، جدة)" value={auth.relation}
@@ -1255,7 +1255,7 @@ export default function StudentRegistrationModule({
                                   updated[i].relation = e.target.value;
                                   setAuthorizedPersons(updated);
                                 }}
-                                className="w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
+                                className="col-span-2 w-full sm:col-span-1 sm:w-32 px-3 py-1.5 bg-white border rounded-xl text-xs"
                               />
                               <button 
                                 type="button" onClick={() => setDeleteConfirm({
@@ -1263,7 +1263,7 @@ export default function StudentRegistrationModule({
                                   message: <>هل أنت متأكد من حذف المأذون <strong>{auth.name || `#${i + 1}`}</strong> من قائمة المأذونين بالمغادرة؟</>,
                                   action: () => handleRemoveAuthPerson(auth.id)
                                 })}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="col-span-2 sm:col-span-1 justify-self-start sm:justify-self-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -1415,20 +1415,20 @@ export default function StudentRegistrationModule({
                     )}
 
                     {!hideRestrictedModules && hasModule('cantine') && (
-                      <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 space-y-3">
+                      <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-[#257C86]/20/80 bg-[#257C86]/[0.06]/40 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
-                            <Cookie className="h-4 w-4 text-emerald-600" />
+                          <span className="text-xs font-black text-[#14464e] flex items-center gap-1.5">
+                            <Cookie className="h-4 w-4 text-[#257C86]" />
                             اشتراكات اللمجة (Goûter)
                           </span>
                           {gouterBothEnrolled && (
-                            <span className="text-[10px] font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-full shadow-lg shadow-slate-900/5">
+                            <span className="text-[10px] font-black bg-[#257C86] text-white px-2.5 py-0.5 rounded-full shadow-lg shadow-slate-900/5">
                               اللمجتان معاً (عرض مدمج)
                             </span>
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterMatinEnrolled && !gouterBothEnrolled ? 'bg-emerald-100 border-emerald-400 text-emerald-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-emerald-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterMatinEnrolled && !gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/40 text-[#14464e] cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterMatinEnrolled && !gouterBothEnrolled}
@@ -1442,7 +1442,7 @@ export default function StudentRegistrationModule({
                                   setGouterMatinEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]/30"
                             />
                             <div>
                               <span className="font-bold text-xs block">لمجة الصباح فقط</span>
@@ -1452,7 +1452,7 @@ export default function StudentRegistrationModule({
                             </div>
                           </label>
 
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterSoirEnrolled && !gouterBothEnrolled ? 'bg-teal-100 border-teal-400 text-teal-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-teal-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterSoirEnrolled && !gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/60 text-[#14464e] cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterSoirEnrolled && !gouterBothEnrolled}
@@ -1466,7 +1466,7 @@ export default function StudentRegistrationModule({
                                   setGouterSoirEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-teal-600 focus:ring-teal-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]"
                             />
                             <div>
                               <span className="font-bold text-xs block">لمجة المساء فقط</span>
@@ -1476,7 +1476,7 @@ export default function StudentRegistrationModule({
                             </div>
                           </label>
 
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterBothEnrolled ? 'bg-emerald-100 border-emerald-400 text-emerald-950 cursor-pointer shadow-lg shadow-slate-900/5' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-emerald-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/40 text-[#14464e] cursor-pointer shadow-lg shadow-slate-900/5' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterBothEnrolled}
@@ -1492,11 +1492,11 @@ export default function StudentRegistrationModule({
                                   setGouterSoirEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]/30"
                             />
                             <div>
-                              <span className="font-bold text-xs block text-emerald-900">اللمجتان معاً (صباح + مساء)</span>
-                              <span className="text-[10px] text-emerald-700 font-mono font-bold">
+                              <span className="font-bold text-xs block text-[#14464e]">اللمجتان معاً (صباح + مساء)</span>
+                              <span className="text-[10px] text-[#1e626b] font-mono font-bold">
                                 {settings ? (getFeesForYear(settings, academicYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, academicYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, academicYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/شهر
                               </span>
                             </div>
@@ -1577,7 +1577,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <span className="text-[10px] font-bold text-[#257C86] bg-[#257C86]/20 px-2.5 py-1 rounded-md">
                     بطاقة تلميذ — {selectedStudent.grade}
@@ -1713,7 +1713,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] overflow-hidden"
             >
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <span className="font-bold text-sm">معاينة بطاقة التسجيل قبل الطباعة</span>
                 <div className="flex gap-2">
                   <button
@@ -1855,17 +1855,17 @@ export default function StudentRegistrationModule({
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">5. الخدمات والاشتراكات</h3>
                     <div className="flex flex-wrap gap-2 text-[10px]">
-                      {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Suivi Scolaire</span>}
-                      {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-teal-100 text-teal-900 rounded font-bold">✓ Étude {centerName}</span>}
-                      {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Bibliothèque</span>}
+                      {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Suivi Scolaire</span>}
+                      {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Étude {centerName}</span>}
+                      {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Bibliothèque</span>}
                       {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded font-bold">✓ Repas</span>}
                       {!hideRestrictedModules && (
                         (printingRegistrationStudent.enrolledServices?.gouterBoth || (printingRegistrationStudent.enrolledServices?.gouterMatin && printingRegistrationStudent.enrolledServices?.gouterSoir)) ? (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-950 rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterMatin ? (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ لمجة الصباح</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ لمجة الصباح</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterSoir ? (
-                          <span className="px-2 py-1 bg-teal-100 text-teal-900 rounded font-bold">✓ لمجة المساء</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ لمجة المساء</span>
                         ) : null
                       )}
                     </div>
@@ -1917,7 +1917,7 @@ export default function StudentRegistrationModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-lg font-black">استيراد ملف تلميذ من سنة سابقة</h3>

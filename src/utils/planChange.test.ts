@@ -3,6 +3,7 @@ import {
   DAY_MS,
   analyzePlanChange,
   displayPlan,
+  moduleTotal,
   periodAmount,
   round2,
   storagePlan,
@@ -136,5 +137,14 @@ describe('periodAmount — cohérence avec le simulateur et la console', () => {
   it('never discounts a monthly period', () => {
     expect(periodAmount('basic', 'monthly', ['scolaire', 'finance'], prices))
       .toBe(totalForCycle(90, 'monthly'));
+  });
+
+  it('never bills the dormant Bibliothèque module, even when granted', () => {
+    expect(
+      moduleTotal(
+        ['scolaire', 'finance', 'bibliotheque'],
+        { scolaire: 50, finance: 40, bibliotheque: 12 }
+      )
+    ).toBe(90);
   });
 });

@@ -35,17 +35,17 @@ export function useToast() {
 }
 
 const iconMap: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />,
+  success: <CheckCircle2 className="h-5 w-5 text-[#3A93A0] shrink-0" />,
   error: <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />,
   warning: <AlertTriangle className="h-5 w-5 text-[#3A93A0] shrink-0" />,
-  info: <Info className="h-5 w-5 text-sky-400 shrink-0" />
+  info: <Info className="h-5 w-5 text-[#3A93A0] shrink-0" />
 };
 
 const borderMap: Record<ToastType, string> = {
-  success: 'border-emerald-500/40',
+  success: 'border-[#257C86]/40',
   error: 'border-red-500/40',
   warning: 'border-[#257C86]/40',
-  info: 'border-sky-500/40'
+  info: 'border-[#257C86]/40'
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

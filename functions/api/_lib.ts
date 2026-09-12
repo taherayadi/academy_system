@@ -10,6 +10,13 @@ export interface Env {
   DB: D1Database;
   /** ImageKit.io private API key — set via Cloudflare Pages env var / secret. */
   IMAGEKIT_PRIVATE_KEY?: string;
+  // PubNub realtime keys — set via Cloudflare Pages → Settings → Environment
+  // variables (Production AND Preview). All three are optional: when any of
+  // them is missing the app silently falls back to polling (see _pubnub.ts).
+  // NEVER store values in wrangler.toml [vars] (committed) — env bindings only.
+  PUBNUB_PUBLISH_KEY?: string;
+  PUBNUB_SUBSCRIBE_KEY?: string;
+  PUBNUB_SECRET_KEY?: string;
 }
 
 // ---------------------------------------------------------------------------

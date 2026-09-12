@@ -7,6 +7,7 @@ import {
   DEFAULT_CENTER_ID,
 } from './_lib';
 import { logPlanHistory } from './_planHistory';
+import { publishOnResponse } from './_pubnub';
 
 const DAY_MS = 86400000;
 
@@ -143,7 +144,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 };
 
 // POST /api/renewal-requests — le centre dépose une demande
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await sessionAllowingExpired(env.DB, request);
     if (!session) return json({ error: 'Session expirée.' }, 401);
@@ -217,6 +219,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       now
     ).run();
 
+    // Signal temps réel « nouvelle demande » → tableau de bord plateforme
+    // (fire-and-forget : ne peut jamais faire échouer la requête).
+    publishOnResponse(context, env, ['platform'], {
+      type: 'refetch',
+      topic: 'renewal_request_created',
+      centerId,
+      at: now,
+    });
+
     return json({ success: true, id, status: 'pending' }, 201);
   } catch (err) {
     console.error('Error creating renewal request:', err);
@@ -225,7 +236,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 };
 
 // PATCH /api/renewal-requests — la plateforme accepte ou refuse
-export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     const session = await sessionAllowingExpired(env.DB, request);
     if (!session) return json({ error: 'Session expirée.' }, 401);
@@ -249,8 +261,12 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     const now = Date.now();
     const decisionNote = String(body.decisionNote || '').slice(0, 500);
+    // Modal « Examiner et appliquer » : le plan a déjà été appliqué via le
+    // moteur « Plans & factures » (régularisation / programmation / facture).
+    // On enregistre seulement la décision pour éviter une double application.
+    const skipApply = body.skipApply === true || String(body.skipApply || '') === 'true';
 
-    if (status === 'approved') {
+    if (status === 'approved' && !skipApply) {
       const center = await env.DB.prepare(
         `SELECT id, status, plan, billing_cycle, subscription_ends_at, trial_ends_at, enabled_modules
          FROM centers WHERE id = ?`
@@ -295,6 +311,16 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
        SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ?
        WHERE id = ?`
     ).bind(status, decisionNote, session.email, now, now, id).run();
+
+    // Signal temps réel « décision rendue » (acceptée ET refusée, chemin
+    // direct comme chemin modal skipApply) → le centre rafraîchit ses
+    // demandes et son abonnement en ~2 s, sans attendre le tick de polling.
+    publishOnResponse(context, env, ['center.' + String(row.center_id), 'platform'], {
+      type: 'refetch',
+      topic: 'renewal_request_decided',
+      centerId: String(row.center_id),
+      at: now,
+    });
 
     return json({ success: true, id, status });
   } catch (err) {

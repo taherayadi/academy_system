@@ -49,19 +49,19 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40 flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-[#257C86]/5 flex items-center justify-center p-4 relative overflow-hidden font-sans"
       dir="rtl"
     >
 
       {/* Background washes — same spirit as the landing page */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-blue-500/[0.05] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-[#257C86]/[0.05] pointer-events-none"></div>
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-[#257C86]/[0.08] blur-[120px] pointer-events-none"></div>
-      <div className="absolute -bottom-24 -right-24 h-[300px] w-[300px] rounded-full bg-[#8DC760]/[0.08] blur-[100px] pointer-events-none"></div>
+      <div className="absolute -bottom-24 -right-24 h-[300px] w-[300px] rounded-full bg-[#257C86]/[0.08] blur-[100px] pointer-events-none"></div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.35 }}
+
+
+
         className="w-full max-w-md bg-white/90 backdrop-blur-xl rounded-3xl border border-slate-200/70 shadow-2xl shadow-slate-900/10 overflow-hidden z-10"
       >
 
@@ -76,13 +76,13 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
               <span>← الموقع التعريفي</span>
             </button>
           )}
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
-            <img src={icon} alt={centerName || 'المركز'} className="w-full h-full object-cover" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-[#257C86] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
+            <img src={icon} alt={centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{centerName || 'المركز'}</h1>
+          <h1 className="text-2xl font-black text-slate-900">{centerName || 'المركز'}</h1>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1.5 rounded-full bg-[#257C86]/10 border border-[#257C86]/20">
             <ShieldCheck className="h-3.5 w-3.5 text-[#257C86]" />
-            <span className="text-[11px] font-black text-[#257C86] uppercase tracking-wider">تسجيل الدخول الإداري</span>
+            <span className="text-[11px] font-black text-[#257C86]">تسجيل الدخول الإداري</span>
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
             )}
 
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-2">البريد الإلكتروني</label>
+              <label className="text-xs font-black text-slate-500 block mb-2">البريد الإلكتروني</label>
               <div className="relative">
                 <Mail className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -113,7 +113,7 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-2">كلمة السر</label>
+              <label className="text-xs font-black text-slate-500 block mb-2">كلمة السر</label>
               <div className="relative">
                 <Lock className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
                 <input

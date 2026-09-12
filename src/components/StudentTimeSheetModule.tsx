@@ -317,7 +317,7 @@ export default function StudentTimeSheetModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <h3 className="text-lg font-black">تأكيد الحذف</h3>

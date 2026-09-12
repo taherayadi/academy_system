@@ -958,17 +958,20 @@ export async function createRenewalRequestApi(payload: CreateRenewalRequestInput
   return { success: data.success || false, id: data.id || '' };
 }
 
-/** Accepter ou refuser une demande — réservé à la plateforme. */
+/** Accepter ou refuser une demande — réservé à la plateforme.
+ * `skipApply` : le plan a déjà été appliqué via le moteur « Plans & factures »
+ * (modal « Examiner et appliquer ») — ne fait qu'enregistrer la décision. */
 export async function decideRenewalRequestApi(
   id: string,
   status: 'approved' | 'rejected',
-  decisionNote = ''
+  decisionNote = '',
+  opts?: { skipApply?: boolean }
 ): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/renewal-requests`, {
     method: 'PATCH',
     headers: authHeaders(true),
     credentials: 'include',
-    body: JSON.stringify({ id, status, decisionNote })
+    body: JSON.stringify({ id, status, decisionNote, ...(opts?.skipApply ? { skipApply: true } : {}) })
   });
   if (res.status === 401) throw new UnauthorizedError();
   const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));

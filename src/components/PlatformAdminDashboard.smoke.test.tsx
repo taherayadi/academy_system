@@ -534,13 +534,18 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
 describe('PlatformAdminDashboard — Center cards', () => {
   it('a trial card no longer shows the amber « +14 jours d’essai » shortcut (handled in Plans & factures)', async () => {
-    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+    // StrictMode invoque deux fois l'effet de chargement : la liste est
+    // mise en file deux fois pour que la 2e charge ne l'écrase pas avec [].
+    const trialCenters = [{
       id: 'ct', name: 'Centre Beta', slug: 'beta', status: 'trial', plan: 'starter',
       monthlyPrice: 0, billingCycle: 'monthly', trialEndsAt: Date.now() + 5 * 86400000,
       subscriptionEndsAt: null, enabledModules: [], studentCount: 2,
       adminEmail: 'b@b.tn', phoneNumber: '22222222', locationCity: 'Sousse',
       centerType: 'jardin', mealOperatingMode: 'external_traiteur', logoUrl: '', createdAt: Date.now(),
-    }]);
+    }];
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(trialCenters)
+      .mockResolvedValueOnce(trialCenters);
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Beta')).toBeTruthy());
 
@@ -810,31 +815,111 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     createdAt: Date.now() - 86400000, updatedAt: Date.now(),
   };
 
-  it('lists the requests and lets the platform accept one', async () => {
+  // Pinned explicitly: earlier suites leave their own fetchCenterPlansApi
+  // implementation behind (clearAllMocks keeps implementations).
+  beforeEach(() => {
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'trial', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 5 * 86400000, enabledModules: [],
+      },
+      invoices: [], schedules: [],
+    });
+  });
+
+  it('lists the requests and opens « Examiner et appliquer » prefilled from the request', async () => {
     (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
       requests: [pendingRequest], history: [],
     });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    expect(screen.getByText('En attente')).toBeTruthy();
+    expect(screen.getAllByText('En attente').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
     // « Essai · Basic → Growth »
     expect(screen.getByText(/Essai/)).toBeTruthy();
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
 
-    // Boutons habillés aux couleurs de l'application (#257C86), pas vert/rouge.
-    const accept = screen.getByRole('button', { name: /Accepter/ });
-    const refuse = screen.getByRole('button', { name: /Refuser/ });
-    expect(accept.className).toContain('#257C86');
-    expect(refuse.className).toContain('#257C86');
-    expect(accept.className).not.toMatch(/emerald/);
-    expect(refuse.className).not.toMatch(/red-/);
+    // Bouton habillé aux couleurs de l'application (#257C86), pas vert/rouge.
+    const review = screen.getByRole('button', { name: /Examiner et appliquer/ });
+    expect(review.className).toContain('#257C86');
+    expect(review.className).not.toMatch(/emerald/);
 
-    fireEvent.click(accept);
+    fireEvent.click(review);
 
-    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', ''));
+    // La modale affiche la demande en lecture seule : plan Growth / mensuel, non modifiables.
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
+    expect(screen.getByTestId('review-apply-cycle').textContent).toBe('Mensuel');
+    expect(screen.queryByTitle('Plan du centre')).toBeNull();
+  });
+
+  it('filters the list by type and by status', async () => {
+    const renewalPending = {
+      ...pendingRequest, id: 'r1', kind: 'renewal', requestedPlan: 'starter',
+      status: 'pending', centerName: 'Centre Alpha', note: '',
+    };
+    const upgradeApproved = {
+      ...pendingRequest, id: 'r2', kind: 'upgrade', requestedPlan: 'growth',
+      status: 'approved', centerName: 'Centre Beta', note: '',
+    };
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [renewalPending, upgradeApproved], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Filtre par type : seul le changement d'offre reste visible.
+    fireEvent.click(screen.getByRole('button', { name: 'Changement d’offre' }));
+    await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Retour à Tous (type), puis filtre par statut : seule la demande acceptée reste.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tous' })[0]);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Acceptée' }));
+    await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
+    expect(screen.getByText('Centre Beta')).toBeTruthy();
+
+    // Combinaison sans résultat : message dédié, pas de carte.
+    fireEvent.click(screen.getByRole('button', { name: 'Renouvellement' }));
+    await waitFor(() => expect(screen.getByText('Aucun résultat pour ces filtres')).toBeTruthy());
+    expect(screen.queryByText('Centre Beta')).toBeNull();
+  });
+
+  it('accept applies the plan through the billing engine then records the decision', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+
+    // Centre en essai → activation immédiate via set-plan (moteur Plans & factures).
+    fireEvent.click(await screen.findByRole('button', { name: /Accepter et appliquer/ }));
+
+    await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'set-plan', centerId: 'c1', plan: 'growth', billingCycle: 'monthly',
+    })));
+    // … puis la décision est actée sans ré-appliquer le plan (skipApply).
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved', '', { skipApply: true }));
+  });
+
+  it('reject only records the decision without touching the plan', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [pendingRequest], history: [],
+    });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
+    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Refuser$/ }));
+
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'rejected', ''));
+    expect(api.centerPlanActionApi).not.toHaveBeenCalled();
+    expect(api.updateCenterApi).not.toHaveBeenCalled();
   });
 
   it('shows an empty state when no center has asked yet', async () => {

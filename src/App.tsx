@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
@@ -84,6 +84,8 @@ import {
   deleteStaffApi,
   createExpenseApi,
   deleteExpenseApi,
+  fetchCentersApi,
+  fetchRenewalRequestsApi,
   UnauthorizedError 
 } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
@@ -113,6 +115,8 @@ import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
+import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from './hooks/useLiveSync';
+import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
 
 
@@ -134,8 +138,14 @@ const TAB_MODULE: Record<string, string> = {
   module8: 'staff'                // إدارة الموظفين
 };
 
+// Bibliothèque désactivée pour l'instant : masquée du menu centre.
+// (Remettre à true pour réactiver le module.)
+const LIBRARY_ENABLED = false;
+
 export default function App() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -182,6 +192,66 @@ export default function App() {
     toast.info('تم تسجيل الخروج.');
   };
 
+  // ── Live subscription sync (center sessions) ──
+  // The platform may accept a renewal / plan-change request at any moment.
+  // PubNub pushes "refetch" signals onto `center.{centerId}`; this SAME
+  // handler serves both the realtime path and the polling fallback
+  // (useLiveSync) used whenever PubNub is unavailable — the pushed payload is
+  // never trusted, only freshly fetched state is compared and applied.
+  const centerBaselineRef = useRef<string | null>(null);
+  // Fast cadence while one of the center's requests is still pending, so a
+  // platform decision lands within seconds; slow cadence otherwise.
+  const [centerSyncFast, setCenterSyncFast] = useState(false);
+  useEffect(() => {
+    // New session (or logout): forget the previous baseline.
+    centerBaselineRef.current = null;
+    setCenterSyncFast(false);
+  }, [currentUser?.email]);
+  const syncCenterSubscription = useCallback(async () => {
+    if (!currentUser || isPlatformSuperAdmin) return;
+    try {
+      const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
+      const fresh = (centers || [])[0] ?? null;
+      if (!fresh) return;
+      setCenterSyncFast((renewal.requests || []).some(r => r.status === 'pending'));
+      const snap = subscriptionSnapshot(fresh);
+      const known = centerBaselineRef.current
+        ?? (currentCenter ? subscriptionSnapshot(currentCenter) : null);
+      centerBaselineRef.current = snap;
+      if (known === null) {
+        // First sight of this session with no local center: adopt silently.
+        if (!currentCenter) setCurrentCenter(fresh);
+        return;
+      }
+      if (known !== snap) {
+        setCurrentCenter(fresh);
+        toastRef.current.success('Votre abonnement a été mis à jour par la plateforme.');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        // Session expired mid-session — force re-login.
+        setCurrentUser(null);
+        clearLocalSession();
+      }
+      // Network/D1 hiccup: stay silent, the next tick retries.
+    }
+  }, [currentUser, isPlatformSuperAdmin, currentCenter]);
+
+  // PubNub realtime — while it is `active` the polling below pauses, so a
+  // decision lands in ~2 s with zero polling traffic; any PubNub failure
+  // (missing keys, grant refused, disconnect) flips the state back and
+  // polling resumes exactly as before.
+  const centerRealtime = usePubNubSync(
+    !!currentUser && !isPlatformSuperAdmin,
+    syncCenterSubscription,
+    currentUser?.email
+  );
+  useLiveSync(
+    !!currentUser && !isPlatformSuperAdmin && centerRealtime !== 'active',
+    syncCenterSubscription,
+    centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
+  );
+
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
   // ── SaaS module gating ──
@@ -198,7 +268,6 @@ export default function App() {
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
   const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
-  const hasCustomCenterLogo = !isPlatformSuperAdmin && Boolean(currentCenter?.logoUrl);
 
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
@@ -836,8 +905,8 @@ export default function App() {
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
-            <span className={`w-16 h-16 rounded-2xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-md shadow-slate-900/10 overflow-hidden`}>
-              <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="w-full h-full rounded-xl object-cover" />
+            <span className="w-16 h-16 rounded-2xl bg-[#257C86] shadow-md shadow-slate-900/10 overflow-hidden">
+              <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
             </span>
             <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
@@ -895,7 +964,7 @@ export default function App() {
         !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
         !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
-        { id: 'module5', label: 'المكتبة', icon: BookOpen },
+        LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
         { id: 'module8', label: 'إدارة الموظفين', icon: Users },
@@ -914,8 +983,8 @@ export default function App() {
       {/* MOBILE HEADER */}
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
-          <span className={`w-10 h-10 rounded-xl bg-slate-100 ${hasCustomCenterLogo ? 'p-px' : 'p-0.5'} shadow-md shadow-slate-900/10 shrink-0 overflow-hidden`}>
-            <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-lg object-cover" />
+          <span className="w-10 h-10 rounded-xl bg-[#257C86] shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
+            <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
           </span>
           <div>
             <h1 className="font-black text-sm text-slate-900">{isPlatformSuperAdmin ? 'إدارة المنصة (SaaS)' : (settings?.centerName || 'المركز')}</h1>
@@ -958,7 +1027,7 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25' 
+                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
                       : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
@@ -978,8 +1047,8 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] ${hasCustomCenterLogo ? 'p-px' : 'p-1'} shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="w-full h-full rounded-xl object-cover" />
+              <span className={`rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+                <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
@@ -1023,7 +1092,7 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/30' 
+                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/30' 
                       : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
                   }`}
                 >
@@ -1044,7 +1113,7 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-[#3A93A0] shadow-sm shadow-[#3A93A0]/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
                 {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
@@ -1215,7 +1284,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'module5' && (
+              {LIBRARY_ENABLED && activeTab === 'module5' && (
                 <LibraryModule 
                   students={students}
                   settings={settings}

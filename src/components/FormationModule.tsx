@@ -775,9 +775,9 @@ export default function FormationModule({
                     <span className="text-[11px] font-bold text-[#1e626b] block mb-1">عدد التلاميذ</span>
                     <span className="font-mono text-base font-black text-[#257C86]">{formationStats.count}</span>
                   </div>
-                  <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-200/70">
-                    <span className="text-[11px] font-bold text-emerald-700 block mb-1">المستخلص فعلياً</span>
-                    <span className="font-mono text-base font-black text-emerald-800">{formationStats.totalPaid} د.ت</span>
+                  <div className="bg-[#257C86]/[0.06] rounded-2xl p-3 border border-[#257C86]/20/70">
+                    <span className="text-[11px] font-bold text-[#1e626b] block mb-1">المستخلص فعلياً</span>
+                    <span className="font-mono text-base font-black text-[#1e626b]">{formationStats.totalPaid} د.ت</span>
                   </div>
                   <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200/70">
                     <span className="text-[11px] font-bold text-amber-700 block mb-1">المتبقي للدفع</span>
@@ -923,7 +923,7 @@ export default function FormationModule({
 
                 {/* Students Table */}
                 <div className="overflow-auto max-h-[60vh] rounded-2xl border border-slate-100 no-scrollbar">
-                  <table className="w-full text-right text-xs">
+                  <table className="min-w-[640px] w-full text-right text-xs">
                     <thead>
                       <tr className="bg-slate-50/80 text-slate-500 font-black border-b border-slate-100">
                         <th className="p-3">التلميذ</th>
@@ -974,7 +974,7 @@ export default function FormationModule({
                                   <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-help ${
                                     st.isPack
                                       ? 'bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20'
-                                      : 'bg-teal-50 text-teal-700 border border-teal-200'
+                                      : 'bg-[#257C86]/5 text-[#1e626b] border border-[#257C86]/20'
                                   }`}>
                                     {st.isPack ? 'باك كامل' : `مواد مختارة (${chosenMatieres.length})`}
                                   </span>
@@ -1002,14 +1002,14 @@ export default function FormationModule({
                               {/* Discount */}
                               <td className="p-3 text-center font-mono font-bold text-slate-500">
                                 {st.discount > 0 ? (
-                                  <span className="text-amber-600">-{st.discount} د.ت</span>
+                                  <span className="text-[#257C86]">-{st.discount} د.ت</span>
                                 ) : (
                                   '—'
                                 )}
                               </td>
 
                               {/* Amount Paid */}
-                              <td className="p-3 text-center font-mono font-black text-emerald-700">
+                              <td className="p-3 text-center font-mono font-black text-[#1e626b]">
                                 {st.amountPaid} د.ت
                               </td>
 
@@ -1027,12 +1027,12 @@ export default function FormationModule({
                                 <div className="text-[11px] font-bold">
                                   {st.paymentMethod === 'espece' ? (
                                     <span className="text-slate-600 flex items-center gap-1">
-                                      <Banknote className="h-3 w-3 text-emerald-600" />
+                                      <Banknote className="h-3 w-3 text-[#257C86]" />
                                       نقداً
                                     </span>
                                   ) : (
                                     <span className="text-slate-800 flex items-center gap-1">
-                                      <CreditCard className="h-3 w-3 text-emerald-600" />
+                                      <CreditCard className="h-3 w-3 text-[#257C86]" />
                                       شيك
                                     </span>
                                   )}
@@ -1046,7 +1046,7 @@ export default function FormationModule({
                                     مسترجع ({st.refundAmount!} د.ت)
                                   </span>
                                 ) : isFullyPaid && (
-                                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-black inline-block">
+                                  <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-block">
                                     خالص ✓
                                   </span>
                                 )}
@@ -1075,7 +1075,7 @@ export default function FormationModule({
                                   <button
                                     onClick={() => setPrintingStudent({ formation: selectedFormation, student: st })}
                                     title="طباعة وصل التكوين"
-                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
                                   >
                                     <Printer className="h-3.5 w-3.5" />
                                   </button>
@@ -1170,7 +1170,7 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Modal Header */}
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <h3 className="text-base font-black">
@@ -1375,7 +1375,7 @@ export default function FormationModule({
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8"
             >
               {/* Header */}
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -1427,7 +1427,7 @@ export default function FormationModule({
                 {/* Enrollment Type (Pack vs Selection) */}
                 <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
                   <label className="text-xs font-black text-[#1e626b] block">نوع التسجيل في التكوين *</label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                       <input
                         type="radio"
@@ -1532,7 +1532,7 @@ export default function FormationModule({
                         min="0"
                         value={stAmountPaid}
                         onChange={e => setStAmountPaid(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-[#1e626b] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                       />
                     </div>
                   </div>
@@ -1543,7 +1543,7 @@ export default function FormationModule({
                       الصافي المستحق: <span className="font-mono font-black text-slate-800">{Math.max(0, stTotalRequired - stDiscount)} د.ت</span>
                     </span>
                     <span className="text-slate-500">
-                      المتبقي للدفع: <span className={`font-mono font-black ${Math.max(0, stTotalRequired - stDiscount - stAmountPaid) > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                      المتبقي للدفع: <span className={`font-mono font-black ${Math.max(0, stTotalRequired - stDiscount - stAmountPaid) > 0 ? 'text-red-600' : 'text-[#1e626b]'}`}>
                         {Math.max(0, stTotalRequired - stDiscount - stAmountPaid)} د.ت
                       </span>
                     </span>
@@ -1553,7 +1553,7 @@ export default function FormationModule({
                 {/* Payment Method */}
                 <div className="space-y-3">
                   <label className="text-xs font-black text-slate-700 block">طريقة الدفع *</label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                       <input
                         type="radio"
@@ -1563,7 +1563,7 @@ export default function FormationModule({
                         className="w-4 h-4 accent-[#257C86]"
                       />
                       <span className="flex items-center gap-1">
-                        <Banknote className="h-3.5 w-3.5 text-emerald-600" />
+                        <Banknote className="h-3.5 w-3.5 text-[#257C86]" />
                         نقداً (Espèce)
                       </span>
                     </label>
@@ -1577,7 +1577,7 @@ export default function FormationModule({
                         className="w-4 h-4 accent-[#257C86]"
                       />
                       <span className="flex items-center gap-1">
-                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                        <CreditCard className="h-3.5 w-3.5 text-[#257C86]" />
                         شيك (Chèque)
                       </span>
                     </label>
@@ -1585,7 +1585,7 @@ export default function FormationModule({
 
                   {/* Cheque details */}
                   {stPaymentMethod === 'cheque' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-200/70">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20/70">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">رقم الشيك *</label>
                         <input
@@ -1688,7 +1688,7 @@ export default function FormationModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <RotateCcw className="h-5 w-5 text-[#257C86]" />
                 <div>
@@ -1764,7 +1764,7 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">وصل تسجيل في تكوين</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -1833,7 +1833,7 @@ export default function FormationModule({
                     {student.discount > 0 && (
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[11px] font-bold text-slate-500">التخفيض</span>
-                        <span className="font-mono font-black text-amber-600">-{student.discount} د.ت</span>
+                        <span className="font-mono font-black text-[#257C86]">-{student.discount} د.ت</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-1">
@@ -1842,7 +1842,7 @@ export default function FormationModule({
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[11px] font-bold text-slate-500">المدفوع</span>
-                      <span className="font-mono font-black text-emerald-600">{student.amountPaid} د.ت</span>
+                      <span className="font-mono font-black text-[#257C86]">{student.amountPaid} د.ت</span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[11px] font-bold text-slate-500">المتبقي</span>
@@ -1875,7 +1875,7 @@ export default function FormationModule({
                         مسترجع ({student.refundAmount!} د.ت)
                       </span>
                     ) : (
-                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : student.amountPaid > 0 ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/30' : student.amountPaid > 0 ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                         {fullyPaid ? 'خالص ✓' : student.amountPaid > 0 ? 'دفعة أولى' : 'غير خالص'}
                       </span>
                     )}
@@ -1910,7 +1910,7 @@ export default function FormationModule({
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center no-print shrink-0">
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print shrink-0">
                 <h3 className="text-sm font-black">طباعة جدول الحصص</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -1942,49 +1942,51 @@ export default function FormationModule({
                     </div>
                   </div>
 
-                  <table className="w-full border-collapse text-right">
-                    <thead>
-                      <tr className="bg-slate-100">
-                        <th className="border border-slate-300 p-2">اليوم</th>
-                        <th className="border border-slate-300 p-2">التوقيت</th>
-                        <th className="border border-slate-300 p-2">المادة</th>
-                        <th className="border border-slate-300 p-2">الأستاذ / التلاميذ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {FORMATION_WORK_DAYS.map(day => {
-                        const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
-                          .filter(s => s.day === day)
-                          .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                        if (daySeances.length === 0) {
-                          return (
-                            <tr key={day}>
-                              <td className="border border-slate-300 p-2 font-bold">{day}</td>
-                              <td className="border border-slate-300 p-2 text-slate-400" colSpan={3}>لا حصص</td>
-                            </tr>
-                          );
-                        }
-                        return daySeances.map((s, idx) => (
-                          <tr key={`${day}-${idx}`}>
-                            {idx === 0 ? (
-                              <td className="border border-slate-300 p-2 font-bold align-top" rowSpan={daySeances.length}>{day}</td>
-                            ) : null}
-                            <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
-                            <td className="border border-slate-300 p-2">{s.matiere}</td>
-                            <td className="border border-slate-300 p-2 align-top">
-                              <div className="font-bold">الأستاذ: ........................................</div>
-                              <div className="mt-1 space-y-0.5">
-                                {studentsForSeance(s.matiere).map((st, si) => (
-                                  <div key={st.id ?? si}>• {st.studentName}</div>
-                                ))}
-                              </div>
-                              <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
-                            </td>
+                  <div className="overflow-x-auto">
+                      <table className="min-w-[560px] w-full border-collapse text-right">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="border border-slate-300 p-2">اليوم</th>
+                            <th className="border border-slate-300 p-2">التوقيت</th>
+                            <th className="border border-slate-300 p-2">المادة</th>
+                            <th className="border border-slate-300 p-2">الأستاذ / التلاميذ</th>
                           </tr>
-                        ));
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {FORMATION_WORK_DAYS.map(day => {
+                            const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
+                              .filter(s => s.day === day)
+                              .sort((a, b) => a.startTime.localeCompare(b.startTime));
+                            if (daySeances.length === 0) {
+                              return (
+                                <tr key={day}>
+                                  <td className="border border-slate-300 p-2 font-bold">{day}</td>
+                                  <td className="border border-slate-300 p-2 text-slate-400" colSpan={3}>لا حصص</td>
+                                </tr>
+                              );
+                            }
+                            return daySeances.map((s, idx) => (
+                              <tr key={`${day}-${idx}`}>
+                                {idx === 0 ? (
+                                  <td className="border border-slate-300 p-2 font-bold align-top" rowSpan={daySeances.length}>{day}</td>
+                                ) : null}
+                                <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
+                                <td className="border border-slate-300 p-2">{s.matiere}</td>
+                                <td className="border border-slate-300 p-2 align-top">
+                                  <div className="font-bold">الأستاذ: ........................................</div>
+                                  <div className="mt-1 space-y-0.5">
+                                    {studentsForSeance(s.matiere).map((st, si) => (
+                                      <div key={st.id ?? si}>• {st.studentName}</div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
+                                </td>
+                              </tr>
+                            ));
+                          })}
+                        </tbody>
+                      </table>
+                  </div>
 
                   <div className="print-footer mt-4 pt-4 border-t border-dashed border-slate-300 flex items-end justify-between">
                     <p className="text-[10px] text-slate-400 font-bold">شكراً لثقتكم بنا</p>

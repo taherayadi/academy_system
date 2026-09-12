@@ -320,7 +320,7 @@ export default function SeanceRevisionModule({
                         <span className="text-[10px] font-black uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md whitespace-nowrap">
                           {r.trimester} — {r.schoolYear}
                         </span>
-                        <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-black uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md">
                           {r.subject}
                         </span>
                       </div>
@@ -351,7 +351,7 @@ export default function SeanceRevisionModule({
                   </div>
 
                   <div className="mt-3 p-2 bg-white rounded-xl border border-slate-200/70 flex justify-between text-[11px] font-bold">
-                    <span className="text-emerald-700">الأستاذ: {r.teacherShare} د.ت</span>
+                    <span className="text-[#1e626b]">الأستاذ: {r.teacherShare} د.ت</span>
                     <span className="text-[#1e626b]">مناب السنتر: {r.centerShare} د.ت</span>
                     <span className="text-slate-400">التلاميذ: {r.students.length}</span>
                   </div>
@@ -388,9 +388,9 @@ export default function SeanceRevisionModule({
                   <span className="text-slate-400 text-[10px] block font-bold">رسوم الحصة الواحدة:</span>
                   <span className="font-extrabold text-slate-900">{selected.teacherShare + selected.centerShare} د.ت</span>
                 </div>
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-                  <span className="text-emerald-700 text-[10px] block font-bold">مناب الأستاذ:</span>
-                  <span className="font-black text-emerald-800">{selected.teacherShare} د.ت</span>
+                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
+                  <span className="text-[#1e626b] text-[10px] block font-bold">مناب الأستاذ:</span>
+                  <span className="font-black text-[#1e626b]">{selected.teacherShare} د.ت</span>
                 </div>
                 <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
                   <span className="text-[#1e626b] text-[10px] block font-bold">مناب السنتر:</span>
@@ -427,8 +427,8 @@ export default function SeanceRevisionModule({
               {!studentsCollapsed && (selected.students.length === 0 ? (
                 <p className="text-xs text-slate-400">لا يوجد تلاميذ في هذه الحصة بعد. أضف التلاميذ الخارجيين الذين سيحضرونها.</p>
               ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
+                <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                  <table className="min-w-[560px] w-full text-xs">
                     <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                       <tr>
                         <th className="p-3 text-right">التلميذ</th>
@@ -452,14 +452,14 @@ export default function SeanceRevisionModule({
                             </div>
                           </td>
                           <td className="p-3 text-center">
-                            <span className={`inline-block px-2.5 py-1 rounded-xl text-[11px] font-black border ${st.present ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                            <span className={`inline-block px-2.5 py-1 rounded-xl text-[11px] font-black border ${st.present ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20' : 'bg-red-50 text-red-700 border-red-200'}`}>
                               {st.present ? 'حاضر' : 'غائب'}
                             </span>
                           </td>
                           <td className="p-3 text-center">
                             <button
                               onClick={() => handleToggleStudentPaid(selected, st.studentId)}
-                              className={`px-2.5 py-1 rounded-xl text-[11px] font-black border cursor-pointer transition ${st.paidSeance ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
+                              className={`px-2.5 py-1 rounded-xl text-[11px] font-black border cursor-pointer transition ${st.paidSeance ? 'bg-[#257C86] text-white border-[#1e626b]' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
                             >
                               {st.paidSeance ? `✓ دفع ${selected.teacherShare + selected.centerShare} د.ت` : 'لم يدفع'}
                             </button>
@@ -495,9 +495,9 @@ export default function SeanceRevisionModule({
                   <span className="text-slate-400 text-[10px] block font-bold">الحاضرون:</span>
                   <span className="font-black text-slate-900">{presentCount} / {selected.students.length}</span>
                 </div>
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-                  <span className="text-emerald-700 text-[10px] block font-bold">إجمالي مناب الأستاذ:</span>
-                  <span className="font-black text-emerald-800">{profTotal} د.ت</span>
+                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
+                  <span className="text-[#1e626b] text-[10px] block font-bold">إجمالي مناب الأستاذ:</span>
+                  <span className="font-black text-[#1e626b]">{profTotal} د.ت</span>
                 </div>
                 <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
                   <span className="text-[#1e626b] text-[10px] block font-bold">إجمالي مناب السنتر:</span>
@@ -532,7 +532,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -662,10 +662,10 @@ export default function SeanceRevisionModule({
                   <span className="text-xs font-bold text-[#1e626b] block">💰 تقسيم مستحقات الحصة الواحدة</span>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-bold text-emerald-700 block mb-1">مناب الأستاذ (د.ت) *</label>
+                      <label className="text-[10px] font-bold text-[#1e626b] block mb-1">مناب الأستاذ (د.ت) *</label>
                       <input
                         type="number" required value={teacherShare} onFocus={(e) => e.target.select()} onChange={(e) => setTeacherShare(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800"
+                        className="w-full px-3 py-2 bg-white border border-[#257C86]/30 rounded-xl text-xs font-bold text-[#1e626b]"
                       />
                     </div>
 
@@ -710,7 +710,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-[#257C86]" />
                   <div>
@@ -790,7 +790,7 @@ export default function SeanceRevisionModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white flex justify-between items-center">
+              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black">تسجيل الحضور والدفع — {selected.subject}</h3>
                   <p className="text-xs text-slate-300">الأستاذ: {selected.teacherName}</p>
@@ -819,8 +819,8 @@ export default function SeanceRevisionModule({
                 {selected.students.length === 0 ? (
                   <p className="text-xs text-slate-400">لا يوجد تلاميذ مسجلين في هذه الحصة بعد.</p>
                 ) : (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-xs">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                    <table className="min-w-[420px] w-full text-xs">
                       <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                         <tr>
                           <th className="p-3">التلميذ</th>
@@ -836,7 +836,7 @@ export default function SeanceRevisionModule({
                             <tr key={st.studentId} className="hover:bg-slate-50/70">
                               <td className="p-3 font-black text-slate-900">
                                 <div className="flex items-start gap-2">
-                                  <span className={`w-4 shrink-0 text-center ${att === 'absent' ? 'text-red-500' : 'text-emerald-600'}`}>
+                                  <span className={`w-4 shrink-0 text-center ${att === 'absent' ? 'text-red-500' : 'text-[#257C86]'}`}>
                                     {att === 'absent' ? '✕' : '✓'}
                                   </span>
                                   <div className="space-y-1">
@@ -853,7 +853,7 @@ export default function SeanceRevisionModule({
                                   <button
                                     type="button"
                                     onClick={() => setAttendanceMap({ ...attendanceMap, [st.studentId]: 'present' })}
-                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'present' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50'}`}
+                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'present' ? 'bg-[#257C86] text-white border-[#1e626b]' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-[#257C86]/[0.06]'}`}
                                   >
                                     حاضر
                                   </button>
@@ -874,7 +874,7 @@ export default function SeanceRevisionModule({
                                   <button
                                     type="button"
                                     onClick={() => setPaymentMap({ ...paymentMap, [st.studentId]: !paid })}
-                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${paid ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50'}`}
+                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${paid ? 'bg-[#257C86] text-white border-[#1e626b]' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-[#257C86]/[0.06]'}`}
                                   >
                                     {paid ? `✓ دفع ${selected.teacherShare + selected.centerShare} د.ت` : 'لم يدفع'}
                                   </button>

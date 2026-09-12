@@ -20,7 +20,7 @@ interface CenterRow {
   enabled_modules: string;
 }
 
-function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedules?: boolean; noHistory?: boolean } = {}) {
+function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedules?: boolean; noHistory?: boolean; modulePrices?: Array<{ module_key: string; price: number }> } = {}) {
   const calls: Array<{ sql: string; args: any[] }> = [];
   return {
     calls,
@@ -43,7 +43,7 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
                 throw new Error('D1_ERROR: no such table: center_plan_history');
               }
               if (sql.includes('module_prices')) {
-                return { results: [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
+                return { results: opts.modulePrices || [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
               }
               if (sql.includes('FROM center_invoices')) {
                 return {
@@ -177,6 +177,32 @@ describe('center-plans POST — set-plan', () => {
     const db = makeDb(ACTIVE_UNPAID);
     const res = await post({ action: 'set-plan', centerId: 'c1', plan: 'diamond' }, db);
     expect(res.status).toBe(400);
+  });
+
+  it('pro preset excludes the dormant Bibliothèque module from grant and billing', async () => {
+    const db = makeDb(TRIAL, {
+      windowPaid: false,
+      modulePrices: [
+        { module_key: 'scolaire', price: 45 },
+        { module_key: 'finance', price: 30 },
+        { module_key: 'etude', price: 30 },
+        { module_key: 'bibliotheque', price: 12 },
+      ],
+    });
+    const res = await post({ action: 'set-plan', centerId: 'c2', plan: 'pro', billingCycle: 'monthly' }, db);
+    const data = await res.json() as any;
+    expect(data.mode).toBe('activated');
+
+    const centersUpdate = db.calls.find((c: any) => c.sql.includes('UPDATE centers'))!;
+    const modulesJson = centersUpdate.args.find((a: any) => typeof a === 'string' && a.includes('scolaire'));
+    const storedModules = JSON.parse(modulesJson);
+    expect(storedModules).not.toContain('bibliotheque');
+    expect(storedModules).toContain('etude');
+
+    // 45 + 30 + 30 : les 12 TND de Bibliothèque ne sont pas facturés.
+    const insert = db.calls.find((c: any) => c.sql.includes('INSERT INTO center_invoices'))!;
+    expect(insert.args[5]).toBeCloseTo(105, 2);
+    expect(data.invoice.amount).toBeCloseTo(105, 2);
   });
 });
 

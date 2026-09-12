@@ -1,6 +1,7 @@
 import { Env, json, readBody, validateSession } from './_lib';
 import { round2, planLabel, BillingCycle } from './planLogic';
 import { logPlanHistory, fetchPlanHistory } from './_planHistory';
+import { publishOnResponse } from './_pubnub';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
 // Editing a center's basic info must NEVER touch its plan or invoices.
@@ -20,9 +21,13 @@ const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
 const ALL_MODULE_KEYS = [
   'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-  'formations', 'cantine', 'transport', 'events', 'bibliotheque',
+  'formations', 'cantine', 'transport', 'events',
   BUNDLED_MODULE_KEY, 'staff',
 ];
+// Bibliothèque désactivée pour l'instant : hors preset Pro (11 modules comme
+// le simulateur) et jamais facturée, même si un centre l'a encore en stock.
+// Pour réactiver : remettre 'bibliotheque' ici et retirer le filtre prix.
+const UNBILLED_MODULE_KEYS = new Set([BUNDLED_MODULE_KEY, 'bibliotheque']);
 const ANNUAL_DISCOUNT = 0.2;
 const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 const VALID_PLANS = new Set(['starter', 'basic', 'growth', 'pro', 'custom']);
@@ -69,7 +74,7 @@ async function computePeriodAmount(
     `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
   ).bind(currentSchoolYear(), ...args.modules).all<any>();
   let total = (results || []).reduce(
-    (sum, row) => sum + (row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)),
+    (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
     0
   );
   if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
@@ -154,7 +159,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 };
 
 // POST /api/center-plans — plan operations for one center
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { env, request } = context;
   try {
     if (!(await isAuthorized(env, request))) return json({ error: 'غير مصرح.' }, 403);
 
@@ -173,6 +179,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const existingEnd = Number(center.subscription_ends_at) || 0;
     const hasLiveWindow = center.status === 'active' && existingEnd > now;
 
+    // Signal temps réel pour le centre (et la plateforme) après chaque action
+    // qui modifie son abonnement — fire-and-forget, jamais bloquant.
+    const signalCenterUpdated = (action: string) => publishOnResponse(
+      context,
+      env,
+      ['center.' + centerId, 'platform'],
+      { type: 'refetch', topic: 'center_plan_updated', centerId, action, at: Date.now() }
+    );
+
     if (action === 'remove-schedule') {
       const scheduleId = String(body.scheduleId || '').trim();
       if (!scheduleId) return json({ error: 'معرف الخطة المبرمجة مطلوب.' }, 400);
@@ -182,6 +197,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       await logPlanHistory(env.DB, {
         centerId, action: 'schedule_cancelled', details: 'Plan programmé annulé par l’administrateur.',
       });
+      signalCenterUpdated('remove-schedule');
       return json({ success: true, mode: 'schedule_cancelled' });
     }
 
@@ -257,6 +273,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         centerId, action: 'trial_added',
         details: `Jours d’essai offerts (${days} jour(s), ${prepend ? 'au début de la période' : 'en fin de période'}) — ${message}`,
       });
+      signalCenterUpdated('add-trial');
       return json({ success: true, mode: 'trial_added', placement: prepend ? 'start' : 'end', days, subscriptionEndsAt: newEnd, message });
     }
 
@@ -282,6 +299,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
         centerId, action: 'plan_removed',
         details: `Abonnement supprimé — factures en attente annulées, centre marqué expiré (${fmtFr(now)}).`,
       });
+      signalCenterUpdated('remove-plan');
       return json({ success: true, mode: 'plan_removed' });
     }
 
@@ -343,6 +361,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
               + (applyAt ? ` pour le ${fmtFr(applyAt)} (fin de période en cours).` : ' pour la prochaine reconduction.')
               + (windowPaid ? ' Période déjà payée : aucune facture payée n’est modifiée.' : ''),
           });
+          signalCenterUpdated('set-plan');
           return json({
             success: true,
             mode: 'scheduled',
@@ -414,6 +433,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           + (periodAmount > 0 ? ` · ${periodAmount.toFixed(2)} TND` : ' · gratuit')
           + (invoice ? ` · facture ${invoice.invoiceNumber} en attente` : (center.status === 'active' ? ' · factures en attente annulées' : '')),
       });
+
+      signalCenterUpdated('set-plan');
 
       return json({
         success: true,

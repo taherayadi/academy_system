@@ -7,6 +7,19 @@ const NOW = Date.UTC(2026, 2, 1, 9, 0, 0);
 
 const loggedHistory: any[] = [];
 
+/** Signaux temps réel publiés (mock de ./_pubnub — jamais de vrai réseau). */
+const publishMock = vi.hoisted(() => ({
+  calls: [] as Array<{ channels: string[]; payload: Record<string, unknown> }>,
+}));
+
+vi.mock('./_pubnub', () => ({
+  publishOnResponse: vi.fn(
+    (_context: unknown, _env: unknown, channels: string[], payload: Record<string, unknown>) => {
+      publishMock.calls.push({ channels, payload });
+    }
+  ),
+}));
+
 vi.mock('./_lib', () => ({
   readBody: vi.fn(async (request: Request) => request.json()),
   json: (data: unknown, status = 200) =>
@@ -71,6 +84,7 @@ const sessionRows = (role = 'admin') => ({
 
 beforeEach(() => {
   loggedHistory.length = 0;
+  publishMock.calls.length = 0;
   vi.spyOn(Date, 'now').mockReturnValue(NOW);
 });
 afterEach(() => {
@@ -204,6 +218,16 @@ describe('renewal-requests PATCH — the platform decides', () => {
     expect(loggedHistory[0].action).toBe('renewal_approved');
   });
 
+  it('skipApply records an approval without re-applying the plan (already applied via Plans & factures)', async () => {
+    const db = makeDb(rowsFor('platform_super_admin'));
+    const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'approved', skipApply: true }) } as any);
+    expect(res.status).toBe(200);
+    expect(db.calls.some(c => c.sql.includes('UPDATE centers'))).toBe(false);
+    expect(loggedHistory).toHaveLength(0);
+    const upd = db.calls.find(c => c.sql.includes('UPDATE renewal_requests'))!;
+    expect(upd.args).toContain('approved');
+  });
+
   it('rejecting records the decision without touching the center', async () => {
     const db = makeDb(rowsFor('platform_super_admin'));
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'rejected', decisionNote: 'Dossier incomplet' }) } as any);
@@ -219,6 +243,65 @@ describe('renewal-requests PATCH — the platform decides', () => {
     const db = makeDb(rowsFor('platform_super_admin', { status: 'approved' }));
     const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'rejected' }) } as any);
     expect(res.status).toBe(409);
+  });
+});
+
+// ─── Signaux temps réel (PubNub) — le helper est mocké, on vérifie le câblage ───
+describe('renewal-requests — signaux PubNub publiés', () => {
+  // Mêmes lignes que le bloc PATCH (session plateforme + demande en attente).
+  const patchRows = (overrides: Record<string, any> = {}) => ({
+    'FROM sessions s LEFT JOIN users u': { email: 'root@test.tn', center_id: 'c1', role: 'platform_super_admin' },
+    'SELECT * FROM renewal_requests WHERE id = ?': {
+      id: 'r1', center_id: 'c1', kind: 'upgrade', requested_plan: 'growth',
+      requested_modules: JSON.stringify(['scolaire', 'finance', 'etude']),
+      billing_cycle: 'monthly', amount: 240, status: 'pending',
+      ...overrides,
+    },
+    'FROM centers WHERE id = ?': {
+      id: 'c1', status: 'active', plan: 'starter', billing_cycle: 'monthly',
+      subscription_ends_at: NOW + 5 * DAY, trial_ends_at: null, enabled_modules: '[]',
+    },
+  });
+
+  it('POST publie un signal sur le canal `platform` seule', async () => {
+    const db = makeDb(sessionRows());
+    const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
+      kind: 'renewal',
+      requestedPlan: 'growth',
+      requestedModules: ['scolaire', 'finance', 'etude'],
+      billingCycle: 'monthly',
+      amount: 120,
+    }) } as any);
+    expect(res.status).toBe(201);
+
+    expect(publishMock.calls).toHaveLength(1);
+    expect(publishMock.calls[0].channels).toEqual(['platform']);
+    expect(publishMock.calls[0].payload).toMatchObject({ topic: 'renewal_request_created', centerId: 'c1' });
+  });
+
+  it('PATCH publie sur center.{id} ET platform — accepté comme refusé', async () => {
+    const approved = makeDb(patchRows());
+    await onRequestPatch({ env: { DB: approved }, request: req('PATCH', { id: 'r1', status: 'approved' }) } as any);
+    expect(publishMock.calls).toHaveLength(1);
+    expect(publishMock.calls[0].channels).toEqual(['center.c1', 'platform']);
+    expect(publishMock.calls[0].payload).toMatchObject({ topic: 'renewal_request_decided', centerId: 'c1' });
+
+    publishMock.calls.length = 0;
+
+    // Chemin modal (skipApply) : même publication.
+    const rejected = makeDb(patchRows());
+    const res = await onRequestPatch({ env: { DB: rejected }, request: req('PATCH', { id: 'r1', status: 'rejected', skipApply: true }) } as any);
+    expect(res.status).toBe(200);
+    expect(publishMock.calls).toHaveLength(1);
+    expect(publishMock.calls[0].channels).toEqual(['center.c1', 'platform']);
+    expect(publishMock.calls[0].payload).toMatchObject({ topic: 'renewal_request_decided', centerId: 'c1' });
+  });
+
+  it('aucune publication quand la décision échoue (409 déjà traitée)', async () => {
+    const db = makeDb(patchRows({ status: 'approved' }));
+    const res = await onRequestPatch({ env: { DB: db }, request: req('PATCH', { id: 'r1', status: 'rejected' }) } as any);
+    expect(res.status).toBe(409);
+    expect(publishMock.calls).toHaveLength(0);
   });
 });
 

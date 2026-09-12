@@ -48,6 +48,20 @@ html {
   font-size: clamp(13px, calc(0.6vw + 7px), 17px);
 }
 
+/* Visible keyboard focus for every interactive element (a11y floor) */
+:focus-visible {
+  outline: 2px solid #257C86;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect users who prefer reduced motion: stop the landing marquee */
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #f8fafc;
@@ -77,9 +91,24 @@ select {
   cursor: pointer;
   background-color: #f8fafc;
 }
+/* Single focus ring on editable fields: no outline+shadow doubling */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgba(245, 158, 11, 0.5);
+  outline: 2px solid #257C86;
   outline-offset: 0;
+}
+
+/* Logo images fill their tile edge-to-edge: same corner radius as the tile,
+   so no gap ring appears between the picture and its border. */
+.center-logo-img {
+  border-radius: inherit;
+  display: block;
 }
 select option {
   font-family: inherit;

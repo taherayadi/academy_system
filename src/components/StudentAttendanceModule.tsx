@@ -189,12 +189,12 @@ export default function StudentAttendanceModule({ students, attendance, onUpdate
           </div>
           <span className="p-3 rounded-xl bg-[#257C86]/10 text-[#257C86]"><Users className="h-5 w-5" /></span>
         </div>
-        <div className="bg-emerald-50/60 border border-emerald-200/70 rounded-2xl p-4 flex items-center justify-between">
+        <div className="bg-[#257C86]/[0.06] border border-[#257C86]/20/70 rounded-2xl p-4 flex items-center justify-between">
           <div>
-            <p className="text-[11px] text-emerald-700 font-bold">حاضرون</p>
-            <p className="text-2xl font-black text-emerald-700 mt-1">{counts.present}</p>
+            <p className="text-[11px] text-[#1e626b] font-bold">حاضرون</p>
+            <p className="text-2xl font-black text-[#1e626b] mt-1">{counts.present}</p>
           </div>
-          <span className="p-3 rounded-xl bg-emerald-100 text-emerald-700"><UserCheck className="h-5 w-5" /></span>
+          <span className="p-3 rounded-xl bg-[#257C86]/10 text-[#1e626b]"><UserCheck className="h-5 w-5" /></span>
         </div>
         <div className="bg-red-50/60 border border-red-200/70 rounded-2xl p-4 flex items-center justify-between">
           <div>
@@ -215,7 +215,7 @@ export default function StudentAttendanceModule({ students, attendance, onUpdate
             type="button"
             onClick={savePointage}
             disabled={saving || students.length === 0}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Check className="h-4 w-4" />
             حفظ pointage اليوم
@@ -264,7 +264,7 @@ export default function StudentAttendanceModule({ students, attendance, onUpdate
                     <button
                       type="button"
                       onClick={() => setStatus(student.id, 'present')}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer ${status === 'present' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'}`}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer ${status === 'present' ? 'bg-[#257C86] text-white shadow-sm' : 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 hover:bg-[#257C86]/10'}`}
                     >
                       حاضر
                     </button>

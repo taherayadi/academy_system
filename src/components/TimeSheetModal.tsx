@@ -337,7 +337,7 @@ export default function TimeSheetModal({
                         ) : (
                           <div className="space-y-1.5">
                             {daySlots.map(slot => (
-                              <div key={slot.id} className="flex items-center gap-2">
+                              <div key={slot.id} className="flex flex-wrap items-center gap-2">
                                 <select
                                   value={slot.startTime}
                                   onChange={e => handleUpdateSlot(slot.id, 'startTime', e.target.value)}

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock, History, Send, Loader2,
-  ArrowUpCircle, Wallet, CalendarClock, Package, Info
+  ArrowUpCircle, Wallet, CalendarClock, Package, Info,
+  Landmark, Banknote, CreditCard, Copy, Check
 } from 'lucide-react';
 import { fetchPublicModulePricesApi, fetchRenewalRequestsApi, createRenewalRequestApi } from '../api';
 import type { CenterTenant, PlanHistoryEntry, RenewalRequest } from '../types';
@@ -15,7 +16,7 @@ import { useToast } from './Toast';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
-  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20', icon: CheckCircle2 },
   rejected: { label: 'Refusée', labelAr: 'مرفوضة', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
 };
 
@@ -35,6 +36,13 @@ const HISTORY_LABELS: Record<string, string> = {
   renewal_upgrade: 'Changement d’offre accepté',
 };
 const historyLabel = (action: string) => HISTORY_LABELS[action] || action.replace(/_/g, ' ');
+
+/** Coordonnées de virement de la plateforme (moyens de paiement). */
+const BANK = {
+  bank: 'Attijari Bank',
+  holder: 'AYADI TAHER',
+  rib: '04073158006372281336',
+};
 
 /**
  * Module « Renouvellement » du centre :
@@ -70,13 +78,15 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
+  // Last known status per request: lets the live sync announce only real
+  // platform decisions (pending → approved / rejected), never repeats.
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchRenewalRequestsApi();
       setRequests(data.requests || []);
       setHistory(data.history || []);
-    } catch (err) {
+      } catch (err) {
       toastRef.current.error(err instanceof Error ? err.message : 'خطأ في جلب الطلبات.');
     } finally {
       setLoading(false);
@@ -90,6 +100,33 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       .catch(() => setPrices({}))
       .finally(() => setPricingLoading(false));
   }, [load]);
+
+  // Reload my requests + plan history — ONLY on page open (via `load`) and
+  // when the user clicks « Actualiser ». No polling, no background refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshRequests = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const data = await fetchRenewalRequestsApi();
+      setRequests(data.requests || []);
+      setHistory(data.history || []);
+    } catch {
+      // Silent: the session expiry is handled globally by App.
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  const [ribCopied, setRibCopied] = useState(false);
+  const copyRib = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(BANK.rib);
+      setRibCopied(true);
+      window.setTimeout(() => setRibCopied(false), 2000);
+    } catch {
+      toastRef.current.info(`RIB : ${BANK.rib}`);
+    }
+  }, []);
 
   const renewalDate = center?.status === 'trial' ? center?.trialEndsAt : center?.subscriptionEndsAt;
   const daysLeft = daysUntil(renewalDate);
@@ -142,7 +179,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   return (
     <div className="space-y-6" dir="rtl">
       {/* ─── En-tête ─────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-[#257C86] to-[#1e626b] p-6 text-white shadow-lg shadow-[#257C86]/25">
+      <div className="relative overflow-hidden rounded-3xl bg-[#257C86] p-6 text-white shadow-lg shadow-[#257C86]/25">
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-black">
@@ -314,7 +351,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#257C86] to-[#1e626b] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-[#257C86]/25 transition hover:shadow-lg disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#257C86] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-[#257C86]/25 transition hover:shadow-lg disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {isUpgrade ? 'Demander le changement d’offre' : 'Demander le renouvellement'}
@@ -323,13 +360,85 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         </div>
       </div>
 
-      {/* ─── Mes demandes ────────────────────────────────────────── */}
+      {/* ─── Moyens de paiement ─────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-          <History className="h-4 w-4 text-[#257C86]" />
-          Mes demandes de renouvellement
-          <span className="text-xs font-bold text-slate-400">طلباتي</span>
+          <Landmark className="h-4 w-4 text-[#257C86]" />
+          Moyens de paiement
+          <span className="text-xs font-bold text-slate-400">طرق الدفع</span>
         </h3>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-900">Virement bancaire</p>
+            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Landmark className="h-4 w-4" /></span>
+          </div>
+          <dl className="mt-3 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-semibold text-slate-400">Banque</dt>
+              <dd className="font-black text-slate-800">{BANK.bank}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-semibold text-slate-400">Titulaire</dt>
+              <dd className="font-black text-slate-800">{BANK.holder}</dd>
+            </div>
+          </dl>
+          <div dir="ltr" className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-800">
+            {BANK.rib}
+          </div>
+          <button
+            type="button"
+            onClick={copyRib}
+            className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-[#257C86]/40 hover:text-[#257C86]"
+          >
+            {ribCopied ? <Check className="h-3.5 w-3.5 text-[#257C86]" /> : <Copy className="h-3.5 w-3.5" />}
+            {ribCopied ? 'RIB copié' : 'Copier le RIB'}
+          </button>
+          <p className="mt-3 text-[11px] font-semibold text-slate-400">
+            Motif du virement : {center?.name || 'votre centre'} — {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-900">Espèces</p>
+            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Banknote className="h-4 w-4" /></span>
+          </div>
+          <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
+            Paiement en main propre, modalités à définir avec la plateforme.
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-400">Paiement en ligne</p>
+            <span className="rounded-xl bg-slate-100 p-2 text-slate-400"><CreditCard className="h-4 w-4" /></span>
+          </div>
+          <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+            Bientôt disponible
+          </span>
+        </div>
+      </div>
+
+      {/* ─── Mes demandes ────────────────────────────────────────── */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
+            <History className="h-4 w-4 text-[#257C86]" />
+            Mes demandes de renouvellement
+            <span className="text-xs font-bold text-slate-400">طلباتي</span>
+          </h3>
+          <button
+            type="button"
+            onClick={refreshRequests}
+            disabled={refreshing}
+            title="Actualiser"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 transition hover:border-[#257C86]/40 hover:text-[#257C86] disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Actualiser
+          </button>
+        </div>
 
         {loading ? (
           <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500">
@@ -345,8 +454,8 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               return (
                 <motion.div
                   key={r.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
+
+
                   className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 p-3"
                 >
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${meta.cls}`}>
@@ -354,7 +463,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                     {meta.label}
                     <span dir="rtl" className="font-bold opacity-75">{meta.labelAr}</span>
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 w-full sm:w-auto sm:flex-1 order-last sm:order-none">
                     <p className="text-xs font-black text-slate-800">
                       {r.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'} · {planLabel(r.requestedPlan)}
                     </p>
@@ -367,7 +476,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">Réponse : {r.decisionNote}</p>
                     )}
                   </div>
-                  <span className="shrink-0 text-[10px] font-bold text-slate-400">{formatDate(r.createdAt)}</span>
+                  <span dir="ltr" className="ms-auto sm:ms-0 shrink-0 text-[10px] font-bold text-slate-400">{formatDate(r.createdAt)}</span>
                 </motion.div>
               );
             })}
@@ -389,11 +498,11 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
             {history.map(h => (
               <li key={h.id} className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2">
                 <span className="text-xs font-black text-slate-700">{historyLabel(h.action)}</span>
-                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
+                <span className="order-last w-full sm:order-none sm:w-auto sm:min-w-0 sm:flex-1 sm:truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
                 {h.amount !== null && (
                   <span className="shrink-0 text-[10px] font-black text-[#257C86]">{h.amount} TND</span>
                 )}
-                <span className="shrink-0 text-[10px] font-bold text-slate-400">{relativeDays(h.createdAt)}</span>
+                <span className="ms-auto sm:ms-0 shrink-0 text-[10px] font-bold text-slate-400">{relativeDays(h.createdAt)}</span>
               </li>
             ))}
           </ul>

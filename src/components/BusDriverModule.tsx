@@ -542,8 +542,8 @@ export default function BusDriverModule({
       {/* TOP HEADER & DRIVER SUMMARY CARD */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white flex items-center justify-center shadow-md">
-            <Bus className="h-7 w-7 text-emerald-600" />
+          <div className="w-14 h-14 rounded-2xl bg-[#257C86] text-white flex items-center justify-center shadow-md">
+            <Bus className="h-7 w-7 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -560,7 +560,7 @@ export default function BusDriverModule({
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           {busDriver ? (
-            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#257C86]/[0.06] border border-[#257C86]/20/40 rounded-2xl">
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl">
               <div className="w-8 h-8 rounded-xl bg-[#257C86] text-white flex items-center justify-center font-bold text-sm">🚌</div>
               <div>
                 <div className="flex items-center gap-2">
@@ -661,7 +661,7 @@ export default function BusDriverModule({
             onClick={openManualForm}
             className="flex items-center gap-2 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-xs rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer shrink-0"
           >
-            <PlusCircle className="h-4 w-4 text-emerald-600" />
+            <PlusCircle className="h-4 w-4 text-[#257C86]" />
             <span>إضافة رحلة يدوية</span>
           </button>
         </div>
@@ -687,7 +687,7 @@ export default function BusDriverModule({
                 <span className="font-black text-amber-800">{studentName}</span>
                 <span className="text-amber-600">— {remark}</span>
                 <button onClick={() => restorePassenger(tripId, studentId)}
-                  className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer px-1 underline">إعادة</button>
+                  className="text-[#257C86] hover:text-[#1e626b] font-bold cursor-pointer px-1 underline">إعادة</button>
               </div>
             ))}
           </div>
@@ -710,9 +710,9 @@ export default function BusDriverModule({
                 return (
                   <motion.div
                     key={trip.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: tripIndex * 0.05 }}
+
+
+
                     className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden"
                   >
                     {/* Trip Card Header */}
@@ -725,10 +725,10 @@ export default function BusDriverModule({
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-emerald-400 text-slate-900 text-[10px] font-black rounded-md">
+                            <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-black rounded-md">
                               رحلة #{tripIndex + 1}
                             </span>
-                            <span className="text-xs font-bold text-emerald-200">
+                            <span className="text-xs font-bold text-white/80">
                               {isToSchool ? `الانطلاق من ${centerName} ← إلى المؤسسات` : `الإحضار من المؤسسات ← إلى ${centerName}`}
                             </span>
                           </div>
@@ -785,7 +785,7 @@ export default function BusDriverModule({
 
                     {/* Passengers Grouped Table */}
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-right">
+                      <table className="min-w-[640px] w-full text-xs text-right">
                         <thead>
                           <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold">
                             <th className="p-3 w-12 text-center">#</th>
@@ -800,14 +800,14 @@ export default function BusDriverModule({
                         <tbody className="divide-y divide-slate-100">
                           {trip.etabGroups.map((grp) => (
                             <React.Fragment key={grp.etablissement}>
-                              <tr className="bg-[#F0F7F8] border-y border-[#257C86]/20/30">
+                              <tr className="bg-[#F0F7F8] border-y border-[#257C86]/20">
                                 <td colSpan={7} className="py-2 px-3">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 font-black text-[#1e626b] text-xs">
                                       <School className="h-4 w-4 text-[#257C86]" />
                                       <span>{grp.etablissement}</span>
                                       {grp.count >= 2 && (
-                                        <span className="bg-emerald-400 text-slate-900 text-[10px] px-2 py-0.5 rounded-full font-black">
+                                        <span className="bg-[#257C86] text-white text-[10px] px-2 py-0.5 rounded-full font-black">
                                           نقل جماعي مشترك ({grp.count} تلاميذ)
                                         </span>
                                       )}
@@ -827,14 +827,14 @@ export default function BusDriverModule({
 
                                 return (
                                   <React.Fragment key={p.student.id}>
-                                    <tr className={`transition ${isBoarded ? 'bg-emerald-50/60' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                                    <tr className={`transition ${isBoarded ? 'bg-[#257C86]/[0.06]' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                                       <td className="p-3 text-center font-mono text-slate-400">{pIdx + 1}</td>
                                       <td className="p-3">
                                         <span className="font-black text-slate-900 text-xs block">
                                           {p.student.lastName} {p.student.firstName}
                                         </span>
                                         {p.isManual && (
-                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20/60 text-[10px] font-black rounded-md">
+                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 text-[10px] font-black rounded-md">
                                             ✏️ يدوي
                                           </span>
                                         )}
@@ -945,7 +945,7 @@ export default function BusDriverModule({
                 <div key={etab} className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-400/20 flex items-center justify-center text-xl">🏫</div>
+                      <div className="w-10 h-10 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-xl">🏫</div>
                       <div>
                         <h4 className="font-black text-slate-900 text-sm">{etab}</h4>
                         <span className="text-[11px] text-slate-400 font-bold block">{distinctStudents.length} تلاميذ مسجلين</span>
@@ -1059,7 +1059,7 @@ export default function BusDriverModule({
                   <label className="block text-xs font-black text-slate-700 mb-1.5">
                     اختر التلاميذ
                     {manualFormStudentIds.size > 0 && (
-                      <span className="mr-2 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20/40 rounded-full text-[10px] font-black">
+                      <span className="mr-2 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black">
                         {manualFormStudentIds.size} محدد
                       </span>
                     )}
@@ -1131,7 +1131,7 @@ export default function BusDriverModule({
                   disabled={manualFormStudentIds.size === 0 || !manualFormTime}
                   className="flex items-center gap-2 px-6 py-2.5 bg-[#257C86] hover:bg-[#1e626b] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-[#257C86]/25"
                 >
-                  <PlusCircle className="h-4 w-4 text-emerald-600" />
+                  <PlusCircle className="h-4 w-4 text-[#257C86]" />
                   إضافة {manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}
                 </button>
               </div>
@@ -1193,7 +1193,7 @@ export default function BusDriverModule({
 
                 <div className="bg-slate-800 text-white p-2 flex justify-between items-center text-xs font-bold">
                   <div className="flex items-center gap-2">
-                    <span className="bg-emerald-400 text-slate-900 px-2 py-0.5 rounded font-black text-[11px]">
+                    <span className="bg-white/20 text-white px-2 py-0.5 rounded font-black text-[11px]">
                       رحلة #{tripIndex + 1}
                     </span>
                     <span>{isToSchool ? `← انطلاق إلى المؤسسات` : `← عودة إلى ${centerName}`}</span>
@@ -1208,48 +1208,50 @@ export default function BusDriverModule({
                   </div>
                 </div>
 
-                <table className="w-full text-xs text-right border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-300 font-black text-slate-800">
-                      <th className="p-2 border-l border-slate-300 w-8 text-center">#</th>
-                      <th className="p-2 border-l border-slate-300">اسم ولقب التلميذ</th>
-                      <th className="p-2 border-l border-slate-300">المستوى</th>
-                      <th className="p-2 border-l border-slate-300">المؤسسة التعليمية (الوجهة)</th>
-                      <th className="p-2 border-l border-slate-300">هاتف الولي للطوارئ</th>
-                      <th className="p-2 text-center w-24">صعود التلميذ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {trip.etabGroups.map((grp) => (
-                      <React.Fragment key={grp.etablissement}>
-                        <tr className="bg-slate-200/80 font-black text-slate-900 border-y border-slate-300">
-                          <td colSpan={6} className="p-1.5 px-3">
-                            <div className="flex justify-between items-center">
-                              <span>🏫 {grp.etablissement} {grp.count >= 2 ? `(${grp.count} تلاميذ - نقل مشترك)` : ''}</span>
-                              <span className="font-mono text-[11px]">{grp.count} تلاميذ</span>
-                            </div>
-                          </td>
+                <div className="overflow-x-auto">
+                    <table className="min-w-[640px] w-full text-xs text-right border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 border-b border-slate-300 font-black text-slate-800">
+                          <th className="p-2 border-l border-slate-300 w-8 text-center">#</th>
+                          <th className="p-2 border-l border-slate-300">اسم ولقب التلميذ</th>
+                          <th className="p-2 border-l border-slate-300">المستوى</th>
+                          <th className="p-2 border-l border-slate-300">المؤسسة التعليمية (الوجهة)</th>
+                          <th className="p-2 border-l border-slate-300">هاتف الولي للطوارئ</th>
+                          <th className="p-2 text-center w-24">صعود التلميذ</th>
                         </tr>
-                        {grp.passengers.map((p, pIdx) => (
-                          <tr key={p.student.id} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
-                            <td className="p-2 border-l border-slate-300 text-center font-mono">{pIdx + 1}</td>
-                            <td className="p-2 border-l border-slate-300 font-black text-slate-950">
-                              {p.student.lastName} {p.student.firstName}
-                            </td>
-                            <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{p.gradeLevel}</td>
-                            <td className="p-2 border-l border-slate-300 font-black text-slate-900">{p.etablissement}</td>
-                            <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
-                              {p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—'}
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className="inline-block w-5 h-5 border-2 border-slate-400 rounded"></span>
-                            </td>
-                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {trip.etabGroups.map((grp) => (
+                          <React.Fragment key={grp.etablissement}>
+                            <tr className="bg-slate-200/80 font-black text-slate-900 border-y border-slate-300">
+                              <td colSpan={6} className="p-1.5 px-3">
+                                <div className="flex justify-between items-center">
+                                  <span>🏫 {grp.etablissement} {grp.count >= 2 ? `(${grp.count} تلاميذ - نقل مشترك)` : ''}</span>
+                                  <span className="font-mono text-[11px]">{grp.count} تلاميذ</span>
+                                </div>
+                              </td>
+                            </tr>
+                            {grp.passengers.map((p, pIdx) => (
+                              <tr key={p.student.id} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
+                                <td className="p-2 border-l border-slate-300 text-center font-mono">{pIdx + 1}</td>
+                                <td className="p-2 border-l border-slate-300 font-black text-slate-950">
+                                  {p.student.lastName} {p.student.firstName}
+                                </td>
+                                <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{p.gradeLevel}</td>
+                                <td className="p-2 border-l border-slate-300 font-black text-slate-900">{p.etablissement}</td>
+                                <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
+                                  {p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—'}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <span className="inline-block w-5 h-5 border-2 border-slate-400 rounded"></span>
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                </div>
               </div>
             );
           })}
@@ -1259,22 +1261,24 @@ export default function BusDriverModule({
         {dayRemovedCount > 0 && (
           <div className="border border-slate-400 rounded-lg p-3 break-inside-avoid">
             <p className="font-bold text-slate-800 mb-2">ملاحظات اليوم — غيابات مسجلة ({dayRemovedCount}):</p>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 border-b border-slate-300">
-                  <th className="p-1.5 text-right font-black">التلميذ</th>
-                  <th className="p-1.5 text-right font-black">الملاحظة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {dayRemovedPassengers.map(({ studentId, studentName, remark }) => (
-                  <tr key={studentId}>
-                    <td className="p-1.5 font-black text-slate-900">{studentName}</td>
-                    <td className="p-1.5 text-slate-700">{remark}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+                <table className="min-w-[320px] w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-300">
+                      <th className="p-1.5 text-right font-black">التلميذ</th>
+                      <th className="p-1.5 text-right font-black">الملاحظة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {dayRemovedPassengers.map(({ studentId, studentName, remark }) => (
+                      <tr key={studentId}>
+                        <td className="p-1.5 font-black text-slate-900">{studentName}</td>
+                        <td className="p-1.5 text-slate-700">{remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            </div>
           </div>
         )}
 
