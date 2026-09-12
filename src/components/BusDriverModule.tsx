@@ -710,9 +710,9 @@ export default function BusDriverModule({
                 return (
                   <motion.div
                     key={trip.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: tripIndex * 0.05 }}
+
+
+
                     className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden"
                   >
                     {/* Trip Card Header */}

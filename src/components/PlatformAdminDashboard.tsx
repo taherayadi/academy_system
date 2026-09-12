@@ -902,8 +902,8 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+
+
         className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
@@ -2996,7 +2996,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ OVERVIEW PAGE ═══ */}
       {page === 'overview' && (
-        <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-6">
+        <motion.div key="overview" className="relative space-y-6">
 
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -3045,9 +3045,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <div key={m.key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
                       <span className="text-[10px] font-black text-slate-500">{m.total > 0 ? m.total.toFixed(0) : ''}</span>
                       <motion.div
-                        initial={{ height: 0 }}
+
                         animate={{ height: `${Math.max(4, (m.total / maxRevenue) * 100)}%` }}
-                        transition={{ duration: 0.7, delay: i * 0.08, ease: 'easeOut' }}
+
                         className={`w-full rounded-xl ${i === revenueChart.length - 1 ? 'bg-[#257C86] shadow-sm shadow-[#257C86]/20' : 'bg-[#257C86]/15'}`}
                       />
                       <span className="text-[10px] font-bold text-slate-400 capitalize">{m.label}</span>
@@ -3148,7 +3148,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ CENTERS PAGE ═══ */}
       {page === 'centers' && (
-        <motion.div key="centers" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
+        <motion.div key="centers" className="relative space-y-4">
 
           {/* Filters — type / statut / plan */}
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
@@ -3215,7 +3215,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             const subscriptionDays = daysLeft(c.subscriptionEndsAt);
             const mods = (c.enabledModules as string[]) || [];
             return (
-              <motion.div key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              <motion.div key={c.id}
                 className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
@@ -3363,7 +3363,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ REQUESTS PAGE ═══ */}
       {page === 'requests' && (
-        <motion.div key="requests" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
+        <motion.div key="requests" className="relative space-y-4">
 
           {/* Filters — type / statut */}
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
@@ -3411,7 +3411,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               {pagedRequests.map(req => {
             const mods = parseModules(req.requestedModules);
             return (
-              <motion.div key={req.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              <motion.div key={req.id}
                 className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
@@ -3541,7 +3541,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ FINANCE PAGE ═══ */}
       {page === 'finance' && (
-        <motion.div key="finance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-6">
+        <motion.div key="finance" className="relative space-y-6">
           {financeLoading ? (
             <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
@@ -3813,7 +3813,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ PRICING PAGE (Tarifs & Modules) ═══ */}
       {page === 'pricing' && (
-        <motion.div key="pricing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-5">
+        <motion.div key="pricing" className="relative space-y-5">
 
           {/* Year selector — sélecteur compact : quelle que soit la taille
               de la liste des années, rien ne déborde et tout reste visible. */}
@@ -3943,7 +3943,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ─── Advertisements Page ───────────────────────────────────────── */}
       {page === 'advertisements' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <motion.div className="space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-2xl font-black text-slate-800">Gestion des publicités</h2>
@@ -4062,7 +4062,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ─── Renewal Requests Page ───────────────────────────────────────── */}
       {page === 'renewals' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <motion.div className="space-y-6">
           {/* Filters — type / statut */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4">
             <div>

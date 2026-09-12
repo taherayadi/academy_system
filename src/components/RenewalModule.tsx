@@ -397,8 +397,8 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               return (
                 <motion.div
                   key={r.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
+
+
                   className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 p-3"
                 >
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${meta.cls}`}>

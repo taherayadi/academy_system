@@ -91,8 +91,8 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="text-white/90 font-extrabold text-xs uppercase tracking-widest bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'المركز'}</span>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">{settings?.centerName || 'المركز'}</h1>
+            <span className="text-white/90 font-extrabold text-xs bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'المركز'}</span>
+            <h1 className="text-3xl md:text-4xl font-black mt-3">{settings?.centerName || 'المركز'}</h1>
             <p className="mt-2 text-slate-300 text-base max-w-xl font-light leading-relaxed">
               مرحباً بك في لوحة قيادة {settings?.centerName || 'المركز'} الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
             </p>
