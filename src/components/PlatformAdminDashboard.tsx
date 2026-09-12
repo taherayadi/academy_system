@@ -114,7 +114,7 @@ const PLAN_BADGE: Record<string, string> = {
   basic: 'bg-slate-100 text-slate-600 border border-slate-200',
   growth: 'bg-slate-100 text-slate-600 border border-slate-200',
   pro: 'bg-slate-100 text-slate-600 border border-slate-200',
-  custom: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'
+  custom: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'
 };
 
 const CENTER_TYPE_LABEL: Record<string, string> = {
@@ -151,7 +151,7 @@ const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }
 ];
 
 const STATUS_BADGE: Record<string, string> = {
-  trial: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20',
+  trial: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30',
   active: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
   suspended: 'bg-slate-100 text-slate-500 border border-slate-200',
   expired: 'bg-slate-50 text-slate-400 border border-slate-100',
@@ -265,7 +265,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
 }) {
   if (totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-3">
+    <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-3">
       <span className="text-xs font-bold text-slate-400">
         {(page - 1) * size + 1}–{Math.min(page * size, total)} sur {total}
       </span>
@@ -280,7 +280,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
           <button key={p} onClick={() => onChange(p)} aria-current={p === page ? 'page' : undefined}
             className={`h-9 min-w-9 px-2 rounded-xl text-xs font-black transition cursor-pointer ${
               p === page
-                ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25'
+                ? 'bg-[#257C86] text-white shadow-sm shadow-[#257C86]/20'
                 : 'border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86]'
             }`}>
             {p}
@@ -303,7 +303,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex items-center p-1 bg-white border-2 border-slate-200 rounded-2xl shadow-sm">
+    <div className="inline-flex items-center p-1 bg-white border border-slate-200 rounded-2xl shadow-sm">
       {options.map(o => {
         const active = value === o.key;
         return (
@@ -312,7 +312,7 @@ function Segmented<T extends string>({
             onClick={() => onChange(o.key)}
             className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black whitespace-nowrap transition-all cursor-pointer ${
               active
-                ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md shadow-[#257C86]/25'
+                ? 'bg-[#257C86] text-white shadow-sm shadow-[#257C86]/20'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -338,7 +338,7 @@ function NoticeDialog({ notice, onDismiss }: {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             onClick={e => e.stopPropagation()}
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200/80"
+            className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200/80"
           >
             <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
@@ -355,7 +355,7 @@ function NoticeDialog({ notice, onDismiss }: {
               <p className="text-sm font-semibold text-slate-600 leading-relaxed">{notice.message}</p>
               <div className="mt-6 flex justify-end">
                 <button onClick={onDismiss}
-                  className="px-6 py-2.5 bg-[#257C86] text-white font-black text-sm rounded-xl hover:bg-[#1e626b] transition cursor-pointer shadow-lg shadow-[#257C86]/25">
+                  className="px-6 py-2.5 bg-[#257C86] text-white font-black text-sm rounded-xl hover:bg-[#1e626b] transition cursor-pointer shadow-sm shadow-[#257C86]/20">
                   Compris
                 </button>
               </div>
@@ -563,12 +563,12 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
           <div className="flex items-center gap-3">
-            <span className="w-11 h-11 rounded-2xl overflow-hidden bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-lg shadow-[#257C86]/25 flex items-center justify-center">
+            <span className="w-11 h-11 rounded-2xl overflow-hidden bg-[#257C86] shadow-sm shadow-[#257C86]/20 flex items-center justify-center">
               <img src={icon} alt="" className="w-full h-full object-cover" />
             </span>
             <div>
@@ -587,7 +587,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Nom du centre *</label>
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
 
             {/* Type d'établissement */}
@@ -598,7 +598,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   const active = form.centerType === ct.key;
                   return (
                     <button key={ct.key} type="button" onClick={() => setForm(f => ({ ...f, centerType: ct.key }))}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition-all duration-200 ${
+                      className={`p-3.5 rounded-2xl border text-left transition-all duration-200 ${
                         active
                           ? 'border-[#257C86] bg-[#257C86]/[0.06] shadow-md shadow-[#257C86]/10'
                           : 'border-slate-200 bg-white hover:border-[#257C86]/40 hover:bg-slate-50/50'
@@ -616,8 +616,8 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-[#257C86] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
                   <img
                     src={logoPreview || form.logoUrl || icon}
                     alt="Logo du centre"
@@ -640,7 +640,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                       type="button"
                       onClick={handleLogoUpload}
                       disabled={!logoFile || logoUploading}
-                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/20 hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                       Télécharger et enregistrer
@@ -664,18 +664,18 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Ville</label>
               <input value={form.locationCity} onChange={e => setForm(f => ({ ...f, locationCity: e.target.value }))}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
               <input required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition text-left" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition text-left" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Plan *</label>
               <select required value={form.plan} onChange={e => handlePlanChange(e.target.value)}
-                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
                 <option value="trial">Essai gratuit</option>
                 <option value="basic">Basic</option>
                 <option value="growth">Growth</option>
@@ -688,20 +688,20 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 <div>
                   <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Cycle de facturation</label>
                   <select value={form.billingCycle} onChange={e => setForm(f => ({ ...f, billingCycle: e.target.value as 'monthly' | 'annual' }))}
-                    className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
+                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition cursor-pointer">
                     <option value="monthly">Mensuel</option>
                     <option value="annual">Annuel — 20 % de remise</option>
                   </select>
                 </div>
                 {/* Same presentation as the « Essai gratuit » card — free days
                     are an trial before the billing starts, not a separate note. */}
-                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
+                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/30 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-left">
                     <label htmlFor="new-center-offer-days" className="text-xs font-black text-slate-600">Durée de l’essai avant l’abonnement</label>
                     <div className="flex items-center gap-2">
                       <input id="new-center-offer-days" type="number" min="0" max="3650" step="1" inputMode="numeric" value={form.offerDays}
                         onChange={e => setForm(f => ({ ...f, offerDays: e.target.value }))}
-                        className="w-20 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                        className="w-20 border border-[#257C86]/30 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
                       <span className="text-xs font-bold text-slate-500">jours</span>
                     </div>
                   </div>
@@ -711,7 +711,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   </div>
                   <p className="text-[11px] font-semibold text-slate-500 text-left">Gratuit pendant l’essai — la facturation ne démarre qu’ensuite, au tarif sélectionné.</p>
                 </div>
-                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3">
+                <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/30 bg-[#257C86]/[0.05] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-black text-slate-600">Tarif calculé</span>
                     <span className="text-lg font-black text-[#257C86]">
@@ -728,7 +728,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     <input type="number" min="0" step="0.01" value={form.monthlyPrice}
                       onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))}
                       placeholder="Saisir le tarif négocié en TND"
-                      className="mt-2 w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] outline-none" />
+                      className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] outline-none" />
                   )}
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="ltr">
@@ -745,13 +745,13 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </>
             )}
             {form.plan === 'trial' && (
-              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/20 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
+              <div className="sm:col-span-2 rounded-2xl border border-[#257C86]/30 bg-[#257C86]/[0.05] px-4 py-3 space-y-2" dir="ltr">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-left">
                   <label htmlFor="new-center-trial-days" className="text-xs font-black text-slate-600">Durée de l’essai offert</label>
                   <div className="flex items-center gap-2">
                     <input id="new-center-trial-days" type="number" min="1" max="3650" step="1" inputMode="numeric" value={form.trialDays}
                       onChange={e => setForm(f => ({ ...f, trialDays: e.target.value }))}
-                      className="w-20 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                      className="w-20 border border-[#257C86]/30 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
                     <span className="text-xs font-bold text-slate-500">jours</span>
                   </div>
                 </div>
@@ -771,17 +771,17 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Nom *</label>
                 <input required value={form.directorName} onChange={e => setForm(f => ({ ...f, directorName: e.target.value }))}
-                  className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Email *</label>
                 <input required type="email" value={form.directorEmail} onChange={e => setForm(f => ({ ...f, directorEmail: e.target.value }))}
-                  className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
               </div>
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Mot de passe initial *</label>
                 <input required type="password" minLength={6} value={form.directorPassword} onChange={e => setForm(f => ({ ...f, directorPassword: e.target.value }))}
-                  className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition" />
               </div>
             </div>
           </div>
@@ -836,7 +836,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               Annuler
             </button>
             <button type="submit" disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-lg shadow-[#257C86]/25 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Créer le centre
             </button>
@@ -851,7 +851,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 // ─── Edit Invoice Modal (statut / paiement / chèque) ────────────────────────
 function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoice; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<CenterInvoice['status']>(invoice.status);
   const [method, setMethod] = useState<string>(
@@ -904,7 +904,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6"
+        className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -942,7 +942,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
           </div>
 
           {chequeMode && (
-            <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/50 p-3.5 space-y-3">
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3.5 space-y-3">
               <p className="text-[10px] font-bold text-indigo-700 leading-relaxed">
                 Chèque reçu : laissez le statut « En attente » — la facture apparaît dans « Chèques en attente » et
                 n’est <span className="underline">pas comptée dans les revenus</span> tant que vous ne l’encaissez pas
@@ -985,7 +985,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
               Annuler
             </button>
             <button type="submit" disabled={saving}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Sauvegarder
             </button>
@@ -1009,7 +1009,7 @@ function centerDateTimestamp(value: string): number | null {
 
 function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -1247,7 +1247,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
@@ -1272,8 +1272,8 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Logo du centre</label>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-[#257C86] to-[#1e626b] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="h-16 w-16 rounded-2xl bg-[#257C86] p-1 shadow-md shadow-[#257C86]/20 ring-1 ring-white/40 overflow-hidden shrink-0">
                   <img src={logoPreview || form.logoUrl || icon} alt="Logo du centre" className="w-full h-full rounded-xl object-cover bg-white" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
@@ -1329,7 +1329,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-lg shadow-[#257C86]/25 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Enregistrer
             </button>
@@ -1380,7 +1380,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   // Keep it in a ref so the effect deps stay stable.
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const fieldCls = 'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [view, setView] = useState<CenterPlansView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1715,7 +1715,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div className="min-w-0">
@@ -1738,7 +1738,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         ) : (
           <div className="p-5 space-y-4">
             {/* ── Abonnement en cours ── */}
-            <div className="rounded-2xl border-2 border-slate-200/70 p-4 bg-slate-50/50">
+            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
                   {isTrial ? 'Période d’essai' : 'Abonnement en cours'}
@@ -1798,7 +1798,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <button onClick={() => openForm('edit')} disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
                     <Edit className="h-3.5 w-3.5" /> {isTrial ? 'Choisir un plan et activer' : hasLiveWindow ? 'Modifier le plan' : 'Relancer un abonnement'}
                   </button>
                   <button onClick={() => openForm('schedule')} disabled={saving || isTrial || !hasLiveWindow}
@@ -1808,7 +1808,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   </button>
                   {(hasLiveWindow || isTrial) && (
                     <button onClick={() => setMode('trial')} disabled={saving}
-                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/25 rounded-xl hover:bg-[#257C86]/[0.12] transition cursor-pointer disabled:opacity-40"
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/30 rounded-xl hover:bg-[#257C86]/[0.12] transition cursor-pointer disabled:opacity-40"
                       title="Offrir des jours : au début si l’abonnement ne court pas encore, sinon ajoutés à la fin de la période">
                       <Clock className="h-3.5 w-3.5" /> Ajouter une période d’essai
                     </button>
@@ -1831,14 +1831,14 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Formulaire : ajouter une période d'essai ── */}
             {mode === 'trial' && (
-              <div className="rounded-2xl border-2 border-[#257C86]/25 bg-[#257C86]/[0.04] p-4 space-y-3" dir="ltr">
+              <div className="rounded-2xl border border-[#257C86]/30 bg-[#257C86]/[0.04] p-4 space-y-3" dir="ltr">
                 <p className="text-xs font-black text-slate-700">Ajouter une période d’essai offerte</p>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <label htmlFor="plan-manager-trial-days" className="text-xs font-black text-slate-600">Nombre de jours</label>
                   <div className="flex items-center gap-2">
                     <input id="plan-manager-trial-days" type="number" min={1} max={3650} step={1} inputMode="numeric"
                       value={trialDaysInput} onChange={e => setTrialDaysInput(e.target.value)}
-                      className="w-24 border-2 border-[#257C86]/20 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
+                      className="w-24 border border-[#257C86]/30 rounded-xl px-2.5 py-2 text-sm font-black text-slate-800 bg-white focus:border-[#257C86] focus:ring-0 outline-none text-center" />
                     <span className="text-xs font-bold text-slate-500">jours</span>
                   </div>
                 </div>
@@ -1854,7 +1854,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
                   <button onClick={submitTrial} disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
                     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
                     Ajouter l’essai ({Math.max(1, trialDaysNum)} j)
                   </button>
@@ -1864,7 +1864,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Formulaire : modifier le plan courant / programmer ── */}
             {(mode === 'edit' || mode === 'schedule') && (
-              <div className={`rounded-2xl border-2 p-4 space-y-3 ${mode === 'edit' ? 'border-[#257C86]/20 bg-[#257C86]/[0.04]' : 'border-amber-300/50 bg-amber-50/50'}`}>
+              <div className={`rounded-2xl border p-4 space-y-3 ${mode === 'edit' ? 'border-[#257C86]/20 bg-[#257C86]/[0.04]' : 'border-amber-300/50 bg-amber-50/50'}`}>
                 <p className="text-xs font-black text-slate-700">
                   {mode === 'schedule'
                     ? 'Programmer un plan pour la fin de la période en cours'
@@ -1890,12 +1890,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       <>
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                            className={`text-left rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">Appliquer maintenant</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">Fin d’abonnement inchangée · régularisation au prorata des jours déjà utilisés</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
+                            className={`text-left rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'la reconduction'}</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">Le plan actuel reste appliqué jusqu’à la fin de la période</div>
                           </button>
@@ -1905,13 +1905,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
+                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
                                 <div className="text-[10px] font-black text-emerald-800">Période déjà payée</div>
                                 <div className="text-sm font-black text-emerald-700">+ {formatTnd(decision.paidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">complément = différence × jours restants</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
+                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
                                 <div className="text-[10px] font-black text-amber-800">Période pas encore payée</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">l’ancienne facture en attente est annulée et remplacée</div>
@@ -1956,7 +1956,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
                   <button onClick={mode === 'schedule' ? submitScheduled : submitPlan} disabled={saving}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white rounded-xl shadow-md transition cursor-pointer disabled:opacity-60 ${mode === 'schedule' ? 'bg-gradient-to-r from-amber-500 to-amber-600 shadow-amber-500/25 hover:shadow-lg' : 'bg-gradient-to-r from-[#257C86] to-[#1e626b] shadow-[#257C86]/25 hover:shadow-lg'}`}>
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white rounded-xl shadow-md transition cursor-pointer disabled:opacity-60 ${mode === 'schedule' ? 'bg-amber-500 shadow-sm shadow-amber-500/20 hover:shadow-md' : 'bg-[#257C86] shadow-sm shadow-[#257C86]/20 hover:shadow-md'}`}>
                     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mode === 'schedule' ? <CalendarClock className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
                     {mode === 'schedule' ? 'Programmer' : isTrial ? 'Activer l’abonnement' : 'Enregistrer le plan'}
                   </button>
@@ -2113,7 +2113,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
 }) {
   const toast = useToast();
   const isEdit = !!ad;
-  const fieldCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const fieldCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const knownLocation = !ad || ['landing_page', 'center_admin', 'both'].includes(String(ad.location));
 
   const [title, setTitle] = useState(ad?.title || '');
@@ -2200,7 +2200,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
 
   const togglePill = (on: boolean, set: (v: boolean) => void, labelOn: string, labelOff: string) => (
     <button type="button" onClick={() => set(!on)}
-      className={`px-3 py-1.5 rounded-xl text-[11px] font-black border-2 transition cursor-pointer ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400'}`}>
+      className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition cursor-pointer ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400'}`}>
       {on ? labelOn : labelOff}
     </button>
   );
@@ -2210,7 +2210,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
           <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -2266,7 +2266,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             {imageUrls.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
                 {imageUrls.map((url, i) => (
-                  <div key={`${url}-${i}`} className="relative group aspect-video rounded-xl overflow-hidden border-2 border-slate-200 bg-slate-50">
+                  <div key={`${url}-${i}`} className="relative group aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
                     <span className="absolute top-1 left-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
@@ -2285,10 +2285,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
               {uploading && <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin text-[#257C86]" /> Téléversement…</span>}
               <div className="flex items-center gap-2 flex-1 min-w-[220px]">
                 <input id="ad-image-url" value={extraImageUrl} onChange={e => setExtraImageUrl(e.target.value)} placeholder="…ou coller une URL d’image"
-                  className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none" dir="ltr" />
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none" dir="ltr" />
                 <button type="button" disabled={!extraImageUrl.trim()}
                   onClick={() => { setImageUrls(cur => [...cur, extraImageUrl.trim()]); setExtraImageUrl(''); }}
-                  className="px-3 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/20 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer disabled:opacity-40">
+                  className="px-3 py-2 text-xs font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/30 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer disabled:opacity-40">
                   Ajouter
                 </button>
               </div>
@@ -2302,7 +2302,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 const on = positions.includes(spec.id);
                 return (
                   <button key={spec.id} type="button" title={spec.hint} onClick={() => togglePosition(spec.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border-2 transition cursor-pointer ${on ? 'border-[#257C86] bg-[#257C86]/10 text-[#257C86]' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${on ? 'border-[#257C86] bg-[#257C86]/10 text-[#257C86]' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
                     {on ? '✓ ' : ''}{spec.label} <span className="font-black">· {spec.size}</span>
                   </button>
                 );
@@ -2326,10 +2326,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     value={centerQuery}
                     onChange={e => setCenterQuery(e.target.value)}
                     placeholder="Rechercher un centre par nom…"
-                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
+                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
                   />
                 </div>
-                <div className="max-h-40 overflow-y-auto rounded-2xl border-2 border-slate-200 divide-y divide-slate-100">
+                <div className="max-h-40 overflow-y-auto rounded-2xl border border-slate-200 divide-y divide-slate-100">
                   {filteredCenters.length === 0 ? (
                     <p className="px-3 py-2.5 text-[11px] font-semibold text-slate-400">
                       Aucun centre ne correspond à « {centerQuery.trim()} ».
@@ -2358,7 +2358,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
             <button type="submit" disabled={saving || uploading}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer disabled:opacity-60">
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               {isEdit ? 'Enregistrer les modifications' : 'Créer l’annonce'}
             </button>
@@ -2950,7 +2950,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     renewals: { title: 'Demandes de renouvellement', sub: 'Renouvellements et changements d’offre des centres' },
   };
 
-  const inputCls = 'w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
+  const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
 
   return (
     <div className="relative space-y-6" dir="ltr">
@@ -2959,9 +2959,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-[280px] w-[760px] rounded-full bg-[#257C86]/[0.06] blur-[110px] pointer-events-none" />
 
       {/* ─── Header (landing style card) ──────────────────────────── */}
-      <div className="relative flex items-center justify-between flex-wrap gap-4 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-lg shadow-slate-900/5 px-5 py-4">
+      <div className="relative flex items-center justify-between flex-wrap gap-4 rounded-3xl bg-white border border-slate-200 shadow-sm shadow-slate-900/5 px-5 py-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-lg shadow-[#257C86]/25 flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-2xl overflow-hidden bg-[#257C86] shadow-sm shadow-[#257C86]/20 flex items-center justify-center flex-shrink-0">
             <img src={icon} alt="SaaS" className="w-full h-full object-cover" />
           </div>
           <div>
@@ -2978,15 +2978,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={page === 'centers' ? 'Rechercher un centre…' : 'Rechercher une demande…'}
-                className="w-48 sm:w-56 pl-9 pr-3 py-2.5 text-sm font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
+                className="w-48 sm:w-56 pl-9 pr-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition"
               />
             </div>
           )}
-          <button onClick={load} className="p-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer" title="Actualiser">
+          <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer" title="Actualiser">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button onClick={() => setShowNewCenter(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer">
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#257C86] hover:shadow-md text-white text-sm font-black rounded-xl shadow-sm shadow-[#257C86]/20 transition cursor-pointer">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nouveau Centre</span>
             <span className="sm:hidden">Centre</span>
@@ -3008,7 +3008,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               { label: 'Nouvelles demandes', value: newRequests, icon: FileText, tint: 'bg-blue-100 text-blue-600' },
               { label: 'À encaisser', value: billingSummary ? `${billingSummary.pendingInvoices.toFixed(0)} TND` : '—', icon: Receipt, tint: 'bg-rose-100 text-rose-600' }
             ].map(kpi => (
-              <div key={kpi.label} className="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:-translate-y-0.5 transition-all">
+              <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:-translate-y-0.5 transition-all">
                 <div className={`inline-flex p-2.5 rounded-xl mb-3 ${kpi.tint}`}>
                   <kpi.icon className="h-5 w-5" />
                 </div>
@@ -3021,7 +3021,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           <div className="grid lg:grid-cols-5 gap-5">
 
             {/* Revenue chart */}
-            <div className="lg:col-span-3 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-lg shadow-slate-900/5">
+            <div className="lg:col-span-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
                 <div className="flex items-center gap-2.5">
                   <span className="p-2.5 bg-[#257C86]/10 rounded-xl"><BarChart3 className="h-4 w-4 text-[#257C86]" /></span>
@@ -3048,7 +3048,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         initial={{ height: 0 }}
                         animate={{ height: `${Math.max(4, (m.total / maxRevenue) * 100)}%` }}
                         transition={{ duration: 0.7, delay: i * 0.08, ease: 'easeOut' }}
-                        className={`w-full rounded-xl ${i === revenueChart.length - 1 ? 'bg-gradient-to-t from-[#257C86] to-[#3aa5b0] shadow-lg shadow-[#257C86]/25' : 'bg-[#257C86]/15'}`}
+                        className={`w-full rounded-xl ${i === revenueChart.length - 1 ? 'bg-[#257C86] shadow-sm shadow-[#257C86]/20' : 'bg-[#257C86]/15'}`}
                       />
                       <span className="text-[10px] font-bold text-slate-400 capitalize">{m.label}</span>
                     </div>
@@ -3058,7 +3058,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
 
             {/* Recent requests */}
-            <div className="lg:col-span-2 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-lg shadow-slate-900/5">
+            <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
                   <span className="p-2.5 bg-blue-100 rounded-xl"><FileText className="h-4 w-4 text-blue-600" /></span>
@@ -3096,7 +3096,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {/* Trials to watch */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-lg shadow-slate-900/5">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
             <div className="flex items-center gap-2.5 mb-5">
               <span className="p-2.5 bg-amber-100 rounded-xl"><CalendarClock className="h-4 w-4 text-amber-600" /></span>
               <h3 className="text-sm font-black text-slate-900">Essais à surveiller</h3>
@@ -3115,7 +3115,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     const days = daysLeft(c.trialEndsAt);
                     return (
                       <button key={c.id} onClick={() => onNavigate?.('centers')}
-                        className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 hover:border-[#257C86]/50 hover:bg-[#257C86]/[0.04] p-3.5 text-left transition cursor-pointer">
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 hover:border-[#257C86]/50 hover:bg-[#257C86]/[0.04] p-3.5 text-left transition cursor-pointer">
                         {c.logoUrl ? (
                           <div className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
                             <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-xl object-cover" />
@@ -3131,8 +3131,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         </div>
                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0 ${
                           days === null ? 'bg-slate-50 text-slate-400 border border-slate-100'
-                            : days <= 3 ? 'bg-[#257C86]/15 text-[#257C86] border border-[#257C86]/25'
-                            : days <= 7 ? 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'
+                            : days <= 3 ? 'bg-[#257C86]/15 text-[#257C86] border border-[#257C86]/30'
+                            : days <= 7 ? 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'
                             : 'bg-slate-50 text-slate-500 border border-slate-200'
                         }`}>
                           {days === null ? '—' : days > 0 ? `${days} j` : 'Expiré'}
@@ -3151,7 +3151,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="centers" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
 
           {/* Filters — type / statut / plan */}
-          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4 scroll-mt-24">
+          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type</div>
               <Segmented<'all' | 'jardin' | 'formation'>
@@ -3198,11 +3198,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200/70">
+            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : filteredCenters.length === 0 ? (
-            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200/70 text-slate-400">
+            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-400">
               <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucun centre'}</p>
             </div>
@@ -3216,7 +3216,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             const mods = (c.enabledModules as string[]) || [];
             return (
               <motion.div key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
+                className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
                     {c.logoUrl ? (
@@ -3235,7 +3235,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(c.centerType) && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'}`}>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
                         {CENTER_TYPE_LABEL[normalizeCenterType(c.centerType)]}
                       </span>
                     )}
@@ -3336,7 +3336,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     {c.status === 'suspended' ? <><CheckCircle2 className="h-3.5 w-3.5" /> Activer</> : <><PauseCircle className="h-3.5 w-3.5" /> Suspendre</>}
                   </button>
                   <button onClick={() => setPlanCenter(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer flex items-center gap-1.5"
+                    className="text-[11px] font-bold px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer flex items-center gap-1.5"
                     title="Gérer le plan, les modules, les factures et les changements programmés">
                     <Layers className="h-3.5 w-3.5" /> Plans &amp; factures
                   </button>
@@ -3366,7 +3366,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="requests" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-4">
 
           {/* Filters — type / statut */}
-          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4 scroll-mt-24">
+          <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type d’établissement</div>
               <Segmented<'all' | 'jardin' | 'formation'>
@@ -3397,11 +3397,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200/70">
+            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : filteredRequests.length === 0 ? (
-            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200/70 text-slate-400">
+            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-400">
               <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucune demande reçue'}</p>
             </div>
@@ -3412,7 +3412,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             const mods = parseModules(req.requestedModules);
             return (
               <motion.div key={req.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
+                className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
                     <div className="h-11 w-11 rounded-2xl bg-blue-50 flex items-center justify-center text-sm font-black text-blue-600 flex-shrink-0">
@@ -3426,7 +3426,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(req.centerType) && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(req.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20'}`}>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(req.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
                         {CENTER_TYPE_LABEL[normalizeCenterType(req.centerType)]}
                       </span>
                     )}
@@ -3489,7 +3489,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       value="converted"
                       onChange={e => { if (e.target.value === 'archived') handleReqStatus(req, 'archived'); }}
                       title="Demande convertie : seule l’archivation est possible."
-                      className="text-[11px] font-bold px-3 py-1.5 border-2 border-slate-200 rounded-xl bg-white text-slate-600 focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer">
+                      className="text-[11px] font-bold px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-600 focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer">
                       <option value="converted">Converti</option>
                       <option value="archived">Archivé</option>
                     </select>
@@ -3497,7 +3497,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <select
                       value={req.status === 'contacted' ? 'new' : req.status}
                       onChange={e => handleReqStatus(req, e.target.value)}
-                      className="text-[11px] font-bold px-3 py-1.5 border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer">
+                      className="text-[11px] font-bold px-3 py-1.5 border border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer">
                       <option value="new">Nouveau</option>
                       <option value="archived">Archivé</option>
                     </select>
@@ -3506,7 +3506,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   {req.status !== 'converted' ? (
                     <button
                       onClick={() => { setConvertRequest(req); setShowNewCenter(true); }}
-                      className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg hover:shadow-[#257C86]/30 transition cursor-pointer">
+                      className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-[#257C86] text-white rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer">
                       <Building2 className="h-3.5 w-3.5" /> Convertir en Centre
                     </button>
                   ) : (
@@ -3543,7 +3543,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       {page === 'finance' && (
         <motion.div key="finance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative space-y-6">
           {financeLoading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200/70">
+            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : (
@@ -3557,7 +3557,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     { label: 'Encaissé cette année', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-violet-100 text-violet-600' },
                     { label: 'Factures en attente', value: `${billingSummary.pendingInvoices.toFixed(2)} TND`, icon: AlertCircle, tint: 'bg-amber-100 text-amber-600' }
                   ].map(kpi => (
-                    <div key={kpi.label} className="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-lg shadow-slate-900/5">
+                    <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
                       <div className={`inline-flex p-2.5 rounded-xl mb-3 ${kpi.tint}`}>
                         <kpi.icon className="h-5 w-5" />
                       </div>
@@ -3570,7 +3570,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
               {/* Chèques en attente — le revenu n'est compté qu'après encaissement */}
               {pendingCheques.length > 0 && (
-                <div className="bg-white rounded-3xl border border-indigo-200/70 p-6 shadow-lg shadow-slate-900/5">
+                <div className="bg-white rounded-3xl border border-indigo-200/70 p-6 shadow-sm shadow-slate-900/5">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
                       <span className="p-2 bg-indigo-100 rounded-xl"><Receipt className="h-4 w-4 text-indigo-600" /></span>
@@ -3635,7 +3635,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               )}
 
               {/* Factures — groupées par centre */}
-              <div className="bg-white rounded-3xl border border-slate-200/70 p-6 shadow-lg shadow-slate-900/5">
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm shadow-slate-900/5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
                     <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
@@ -3651,13 +3651,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         value={invoiceSearch}
                         onChange={e => setInvoiceSearch(e.target.value)}
                         placeholder="Filtrer par nom du centre…"
-                        className="pl-9 pr-3 py-2 text-xs font-semibold bg-white border-2 border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition w-48 sm:w-56"
+                        className="pl-9 pr-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-[#257C86] focus:ring-0 outline-none transition w-48 sm:w-56"
                       />
                     </div>
                     <select
                       value={invoiceStatusFilter}
                       onChange={e => setInvoiceStatusFilter(e.target.value as 'all' | CenterInvoice['status'])}
-                      className="px-3 py-2 text-xs font-bold border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer"
+                      className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer"
                     >
                       <option value="all">Tous les statuts</option>
                       <option value="pending">En attente</option>
@@ -3668,7 +3668,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <select
                       value={invoiceMonthFilter}
                       onChange={e => setInvoiceMonthFilter(e.target.value)}
-                      className="px-3 py-2 text-xs font-bold border-2 border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer capitalize"
+                      className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl bg-white focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer capitalize"
                       title="Filtrer par mois de période facturée"
                     >
                       <option value="all">Tous les mois</option>
@@ -3705,10 +3705,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                           {/* Centre header — cliquer pour replier / déplier */}
                           <button type="button"
                             onClick={() => setCollapsedGroupIds(prev => ({ ...prev, [group.centerId]: !prev[group.centerId] }))}
-                            className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-left cursor-pointer border-b border-slate-200/70">
+                            className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-left cursor-pointer border-b border-slate-200">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} />
-                              <span className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
+                              <span className="h-8 w-8 rounded-lg bg-[#257C86] text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
                                 {group.centerName.split(' ').map((word: string) => word[0]).join('').slice(0, 2).toUpperCase()}
                               </span>
                               <div className="min-w-0">
@@ -3817,7 +3817,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
           {/* Year selector — sélecteur compact : quelle que soit la taille
               de la liste des années, rien ne déborde et tout reste visible. */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white p-3 sm:p-4 shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex-shrink-0">
@@ -3826,7 +3826,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <select
                   value={priceYear}
                   onChange={e => setPriceYear(e.target.value)}
-                  className="px-3 py-2 bg-white border-2 border-slate-200 rounded-xl text-sm font-black text-slate-800 focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer min-w-[140px]"
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-800 focus:border-[#257C86] focus:ring-0 outline-none cursor-pointer min-w-[140px]"
                 >
                   {priceYears.map(year => (
                     <option key={year} value={year}>{year}</option>
@@ -3834,7 +3834,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 </select>
               </div>
               <button onClick={addSchoolYear} disabled={addingYear}
-                className="ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-dashed border-[#257C86]/50 text-[#257C86] text-xs sm:text-sm font-black whitespace-nowrap hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60"
+                className="ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-dashed border-[#257C86]/50 text-[#257C86] text-xs sm:text-sm font-black whitespace-nowrap hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60"
                 title={`Crée ${nextSchoolYear} avec les tarifs copiés depuis ${priceYears[priceYears.length - 1] || ''}`}
               >
                 {addingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -3844,14 +3844,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {pricesLoading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200/70">
+            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
               <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : (
             <div className="grid lg:grid-cols-3 gap-5">
 
               {/* Base plan card */}
-              <div className="rounded-3xl bg-gradient-to-br from-[#257C86] to-[#1e626b] text-white p-6 shadow-xl shadow-[#257C86]/25 relative overflow-hidden">
+              <div className="rounded-3xl bg-[#257C86] text-white p-6 shadow-xl shadow-[#257C86]/25 relative overflow-hidden">
                 <div className="absolute -top-16 -right-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -3884,7 +3884,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               </div>
 
               {/* Module price editor */}
-              <div className="lg:col-span-2 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-lg shadow-slate-900/5">
+              <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
                 <h3 className="text-sm font-black text-slate-900 mb-1">Prix des modules additionnels</h3>
                 <p className="text-xs text-slate-500 font-semibold mb-5">
                   Ces tarifs servent au calcul automatique du prix d’un centre selon ses modules activés — année {priceYear}.
@@ -3894,14 +3894,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     const base = isBaseModule(m.key);
                     return (
                       <div key={m.key}
-                        className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 ${base ? 'border-[#257C86]/30 bg-[#257C86]/[0.05]' : 'border-slate-200 bg-white hover:border-[#257C86]/30 transition'}`}>
+                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${base ? 'border-[#257C86]/30 bg-[#257C86]/[0.05]' : 'border-slate-200 bg-white hover:border-[#257C86]/30 transition'}`}>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                             {m.label}
                             {m.key === BUNDLED_MODULE_KEY ? (
                               <span className="text-[8px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-px uppercase">Offert</span>
                             ) : base ? (
-                              <span className="text-[8px] font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/25 rounded-full px-1.5 py-px uppercase">Base</span>
+                              <span className="text-[8px] font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/30 rounded-full px-1.5 py-px uppercase">Base</span>
                             ) : null}
                           </div>
                           <div className="text-[10px] font-semibold text-slate-400">{m.key}</div>
@@ -3914,7 +3914,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                               type="number" step="0.5" min="0"
                               value={priceList[m.key] ?? 0}
                               onChange={e => setPriceList(p => ({ ...p, [m.key]: Number(e.target.value) }))}
-                              className="w-20 border-2 border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-right text-slate-800 focus:border-[#257C86] focus:ring-0 outline-none bg-white transition"
+                              className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-right text-slate-800 focus:border-[#257C86] focus:ring-0 outline-none bg-white transition"
                             />
                           )}
                           <span className="text-[10px] font-bold text-slate-400">{m.key === BUNDLED_MODULE_KEY ? 'offert' : 'TND/mois'}</span>
@@ -3933,7 +3933,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               Tarifs appliqués à l'année scolaire {priceYear}.
             </p>
             <button onClick={savePrices} disabled={savingPrices || pricesLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:shadow-lg hover:shadow-[#257C86]/30 text-white text-sm font-black rounded-2xl shadow-md shadow-[#257C86]/25 transition cursor-pointer disabled:opacity-60">
+              className="flex items-center gap-2 px-6 py-3 bg-[#257C86] hover:shadow-md text-white text-sm font-black rounded-2xl shadow-sm shadow-[#257C86]/20 transition cursor-pointer disabled:opacity-60">
               {savingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Sauvegarder les tarifs
             </button>
@@ -3972,7 +3972,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} />
               </button>
               <button onClick={() => setShowNewAd(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-md hover:shadow-lg transition cursor-pointer">
+                className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white text-sm font-black rounded-xl shadow-md hover:shadow-md transition cursor-pointer">
                 <Plus className="h-4 w-4" />
                 Nouvelle publicité
               </button>
@@ -3992,7 +3992,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {visibleAds.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (
-                <div key={ad.id} className="border-2 border-slate-200 rounded-xl p-4 bg-white hover:border-[#257C86]/30 transition">
+                <div key={ad.id} className="border border-slate-200 rounded-xl p-4 bg-white hover:border-[#257C86]/30 transition">
                   <div className="aspect-video bg-slate-100 rounded-lg mb-3 overflow-hidden">
                     {ad.imageUrls?.[0] && (
                       <img src={ad.imageUrls[0]} alt={ad.title} className="w-full h-full object-cover" />
@@ -4043,7 +4043,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <button
                 onClick={() => setAdsPage(p => Math.max(1, p - 1))}
                 disabled={adsPage === 1}
-                className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
+                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="px-4 py-2 text-sm font-bold text-slate-600">
@@ -4052,7 +4052,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <button
                 onClick={() => setAdsPage(p => Math.min(Math.ceil(visibleAds.length / PAGE_SIZE), p + 1))}
                 disabled={adsPage >= Math.ceil(visibleAds.length / PAGE_SIZE)}
-                className="px-3 py-2 border-2 border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
+                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -4064,7 +4064,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       {page === 'renewals' && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           {/* Filters — type / statut */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-sm px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4">
             <div>
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-1.5">Type</div>
               <Segmented<'all' | 'renewal' | 'upgrade'>
@@ -4091,7 +4091,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
             <button onClick={loadRenewals} title="Actualiser"
-              className="ml-auto p-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
+              className="ml-auto p-2.5 rounded-xl bg-white border border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
               <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -4101,14 +4101,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <Loader2 className="h-4 w-4 animate-spin text-[#257C86]" /> Chargement…
             </p>
           ) : renewalRequests.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
+            <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
               <p className="text-sm font-black text-slate-500">Aucune demande</p>
               <p className="mt-1 text-xs font-semibold text-slate-400">
                 Les centres soumettent ici leurs demandes de renouvellement et de changement d’offre.
               </p>
             </div>
           ) : filteredRenewals.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
+            <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
               <p className="text-sm font-black text-slate-500">Aucun résultat pour ces filtres</p>
               <p className="mt-1 text-xs font-semibold text-slate-400">
                 Modifiez le type ou le statut pour voir d’autres demandes.
@@ -4117,7 +4117,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           ) : (
             <div className="space-y-3">
               {filteredRenewals.map(r => (
-                <div key={r.id} className={`rounded-2xl border-2 bg-white p-4 ${r.status === 'pending' ? 'border-amber-200' : 'border-slate-200'}`}>
+                <div key={r.id} className={`rounded-2xl border bg-white p-4 ${r.status === 'pending' ? 'border-amber-200' : 'border-slate-200'}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-black text-slate-900">{r.centerName || r.centerId}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
@@ -4159,7 +4159,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <button
                         type="button"
                         onClick={() => setReviewRenewal(r)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-[#257C86] to-[#1e626b] rounded-xl shadow-md shadow-[#257C86]/25 hover:shadow-lg transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer"
                       >
                         <FileText className="h-3.5 w-3.5" />
                         Examiner et appliquer
@@ -4174,7 +4174,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <button
                         type="button"
                         onClick={() => setReviewRenewal(r)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 rounded-xl transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/30 rounded-xl transition cursor-pointer"
                       >
                         <FileText className="h-3 w-3" />
                         Voir le détail
