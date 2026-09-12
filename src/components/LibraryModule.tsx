@@ -485,8 +485,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
           </div>
           
           <div className="flex items-center gap-4 text-xs font-bold">
-            <div className="flex items-center gap-1.5 text-emerald-700">
-              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+            <div className="flex items-center gap-1.5 text-amber-700">
+              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
               <span>Payé</span>
             </div>
             <div className="flex items-center gap-1.5 text-[#1e626b]">
@@ -558,7 +558,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                         {regStatus.status === 'paid' && regStatus.paymentRecord ? (
                           <button
                             onClick={() => setPrintingReceipt({ student: st, payment: regStatus.paymentRecord! })}
-                            className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-black text-[10px] flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1 bg-[#257C86]/10 hover:bg-[#257C86]/20 text-[#1e626b] rounded font-black text-[10px] flex items-center gap-1 cursor-pointer"
                             title="طباعة وصل التسجيل السنوي"
                           >
                             <CheckCircle2 className="h-3 w-3" />
@@ -589,7 +589,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                             {mStatus.status === 'paid' && (
                               <button
                                 onClick={() => handleOpenPayment(st, m)}
-                                className="w-full py-1.5 px-2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-emerald-200 transition cursor-pointer"
+                                className="w-full py-1.5 px-2 bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/30 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-[#257C86]/20 transition cursor-pointer"
                                 title="طباعة الوصل"
                               >
                                 <CheckCircle2 className="h-3 w-3" />
@@ -791,7 +791,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                         <div className="p-3.5 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 text-xs space-y-1.5 font-bold text-[#1e626b]">
                           <div className="flex justify-between items-center">
                             <span>سبق خلاص تسبقة لشهر {paymentMonth}:</span>
-                            <span className="font-mono text-emerald-800 font-extrabold text-sm">{activeMonthStatus.paidAmount} د.ت</span>
+                            <span className="font-mono text-[#1e626b] font-extrabold text-sm">{activeMonthStatus.paidAmount} د.ت</span>
                           </div>
                           <div className="flex justify-between items-center border-t border-[#257C86]/25 pt-1.5">
                             <span>المتبقي لاستكمال الشهر (Solde):</span>
@@ -914,7 +914,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                       <div>
                         <label className="text-xs font-bold text-slate-600 block mb-1">
-                          التخفيض (د.ت) <span className="text-[10px] text-amber-600 font-semibold">(يجب أن يكون أقل من المبلغ)</span>
+                          التخفيض (د.ت) <span className="text-[10px] text-[#1e626b]/80 font-semibold">(يجب أن يكون أقل من المبلغ)</span>
                         </label>
                         <input 
                           type="number" min="0" max={Math.max(0, standardFee - 1)}
@@ -927,7 +927,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                               setAmountPaid(Math.max(0, standardFee - val));
                             }
                           }}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-emerald-700"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b]"
                         />
                         <p className="text-[10px] text-slate-400 font-bold mt-1">
                           المستوجب بعد التخفيض: {Math.max(0, standardFee - (Number(discount) || 0))} د.ت
@@ -956,7 +956,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                                 setAmountPaid(val);
                               }
                             }}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-emerald-700"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b]"
                           />
                         </div>
 
@@ -1098,7 +1098,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
                                     {p.discount ? <span className="text-[#1e626b] text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>
-                                  <td className="p-2 text-left font-black font-mono text-emerald-800">{p.amountPaid} د.ت</td>
+                                  <td className="p-2 text-left font-black font-mono text-[#1e626b]">{p.amountPaid} د.ت</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1112,9 +1112,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                           <span className="text-base font-black text-slate-900 font-mono">{fullFeeRequired} د.ت</span>
                         </div>
 
-                        <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-300">
-                          <span className="text-[10px] text-emerald-800 block font-bold">المسدد حتى الآن:</span>
-                          <span className="text-base font-black text-emerald-700 font-mono">{totalPaidForMonth} د.ت</span>
+                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
+                          <span className="text-[10px] text-[#1e626b] block font-bold">المسدد حتى الآن:</span>
+                          <span className="text-base font-black text-[#1e626b] font-mono">{totalPaidForMonth} د.ت</span>
                         </div>
 
                         <div className={`p-2.5 rounded-xl border ${finalRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-[#257C86]/[0.06] border-[#257C86]/20'}`}>
@@ -1132,7 +1132,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
                       <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center font-bold">
                         {finalRemaining === 0 ? (
-                          <span className="text-emerald-700 text-xs flex items-center justify-center gap-1">
+                          <span className="text-[#1e626b] text-xs flex items-center justify-center gap-1">
                             <CheckCircle2 className="h-4 w-4" />
                             {printingReceipt.payment.month.startsWith('Annuel') ? 'حالة التسجيل: مسدد بالكامل' : 'حالة اشتراك الشهر: مسدد بالكامل'}
                           </span>

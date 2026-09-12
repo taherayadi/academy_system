@@ -52,15 +52,15 @@ const PLAN_BADGE: Record<string, string> = {
 const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
   center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
   plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
-  plan_activated: { text: 'Abonnement activé', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_activated: { text: 'Abonnement activé', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_renewed: { text: 'Reconduction', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  plan_settled: { text: 'Régularisation', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_settled: { text: 'Régularisation', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
   plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
   plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
   trial_added: { text: 'Jours offerts', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-emerald-100 text-emerald-700' },
+  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
 };
 
@@ -451,7 +451,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
                   request.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : request.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : request.status === 'approved' ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20'
                     : 'bg-red-50 text-red-700 border-red-200'
                 }`}>
                   {request.status === 'pending' ? 'En attente' : request.status === 'approved' ? 'Acceptée' : 'Refusée'}
@@ -489,7 +489,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   {isTrial ? 'Période d’essai' : 'Abonnement en cours'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-emerald-100 text-emerald-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-[#257C86]/10 text-[#1e626b]' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'Fenêtre payée' : pendingInvoice ? 'Fenêtre non payée' : 'Sans facture'}
                   </span>
                 )}
@@ -530,7 +530,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                     </p>
                   )}
                   {!expiredState && windowPaidInvoice && (
-                    <p className="text-[11px] font-bold text-emerald-700 mt-1.5">
+                    <p className="text-[11px] font-bold text-[#1e626b] mt-1.5">
                       Facture {windowPaidInvoice.invoiceNumber} payée · {windowPaidInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
@@ -573,9 +573,9 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
-                                <div className="text-[10px] font-black text-emerald-800">Période déjà payée</div>
-                                <div className="text-sm font-black text-emerald-700">+ {formatTnd(decision.paidAmount)}</div>
+                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-[#257C86] bg-[#257C86]/[0.06]' : 'border-slate-200 bg-white hover:border-[#257C86]/40'}`}>
+                                <div className="text-[10px] font-black text-[#1e626b]">Période déjà payée</div>
+                                <div className="text-sm font-black text-[#1e626b]">+ {formatTnd(decision.paidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">complément = différence × jours restants</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}

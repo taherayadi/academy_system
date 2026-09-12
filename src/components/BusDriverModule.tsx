@@ -543,7 +543,7 @@ export default function BusDriverModule({
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-[#257C86] text-white flex items-center justify-center shadow-md">
-            <Bus className="h-7 w-7 text-emerald-600" />
+            <Bus className="h-7 w-7 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -661,7 +661,7 @@ export default function BusDriverModule({
             onClick={openManualForm}
             className="flex items-center gap-2 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-xs rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer shrink-0"
           >
-            <PlusCircle className="h-4 w-4 text-emerald-600" />
+            <PlusCircle className="h-4 w-4 text-[#257C86]" />
             <span>إضافة رحلة يدوية</span>
           </button>
         </div>
@@ -687,7 +687,7 @@ export default function BusDriverModule({
                 <span className="font-black text-amber-800">{studentName}</span>
                 <span className="text-amber-600">— {remark}</span>
                 <button onClick={() => restorePassenger(tripId, studentId)}
-                  className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer px-1 underline">إعادة</button>
+                  className="text-[#257C86] hover:text-[#1e626b] font-bold cursor-pointer px-1 underline">إعادة</button>
               </div>
             ))}
           </div>
@@ -725,10 +725,10 @@ export default function BusDriverModule({
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-emerald-400 text-slate-900 text-[10px] font-black rounded-md">
+                            <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-black rounded-md">
                               رحلة #{tripIndex + 1}
                             </span>
-                            <span className="text-xs font-bold text-emerald-200">
+                            <span className="text-xs font-bold text-white/80">
                               {isToSchool ? `الانطلاق من ${centerName} ← إلى المؤسسات` : `الإحضار من المؤسسات ← إلى ${centerName}`}
                             </span>
                           </div>
@@ -807,7 +807,7 @@ export default function BusDriverModule({
                                       <School className="h-4 w-4 text-[#257C86]" />
                                       <span>{grp.etablissement}</span>
                                       {grp.count >= 2 && (
-                                        <span className="bg-emerald-400 text-slate-900 text-[10px] px-2 py-0.5 rounded-full font-black">
+                                        <span className="bg-[#257C86] text-white text-[10px] px-2 py-0.5 rounded-full font-black">
                                           نقل جماعي مشترك ({grp.count} تلاميذ)
                                         </span>
                                       )}
@@ -827,7 +827,7 @@ export default function BusDriverModule({
 
                                 return (
                                   <React.Fragment key={p.student.id}>
-                                    <tr className={`transition ${isBoarded ? 'bg-emerald-50/60' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                                    <tr className={`transition ${isBoarded ? 'bg-[#257C86]/[0.06]' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                                       <td className="p-3 text-center font-mono text-slate-400">{pIdx + 1}</td>
                                       <td className="p-3">
                                         <span className="font-black text-slate-900 text-xs block">
@@ -945,7 +945,7 @@ export default function BusDriverModule({
                 <div key={etab} className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-400/20 flex items-center justify-center text-xl">🏫</div>
+                      <div className="w-10 h-10 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-xl">🏫</div>
                       <div>
                         <h4 className="font-black text-slate-900 text-sm">{etab}</h4>
                         <span className="text-[11px] text-slate-400 font-bold block">{distinctStudents.length} تلاميذ مسجلين</span>
@@ -1131,7 +1131,7 @@ export default function BusDriverModule({
                   disabled={manualFormStudentIds.size === 0 || !manualFormTime}
                   className="flex items-center gap-2 px-6 py-2.5 bg-[#257C86] hover:bg-[#1e626b] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-[#257C86]/25"
                 >
-                  <PlusCircle className="h-4 w-4 text-emerald-600" />
+                  <PlusCircle className="h-4 w-4 text-[#257C86]" />
                   إضافة {manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}
                 </button>
               </div>
@@ -1193,7 +1193,7 @@ export default function BusDriverModule({
 
                 <div className="bg-slate-800 text-white p-2 flex justify-between items-center text-xs font-bold">
                   <div className="flex items-center gap-2">
-                    <span className="bg-emerald-400 text-slate-900 px-2 py-0.5 rounded font-black text-[11px]">
+                    <span className="bg-white/20 text-white px-2 py-0.5 rounded font-black text-[11px]">
                       رحلة #{tripIndex + 1}
                     </span>
                     <span>{isToSchool ? `← انطلاق إلى المؤسسات` : `← عودة إلى ${centerName}`}</span>

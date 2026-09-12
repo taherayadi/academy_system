@@ -690,7 +690,7 @@ export default function StudentRegistrationModule({
               {/* Badges of Enrolled Services */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {st.enrolledServices?.suivi && (
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                     Suivi Scolaire
                   </span>
                 )}
@@ -700,7 +700,7 @@ export default function StudentRegistrationModule({
                   </span>
                 )}
                 {st.enrolledServices?.library && (
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                     Bibliothèque
                   </span>
                 )}
@@ -712,11 +712,11 @@ export default function StudentRegistrationModule({
                 {!hideRestrictedModules && (
                   <>
                     {(st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir)) ? (
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#14464e] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                         اللمجتان معاً
                       </span>
                     ) : st.enrolledServices?.gouterMatin ? (
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/[0.06] text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20/50">
                         لمجة الصباح
                       </span>
                     ) : st.enrolledServices?.gouterSoir ? (
@@ -1415,20 +1415,20 @@ export default function StudentRegistrationModule({
                     )}
 
                     {!hideRestrictedModules && hasModule('cantine') && (
-                      <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 space-y-3">
+                      <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-[#257C86]/20/80 bg-[#257C86]/[0.06]/40 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
-                            <Cookie className="h-4 w-4 text-emerald-600" />
+                          <span className="text-xs font-black text-[#14464e] flex items-center gap-1.5">
+                            <Cookie className="h-4 w-4 text-[#257C86]" />
                             اشتراكات اللمجة (Goûter)
                           </span>
                           {gouterBothEnrolled && (
-                            <span className="text-[10px] font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-full shadow-lg shadow-slate-900/5">
+                            <span className="text-[10px] font-black bg-[#257C86] text-white px-2.5 py-0.5 rounded-full shadow-lg shadow-slate-900/5">
                               اللمجتان معاً (عرض مدمج)
                             </span>
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterMatinEnrolled && !gouterBothEnrolled ? 'bg-emerald-100 border-emerald-400 text-emerald-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-emerald-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterMatinEnrolled && !gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/40 text-[#14464e] cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterMatinEnrolled && !gouterBothEnrolled}
@@ -1442,7 +1442,7 @@ export default function StudentRegistrationModule({
                                   setGouterMatinEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]/30"
                             />
                             <div>
                               <span className="font-bold text-xs block">لمجة الصباح فقط</span>
@@ -1476,7 +1476,7 @@ export default function StudentRegistrationModule({
                             </div>
                           </label>
 
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterBothEnrolled ? 'bg-emerald-100 border-emerald-400 text-emerald-950 cursor-pointer shadow-lg shadow-slate-900/5' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-emerald-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/40 text-[#14464e] cursor-pointer shadow-lg shadow-slate-900/5' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterBothEnrolled}
@@ -1492,11 +1492,11 @@ export default function StudentRegistrationModule({
                                   setGouterSoirEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]/30"
                             />
                             <div>
-                              <span className="font-bold text-xs block text-emerald-900">اللمجتان معاً (صباح + مساء)</span>
-                              <span className="text-[10px] text-emerald-700 font-mono font-bold">
+                              <span className="font-bold text-xs block text-[#14464e]">اللمجتان معاً (صباح + مساء)</span>
+                              <span className="text-[10px] text-[#1e626b] font-mono font-bold">
                                 {settings ? (getFeesForYear(settings, academicYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, academicYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, academicYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/شهر
                               </span>
                             </div>
@@ -1855,15 +1855,15 @@ export default function StudentRegistrationModule({
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">5. الخدمات والاشتراكات</h3>
                     <div className="flex flex-wrap gap-2 text-[10px]">
-                      {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Suivi Scolaire</span>}
+                      {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Suivi Scolaire</span>}
                       {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Étude {centerName}</span>}
-                      {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Bibliothèque</span>}
+                      {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Bibliothèque</span>}
                       {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded font-bold">✓ Repas</span>}
                       {!hideRestrictedModules && (
                         (printingRegistrationStudent.enrolledServices?.gouterBoth || (printingRegistrationStudent.enrolledServices?.gouterMatin && printingRegistrationStudent.enrolledServices?.gouterSoir)) ? (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-950 rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterMatin ? (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ لمجة الصباح</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ لمجة الصباح</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterSoir ? (
                           <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ لمجة المساء</span>
                         ) : null

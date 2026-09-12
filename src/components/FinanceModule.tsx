@@ -811,7 +811,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 no-print">
         <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
           <span className="text-xs font-bold text-slate-500 block">إجمالي المقبوضات الكلي</span>
-          <p className="text-2xl font-black font-mono text-emerald-700">{fmt(grandTotalRevenueNet)} د.ت</p>
+          <p className="text-2xl font-black font-mono text-[#1e626b]">{fmt(grandTotalRevenueNet)} د.ت</p>
           <span className="text-[10px] text-slate-400 font-bold block">المقبوضات الفعلية (نقداً + شيكات محصلة)</span>
         </div>
 
@@ -917,17 +917,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <span className="text-[10px] text-[#1e626b] font-bold">تسجيلات سنوية — لا يتأثر بفيلتر الشهر</span>
         </div>
 
-        <div className="bg-emerald-50/60 p-5 rounded-3xl border border-emerald-200/80 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-emerald-800 block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
-          <p className="text-2xl font-black text-emerald-700 font-mono">{fmt(revenueSansRepas)} د.ت</p>
-          <span className="text-[10px] text-emerald-600 font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
+        <div className="bg-[#257C86]/[0.06] p-5 rounded-3xl border border-[#257C86]/20/80 shadow-lg shadow-slate-900/5 space-y-1">
+          <span className="text-xs font-bold text-[#1e626b] block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
+          <p className="text-2xl font-black text-[#1e626b] font-mono">{fmt(revenueSansRepas)} د.ت</p>
+          <span className="text-[10px] text-[#257C86] font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
         </div>
 
         {canteenEnabled && !hideRestrictedModules && (
-          <div className="bg-amber-50 p-5 rounded-3xl border border-amber-200 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-amber-800 block">إيرادات المطعم</span>
-            <p className="text-2xl font-black text-amber-600 font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-amber-600 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
+          <div className="bg-[#257C86]/[0.06] p-5 rounded-3xl border border-[#257C86]/20 shadow-lg shadow-slate-900/5 space-y-1">
+            <span className="text-xs font-bold text-[#1e626b] block">إيرادات المطعم</span>
+            <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-[#1e626b]/80 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
           </div>
         )}
 
@@ -1070,36 +1070,36 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">1. المتابعة الدراسية:</span>
-                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Suivi)} د.ت</span>
+                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Suivi)} د.ت</span>
               </div>
             {hasModule('etude') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">2. دراسات {centerName}:</span>
-                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
+                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
               )}
               {!hideRestrictedModules && coursPartEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3. مناب السنتر من الكورسات الخاصة:</span>
-                  <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
+                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
                 </div>
               )}
               {!hideRestrictedModules && revisionsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ب. مناب السنتر من حصص المراجعة:</span>
-                  <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Revision)} د.ت</span>
+                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Revision)} د.ت</span>
                 </div>
               )}
               {!hideRestrictedModules && formationsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ج. مداخيل التكوينات والدورات:</span>
-                  <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Formation)} د.ت</span>
+                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Formation)} د.ت</span>
                 </div>
               )}
               {hasModule('bibliotheque') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">4. اشتراكات المكتبة:</span>
-                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
+                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
               )}
               {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
@@ -1111,7 +1111,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               {hasModule('coursParticuliers') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">5. رسوم التأمين المدرسي (Assurance):</span>
-                <span className="font-mono text-emerald-700 font-black">{fmt(revenueByService.Assurance)} د.ت</span>
+                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Assurance)} د.ت</span>
               </div>
               )}
               {revenueByService.Refunds !== 0 && (
@@ -1208,21 +1208,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-4 font-mono text-slate-500">{st.academicYear || getCurrentAcademicYear()}</td>
                           <td className="p-4 text-slate-500">{st.grade}</td>
                           <td className="p-4">
-                            {hasSuiviPaid ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
+                            {hasSuiviPaid ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
                           </td>
                           {showEtudeCol && (
                             <td className="p-4">
-                              {hasTC ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                              {hasTC ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                           {showLibraryCol && (
                             <td className="p-4">
-                              {hasLib ? <span className="text-emerald-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                              {hasLib ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                           {showRepasCol && (
                             <td className="p-4">
-                              {hasMeal ? <span className="text-emerald-700">✓ مشترك</span> : <span className="text-slate-400">-</span>}
+                              {hasMeal ? <span className="text-[#1e626b]">✓ مشترك</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                         </tr>
@@ -1364,7 +1364,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               {p.refund ? (
                                 <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                               ) : (
-                                <span className="text-emerald-700">{fmt(p.amountPaid)} د.ت</span>
+                                <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
                               )}
                             </td>
                             <td className="p-4">
@@ -1399,11 +1399,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               })()}
                             </td>
                             <td className="p-4"><span className="text-slate-300">—</span></td>
-                            <td className="p-4 font-mono font-black text-emerald-700">{fmt(g.totalAmount)} د.ت</td>
+                            <td className="p-4 font-mono font-black text-[#1e626b]">{fmt(g.totalAmount)} د.ت</td>
                             <td className="p-4">
                               <div className="flex items-center gap-1">
                                 {g.chequePaid ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
                                     <CheckCircle2 className="h-3 w-3" />
                                     شيك محصل
                                   </span>
@@ -1512,14 +1512,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           {p.refund ? (
                             <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                           ) : (
-                            <span className="text-emerald-700">{fmt(p.amountPaid)} د.ت</span>
+                            <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
                           )}
                         </td>
                         <td className="p-4">
                           {p.method === 'Chèque' ? (
                             <div className="flex items-center gap-1">
                               {p.chequePaid === true ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
                                   <CheckCircle2 className="h-3 w-3" />
                                   شيك محصل
                                 </span>
@@ -1639,14 +1639,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           {p.refund ? (
                             <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                           ) : (
-                            <span className="text-emerald-700">{fmt(p.amountPaid)} د.ت</span>
+                            <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
                           )}
                         </td>
                         <td className="p-4">
                           {p.method === 'Chèque' ? (
                             <div className="flex items-center gap-1">
                               {p.chequePaid === true ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
                                   <CheckCircle2 className="h-3 w-3" />
                                   شيك محصل
                                 </span>
@@ -1726,9 +1726,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي التلاميذ الخارجيين</span>
                 <p className="text-xl font-black text-[#14464e]">{filteredExtStudents.length} تلميذ</p>
               </div>
-              <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-1">
-                <span className="text-[11px] font-bold text-emerald-700 block">إجمالي مداخيل الكورسات</span>
-                <p className="text-xl font-black text-emerald-800 font-mono">{fmt(totalCoursePayments)} د.ت</p>
+              <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
+                <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي مداخيل الكورسات</span>
+                <p className="text-xl font-black text-[#1e626b] font-mono">{fmt(totalCoursePayments)} د.ت</p>
               </div>
               <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
                 <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي التأمين المدرسي</span>
@@ -1789,10 +1789,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             <td className="p-4 font-mono text-slate-500" dir="ltr">{reg.parentPhone || '—'}</td>
                             <td className="p-4">
                               {reg.assurancePaid ? (
-                                <div className="flex flex-col items-center text-center gap-0.5 bg-emerald-100 text-emerald-700 rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
+                                <div className="flex flex-col items-center text-center gap-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
                                   <span>✓ مدفوع — {fmt(reg.assuranceAmount)} د.ت</span>
                                   {reg.assuranceDate && (
-                                    <span className="text-[9px] font-bold text-emerald-600">{reg.assuranceDate}</span>
+                                    <span className="text-[9px] font-bold text-[#257C86]">{reg.assuranceDate}</span>
                                   )}
                                 </div>
                               ) : (
@@ -1801,7 +1801,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                 </span>
                               )}
                             </td>
-                            <td className="p-4 font-mono font-black text-emerald-700">
+                            <td className="p-4 font-mono font-black text-[#1e626b]">
                               {fmt(coursePaymentsTotal)} د.ت
                               {(reg.payments || []).length > 0 && (
                                 <span className="text-[10px] text-slate-400 font-normal block">{(reg.payments || []).length} دفعة</span>
@@ -1831,7 +1831,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <tr>
                         <td colSpan={4} className="p-4 font-black text-slate-700 text-xs">الإجماليات</td>
                         <td className="p-4 font-mono font-black text-[#1e626b] text-xs">{fmt(totalAssurance)} د.ت</td>
-                        <td className="p-4 font-mono font-black text-emerald-700 text-xs">{fmt(totalCoursePayments)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-[#1e626b] text-xs">{fmt(totalCoursePayments)} د.ت</td>
                         <td className="p-4 font-mono font-black text-slate-900 text-xs">{fmt(totalExtRevenue)} د.ت</td>
                         <td className="p-4"></td>
                       </tr>
@@ -1916,7 +1916,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               <td className="p-4 font-mono text-slate-600">{row.date || '—'}</td>
                               <td className="p-4 font-black text-slate-900">{row.name}</td>
                               <td className={`p-4 font-bold ${row.isAssurance ? 'text-[#1e626b]' : 'text-[#1e626b]'}`}>{row.courseName}</td>
-                              <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-[#1e626b]' : 'text-emerald-700'}`}>{fmt(row.amount)} د.ت</td>
+                              <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-[#1e626b]' : 'text-[#1e626b]'}`}>{fmt(row.amount)} د.ت</td>
                               <td className="p-4 text-slate-600 font-bold">{row.method}</td>
                             </tr>
                           ))
@@ -2298,17 +2298,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
-                <div className="text-[10px] font-bold text-emerald-700 mb-1">إجمالي الاشتراكات</div>
-                <div className="font-mono text-lg font-black text-emerald-900">{fmt(totalSubscriptions)} د.ت</div>
+              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
+                <div className="text-[10px] font-bold text-[#1e626b] mb-1">إجمالي الاشتراكات</div>
+                <div className="font-mono text-lg font-black text-[#14464e]">{fmt(totalSubscriptions)} د.ت</div>
                 {totalRefundedAll > 0 && (
                   <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalRefundedAll)} د.ت</div>
                 )}
               </div>
-              <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
-                <div className="text-[10px] font-bold text-emerald-700 mb-1">إجمالي الوجبات المستهلكة</div>
-                <div className="font-mono text-lg font-black text-emerald-900">{totalPlatesConsumed}</div>
-                <div className="text-[9px] text-emerald-600 mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
+              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
+                <div className="text-[10px] font-bold text-[#1e626b] mb-1">إجمالي الوجبات المستهلكة</div>
+                <div className="font-mono text-lg font-black text-[#14464e]">{totalPlatesConsumed}</div>
+                <div className="text-[9px] text-[#257C86] mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
               </div>
               <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
                 <div className="text-[10px] font-bold text-amber-700 mb-1">وجبات غير مدفوعة</div>
@@ -2324,10 +2324,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <div className="font-mono text-lg font-black text-red-900">{traiteurCost > 0 ? `${fmt(traiteurCost)} د.ت` : '0.000 د.ت'}</div>
                 <div className="text-[9px] text-red-600 mt-1">{traiteurCost > 0 ? `${totalPlatesConsumed} وجبة` : (isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : 'لا توجد مصاريف traiteur')}</div>
               </div>
-              <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-center">
-                <div className="text-[10px] font-bold text-emerald-700 mb-1">ربح السنتر من الوجبات</div>
-                <div className="font-mono text-lg font-black text-emerald-900">{fmt(centerBenefit)} د.ت</div>
-                <div className="text-[9px] text-emerald-600 mt-1">
+              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
+                <div className="text-[10px] font-bold text-[#1e626b] mb-1">ربح السنتر من الوجبات</div>
+                <div className="font-mono text-lg font-black text-[#14464e]">{fmt(centerBenefit)} د.ت</div>
+                <div className="text-[9px] text-[#257C86] mt-1">
                   {totalPaidMeals} وجبة مدفوعة = {fmt(totalPaidMargin)} د.ت
                   {totalForfaitUnused > 0 && ` + فرفي ${fmt(totalForfaitUnused)} د.ت`}
                 </div>
@@ -2351,9 +2351,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <span className="text-[10px] text-slate-500 block font-bold">تقدير غير مكتسب</span>
                   <span className="font-mono font-black text-slate-800 text-sm">{fmt(totalForfaitEstimate)} د.ت</span>
                 </div>
-                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-emerald-200 text-center">
-                  <span className="text-[10px] text-emerald-600 block font-bold">مكتسب فعلياً</span>
-                  <span className="font-mono font-black text-emerald-900 text-sm">{fmt(totalForfaitUnused)} د.ت</span>
+                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
+                  <span className="text-[10px] text-[#257C86] block font-bold">مكتسب فعلياً</span>
+                  <span className="font-mono font-black text-[#14464e] text-sm">{fmt(totalForfaitUnused)} د.ت</span>
                 </div>
                 {monthFilter !== 'all' && schoolYearFilter !== 'all' && (
                   <div className="flex flex-col items-center gap-1">
@@ -2404,13 +2404,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             {/* Pricing Info */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-wrap items-center gap-6 text-xs font-bold">
               <span className="text-slate-500">سعر الوجبة:</span>
-              <span className="font-mono text-emerald-700">{fmt(prixPlat)} د.ت</span>
+              <span className="font-mono text-[#1e626b]">{fmt(prixPlat)} د.ت</span>
               <span className="text-slate-300">|</span>
               <span className="text-slate-500">حصة الـ Traiteur:</span>
               <span className="font-mono text-red-700">{fmt(prixTraiteur)} د.ت</span>
               <span className="text-slate-300">|</span>
               <span className="text-slate-500">ربح السنتر للوجبة:</span>
-              <span className="font-mono text-emerald-700">{fmt(centerMarginPerPlate)} د.ت</span>
+              <span className="font-mono text-[#1e626b]">{fmt(centerMarginPerPlate)} د.ت</span>
             </div>
 
             {/* Goûter Summary in Tab 6 */}
@@ -2442,9 +2442,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <span className="text-[10px] text-[#257C86] block font-bold">مداخيل اللمجة</span>
                       <span className="font-mono font-black text-[#14464e] text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
                     </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-emerald-200 text-center">
-                      <span className="text-[10px] text-emerald-600 block font-bold">لمجة الصباح 🥐</span>
-                      <span className="font-mono font-black text-emerald-900 text-sm">{gouterMatinCount}</span>
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
+                      <span className="text-[10px] text-[#257C86] block font-bold">لمجة الصباح 🥐</span>
+                      <span className="font-mono font-black text-[#14464e] text-sm">{gouterMatinCount}</span>
                     </div>
                     <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
                       <span className="text-[10px] text-[#257C86] block font-bold">لمجة المساء 🍪</span>
@@ -2475,10 +2475,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <th className="p-3 text-center">وحدات</th>
                       <th className="p-3 text-center">المجموع</th>
                       <th className="p-3 text-center text-amber-700">غير مدفوعة</th>
-                      <th className="p-3 text-center text-emerald-700">المدفوع</th>
+                      <th className="p-3 text-center text-[#1e626b]">المدفوع</th>
                       <th className="p-3 text-center text-red-600">المسترجع</th>
                       <th className="p-3 text-center text-amber-800">الفرفي</th>
-                      <th className="p-3 text-center text-emerald-700">حصة السنتر</th>
+                      <th className="p-3 text-center text-[#1e626b]">حصة السنتر</th>
                       <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
                     </tr>
                   </thead>
@@ -2494,25 +2494,25 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-slate-600">{s.grade}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-emerald-100 text-emerald-700' : s.isEnrolled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
+                              s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-[#257C86]/10 text-[#1e626b]' : s.isEnrolled ? 'bg-[#257C86]/10 text-[#1e626b]' : 'bg-slate-100 text-slate-700'
                             }`}>
                               {s.isRefunded ? 'مسترجع' : s.isSubscribed ? 'مشترك' : s.isEnrolled ? 'لم يدفع الإشتراك' : 'وجبة منفردة'}
                             </span>
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-700">{s.subscriptionMeals}</td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-700">{s.unitMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{s.subscriptionMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{s.unitMeals}</td>
                           <td className="p-3 text-center font-mono font-black text-slate-900">{s.totalMeals}</td>
                           <td className="p-3 text-center font-mono font-bold text-amber-700">{s.unpaidMeals > 0 ? s.unpaidMeals : '—'}</td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-700">{fmt(s.grossPaid)} د.ت</td>
+                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{fmt(s.grossPaid)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-600">{s.totalRefunded > 0 ? `-${fmt(s.totalRefunded)} د.ت` : '—'}</td>
                           <td className="p-3 text-center font-mono font-bold">
                             {s.forfaitUnused > 0 ? (
-                              <span className="text-emerald-700">{fmt(s.forfaitUnused)} د.ت</span>
+                              <span className="text-[#1e626b]">{fmt(s.forfaitUnused)} د.ت</span>
                             ) : s.forfaitEstimate > 0 ? (
                               <span className="text-slate-400" title="تقدير — يصبح مكتسباً بعد إغلاق الشهر">({fmt(s.forfaitEstimate)})</span>
                             ) : '—'}
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-700">{fmt(s.centerPart)} د.ت</td>
+                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{fmt(s.centerPart)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
                         </tr>
                       ))
@@ -2539,9 +2539,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <h3 className="font-extrabold text-slate-900 text-sm">إجمالي الوجبات المستهلكة في كل شهر</h3>
                   <p className="text-[11px] text-slate-500 mt-1">يُحتسب لكل شهر الوجبات المستهلكة بالاشتراك الشهري أو بالوجبة المنفردة</p>
                 </div>
-                <div className="bg-emerald-100 border border-emerald-200 rounded-2xl px-4 py-2 text-center">
-                  <span className="text-[10px] font-bold text-emerald-700 block">الإجمالي الكلي</span>
-                  <span className="font-mono font-black text-emerald-800 text-lg">{totalPlatesConsumed} وجبة</span>
+                <div className="bg-[#257C86]/10 border border-[#257C86]/20 rounded-2xl px-4 py-2 text-center">
+                  <span className="text-[10px] font-bold text-[#1e626b] block">الإجمالي الكلي</span>
+                  <span className="font-mono font-black text-[#1e626b] text-lg">{totalPlatesConsumed} وجبة</span>
                 </div>
               </div>
               <div className="p-5">
@@ -2558,11 +2558,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         key={month}
                         type="button"
                         onClick={() => setConsumedDetailMonth(month === consumedDetailMonth ? null : month)}
-                        className={`rounded-2xl border p-3 text-center transition cursor-pointer ${consumedDetailMonth === month ? 'bg-emerald-100 border-emerald-400 shadow-sm' : 'border-slate-200 bg-slate-50/60 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                        className={`rounded-2xl border p-3 text-center transition cursor-pointer ${consumedDetailMonth === month ? 'bg-[#257C86]/10 border-[#257C86]/40 shadow-sm' : 'border-slate-200 bg-slate-50/60 hover:border-[#257C86]/30 hover:bg-[#257C86]/[0.06]'}`}
                       >
                         <p className="text-[10px] font-bold text-slate-500">{ARABIC_ACADEMIC_MONTHS[month]} ({month})</p>
                         <p className="font-mono font-black text-slate-900 text-xl mt-1">{count}</p>
-                        <p className="text-[10px] font-bold text-emerald-700">وجبة مستهلكة</p>
+                        <p className="text-[10px] font-bold text-[#1e626b]">وجبة مستهلكة</p>
                       </button>
                     );
                   })}
@@ -2592,7 +2592,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           تفاصيل الوجبات المستهلكة في شهر {ARABIC_ACADEMIC_MONTHS[consumedDetailMonth]} ({consumedDetailMonth})
                         </h4>
                         <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
+                          <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
                           <button
                             type="button"
                             onClick={() => { setConsumedDetailMonth(null); setExpandedDays(new Set()); }}
@@ -2634,7 +2634,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                       <span className="text-[10px] font-bold text-slate-400">({dayRows.length} وجبة / لمجة)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-emerald-600">{paidCount} مدفوعة</span>
+                                      <span className="text-[10px] font-bold text-[#257C86]">{paidCount} مدفوعة</span>
                                       {dayRows.filter(r => !r.paid && r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-amber-600">{dayRows.filter(r => !r.paid && r.isEnrolled).length} لم يدفعو الإشتراك</span>}
                                       {dayRows.filter(r => !r.paid && !r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-red-500">{dayRows.filter(r => !r.paid && !r.isEnrolled).length} غير مدفوعة</span>}
                                     </div>
@@ -2658,7 +2658,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                                   <td className="p-2.5 text-slate-500">{row.grade}</td>
                                                   <td className="p-2.5">
                                                     {row.service === 'gouter_matin' ? (
-                                                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
+                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
                                                         {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
                                                       </span>
                                                     ) : row.service === 'gouter_apres_midi' ? (
@@ -2672,7 +2672,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                                     )}
                                                   </td>
                                                   <td className="p-2.5 font-bold">
-                                                    {row.paid ? <span className="text-emerald-700">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
+                                                    {row.paid ? <span className="text-[#1e626b]">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
                                                   </td>
                                                 </tr>
                                               ))}
@@ -2814,7 +2814,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         </div>
                         <button
                           onClick={() => handleValidateChequeGroup(cheque)}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-sm cursor-pointer flex items-center gap-1.5"
+                          className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl transition shadow-sm cursor-pointer flex items-center gap-1.5"
                         >
                           <CheckCircle2 className="h-4 w-4" />
                           تم التحصيل
@@ -2889,7 +2889,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">الحالة</p>
-                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-emerald-700' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
+                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-[#1e626b]' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">المبلغ الإجمالي</p>

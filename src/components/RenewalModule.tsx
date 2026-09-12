@@ -17,7 +17,7 @@ import { usePubNubSync } from '../hooks/usePubNubSync';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
-  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20', icon: CheckCircle2 },
   rejected: { label: 'Refusée', labelAr: 'مرفوضة', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
 };
 

@@ -152,7 +152,7 @@ const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }
 
 const STATUS_BADGE: Record<string, string> = {
   trial: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30',
-  active: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  active: 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20',
   suspended: 'bg-slate-100 text-slate-500 border border-slate-200',
   expired: 'bg-slate-50 text-slate-400 border border-slate-100',
 };
@@ -163,7 +163,7 @@ const STATUS_LABEL: Record<string, string> = {
 const REQ_STATUS_BADGE: Record<string, string> = {
   new: 'bg-[#257C86]/10 text-[#1e626b]',
   contacted: 'bg-[#257C86]/10 text-[#1e626b]',
-  converted: 'bg-emerald-100 text-emerald-800',
+  converted: 'bg-[#257C86]/10 text-[#1e626b]',
   archived: 'bg-slate-100 text-slate-500',
 };
 const REQ_STATUS_LABEL: Record<string, string> = {
@@ -224,7 +224,7 @@ function invoiceStatusMeta(inv: { status: string; paymentMethod?: string | null 
   }
   switch (inv.status) {
     case 'pending': return { label: 'En attente', cls: 'bg-amber-50 text-amber-800 border border-amber-200' };
-    case 'paid': return { label: 'Payée', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
+    case 'paid': return { label: 'Payée', cls: 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' };
     case 'overdue': return { label: 'En retard', cls: 'bg-red-50 text-red-700 border border-red-200' };
     case 'cancelled': return { label: 'Annulée', cls: 'bg-slate-100 text-slate-500 border border-slate-200' };
     default: return { label: inv.status, cls: 'bg-slate-100 text-slate-600 border border-slate-200' };
@@ -798,7 +798,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
                 </span>
               ))}
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/25 cursor-default">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-[#257C86] text-white shadow-sm shadow-[#257C86]/25 cursor-default">
                 <Lock className="h-3 w-3" />
                 {MODULE_LABEL(BUNDLED_MODULE_KEY)}
                 <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
@@ -1345,15 +1345,15 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
   center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
   plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
-  plan_activated: { text: 'Abonnement activé', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_activated: { text: 'Abonnement activé', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_renewed: { text: 'Reconduction', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  plan_settled: { text: 'Régularisation', cls: 'bg-emerald-100 text-emerald-700' },
+  plan_settled: { text: 'Régularisation', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
   plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
   plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
   trial_added: { text: 'Jours offerts', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-emerald-100 text-emerald-700' },
+  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
 };
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
@@ -1744,7 +1744,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   {isTrial ? 'Période d’essai' : 'Abonnement en cours'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-emerald-100 text-emerald-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-[#257C86]/10 text-[#1e626b]' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'Fenêtre payée' : pendingInvoice ? 'Fenêtre non payée' : 'Sans facture'}
                   </span>
                 )}
@@ -1785,7 +1785,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                     </p>
                   )}
                   {!expiredState && windowPaidInvoice && (
-                    <p className="text-[11px] font-bold text-emerald-700 mt-1.5">
+                    <p className="text-[11px] font-bold text-[#1e626b] mt-1.5">
                       Facture {windowPaidInvoice.invoiceNumber} payée · {windowPaidInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
@@ -1905,9 +1905,9 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-400'}`}>
-                                <div className="text-[10px] font-black text-emerald-800">Période déjà payée</div>
-                                <div className="text-sm font-black text-emerald-700">+ {formatTnd(decision.paidAmount)}</div>
+                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-[#257C86] bg-[#257C86]/[0.06]' : 'border-slate-200 bg-white hover:border-[#257C86]/40'}`}>
+                                <div className="text-[10px] font-black text-[#1e626b]">Période déjà payée</div>
+                                <div className="text-sm font-black text-[#1e626b]">+ {formatTnd(decision.paidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">complément = différence × jours restants</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
@@ -2073,7 +2073,7 @@ function adStatusOf(ad: PlatformAdvertisement, now = Date.now()): AdStatus {
   return ad.isPublished ? 'live' : 'draft';
 }
 const AD_STATUS_META: Record<AdStatus, { label: string; cls: string }> = {
-  live: { label: 'En ligne', cls: 'bg-emerald-100 text-emerald-700' },
+  live: { label: 'En ligne', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   draft: { label: 'Brouillon', cls: 'bg-amber-100 text-amber-700' },
   scheduled: { label: 'Programmée', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   paused: { label: 'En pause', cls: 'bg-slate-200 text-slate-500' },
@@ -2200,7 +2200,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
 
   const togglePill = (on: boolean, set: (v: boolean) => void, labelOn: string, labelOff: string) => (
     <button type="button" onClick={() => set(!on)}
-      className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition cursor-pointer ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400'}`}>
+      className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition cursor-pointer ${on ? 'border-[#257C86] bg-[#257C86]/[0.06] text-[#1e626b]' : 'border-slate-200 bg-white text-slate-400'}`}>
       {on ? labelOn : labelOff}
     </button>
   );
@@ -3001,9 +3001,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             {[
-              { label: 'MRR — Mensuel', value: billingSummary ? `${billingSummary.mrr.toFixed(0)} TND` : '—', icon: TrendingUp, tint: 'bg-emerald-100 text-emerald-600' },
+              { label: 'MRR — Mensuel', value: billingSummary ? `${billingSummary.mrr.toFixed(0)} TND` : '—', icon: TrendingUp, tint: 'bg-[#257C86]/10 text-[#257C86]' },
               { label: 'Total Centres', value: centers.length, icon: Building2, tint: 'bg-[#257C86]/10 text-[#257C86]' },
-              { label: 'Actifs', value: activeCenters, icon: CheckCircle2, tint: 'bg-emerald-100 text-emerald-600' },
+              { label: 'Actifs', value: activeCenters, icon: CheckCircle2, tint: 'bg-[#257C86]/10 text-[#257C86]' },
               { label: 'En Essai', value: trialCenters, icon: Clock, tint: 'bg-amber-100 text-amber-600' },
               { label: 'Nouvelles demandes', value: newRequests, icon: FileText, tint: 'bg-[#257C86]/10 text-[#257C86]' },
               { label: 'À encaisser', value: billingSummary ? `${billingSummary.pendingInvoices.toFixed(0)} TND` : '—', icon: Receipt, tint: 'bg-red-100 text-red-600' }
@@ -3031,7 +3031,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                 </div>
                 {billingSummary && (
-                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+                  <span className="text-xs font-black text-[#1e626b] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-full px-3 py-1">
                     {billingSummary.collectedThisYear.toFixed(0)} TND / an
                   </span>
                 )}
@@ -3235,7 +3235,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(c.centerType) && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
                         {CENTER_TYPE_LABEL[normalizeCenterType(c.centerType)]}
                       </span>
                     )}
@@ -3330,7 +3330,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <button onClick={() => handleToggleStatus(c)}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       c.status === 'suspended'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20 hover:bg-[#257C86]/10'
                         : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
                     }`}>
                     {c.status === 'suspended' ? <><CheckCircle2 className="h-3.5 w-3.5" /> Activer</> : <><PauseCircle className="h-3.5 w-3.5" /> Suspendre</>}
@@ -3426,7 +3426,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(req.centerType) && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(req.centerType) === 'jardin' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(req.centerType) === 'jardin' ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30'}`}>
                         {CENTER_TYPE_LABEL[normalizeCenterType(req.centerType)]}
                       </span>
                     )}
@@ -3449,7 +3449,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   )}
                   {req.phone && (
                     <a href={`tel:${req.phone}`}
-                      className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:underline">
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#257C86] hover:underline">
                       <Phone className="h-3.5 w-3.5" /> {req.phone}
                     </a>
                   )}
@@ -3511,7 +3511,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     </button>
                   ) : (
                     <span
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-xl"
                       title="Cette demande a déjà été convertie en centre — la conversion n'est possible qu'une seule fois."
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" /> Déjà converti
@@ -3552,7 +3552,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               {billingSummary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'MRR (factures payées)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-emerald-100 text-emerald-600' },
+                    { label: 'MRR (factures payées)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-[#257C86]/10 text-[#257C86]' },
                     { label: 'Encaissé ce mois', value: `${billingSummary.collectedThisMonth.toFixed(2)} TND`, icon: DollarSign, tint: 'bg-[#257C86]/10 text-[#257C86]' },
                     { label: 'Encaissé cette année', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-[#257C86]/10 text-[#257C86]' },
                     { label: 'Factures en attente', value: `${billingSummary.pendingInvoices.toFixed(2)} TND`, icon: AlertCircle, tint: 'bg-amber-100 text-amber-600' }
@@ -3613,7 +3613,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                       toast.error(err instanceof Error ? err.message : 'Erreur');
                                     }
                                   }}
-                                  className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition cursor-pointer"
                                   title="Le chèque est encaissé : la facture devient payée et compte dans les revenus"
                                 >
                                   <CheckCircle2 className="h-3.5 w-3.5" /> Encaisser
@@ -3725,7 +3725,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                 </span>
                               )}
                               {paidTotal > 0 && (
-                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20">
                                   Payé : {paidTotal.toFixed(2)} TND
                                 </span>
                               )}
@@ -3875,9 +3875,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <span className="flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Finance</span>
                       <span className="font-black">{priceList['finance'] ?? '—'} TND</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-xl bg-emerald-400/20 border border-emerald-300/30 px-3.5 py-2.5">
+                    <div className="flex items-center justify-between rounded-xl bg-white/10 border border-white/20 px-3.5 py-2.5">
                       <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> Jd. Horaires</span>
-                      <span className="font-black text-emerald-200">Inclus — offert</span>
+                      <span className="font-black text-white/90">Inclus — offert</span>
                     </div>
                   </div>
                 </div>
@@ -3899,7 +3899,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                           <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                             {m.label}
                             {m.key === BUNDLED_MODULE_KEY ? (
-                              <span className="text-[8px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-px uppercase">Offert</span>
+                              <span className="text-[8px] font-black text-[#1e626b] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-full px-1.5 py-px uppercase">Offert</span>
                             ) : base ? (
                               <span className="text-[8px] font-black text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/30 rounded-full px-1.5 py-px uppercase">Base</span>
                             ) : null}
@@ -3908,7 +3908,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {m.key === BUNDLED_MODULE_KEY ? (
-                            <span className="text-sm font-black text-emerald-600 w-20 text-center">Inclus</span>
+                            <span className="text-sm font-black text-[#257C86] w-20 text-center">Inclus</span>
                           ) : (
                             <input
                               type="number" step="0.5" min="0"
@@ -4127,7 +4127,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
                       r.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : r.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : r.status === 'approved' ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20'
                         : 'bg-red-50 text-red-700 border-red-200'
                     }`}>
                       {r.status === 'pending' ? 'En attente' : r.status === 'approved' ? 'Acceptée' : 'Refusée'}

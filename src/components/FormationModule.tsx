@@ -775,9 +775,9 @@ export default function FormationModule({
                     <span className="text-[11px] font-bold text-[#1e626b] block mb-1">عدد التلاميذ</span>
                     <span className="font-mono text-base font-black text-[#257C86]">{formationStats.count}</span>
                   </div>
-                  <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-200/70">
-                    <span className="text-[11px] font-bold text-emerald-700 block mb-1">المستخلص فعلياً</span>
-                    <span className="font-mono text-base font-black text-emerald-800">{formationStats.totalPaid} د.ت</span>
+                  <div className="bg-[#257C86]/[0.06] rounded-2xl p-3 border border-[#257C86]/20/70">
+                    <span className="text-[11px] font-bold text-[#1e626b] block mb-1">المستخلص فعلياً</span>
+                    <span className="font-mono text-base font-black text-[#1e626b]">{formationStats.totalPaid} د.ت</span>
                   </div>
                   <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200/70">
                     <span className="text-[11px] font-bold text-amber-700 block mb-1">المتبقي للدفع</span>
@@ -1002,14 +1002,14 @@ export default function FormationModule({
                               {/* Discount */}
                               <td className="p-3 text-center font-mono font-bold text-slate-500">
                                 {st.discount > 0 ? (
-                                  <span className="text-amber-600">-{st.discount} د.ت</span>
+                                  <span className="text-[#257C86]">-{st.discount} د.ت</span>
                                 ) : (
                                   '—'
                                 )}
                               </td>
 
                               {/* Amount Paid */}
-                              <td className="p-3 text-center font-mono font-black text-emerald-700">
+                              <td className="p-3 text-center font-mono font-black text-[#1e626b]">
                                 {st.amountPaid} د.ت
                               </td>
 
@@ -1027,12 +1027,12 @@ export default function FormationModule({
                                 <div className="text-[11px] font-bold">
                                   {st.paymentMethod === 'espece' ? (
                                     <span className="text-slate-600 flex items-center gap-1">
-                                      <Banknote className="h-3 w-3 text-emerald-600" />
+                                      <Banknote className="h-3 w-3 text-[#257C86]" />
                                       نقداً
                                     </span>
                                   ) : (
                                     <span className="text-slate-800 flex items-center gap-1">
-                                      <CreditCard className="h-3 w-3 text-emerald-600" />
+                                      <CreditCard className="h-3 w-3 text-[#257C86]" />
                                       شيك
                                     </span>
                                   )}
@@ -1046,7 +1046,7 @@ export default function FormationModule({
                                     مسترجع ({st.refundAmount!} د.ت)
                                   </span>
                                 ) : isFullyPaid && (
-                                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-black inline-block">
+                                  <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-block">
                                     خالص ✓
                                   </span>
                                 )}
@@ -1075,7 +1075,7 @@ export default function FormationModule({
                                   <button
                                     onClick={() => setPrintingStudent({ formation: selectedFormation, student: st })}
                                     title="طباعة وصل التكوين"
-                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
                                   >
                                     <Printer className="h-3.5 w-3.5" />
                                   </button>
@@ -1532,7 +1532,7 @@ export default function FormationModule({
                         min="0"
                         value={stAmountPaid}
                         onChange={e => setStAmountPaid(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono text-[#1e626b] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                       />
                     </div>
                   </div>
@@ -1543,7 +1543,7 @@ export default function FormationModule({
                       الصافي المستحق: <span className="font-mono font-black text-slate-800">{Math.max(0, stTotalRequired - stDiscount)} د.ت</span>
                     </span>
                     <span className="text-slate-500">
-                      المتبقي للدفع: <span className={`font-mono font-black ${Math.max(0, stTotalRequired - stDiscount - stAmountPaid) > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                      المتبقي للدفع: <span className={`font-mono font-black ${Math.max(0, stTotalRequired - stDiscount - stAmountPaid) > 0 ? 'text-red-600' : 'text-[#1e626b]'}`}>
                         {Math.max(0, stTotalRequired - stDiscount - stAmountPaid)} د.ت
                       </span>
                     </span>
@@ -1563,7 +1563,7 @@ export default function FormationModule({
                         className="w-4 h-4 accent-[#257C86]"
                       />
                       <span className="flex items-center gap-1">
-                        <Banknote className="h-3.5 w-3.5 text-emerald-600" />
+                        <Banknote className="h-3.5 w-3.5 text-[#257C86]" />
                         نقداً (Espèce)
                       </span>
                     </label>
@@ -1577,7 +1577,7 @@ export default function FormationModule({
                         className="w-4 h-4 accent-[#257C86]"
                       />
                       <span className="flex items-center gap-1">
-                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                        <CreditCard className="h-3.5 w-3.5 text-[#257C86]" />
                         شيك (Chèque)
                       </span>
                     </label>
@@ -1585,7 +1585,7 @@ export default function FormationModule({
 
                   {/* Cheque details */}
                   {stPaymentMethod === 'cheque' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-200/70">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20/70">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">رقم الشيك *</label>
                         <input
@@ -1833,7 +1833,7 @@ export default function FormationModule({
                     {student.discount > 0 && (
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[11px] font-bold text-slate-500">التخفيض</span>
-                        <span className="font-mono font-black text-amber-600">-{student.discount} د.ت</span>
+                        <span className="font-mono font-black text-[#257C86]">-{student.discount} د.ت</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-1">
@@ -1842,7 +1842,7 @@ export default function FormationModule({
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[11px] font-bold text-slate-500">المدفوع</span>
-                      <span className="font-mono font-black text-emerald-600">{student.amountPaid} د.ت</span>
+                      <span className="font-mono font-black text-[#257C86]">{student.amountPaid} د.ت</span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[11px] font-bold text-slate-500">المتبقي</span>
@@ -1875,7 +1875,7 @@ export default function FormationModule({
                         مسترجع ({student.refundAmount!} د.ت)
                       </span>
                     ) : (
-                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : student.amountPaid > 0 ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black ${fullyPaid ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/30' : student.amountPaid > 0 ? 'bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                         {fullyPaid ? 'خالص ✓' : student.amountPaid > 0 ? 'دفعة أولى' : 'غير خالص'}
                       </span>
                     )}

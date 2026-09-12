@@ -1114,7 +1114,7 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-[#3A93A0] shadow-sm shadow-[#3A93A0]/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
                 {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
