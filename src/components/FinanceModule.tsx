@@ -906,9 +906,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       {/* FILTERED METRIC CARDS (ACCORDING TO SELECTED FILTERS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
         <div className="bg-gradient-to-br from-[#257C86] to-[#1e626b] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
-          <span className="text-xs font-bold text-teal-50 block">الإيرادات الكلية (السنة)</span>
+          <span className="text-xs font-bold text-white/80 block">الإيرادات الكلية (السنة)</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(yearTotalRevenue)} د.ت</p>
-          <span className="text-[10px] text-teal-100/80 font-bold">كل الإيرادات دون فيلتر الشهر</span>
+          <span className="text-[10px] text-white/60 font-bold">كل الإيرادات دون فيلتر الشهر</span>
         </div>
 
         <div className="bg-[#257C86]/[0.05] p-5 rounded-3xl border border-[#257C86]/25 shadow-lg shadow-slate-900/5 space-y-1">
@@ -924,18 +924,18 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         </div>
 
         {canteenEnabled && !hideRestrictedModules && (
-          <div className="bg-orange-50/60 p-5 rounded-3xl border border-orange-200/80 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-orange-800 block">إيرادات المطعم</span>
-            <p className="text-2xl font-black text-orange-600 font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-orange-600 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
+          <div className="bg-amber-50 p-5 rounded-3xl border border-amber-200 shadow-lg shadow-slate-900/5 space-y-1">
+            <span className="text-xs font-bold text-amber-800 block">إيرادات المطعم</span>
+            <p className="text-2xl font-black text-amber-600 font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-amber-600 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
           </div>
         )}
 
         {formationsEnabled && !hideRestrictedModules && (
-          <div className="bg-teal-50/60 p-5 rounded-3xl border border-teal-200/80 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-teal-800 block">التكوينات والدورات</span>
-            <p className="text-2xl font-black text-teal-600 font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-teal-600 font-bold">حسب الشهر</span>
+          <div className="bg-[#257C86]/5 p-5 rounded-3xl border border-[#257C86]/20 shadow-lg shadow-slate-900/5 space-y-1">
+            <span className="text-xs font-bold text-[#1e626b] block">التكوينات والدورات</span>
+            <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-[#257C86] font-bold">حسب الشهر</span>
           </div>
         )}
 
@@ -952,9 +952,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         </div>
 
         <div className="bg-gradient-to-br from-[#257C86] to-[#1e626b] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
-          <span className="text-xs font-bold text-teal-50 block">الصافي المالي للفترة</span>
+          <span className="text-xs font-bold text-white/80 block">الصافي المالي للفترة</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(netProfit)} د.ت</p>
-          <span className="text-[10px] text-teal-100/80 font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
+          <span className="text-[10px] text-white/60 font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
         </div>
       </div>
 
@@ -1001,13 +1001,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('formations')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'formations' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-800'
+              activeTab === 'formations' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/5 hover:text-[#1e626b]'
             }`}
           >
             🎓 سجل التكوينات
             {formationPayments.length > 0 && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                activeTab === 'formations' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700'
+                activeTab === 'formations' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#1e626b]'
               }`}>{formationPayments.length}</span>
             )}
           </button>
@@ -1016,13 +1016,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('externalCours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'externalCours' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-800'
+              activeTab === 'externalCours' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/5 hover:text-[#1e626b]'
             }`}
           >
             🎒 الكورسات الخارجية
             {externalStudents.length > 0 && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                activeTab === 'externalCours' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700'
+                activeTab === 'externalCours' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#1e626b]'
               }`}>{externalStudents.length}</span>
             )}
           </button>
@@ -1103,9 +1103,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               )}
               {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
-                <div className="p-3 bg-teal-50 rounded-2xl border border-teal-200 flex justify-between font-bold">
-                  <span className="text-teal-800">4ب. مداخيل خدمة اللمجة (Goûter):</span>
-                  <span className="font-mono text-teal-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
+                <div className="p-3 bg-[#257C86]/5 rounded-2xl border border-[#257C86]/20 flex justify-between font-bold">
+                  <span className="text-[#1e626b]">4ب. مداخيل خدمة اللمجة (Goûter):</span>
+                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Gouter)} د.ت</span>
                 </div>
               )}
               {hasModule('coursParticuliers') && (
@@ -1178,7 +1178,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+              <table className="min-w-[640px] w-full text-right text-xs">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-4">التلميذ</th>
@@ -1324,7 +1324,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+              <table className="min-w-[640px] w-full text-right text-xs">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-4">رقم الوصل</th>
@@ -1475,7 +1475,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+              <table className="min-w-[640px] w-full text-right text-xs">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-4">رقم الوصل</th>
@@ -1599,12 +1599,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <div className="text-left">
                 <p className="text-[11px] text-slate-500 font-bold">المجموع</p>
-                <p className="text-xl font-black text-teal-600 font-mono">{fmt(formTotal)} د.ت</p>
+                <p className="text-xl font-black text-[#257C86] font-mono">{fmt(formTotal)} د.ت</p>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+              <table className="min-w-[640px] w-full text-right text-xs">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-4">رقم الوصل</th>
@@ -1627,7 +1627,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                         <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
                         <td className="p-4 font-black text-slate-900">{p.studentName}</td>
-                        <td className="p-4 font-bold text-teal-700">{p.formationName || p.notes || monthToArabic(p.month)}</td>
+                        <td className="p-4 font-bold text-[#1e626b]">{p.formationName || p.notes || monthToArabic(p.month)}</td>
                         <td className="p-4">
                           {p.discount ? (
                             <span className="text-[#1e626b] font-black font-mono">{fmt(p.discount)} د.ت</span>
@@ -1722,9 +1722,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <div className="space-y-4 no-print">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-teal-50 p-4 rounded-2xl border border-teal-200 space-y-1">
-                <span className="text-[11px] font-bold text-teal-700 block">إجمالي التلاميذ الخارجيين</span>
-                <p className="text-xl font-black text-teal-900">{filteredExtStudents.length} تلميذ</p>
+              <div className="bg-[#257C86]/5 p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
+                <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي التلاميذ الخارجيين</span>
+                <p className="text-xl font-black text-[#14464e]">{filteredExtStudents.length} تلميذ</p>
               </div>
               <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-1">
                 <span className="text-[11px] font-bold text-emerald-700 block">إجمالي مداخيل الكورسات</span>
@@ -1743,7 +1743,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
             {/* Students Table */}
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
-              <div className="p-5 border-b border-slate-100 bg-teal-50/50 flex justify-between items-center">
+              <div className="p-5 border-b border-slate-100 bg-[#257C86]/5 flex justify-between items-center">
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                     🎒 سجل التلاميذ الخارجيين — الكورسات والتأمين
@@ -1753,7 +1753,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs">
+                <table className="min-w-[640px] w-full text-right text-xs">
                   <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-4">التلميذ الخارجي</th>
@@ -1782,7 +1782,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           c.enrolledStudents.some(s => s.studentId === reg.id)
                         );
                         return (
-                          <tr key={reg.id} className="hover:bg-teal-50/40 transition">
+                          <tr key={reg.id} className="hover:bg-[#257C86]/5 transition">
                             <td className="p-4 font-black text-slate-900">{reg.name}</td>
                             <td className="p-4 text-slate-600 font-bold">{reg.grade}</td>
                             <td className="p-4 font-mono text-slate-500">{reg.schoolYear || '—'}</td>
@@ -1814,7 +1814,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   {enrolledCourses.map(c => (
-                                    <span key={c.id} className="block w-fit px-2 py-0.5 bg-teal-100 text-teal-800 rounded-lg text-[10px] font-bold text-center">
+                                    <span key={c.id} className="block w-fit px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold text-center">
                                       {c.subject} — {c.gradeLevel} ({c.schoolYear})
                                     </span>
                                   ))}
@@ -1893,7 +1893,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
+                    <table className="min-w-[640px] w-full text-right text-xs">
                       <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                         <tr>
                           <th className="p-4">التاريخ</th>
@@ -1915,7 +1915,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             }`}>
                               <td className="p-4 font-mono text-slate-600">{row.date || '—'}</td>
                               <td className="p-4 font-black text-slate-900">{row.name}</td>
-                              <td className={`p-4 font-bold ${row.isAssurance ? 'text-[#1e626b]' : 'text-teal-700'}`}>{row.courseName}</td>
+                              <td className={`p-4 font-bold ${row.isAssurance ? 'text-[#1e626b]' : 'text-[#1e626b]'}`}>{row.courseName}</td>
                               <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-[#1e626b]' : 'text-emerald-700'}`}>{fmt(row.amount)} د.ت</td>
                               <td className="p-4 text-slate-600 font-bold">{row.method}</td>
                             </tr>
@@ -1977,7 +1977,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+              <table className="min-w-[640px] w-full text-right text-xs">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-4">مرجع الفاتورة</th>
@@ -2335,7 +2335,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure */}
-            <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-gradient-to-r from-amber-50 via-amber-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-2">
                 <span className="text-xl">🔒</span>
                 <div>
@@ -2429,26 +2429,26 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               const gouterSubscribersCount = filteredStudents.filter(s => s.enrolledServices?.gouterMatin || s.enrolledServices?.gouterSoir || s.enrolledServices?.gouterBoth).length;
 
               return (
-                <div className="bg-gradient-to-r from-teal-50 via-pink-50 to-white p-4 rounded-2xl border border-teal-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="bg-gradient-to-r from-[#257C86]/5 via-red-50 to-white p-4 rounded-2xl border border-[#257C86]/20 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">🍪</span>
                     <div>
-                      <h4 className="font-extrabold text-teal-950">مداخيل واستهلاك خدمة اللمجة (Goûter)</h4>
-                      <p className="text-[11px] text-teal-700 font-medium">مجموع التلاميذ المشتركين في اللمجة: <strong>{gouterSubscribersCount}</strong> تلميذ</p>
+                      <h4 className="font-extrabold text-[#14464e]">مداخيل واستهلاك خدمة اللمجة (Goûter)</h4>
+                      <p className="text-[11px] text-[#1e626b] font-medium">مجموع التلاميذ المشتركين في اللمجة: <strong>{gouterSubscribersCount}</strong> تلميذ</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-teal-200 text-center">
-                      <span className="text-[10px] text-teal-600 block font-bold">مداخيل اللمجة</span>
-                      <span className="font-mono font-black text-teal-900 text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
+                      <span className="text-[10px] text-[#257C86] block font-bold">مداخيل اللمجة</span>
+                      <span className="font-mono font-black text-[#14464e] text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
                     </div>
                     <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-emerald-200 text-center">
                       <span className="text-[10px] text-emerald-600 block font-bold">لمجة الصباح 🥐</span>
                       <span className="font-mono font-black text-emerald-900 text-sm">{gouterMatinCount}</span>
                     </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-teal-200 text-center">
-                      <span className="text-[10px] text-teal-600 block font-bold">لمجة المساء 🍪</span>
-                      <span className="font-mono font-black text-teal-900 text-sm">{gouterSoirCount}</span>
+                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
+                      <span className="text-[10px] text-[#257C86] block font-bold">لمجة المساء 🍪</span>
+                      <span className="font-mono font-black text-[#14464e] text-sm">{gouterSoirCount}</span>
                     </div>
                   </div>
                 </div>
@@ -2465,7 +2465,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs">
+                <table className="min-w-[640px] w-full text-right text-xs">
                   <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-3">التلميذ</th>
@@ -2494,7 +2494,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-slate-600">{s.grade}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              s.isRefunded ? 'bg-orange-100 text-orange-700' : s.isSubscribed ? 'bg-emerald-100 text-emerald-700' : s.isEnrolled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
+                              s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-emerald-100 text-emerald-700' : s.isEnrolled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
                             }`}>
                               {s.isRefunded ? 'مسترجع' : s.isSubscribed ? 'مشترك' : s.isEnrolled ? 'لم يدفع الإشتراك' : 'وجبة منفردة'}
                             </span>
@@ -2641,42 +2641,44 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                   </button>
                                   {isOpen && (
                                     <div className="border-t border-slate-200">
-                                      <table className="w-full text-right text-xs">
-                                        <thead className="bg-slate-100/60 text-slate-600 font-bold">
-                                          <tr>
-                                            <th className="p-2.5">التلميذ</th>
-                                            <th className="p-2.5">المستوى</th>
-                                            <th className="p-2.5">النوع والتصنيف</th>
-                                            <th className="p-2.5">الحالة</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                          {dayRows.map((row, i) => (
-                                            <tr key={i} className="hover:bg-slate-50/80 transition">
-                                              <td className="p-2.5 font-black text-slate-900">{row.studentName}</td>
-                                              <td className="p-2.5 text-slate-500">{row.grade}</td>
-                                              <td className="p-2.5">
-                                                {row.service === 'gouter_matin' ? (
-                                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
-                                                    {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
-                                                  </span>
-                                                ) : row.service === 'gouter_apres_midi' ? (
-                                                  <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-lg text-[10px] font-bold">
-                                                    {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
-                                                  </span>
-                                                ) : (
-                                                  <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
-                                                    {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
-                                                  </span>
-                                                )}
-                                              </td>
-                                              <td className="p-2.5 font-bold">
-                                                {row.paid ? <span className="text-emerald-700">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                      <div className="overflow-x-auto">
+                                          <table className="min-w-[560px] w-full text-right text-xs">
+                                            <thead className="bg-slate-100/60 text-slate-600 font-bold">
+                                              <tr>
+                                                <th className="p-2.5">التلميذ</th>
+                                                <th className="p-2.5">المستوى</th>
+                                                <th className="p-2.5">النوع والتصنيف</th>
+                                                <th className="p-2.5">الحالة</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                              {dayRows.map((row, i) => (
+                                                <tr key={i} className="hover:bg-slate-50/80 transition">
+                                                  <td className="p-2.5 font-black text-slate-900">{row.studentName}</td>
+                                                  <td className="p-2.5 text-slate-500">{row.grade}</td>
+                                                  <td className="p-2.5">
+                                                    {row.service === 'gouter_matin' ? (
+                                                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
+                                                        {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
+                                                      </span>
+                                                    ) : row.service === 'gouter_apres_midi' ? (
+                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
+                                                        {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
+                                                        {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="p-2.5 font-bold">
+                                                    {row.paid ? <span className="text-emerald-700">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -2803,7 +2805,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <div className="space-y-4">
                   {groupedCheques.map((cheque, idx) => (
                     <div key={cheque.chequeNumber || idx} className="border border-[#257C86]/20 rounded-2xl overflow-hidden">
-                      <div className="px-4 py-3 bg-[#257C86]/10/50 border-b border-[#257C86]/20 flex justify-between items-center">
+                      <div className="px-4 py-3 bg-[#257C86]/10 border-b border-[#257C86]/20 flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <div>
                             <p className="font-black text-[#1e626b] text-sm">شيك رقم: <span className="font-mono">{cheque.chequeNumber || 'بدون رقم'}</span></p>
@@ -2819,7 +2821,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         </button>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
+                        <table className="min-w-[560px] w-full text-xs">
                           <thead>
                             <tr className="bg-slate-50">
                               <th className="p-3 text-right font-bold text-slate-600">التلميذ</th>
@@ -2895,30 +2897,32 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   </div>
                 </div>
                 <h4 className="font-black text-[#1e626b] text-sm mb-2">الخدمات المشمولة ({chequeDetailModal.payments.length})</h4>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-50">
-                      <th className="p-2.5 text-right font-bold text-slate-600">التلميذ</th>
-                      <th className="p-2.5 text-center font-bold text-slate-600">الخدمة</th>
-                      <th className="p-2.5 text-center font-bold text-slate-600">رقم الوصل</th>
-                      <th className="p-2.5 text-center font-bold text-slate-600">المبلغ</th>
-                      <th className="p-2.5 text-center font-bold text-slate-600">الشهر</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {chequeDetailModal.payments.map((p: any) => (
-                      <tr key={p.id} className="hover:bg-[#257C86]/[0.05]">
-                        <td className="p-2.5 font-bold text-slate-900">{p.studentName}</td>
-                        <td className="p-2.5 text-center">
-                          <span className="inline-flex px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-bold text-[10px]">{paymentServiceLabel(p)}</span>
-                        </td>
-                        <td className="p-2.5 text-center font-mono font-bold text-slate-500 text-[10px]">{p.receiptNumber || '-'}</td>
-                        <td className="p-2.5 text-center font-mono font-bold text-[#257C86]">{fmt(p.amountPaid)} د.ت</td>
-                        <td className="p-2.5 text-center text-slate-600 font-bold">{monthToArabic(p.month)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                    <table className="min-w-[640px] w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50">
+                          <th className="p-2.5 text-right font-bold text-slate-600">التلميذ</th>
+                          <th className="p-2.5 text-center font-bold text-slate-600">الخدمة</th>
+                          <th className="p-2.5 text-center font-bold text-slate-600">رقم الوصل</th>
+                          <th className="p-2.5 text-center font-bold text-slate-600">المبلغ</th>
+                          <th className="p-2.5 text-center font-bold text-slate-600">الشهر</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {chequeDetailModal.payments.map((p: any) => (
+                          <tr key={p.id} className="hover:bg-[#257C86]/[0.05]">
+                            <td className="p-2.5 font-bold text-slate-900">{p.studentName}</td>
+                            <td className="p-2.5 text-center">
+                              <span className="inline-flex px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-bold text-[10px]">{paymentServiceLabel(p)}</span>
+                            </td>
+                            <td className="p-2.5 text-center font-mono font-bold text-slate-500 text-[10px]">{p.receiptNumber || '-'}</td>
+                            <td className="p-2.5 text-center font-mono font-bold text-[#257C86]">{fmt(p.amountPaid)} د.ت</td>
+                            <td className="p-2.5 text-center text-slate-600 font-bold">{monthToArabic(p.month)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                </div>
               </div>
             </motion.div>
           </motion.div>

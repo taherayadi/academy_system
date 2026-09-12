@@ -560,7 +560,7 @@ export default function BusDriverModule({
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           {busDriver ? (
-            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#257C86]/[0.06] border border-[#257C86]/20/40 rounded-2xl">
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl">
               <div className="w-8 h-8 rounded-xl bg-[#257C86] text-white flex items-center justify-center font-bold text-sm">🚌</div>
               <div>
                 <div className="flex items-center gap-2">
@@ -785,7 +785,7 @@ export default function BusDriverModule({
 
                     {/* Passengers Grouped Table */}
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-right">
+                      <table className="min-w-[640px] w-full text-xs text-right">
                         <thead>
                           <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold">
                             <th className="p-3 w-12 text-center">#</th>
@@ -800,7 +800,7 @@ export default function BusDriverModule({
                         <tbody className="divide-y divide-slate-100">
                           {trip.etabGroups.map((grp) => (
                             <React.Fragment key={grp.etablissement}>
-                              <tr className="bg-[#F0F7F8] border-y border-[#257C86]/20/30">
+                              <tr className="bg-[#F0F7F8] border-y border-[#257C86]/20">
                                 <td colSpan={7} className="py-2 px-3">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 font-black text-[#1e626b] text-xs">
@@ -834,7 +834,7 @@ export default function BusDriverModule({
                                           {p.student.lastName} {p.student.firstName}
                                         </span>
                                         {p.isManual && (
-                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20/60 text-[10px] font-black rounded-md">
+                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 text-[10px] font-black rounded-md">
                                             ✏️ يدوي
                                           </span>
                                         )}
@@ -1059,7 +1059,7 @@ export default function BusDriverModule({
                   <label className="block text-xs font-black text-slate-700 mb-1.5">
                     اختر التلاميذ
                     {manualFormStudentIds.size > 0 && (
-                      <span className="mr-2 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20/40 rounded-full text-[10px] font-black">
+                      <span className="mr-2 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black">
                         {manualFormStudentIds.size} محدد
                       </span>
                     )}
@@ -1208,48 +1208,50 @@ export default function BusDriverModule({
                   </div>
                 </div>
 
-                <table className="w-full text-xs text-right border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-300 font-black text-slate-800">
-                      <th className="p-2 border-l border-slate-300 w-8 text-center">#</th>
-                      <th className="p-2 border-l border-slate-300">اسم ولقب التلميذ</th>
-                      <th className="p-2 border-l border-slate-300">المستوى</th>
-                      <th className="p-2 border-l border-slate-300">المؤسسة التعليمية (الوجهة)</th>
-                      <th className="p-2 border-l border-slate-300">هاتف الولي للطوارئ</th>
-                      <th className="p-2 text-center w-24">صعود التلميذ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {trip.etabGroups.map((grp) => (
-                      <React.Fragment key={grp.etablissement}>
-                        <tr className="bg-slate-200/80 font-black text-slate-900 border-y border-slate-300">
-                          <td colSpan={6} className="p-1.5 px-3">
-                            <div className="flex justify-between items-center">
-                              <span>🏫 {grp.etablissement} {grp.count >= 2 ? `(${grp.count} تلاميذ - نقل مشترك)` : ''}</span>
-                              <span className="font-mono text-[11px]">{grp.count} تلاميذ</span>
-                            </div>
-                          </td>
+                <div className="overflow-x-auto">
+                    <table className="min-w-[640px] w-full text-xs text-right border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 border-b border-slate-300 font-black text-slate-800">
+                          <th className="p-2 border-l border-slate-300 w-8 text-center">#</th>
+                          <th className="p-2 border-l border-slate-300">اسم ولقب التلميذ</th>
+                          <th className="p-2 border-l border-slate-300">المستوى</th>
+                          <th className="p-2 border-l border-slate-300">المؤسسة التعليمية (الوجهة)</th>
+                          <th className="p-2 border-l border-slate-300">هاتف الولي للطوارئ</th>
+                          <th className="p-2 text-center w-24">صعود التلميذ</th>
                         </tr>
-                        {grp.passengers.map((p, pIdx) => (
-                          <tr key={p.student.id} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
-                            <td className="p-2 border-l border-slate-300 text-center font-mono">{pIdx + 1}</td>
-                            <td className="p-2 border-l border-slate-300 font-black text-slate-950">
-                              {p.student.lastName} {p.student.firstName}
-                            </td>
-                            <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{p.gradeLevel}</td>
-                            <td className="p-2 border-l border-slate-300 font-black text-slate-900">{p.etablissement}</td>
-                            <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
-                              {p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—'}
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className="inline-block w-5 h-5 border-2 border-slate-400 rounded"></span>
-                            </td>
-                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {trip.etabGroups.map((grp) => (
+                          <React.Fragment key={grp.etablissement}>
+                            <tr className="bg-slate-200/80 font-black text-slate-900 border-y border-slate-300">
+                              <td colSpan={6} className="p-1.5 px-3">
+                                <div className="flex justify-between items-center">
+                                  <span>🏫 {grp.etablissement} {grp.count >= 2 ? `(${grp.count} تلاميذ - نقل مشترك)` : ''}</span>
+                                  <span className="font-mono text-[11px]">{grp.count} تلاميذ</span>
+                                </div>
+                              </td>
+                            </tr>
+                            {grp.passengers.map((p, pIdx) => (
+                              <tr key={p.student.id} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
+                                <td className="p-2 border-l border-slate-300 text-center font-mono">{pIdx + 1}</td>
+                                <td className="p-2 border-l border-slate-300 font-black text-slate-950">
+                                  {p.student.lastName} {p.student.firstName}
+                                </td>
+                                <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{p.gradeLevel}</td>
+                                <td className="p-2 border-l border-slate-300 font-black text-slate-900">{p.etablissement}</td>
+                                <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
+                                  {p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—'}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <span className="inline-block w-5 h-5 border-2 border-slate-400 rounded"></span>
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                </div>
               </div>
             );
           })}
@@ -1259,22 +1261,24 @@ export default function BusDriverModule({
         {dayRemovedCount > 0 && (
           <div className="border border-slate-400 rounded-lg p-3 break-inside-avoid">
             <p className="font-bold text-slate-800 mb-2">ملاحظات اليوم — غيابات مسجلة ({dayRemovedCount}):</p>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 border-b border-slate-300">
-                  <th className="p-1.5 text-right font-black">التلميذ</th>
-                  <th className="p-1.5 text-right font-black">الملاحظة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {dayRemovedPassengers.map(({ studentId, studentName, remark }) => (
-                  <tr key={studentId}>
-                    <td className="p-1.5 font-black text-slate-900">{studentName}</td>
-                    <td className="p-1.5 text-slate-700">{remark}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+                <table className="min-w-[320px] w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-300">
+                      <th className="p-1.5 text-right font-black">التلميذ</th>
+                      <th className="p-1.5 text-right font-black">الملاحظة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {dayRemovedPassengers.map(({ studentId, studentName, remark }) => (
+                      <tr key={studentId}>
+                        <td className="p-1.5 font-black text-slate-900">{studentName}</td>
+                        <td className="p-1.5 text-slate-700">{remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            </div>
           </div>
         )}
 

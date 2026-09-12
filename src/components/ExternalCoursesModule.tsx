@@ -1459,8 +1459,8 @@ export default function ExternalCoursesModule({
                   {selectedCourse.enrolledStudents.length === 0 ? (
                     <p className="text-xs text-slate-400">لا يوجد تلاميذ مسجلين رسمياً.</p>
                   ) : (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-xs">
+                    <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                      <table className="min-w-[420px] w-full text-xs">
                         <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                           <tr>
                             <th className="p-3">التلميذ</th>

@@ -49,12 +49,12 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40 flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-[#257C86]/5 flex items-center justify-center p-4 relative overflow-hidden font-sans"
       dir="rtl"
     >
 
       {/* Background washes — same spirit as the landing page */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-blue-500/[0.05] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-[#257C86]/[0.05] pointer-events-none"></div>
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-[#257C86]/[0.08] blur-[120px] pointer-events-none"></div>
       <div className="absolute -bottom-24 -right-24 h-[300px] w-[300px] rounded-full bg-[#8DC760]/[0.08] blur-[100px] pointer-events-none"></div>
 

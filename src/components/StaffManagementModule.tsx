@@ -1223,7 +1223,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                                      <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-md px-1.5 py-0.5 mt-0.5">
                                        {timeKey}
                                        {isExtra && (
-                                         <span className="text-[9px] font-black text-teal-700 bg-teal-50 border border-teal-200 rounded px-1 py-px not-italic">ساعات إضافية</span>
+                                         <span className="text-[9px] font-black text-[#1e626b] bg-[#257C86]/5 border border-[#257C86]/20 rounded px-1 py-px not-italic">ساعات إضافية</span>
                                        )}
                                      </span>
                                    </td>
@@ -1595,7 +1595,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       <label className="text-xs font-bold text-slate-600 block mb-1">ثمن الساعة الإضافية د.ت</label>
                       <input 
                         type="number" min="0" value={extraHourRate} onFocus={(e) => e.target.select()} onChange={(e) => setExtraHourRate(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-teal-700"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-[#1e626b]"
                       />
                     </div>
 
@@ -1624,7 +1624,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                         <span>خصم الغياب:</span>
                         <span className="font-mono text-red-600">-{autoDed.toFixed(2)} د.ت</span>
                       </div>
-                      <div className="flex justify-between text-teal-700 font-bold">
+                      <div className="flex justify-between text-[#1e626b] font-bold">
                         <span>الساعات الإضافية:</span>
                         <span className="font-mono">{((manualExtraHours !== null ? manualExtraHours : (att?.extraHours ?? 0))).toFixed(1)} ساعة</span>
                       </div>
@@ -1635,7 +1635,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           value={manualExtraHours === null ? '' : manualExtraHours}
                           placeholder={`تلقائي: ${((att?.extraHours ?? 0)).toFixed(1)} ساعة`}
                           onChange={(e) => setManualExtraHours(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs font-bold font-mono text-teal-700"
+                          className="w-full px-3 py-2 bg-white border border-[#257C86]/30 rounded-xl text-xs font-bold font-mono text-[#1e626b]"
                         />
                       </div>
                       <div>
@@ -1674,7 +1674,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           <span>المنح والمكافآت:</span>
                           <span className="font-mono">+{bonusAmount} د.ت</span>
                         </div>
-                        <div className="px-3 py-2 flex justify-between text-teal-700 font-bold">
+                        <div className="px-3 py-2 flex justify-between text-[#1e626b] font-bold">
                           <span>الساعات الإضافية:</span>
                           <span className="font-mono">+{extraAmt.toFixed(2)} د.ت</span>
                         </div>
@@ -1802,7 +1802,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       const extraRate = printedPayslip.extraHourRate ?? 0;
                       const extraAmt = printedPayslip.extraHoursAmount ?? (extraH * extraRate);
                       return (
-                        <div className="p-2 flex justify-between text-teal-700 font-bold">
+                        <div className="p-2 flex justify-between text-[#1e626b] font-bold">
                           <span>الساعات الإضافية:</span>
                           <span className="font-mono">+{extraAmt.toFixed(2)} د.ت</span>
                         </div>

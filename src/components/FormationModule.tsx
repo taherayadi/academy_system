@@ -923,7 +923,7 @@ export default function FormationModule({
 
                 {/* Students Table */}
                 <div className="overflow-auto max-h-[60vh] rounded-2xl border border-slate-100 no-scrollbar">
-                  <table className="w-full text-right text-xs">
+                  <table className="min-w-[640px] w-full text-right text-xs">
                     <thead>
                       <tr className="bg-slate-50/80 text-slate-500 font-black border-b border-slate-100">
                         <th className="p-3">التلميذ</th>
@@ -974,7 +974,7 @@ export default function FormationModule({
                                   <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-help ${
                                     st.isPack
                                       ? 'bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20'
-                                      : 'bg-teal-50 text-teal-700 border border-teal-200'
+                                      : 'bg-[#257C86]/5 text-[#1e626b] border border-[#257C86]/20'
                                   }`}>
                                     {st.isPack ? 'باك كامل' : `مواد مختارة (${chosenMatieres.length})`}
                                   </span>
@@ -1942,49 +1942,51 @@ export default function FormationModule({
                     </div>
                   </div>
 
-                  <table className="w-full border-collapse text-right">
-                    <thead>
-                      <tr className="bg-slate-100">
-                        <th className="border border-slate-300 p-2">اليوم</th>
-                        <th className="border border-slate-300 p-2">التوقيت</th>
-                        <th className="border border-slate-300 p-2">المادة</th>
-                        <th className="border border-slate-300 p-2">الأستاذ / التلاميذ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {FORMATION_WORK_DAYS.map(day => {
-                        const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
-                          .filter(s => s.day === day)
-                          .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                        if (daySeances.length === 0) {
-                          return (
-                            <tr key={day}>
-                              <td className="border border-slate-300 p-2 font-bold">{day}</td>
-                              <td className="border border-slate-300 p-2 text-slate-400" colSpan={3}>لا حصص</td>
-                            </tr>
-                          );
-                        }
-                        return daySeances.map((s, idx) => (
-                          <tr key={`${day}-${idx}`}>
-                            {idx === 0 ? (
-                              <td className="border border-slate-300 p-2 font-bold align-top" rowSpan={daySeances.length}>{day}</td>
-                            ) : null}
-                            <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
-                            <td className="border border-slate-300 p-2">{s.matiere}</td>
-                            <td className="border border-slate-300 p-2 align-top">
-                              <div className="font-bold">الأستاذ: ........................................</div>
-                              <div className="mt-1 space-y-0.5">
-                                {studentsForSeance(s.matiere).map((st, si) => (
-                                  <div key={st.id ?? si}>• {st.studentName}</div>
-                                ))}
-                              </div>
-                              <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
-                            </td>
+                  <div className="overflow-x-auto">
+                      <table className="min-w-[560px] w-full border-collapse text-right">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="border border-slate-300 p-2">اليوم</th>
+                            <th className="border border-slate-300 p-2">التوقيت</th>
+                            <th className="border border-slate-300 p-2">المادة</th>
+                            <th className="border border-slate-300 p-2">الأستاذ / التلاميذ</th>
                           </tr>
-                        ));
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {FORMATION_WORK_DAYS.map(day => {
+                            const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
+                              .filter(s => s.day === day)
+                              .sort((a, b) => a.startTime.localeCompare(b.startTime));
+                            if (daySeances.length === 0) {
+                              return (
+                                <tr key={day}>
+                                  <td className="border border-slate-300 p-2 font-bold">{day}</td>
+                                  <td className="border border-slate-300 p-2 text-slate-400" colSpan={3}>لا حصص</td>
+                                </tr>
+                              );
+                            }
+                            return daySeances.map((s, idx) => (
+                              <tr key={`${day}-${idx}`}>
+                                {idx === 0 ? (
+                                  <td className="border border-slate-300 p-2 font-bold align-top" rowSpan={daySeances.length}>{day}</td>
+                                ) : null}
+                                <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
+                                <td className="border border-slate-300 p-2">{s.matiere}</td>
+                                <td className="border border-slate-300 p-2 align-top">
+                                  <div className="font-bold">الأستاذ: ........................................</div>
+                                  <div className="mt-1 space-y-0.5">
+                                    {studentsForSeance(s.matiere).map((st, si) => (
+                                      <div key={st.id ?? si}>• {st.studentName}</div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
+                                </td>
+                              </tr>
+                            ));
+                          })}
+                        </tbody>
+                      </table>
+                  </div>
 
                   <div className="print-footer mt-4 pt-4 border-t border-dashed border-slate-300 flex items-end justify-between">
                     <p className="text-[10px] text-slate-400 font-bold">شكراً لثقتكم بنا</p>

@@ -1076,8 +1076,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                           <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: {allMonthPayments.length}</span>
                         </h4>
 
-                        <div className="border border-slate-300 rounded-xl overflow-hidden">
-                          <table className="w-full text-right text-[11px]">
+                        <div className="border border-slate-300 rounded-xl overflow-x-auto">
+                          <table className="min-w-[640px] w-full text-right text-[11px]">
                             <thead className="bg-slate-100 text-slate-800 font-black border-b border-slate-300">
                               <tr>
                                 <th className="p-2">#</th>

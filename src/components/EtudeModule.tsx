@@ -964,7 +964,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               return (
                 <div
                   key={slot.id}
-                  className="group bg-white rounded-3xl border border-[#257C86]/20/70 shadow-sm hover:shadow-lg hover:shadow-[#257C86]/10 hover:border-[#257C86]/40 transition-all duration-200 overflow-hidden"
+                  className="group bg-white rounded-3xl border border-[#257C86]/20 shadow-sm hover:shadow-lg hover:shadow-[#257C86]/10 hover:border-[#257C86]/40 transition-all duration-200 overflow-hidden"
                 >
                   <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gradient-to-l from-[#257C86]/[0.06] to-white border-b border-slate-100">
                     <div className="flex items-center gap-2 min-w-0">
@@ -972,7 +972,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                         {slot.startTime} - {slot.endTime}
                       </span>
                       {slot.isExtra && (
-                        <span className="text-[9px] font-black text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-2 py-1 whitespace-nowrap">
+                        <span className="text-[9px] font-black text-[#1e626b] bg-[#257C86]/5 border border-[#257C86]/20 rounded-lg px-2 py-1 whitespace-nowrap">
                           ساعات إضافية
                         </span>
                       )}
@@ -1728,8 +1728,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                           <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: {allMonthPayments.length}</span>
                         </h4>
 
-                        <div className="border border-slate-300 rounded-xl overflow-hidden">
-                          <table className="w-full text-right text-[11px]">
+                        <div className="border border-slate-300 rounded-xl overflow-x-auto">
+                          <table className="min-w-[640px] w-full text-right text-[11px]">
                             <thead className="bg-slate-100 text-slate-800 font-black border-b border-slate-300">
                               <tr>
                                 <th className="p-2">#</th>

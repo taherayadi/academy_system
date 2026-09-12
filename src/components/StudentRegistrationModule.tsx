@@ -695,7 +695,7 @@ export default function StudentRegistrationModule({
                   </span>
                 )}
                 {st.enrolledServices?.etude && (
-                  <span className="text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md border border-teal-200/50">
+                  <span className="text-[10px] font-bold bg-[#257C86]/5 text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20">
                     Étude {centerName}
                   </span>
                 )}
@@ -720,7 +720,7 @@ export default function StudentRegistrationModule({
                         لمجة الصباح
                       </span>
                     ) : st.enrolledServices?.gouterSoir ? (
-                      <span className="text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md border border-teal-200/50">
+                      <span className="text-[10px] font-bold bg-[#257C86]/5 text-[#1e626b] px-2 py-0.5 rounded-md border border-[#257C86]/20">
                         لمجة المساء
                       </span>
                     ) : null}
@@ -949,7 +949,7 @@ export default function StudentRegistrationModule({
                           const currentExtras = mother.extraPhones || [];
                           setMother({ ...mother, extraPhones: [...currentExtras, ''] });
                         }}
-                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10/80 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
+                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
                       >
                         إضافة رقم هاتف للأم
                       </button>
@@ -1033,7 +1033,7 @@ export default function StudentRegistrationModule({
                           const currentExtras = father.extraPhones || [];
                           setFather({ ...father, extraPhones: [...currentExtras, ''] });
                         }}
-                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10/80 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
+                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 px-2.5 py-1 rounded-lg cursor-pointer border border-[#257C86]/20 flex items-center gap-1"
                       >
                         إضافة رقم هاتف للأب
                       </button>
@@ -1452,7 +1452,7 @@ export default function StudentRegistrationModule({
                             </div>
                           </label>
 
-                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterSoirEnrolled && !gouterBothEnrolled ? 'bg-teal-100 border-teal-400 text-teal-900 cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-teal-300'}`}>
+                          <label className={`p-3 rounded-xl border transition flex items-center gap-2.5 ${lockedGouter ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : gouterSoirEnrolled && !gouterBothEnrolled ? 'bg-[#257C86]/10 border-[#257C86]/60 text-[#14464e] cursor-pointer' : 'bg-white border-slate-200 text-slate-700 cursor-pointer hover:border-[#257C86]/30'}`}>
                             <input
                               type="checkbox"
                               checked={gouterSoirEnrolled && !gouterBothEnrolled}
@@ -1466,7 +1466,7 @@ export default function StudentRegistrationModule({
                                   setGouterSoirEnrolled(false);
                                 }
                               }}
-                              className="h-4 w-4 rounded text-teal-600 focus:ring-teal-500"
+                              className="h-4 w-4 rounded text-[#257C86] focus:ring-[#257C86]"
                             />
                             <div>
                               <span className="font-bold text-xs block">لمجة المساء فقط</span>
@@ -1856,7 +1856,7 @@ export default function StudentRegistrationModule({
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">5. الخدمات والاشتراكات</h3>
                     <div className="flex flex-wrap gap-2 text-[10px]">
                       {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Suivi Scolaire</span>}
-                      {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-teal-100 text-teal-900 rounded font-bold">✓ Étude {centerName}</span>}
+                      {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ Étude {centerName}</span>}
                       {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ Bibliothèque</span>}
                       {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded font-bold">✓ Repas</span>}
                       {!hideRestrictedModules && (
@@ -1865,7 +1865,7 @@ export default function StudentRegistrationModule({
                         ) : printingRegistrationStudent.enrolledServices?.gouterMatin ? (
                           <span className="px-2 py-1 bg-emerald-100 text-emerald-900 rounded font-bold">✓ لمجة الصباح</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterSoir ? (
-                          <span className="px-2 py-1 bg-teal-100 text-teal-900 rounded font-bold">✓ لمجة المساء</span>
+                          <span className="px-2 py-1 bg-[#257C86]/10 text-[#14464e] rounded font-bold">✓ لمجة المساء</span>
                         ) : null
                       )}
                     </div>

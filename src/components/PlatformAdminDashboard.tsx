@@ -161,8 +161,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const REQ_STATUS_BADGE: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-violet-100 text-violet-800',
+  new: 'bg-[#257C86]/10 text-[#1e626b]',
+  contacted: 'bg-[#257C86]/10 text-[#1e626b]',
   converted: 'bg-emerald-100 text-emerald-800',
   archived: 'bg-slate-100 text-slate-500',
 };
@@ -220,7 +220,7 @@ function formatTnd(value: number): string {
 /** Badge + label of an invoice status (a pending cheque gets its own badge). */
 function invoiceStatusMeta(inv: { status: string; paymentMethod?: string | null }): { label: string; cls: string } {
   if (inv.status === 'pending' && inv.paymentMethod === 'cheque') {
-    return { label: 'Chèque en attente', cls: 'bg-indigo-50 text-indigo-700 border border-indigo-200' };
+    return { label: 'Chèque en attente', cls: 'bg-[#257C86]/5 text-[#1e626b] border border-[#257C86]/20' };
   }
   switch (inv.status) {
     case 'pending': return { label: 'En attente', cls: 'bg-amber-50 text-amber-800 border border-amber-200' };
@@ -942,8 +942,8 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
           </div>
 
           {chequeMode && (
-            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3.5 space-y-3">
-              <p className="text-[10px] font-bold text-indigo-700 leading-relaxed">
+            <div className="rounded-2xl border border-[#257C86]/20 bg-[#257C86]/5 p-3.5 space-y-3">
+              <p className="text-[10px] font-bold text-[#1e626b] leading-relaxed">
                 Chèque reçu : laissez le statut « En attente » — la facture apparaît dans « Chèques en attente » et
                 n’est <span className="underline">pas comptée dans les revenus</span> tant que vous ne l’encaissez pas
                 (bouton « Encaisser », qui passe la facture en « Payée »).
@@ -1346,13 +1346,13 @@ const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
   center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
   plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   plan_activated: { text: 'Abonnement activé', cls: 'bg-emerald-100 text-emerald-700' },
-  plan_renewed: { text: 'Reconduction', cls: 'bg-sky-100 text-sky-700' },
+  plan_renewed: { text: 'Reconduction', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_settled: { text: 'Régularisation', cls: 'bg-emerald-100 text-emerald-700' },
   plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
   plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
   plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
-  trial_added: { text: 'Jours offerts', cls: 'bg-violet-100 text-violet-700' },
+  trial_added: { text: 'Jours offerts', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-emerald-100 text-emerald-700' },
   renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
 };
@@ -2003,8 +2003,8 @@ function PlanManagerModal({ center, onClose, onSaved }: {
               {(view.history || []).length === 0 ? (
                 <p className="text-[11px] font-semibold text-slate-400">Aucune activité enregistrée.</p>
               ) : (
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full" dir="ltr">
+                <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                  <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
                       <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-400">
                         <th className="px-3 py-2">Date</th>
@@ -2075,7 +2075,7 @@ function adStatusOf(ad: PlatformAdvertisement, now = Date.now()): AdStatus {
 const AD_STATUS_META: Record<AdStatus, { label: string; cls: string }> = {
   live: { label: 'En ligne', cls: 'bg-emerald-100 text-emerald-700' },
   draft: { label: 'Brouillon', cls: 'bg-amber-100 text-amber-700' },
-  scheduled: { label: 'Programmée', cls: 'bg-sky-100 text-sky-700' },
+  scheduled: { label: 'Programmée', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   paused: { label: 'En pause', cls: 'bg-slate-200 text-slate-500' },
   expired: { label: 'Expirée', cls: 'bg-red-100 text-red-600' },
 };
@@ -3005,8 +3005,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               { label: 'Total Centres', value: centers.length, icon: Building2, tint: 'bg-[#257C86]/10 text-[#257C86]' },
               { label: 'Actifs', value: activeCenters, icon: CheckCircle2, tint: 'bg-emerald-100 text-emerald-600' },
               { label: 'En Essai', value: trialCenters, icon: Clock, tint: 'bg-amber-100 text-amber-600' },
-              { label: 'Nouvelles demandes', value: newRequests, icon: FileText, tint: 'bg-blue-100 text-blue-600' },
-              { label: 'À encaisser', value: billingSummary ? `${billingSummary.pendingInvoices.toFixed(0)} TND` : '—', icon: Receipt, tint: 'bg-rose-100 text-rose-600' }
+              { label: 'Nouvelles demandes', value: newRequests, icon: FileText, tint: 'bg-[#257C86]/10 text-[#257C86]' },
+              { label: 'À encaisser', value: billingSummary ? `${billingSummary.pendingInvoices.toFixed(0)} TND` : '—', icon: Receipt, tint: 'bg-red-100 text-red-600' }
             ].map(kpi => (
               <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:-translate-y-0.5 transition-all">
                 <div className={`inline-flex p-2.5 rounded-xl mb-3 ${kpi.tint}`}>
@@ -3061,7 +3061,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <span className="p-2.5 bg-blue-100 rounded-xl"><FileText className="h-4 w-4 text-blue-600" /></span>
+                  <span className="p-2.5 bg-[#257C86]/10 rounded-xl"><FileText className="h-4 w-4 text-[#257C86]" /></span>
                   <h3 className="text-sm font-black text-slate-900">Dernières demandes</h3>
                 </div>
                 <button onClick={() => onNavigate?.('requests')} className="text-[11px] font-black text-[#257C86] hover:text-[#1e626b] transition inline-flex items-center gap-1 cursor-pointer">
@@ -3415,7 +3415,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:border-[#257C86]/30 transition flex flex-col">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-3.5">
-                    <div className="h-11 w-11 rounded-2xl bg-blue-50 flex items-center justify-center text-sm font-black text-blue-600 flex-shrink-0">
+                    <div className="h-11 w-11 rounded-2xl bg-[#257C86]/5 flex items-center justify-center text-sm font-black text-[#257C86] flex-shrink-0">
                       {titleCaseName(req.fullName).split(' ').map(w => w[0]).join('').slice(0, 2)}
                     </div>
                     <div>
@@ -3443,7 +3443,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="mt-3 flex items-center gap-4 flex-wrap">
                   {req.email && (
                     <a href={`mailto:${req.email}`}
-                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#257C86] hover:underline">
                       <Mail className="h-3.5 w-3.5" /> {req.email}
                     </a>
                   )}
@@ -3553,8 +3553,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     { label: 'MRR (factures payées)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-emerald-100 text-emerald-600' },
-                    { label: 'Encaissé ce mois', value: `${billingSummary.collectedThisMonth.toFixed(2)} TND`, icon: DollarSign, tint: 'bg-blue-100 text-blue-600' },
-                    { label: 'Encaissé cette année', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-violet-100 text-violet-600' },
+                    { label: 'Encaissé ce mois', value: `${billingSummary.collectedThisMonth.toFixed(2)} TND`, icon: DollarSign, tint: 'bg-[#257C86]/10 text-[#257C86]' },
+                    { label: 'Encaissé cette année', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-[#257C86]/10 text-[#257C86]' },
                     { label: 'Factures en attente', value: `${billingSummary.pendingInvoices.toFixed(2)} TND`, icon: AlertCircle, tint: 'bg-amber-100 text-amber-600' }
                   ].map(kpi => (
                     <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
@@ -3570,19 +3570,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
               {/* Chèques en attente — le revenu n'est compté qu'après encaissement */}
               {pendingCheques.length > 0 && (
-                <div className="bg-white rounded-3xl border border-indigo-200/70 p-6 shadow-sm shadow-slate-900/5">
+                <div className="bg-white rounded-3xl border border-[#257C86]/20 p-6 shadow-sm shadow-slate-900/5">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
-                      <span className="p-2 bg-indigo-100 rounded-xl"><Receipt className="h-4 w-4 text-indigo-600" /></span>
+                      <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
                       Chèques en attente
                       <span className="text-[11px] font-bold text-slate-400 font-sans">{pendingCheques.length}</span>
                     </h3>
                     <p className="text-[10px] font-bold text-slate-400">
-                      Les chèques en attente ne sont <span className="text-indigo-600">pas comptés dans les revenus</span> — encaissez-les pour les comptabiliser.
+                      Les chèques en attente ne sont <span className="text-[#257C86]">pas comptés dans les revenus</span> — encaissez-les pour les comptabiliser.
                     </p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="min-w-[640px] w-full text-sm text-left">
                       <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
                         <tr>
                           <th className="pb-3 px-3">Centre</th>
@@ -3595,13 +3595,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {pendingCheques.map(inv => (
-                          <tr key={inv.id} className="hover:bg-indigo-50/40">
-                            <td className="py-3 px-3 font-black text-slate-900">{inv.centerName}</td>
-                            <td className="py-3 px-3 font-mono text-xs text-slate-500">{inv.invoiceNumber}</td>
-                            <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
+                          <tr key={inv.id} className="hover:bg-[#257C86]/5">
+                            <td className="py-3 px-3 font-black text-slate-900 whitespace-nowrap">{inv.centerName}</td>
+                            <td className="py-3 px-3 font-mono text-xs text-slate-500 whitespace-nowrap">{inv.invoiceNumber}</td>
+                            <td className="py-3 px-3 font-black text-slate-900 whitespace-nowrap">{inv.amount.toFixed(2)} TND</td>
                             <td className="py-3 px-3 text-slate-600 text-xs font-bold">{inv.chequeNumber || '—'}</td>
-                            <td className="py-3 px-3 text-slate-600 text-xs">{inv.chequeDate ? new Date(inv.chequeDate).toLocaleDateString('fr-TN') : '—'}</td>
-                            <td className="py-3 px-3">
+                            <td className="py-3 px-3 text-slate-600 text-xs whitespace-nowrap">{inv.chequeDate ? new Date(inv.chequeDate).toLocaleDateString('fr-TN') : '—'}</td>
+                            <td className="py-3 px-3 whitespace-nowrap">
                               <div className="flex items-center gap-1.5">
                                 <button
                                   onClick={async () => {
@@ -3732,7 +3732,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                             </div>
                           </button>
                           <div className={`overflow-x-auto${collapsedGroupIds[group.centerId] ? ' hidden' : ''}`}>
-                            <table className="w-full text-sm text-left">
+                            <table className="min-w-[640px] w-full text-sm text-left">
                               <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-white">
                                 <tr>
                                   <th className="py-2.5 px-3">N° Facture</th>
@@ -3748,16 +3748,16 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                   const meta = invoiceStatusMeta(inv);
                                   return (
                                     <tr key={inv.id} className="hover:bg-slate-50/70">
-                                      <td className="py-3 px-3 font-mono text-xs text-slate-500">{inv.invoiceNumber}</td>
-                                      <td className="py-3 px-3 text-slate-600 text-xs">
+                                      <td className="py-3 px-3 font-mono text-xs text-slate-500 whitespace-nowrap">{inv.invoiceNumber}</td>
+                                      <td className="py-3 px-3 text-slate-600 text-xs whitespace-nowrap">
                                         {new Date(inv.periodStart).toLocaleDateString('fr-TN')} – {new Date(inv.periodEnd).toLocaleDateString('fr-TN')}
                                       </td>
-                                      <td className="py-3 px-3 font-black text-slate-900">{inv.amount.toFixed(2)} TND</td>
-                                      <td className="py-3 px-3 text-slate-600 text-xs font-semibold">{paymentMethodLabel(inv.paymentMethod)}</td>
-                                      <td className="py-3 px-3">
+                                      <td className="py-3 px-3 font-black text-slate-900 whitespace-nowrap">{inv.amount.toFixed(2)} TND</td>
+                                      <td className="py-3 px-3 text-slate-600 text-xs font-semibold whitespace-nowrap">{paymentMethodLabel(inv.paymentMethod)}</td>
+                                      <td className="py-3 px-3 whitespace-nowrap">
                                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${meta.cls}`}>{meta.label}</span>
                                       </td>
-                                      <td className="py-3 px-3">
+                                      <td className="py-3 px-3 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
                                           <button onClick={() => handlePrintInvoice(inv)}
                                             className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture">
@@ -4007,7 +4007,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       {adLocationLabel(ad.location)}
                     </span>
                     {ad.centerIds?.length > 0 && (
-                      <span className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full">
+                      <span className="px-2 py-1 bg-[#257C86]/5 text-[#1e626b] text-xs font-bold rounded-full">
                         {ad.centerIds.length} centre{ad.centerIds.length > 1 ? 's' : ''}
                       </span>
                     )}

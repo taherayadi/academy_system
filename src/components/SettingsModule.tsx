@@ -625,8 +625,8 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
 
             {/* Étude — uniquement si le module est au plan */}
             {hasModule('etude') && (
-            <div className="bg-teal-50/40 p-4 rounded-2xl border border-teal-200/60 space-y-3">
-              <span className="text-xs font-extrabold text-teal-900 block border-b border-teal-200/60 pb-1">
+            <div className="bg-[#257C86]/5 p-4 rounded-2xl border border-[#257C86]/20 space-y-3">
+              <span className="text-xs font-extrabold text-[#14464e] block border-b border-[#257C86]/20 pb-1">
                 تأطير Étude
               </span>
               

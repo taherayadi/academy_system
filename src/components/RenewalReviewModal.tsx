@@ -53,13 +53,13 @@ const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
   center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
   plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   plan_activated: { text: 'Abonnement activé', cls: 'bg-emerald-100 text-emerald-700' },
-  plan_renewed: { text: 'Reconduction', cls: 'bg-sky-100 text-sky-700' },
+  plan_renewed: { text: 'Reconduction', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   plan_settled: { text: 'Régularisation', cls: 'bg-emerald-100 text-emerald-700' },
   plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
   plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
   schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
   plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
-  trial_added: { text: 'Jours offerts', cls: 'bg-violet-100 text-violet-700' },
+  trial_added: { text: 'Jours offerts', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
   renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-emerald-100 text-emerald-700' },
   renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
 };
@@ -684,8 +684,8 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               {(view.history || []).length === 0 ? (
                 <p className="text-[11px] font-semibold text-slate-400">Aucune activité enregistrée.</p>
               ) : (
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full" dir="ltr">
+                <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                  <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
                       <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-400">
                         <th className="px-3 py-2">Date</th>
