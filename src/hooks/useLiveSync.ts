@@ -7,10 +7,11 @@ export const LIVE_SYNC_INTERVAL_MS = 30000;
 export const LIVE_SYNC_FAST_INTERVAL_MS = 5000;
 
 /**
- * Runs `handler` every `intervalMs`, plus whenever the tab regains focus,
- * becomes visible again or comes back online. Ticks are skipped while the
- * tab is hidden and overlapping runs are guarded — silent by design, the
- * handler decides what (if anything) deserves a toast.
+ * Runs `handler` every `intervalMs` while the page is open and visible.
+ * There is NO fetch on focus regain, visibility regain or reconnect — data
+ * loads when the page opens and refreshes only when the caller invokes the
+ * handler itself (e.g. a refresh button). The cadence is paused while the
+ * tab is hidden and resumes afterwards without an immediate fetch.
  */
 export function useLiveSync(
   enabled: boolean,
@@ -33,18 +34,19 @@ export function useLiveSync(
         running = false;
       }
     };
-    const id = window.setInterval(() => { void tick(); }, intervalMs);
-    const onFocus = () => { void tick(); };
-    const onVisible = () => { if (!document.hidden) void tick(); };
-    window.addEventListener('focus', onFocus);
+    let id = window.setInterval(() => { void tick(); }, intervalMs);
+    // While hidden: no ticking at all. On return: resume the cadence WITHOUT
+    // an immediate fetch — a refresh is a page open or a user action, never
+    // a background event.
+    const onVisible = () => {
+      window.clearInterval(id);
+      id = window.setInterval(() => { void tick(); }, intervalMs);
+    };
     document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('online', onFocus);
     return () => {
       stopped = true;
       window.clearInterval(id);
-      window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('online', onFocus);
     };
   }, [enabled, intervalMs]);
 }

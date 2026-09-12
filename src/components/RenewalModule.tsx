@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react';
 import {
   RefreshCw, CheckCircle2, XCircle, Clock, History, Send, Loader2,
-  ArrowUpCircle, Wallet, CalendarClock, Package, Info
+  ArrowUpCircle, Wallet, CalendarClock, Package, Info,
+  Landmark, Banknote, CreditCard, Copy, Check
 } from 'lucide-react';
 import { fetchPublicModulePricesApi, fetchRenewalRequestsApi, createRenewalRequestApi } from '../api';
 import type { CenterTenant, PlanHistoryEntry, RenewalRequest } from '../types';
@@ -12,8 +13,6 @@ import {
 } from '../utils/pricing';
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
-import { useLiveSync, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from '../hooks/useLiveSync';
-import { usePubNubSync } from '../hooks/usePubNubSync';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
@@ -37,6 +36,13 @@ const HISTORY_LABELS: Record<string, string> = {
   renewal_upgrade: 'Changement d’offre accepté',
 };
 const historyLabel = (action: string) => HISTORY_LABELS[action] || action.replace(/_/g, ' ');
+
+/** Coordonnées de virement de la plateforme (moyens de paiement). */
+const BANK = {
+  bank: 'Attijari Bank',
+  holder: 'AYADI TAHER',
+  rib: '04073158006372281336',
+};
 
 /**
  * Module « Renouvellement » du centre :
@@ -74,18 +80,13 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
 
   // Last known status per request: lets the live sync announce only real
   // platform decisions (pending → approved / rejected), never repeats.
-  const requestStatusRef = useRef<Record<string, string> | null>(null);
-  const statusMap = (list: RenewalRequest[]) =>
-    Object.fromEntries(list.map(r => [r.id, r.status]));
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchRenewalRequestsApi();
       setRequests(data.requests || []);
       setHistory(data.history || []);
-      requestStatusRef.current = statusMap(data.requests || []);
-    } catch (err) {
+      } catch (err) {
       toastRef.current.error(err instanceof Error ? err.message : 'خطأ في جلب الطلبات.');
     } finally {
       setLoading(false);
@@ -100,48 +101,32 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       .finally(() => setPricingLoading(false));
   }, [load]);
 
-  // Live sync of my requests: when the platform accepts or refuses, the list
-  // (+ plan history) refreshes by itself and a toast announces the decision —
-  // no manual refresh needed.
-  const syncRequests = useCallback(async () => {
+  // Reload my requests + plan history — ONLY on page open (via `load`) and
+  // when the user clicks « Actualiser ». No polling, no background refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshRequests = useCallback(async () => {
+    setRefreshing(true);
     try {
       const data = await fetchRenewalRequestsApi();
-      const list = data.requests || [];
-      const prev = requestStatusRef.current;
-      if (prev) {
-        for (const r of list) {
-          if (prev[r.id] !== 'pending') continue;
-          if (r.status === 'approved') {
-            toastRef.current.success(
-              r.kind === 'upgrade'
-                ? 'Changement d’offre accepté — votre abonnement est mis à jour.'
-                : 'Renouvellement accepté — votre abonnement est mis à jour.'
-            );
-          } else if (r.status === 'rejected') {
-            toastRef.current.error('Votre demande a été refusée par la plateforme.');
-          }
-        }
-      }
-      requestStatusRef.current = statusMap(list);
-      setRequests(list);
+      setRequests(data.requests || []);
       setHistory(data.history || []);
     } catch {
-      // Silent: the session expiry is handled globally by App, anything else
-      // is retried on the next tick.
+      // Silent: the session expiry is handled globally by App.
+    } finally {
+      setRefreshing(false);
     }
   }, []);
-  // Fast cadence while one of my requests is still pending (the decision
-  // lands within seconds), slow cadence otherwise.
-  const hasPendingRequest = requests.some(r => r.status === 'pending');
-  // PubNub realtime — when connected (`active`) the polling above pauses and
-  // the SAME syncRequests handler runs on each "refetch" signal; any PubNub
-  // failure resumes the polling cadence automatically.
-  const realtimeState = usePubNubSync(true, syncRequests);
-  useLiveSync(
-    realtimeState !== 'active',
-    syncRequests,
-    hasPendingRequest ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
-  );
+
+  const [ribCopied, setRibCopied] = useState(false);
+  const copyRib = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(BANK.rib);
+      setRibCopied(true);
+      window.setTimeout(() => setRibCopied(false), 2000);
+    } catch {
+      toastRef.current.info(`RIB : ${BANK.rib}`);
+    }
+  }, []);
 
   const renewalDate = center?.status === 'trial' ? center?.trialEndsAt : center?.subscriptionEndsAt;
   const daysLeft = daysUntil(renewalDate);
@@ -375,13 +360,85 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         </div>
       </div>
 
-      {/* ─── Mes demandes ────────────────────────────────────────── */}
+      {/* ─── Moyens de paiement ─────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-          <History className="h-4 w-4 text-[#257C86]" />
-          Mes demandes de renouvellement
-          <span className="text-xs font-bold text-slate-400">طلباتي</span>
+          <Landmark className="h-4 w-4 text-[#257C86]" />
+          Moyens de paiement
+          <span className="text-xs font-bold text-slate-400">طرق الدفع</span>
         </h3>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-900">Virement bancaire</p>
+            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Landmark className="h-4 w-4" /></span>
+          </div>
+          <dl className="mt-3 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-semibold text-slate-400">Banque</dt>
+              <dd className="font-black text-slate-800">{BANK.bank}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-semibold text-slate-400">Titulaire</dt>
+              <dd className="font-black text-slate-800">{BANK.holder}</dd>
+            </div>
+          </dl>
+          <div dir="ltr" className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-800">
+            {BANK.rib}
+          </div>
+          <button
+            type="button"
+            onClick={copyRib}
+            className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-[#257C86]/40 hover:text-[#257C86]"
+          >
+            {ribCopied ? <Check className="h-3.5 w-3.5 text-[#257C86]" /> : <Copy className="h-3.5 w-3.5" />}
+            {ribCopied ? 'RIB copié' : 'Copier le RIB'}
+          </button>
+          <p className="mt-3 text-[11px] font-semibold text-slate-400">
+            Motif du virement : {center?.name || 'votre centre'} — {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-900">Espèces</p>
+            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Banknote className="h-4 w-4" /></span>
+          </div>
+          <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
+            Paiement en main propre, modalités à définir avec la plateforme.
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-black text-slate-400">Paiement en ligne</p>
+            <span className="rounded-xl bg-slate-100 p-2 text-slate-400"><CreditCard className="h-4 w-4" /></span>
+          </div>
+          <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+            Bientôt disponible
+          </span>
+        </div>
+      </div>
+
+      {/* ─── Mes demandes ────────────────────────────────────────── */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
+            <History className="h-4 w-4 text-[#257C86]" />
+            Mes demandes de renouvellement
+            <span className="text-xs font-bold text-slate-400">طلباتي</span>
+          </h3>
+          <button
+            type="button"
+            onClick={refreshRequests}
+            disabled={refreshing}
+            title="Actualiser"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 transition hover:border-[#257C86]/40 hover:text-[#257C86] disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Actualiser
+          </button>
+        </div>
 
         {loading ? (
           <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500">

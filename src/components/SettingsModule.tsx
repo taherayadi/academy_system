@@ -272,11 +272,11 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
           </h3>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-24 h-24 rounded-2xl bg-[#257C86] p-1 shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0">
+            <div className="w-24 h-24 rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/25 ring-1 ring-white/40 shrink-0 overflow-hidden">
               <img
                 src={logoPreview || centerLogoUrl || defaultLogo}
                 alt="شعار المركز"
-                className="w-full h-full rounded-xl object-cover bg-white"
+                className="center-logo-img w-full h-full object-cover"
               />
             </div>
             <div className="space-y-3 min-w-0">

@@ -445,7 +445,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             <div className="rounded-2xl border-2 border-amber-200/70 bg-amber-50/60 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
-                  request.kind === 'upgrade' ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20' : 'bg-white text-slate-600 border-slate-200'
+                  request.kind === 'upgrade' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'
                 }`}>
                   {request.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'}
                 </span>

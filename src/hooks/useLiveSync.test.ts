@@ -56,27 +56,45 @@ describe('useLiveSync', () => {
     vi.restoreAllMocks();
   });
 
-  it('ticks on the interval and on focus / visible / online', async () => {
+  it('ticks only on the interval — focus / visible / online never fetch', async () => {
     const handler = vi.fn().mockResolvedValue(undefined);
     renderHook(() => useLiveSync(true, handler, 10000));
 
-    expect(handler).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled(); // no fetch on mount
     await vi.advanceTimersByTimeAsync(10000);
     expect(handler).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(20000);
     expect(handler).toHaveBeenCalledTimes(3);
 
+    // Regaining focus, coming back online or becoming visible again must NOT
+    // trigger a fetch — refresh is a page open or a user action only.
     window.dispatchEvent(new Event('focus'));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(handler).toHaveBeenCalledTimes(4);
-
     window.dispatchEvent(new Event('online'));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(handler).toHaveBeenCalledTimes(5);
-
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.advanceTimersByTimeAsync(0);
-    expect(handler).toHaveBeenCalledTimes(6);
+    expect(handler).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(handler).toHaveBeenCalledTimes(4); // cadence resumed, no catch-up
+  });
+
+  it('pauses while the tab is hidden and resumes without an immediate fetch', async () => {
+    const handler = vi.fn().mockResolvedValue(undefined);
+    renderHook(() => useLiveSync(true, handler, 5000));
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(handler).toHaveBeenCalledTimes(1); // fully paused while hidden
+
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(handler).toHaveBeenCalledTimes(1); // resume: no immediate fetch
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(handler).toHaveBeenCalledTimes(2);
   });
 
   it('stays silent while disabled and skips ticks when the tab is hidden', async () => {

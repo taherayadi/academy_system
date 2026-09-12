@@ -76,8 +76,8 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
               <span>← الموقع التعريفي</span>
             </button>
           )}
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
-            <img src={icon} alt={centerName || 'المركز'} className="w-full h-full object-cover" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-[#257C86] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
+            <img src={icon} alt={centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-black text-slate-900">{centerName || 'المركز'}</h1>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1.5 rounded-full bg-[#257C86]/10 border border-[#257C86]/20">

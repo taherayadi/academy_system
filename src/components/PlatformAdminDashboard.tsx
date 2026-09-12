@@ -4121,7 +4121,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-black text-slate-900">{r.centerName || r.centerId}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
-                      r.kind === 'upgrade' ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20' : 'bg-slate-100 text-slate-600 border-slate-200'
+                      r.kind === 'upgrade' ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}>
                       {r.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'}
                     </span>

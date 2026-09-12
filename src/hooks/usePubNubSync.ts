@@ -16,6 +16,9 @@ export type { RealtimeState };
  *   • `active`    — PubNub is live; consumers pause their polling.
  *   • `connecting`/`fallback`/`idle` — keep polling with `useLiveSync`.
  *
+ * While the tab is hidden the subscription is torn down entirely (state
+ * `idle`): pushed signals never trigger background refreshes.
+ *
  * `sessionKey` (typically the user email) forces a fresh grant + subscription
  * when the authenticated account changes.
  */
@@ -36,15 +39,38 @@ export function usePubNubSync(
       setState('idle');
       return;
     }
-    setState('connecting');
-    const handle = subscribeRealtime(
-      () => {
-        void handlerRef.current();
-      },
-      setState,
-      sessionKey
-    );
-    return handle.unsubscribe;
+    let cleanup: { unsubscribe: () => void } | null = null;
+    let paused = false;
+    const start = () => {
+      setState('connecting');
+      cleanup = subscribeRealtime(
+        () => {
+          if (document.hidden) return; // never auto-refresh in the background
+          void handlerRef.current();
+        },
+        setState,
+        sessionKey
+      );
+    };
+    start();
+    // No live traffic while the tab is hidden: the subscription is torn down
+    // and re-established (fresh grant) when the page becomes visible again.
+    const onVisible = () => {
+      if (document.hidden) {
+        paused = true;
+        cleanup?.unsubscribe();
+        cleanup = null;
+        setState('idle'); // consumers keep polling; polling is paused too
+      } else if (paused) {
+        paused = false;
+        start();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      cleanup?.unsubscribe();
+    };
   }, [enabled, sessionKey]);
 
   return state;
