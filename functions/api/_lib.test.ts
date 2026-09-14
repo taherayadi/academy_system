@@ -3,7 +3,8 @@ import {
   getClientIp,
   json,
   readBody,
-  sha256Hex,
+  hashPassword,
+  verifyPassword,
   getSessionToken,
   isHttpsRequest,
   makeSessionCookie,
@@ -96,30 +97,32 @@ describe('readBody', () => {
 });
 
 // ---------------------------------------------------------------------------
-// sha256Hex
+// hashPassword & verifyPassword
 // ---------------------------------------------------------------------------
-describe('sha256Hex', () => {
-  it('produces correct SHA-256 for known input', async () => {
-    // SHA-256 of "hello" = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-    const hash = await sha256Hex('hello');
-    expect(hash).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+describe('hashPassword & verifyPassword', () => {
+  it('hashes and successfully verifies a correct password', async () => {
+    const pwd = 'TestPassword123!';
+    const hash = await hashPassword(pwd);
+    expect(hash).not.toBe(pwd);
+    expect(hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')).toBe(true);
+
+    const isValid = await verifyPassword(pwd, hash);
+    expect(isValid).toBe(true);
   });
 
-  it('produces correct hash for empty string', async () => {
-    const hash = await sha256Hex('');
-    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  it('rejects incorrect password during verification', async () => {
+    const hash = await hashPassword('correctPassword');
+    const isValid = await verifyPassword('wrongPassword', hash);
+    expect(isValid).toBe(false);
   });
 
-  it('returns 64-char hex string', async () => {
-    const hash = await sha256Hex('test123');
-    expect(hash).toHaveLength(64);
-    expect(/^[a-f0-9]+$/.test(hash)).toBe(true);
-  });
-
-  it('produces different hashes for different inputs', async () => {
-    const h1 = await sha256Hex('aaa');
-    const h2 = await sha256Hex('bbb');
-    expect(h1).not.toBe(h2);
+  it('produces different hashes with unique salts for identical passwords', async () => {
+    const pwd = 'commonPassword';
+    const hash1 = await hashPassword(pwd);
+    const hash2 = await hashPassword(pwd);
+    expect(hash1).not.toBe(hash2);
+    expect(await verifyPassword(pwd, hash1)).toBe(true);
+    expect(await verifyPassword(pwd, hash2)).toBe(true);
   });
 });
 
@@ -312,3 +315,4 @@ describe('getCenterAccessState', () => {
     expect(getCenterAccessState({ status: 'active', subscription_ends_at: null }, now)).toBeNull();
   });
 });
+

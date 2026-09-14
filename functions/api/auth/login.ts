@@ -1,4 +1,4 @@
-import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow, getCenterAccessState } from '../_lib';
+import { Env, json, readBody, hashPassword, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow, getCenterAccessState } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -35,8 +35,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
-    const hash = await sha256Hex(cleanPassword);
-    if (hash !== user.password_hash) {
+    const isPasswordValid = await verifyPassword(cleanPassword, user.password_hash);
+    if (!isPasswordValid) {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 

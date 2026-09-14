@@ -656,9 +656,6 @@ INSERT INTO subjects (name) VALUES
   ('التاريخ والجغرافيا (Histoire-Géo)'),
   ('الإقتصاد والتصرف (Économie-Gestion)');
 
--- Users (admin account, SHA-256 hashed password)
-INSERT INTO users (email, name, role, description, password_hash) VALUES
-  ('academy_system@gmail.com', 'إدارة Academy System (شاملة)', 'super_admin', 'جميع الصلاحيات', 'ff85c1201b1985d278c28a3f82f569a1ab412abe2ffb5a94f4b489bd020ae126');
 
 -- Indexes on foreign key columns
 CREATE INDEX IF NOT EXISTS idx_student_parents_student_id ON student_parents(student_id);

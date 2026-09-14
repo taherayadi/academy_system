@@ -103,13 +103,18 @@ export async function readBody<T = any>(request: Request): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Password hashing (WebCrypto)
+// Password hashing (bcrypt)
 // ---------------------------------------------------------------------------
 
-export async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+import * as bcrypt from 'bcryptjs';
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
 }
 
 // ---------------------------------------------------------------------------

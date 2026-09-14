@@ -1,4 +1,4 @@
-import { Env, json, readBody, validateSession, sha256Hex, DEFAULT_CENTER_ID, getCenterAccessState } from './_lib';
+import { Env, json, readBody, validateSession, hashPassword, DEFAULT_CENTER_ID, getCenterAccessState } from './_lib';
 import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
@@ -492,7 +492,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       subscriptionEndsAt = createdAt + offerDays * 86400000 + periodMs;
     }
 
-    const passwordHash = await sha256Hex(adminPassword);
+    const passwordHash = await hashPassword(adminPassword);
 
     const stmts: D1PreparedStatement[] = [];
 
@@ -1080,7 +1080,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     // Also update admin password if requested
     if (body.newAdminPassword && body.adminEmail) {
-      const newHash = await sha256Hex(String(body.newAdminPassword).trim());
+      const newHash = await hashPassword(String(body.newAdminPassword).trim());
       await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ? AND center_id = ?')
         .bind(newHash, String(body.adminEmail).trim().toLowerCase(), id).run();
     }

@@ -1,4 +1,4 @@
-import { Env, json, readBody, sha256Hex, consumeAuthRateLimit } from '../_lib';
+import { Env, json, readBody, hashPassword, verifyPassword, consumeAuthRateLimit } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -39,12 +39,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'الحساب غير موجود.' }, 404);
     }
 
-    const currentHash = await sha256Hex(cleanCurrent);
-    if (currentHash !== user.password_hash) {
+    const isCurrentValid = await verifyPassword(cleanCurrent, user.password_hash);
+    if (!isCurrentValid) {
       return json({ error: 'كلمة السر الحالية غير صحيحة.' }, 401);
     }
 
-    const newHash = await sha256Hex(cleanNew);
+    const newHash = await hashPassword(cleanNew);
     await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
       .bind(newHash, cleanEmail).run();
 
