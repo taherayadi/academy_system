@@ -1,4 +1,4 @@
-import { Env, json, readBody, validateSession, hashPassword, DEFAULT_CENTER_ID, getCenterAccessState } from './_lib';
+import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState } from './_lib';
 import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
@@ -231,9 +231,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'غير مصرح. يرجى تسجيل الدخول أولاً.' }, 401);
     }
 
-    const isPlatformAdmin = session.role === 'super_admin' || session.role === 'platform_super_admin';
+    // Only platform accounts authenticate to this application; validateSession
+    // already enforces the role. The legacy branch that answered a center
+    // session with its own tenant row was removed with the split — centers
+    // read their own tenant through their application, never through here.
+    if (session.role !== 'platform_super_admin') {
+      return json({ error: 'غير مصرح.' }, 403);
+    }
 
-    if (isPlatformAdmin) {
+    {
       const { results } = await env.DB.prepare(`
         SELECT
           c.id, c.name, c.slug, c.phone_number, c.location_city, c.plan,
@@ -339,38 +345,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       });
 
       return json({ centers: withSchedules });
-    } else {
-      const centerId = session.centerId || DEFAULT_CENTER_ID;
-      const center = await env.DB.prepare('SELECT * FROM centers WHERE id = ?').bind(centerId).first<any>();
-      if (!center) return json({ error: 'المركز غير موجود.' }, 404);
-
-      let modules: string[] = [];
-      try {
-        modules = typeof center.enabled_modules === 'string' ? JSON.parse(center.enabled_modules) : (center.enabled_modules || []);
-      } catch {
-        modules = [];
-      }
-
-      return json({
-        centers: [{
-          id: center.id,
-          name: center.name,
-          slug: center.slug || '',
-          phoneNumber: center.phone_number || '',
-          locationCity: center.location_city || '',
-          plan: center.plan || 'starter',
-          enabledModules: modules,
-          mealOperatingMode: center.meal_operating_mode || 'external_traiteur',
-          status: center.status || 'active',
-          trialEndsAt: center.trial_ends_at || null,
-          subscriptionEndsAt: center.subscription_ends_at || null,
-          billingCycle: center.billing_cycle || 'monthly',
-          monthlyPrice: center.monthly_price !== null ? Number(center.monthly_price) : 0,
-          centerType: center.center_type || '',
-          logoUrl: center.logo_url || '',
-          createdAt: center.created_at || Date.now()
-        }]
-      });
     }
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات المراكز.' }, 500);
@@ -381,7 +355,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح لك بإنشاء مراكز جديدة.' }, 403);
     }
 
@@ -602,7 +576,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح.' }, 403);
     }
 
@@ -1109,7 +1083,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح.' }, 403);
     }
 

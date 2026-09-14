@@ -1,7 +1,7 @@
 /**
  * PubNub realtime client (browser side).
  *
- * One shared PubNub instance per tab serves every consumer (App, RenewalModule,
+ * One shared PubNub instance per tab serves every consumer (here: the platform
  * PlatformAdminDashboard). Messages are **"refetch" signals only**: consumers
  * re-run their existing fetch/snapshot/toast handlers and NEVER trust the
  * pushed payload.

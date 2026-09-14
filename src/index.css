@@ -55,13 +55,6 @@ html {
   border-radius: 4px;
 }
 
-/* Respect users who prefer reduced motion: stop the landing marquee */
-@media (prefers-reduced-motion: reduce) {
-  .animate-marquee {
-    animation: none;
-  }
-}
-
 body {
   font-family: var(--font-sans);
   background-color: #f8fafc;

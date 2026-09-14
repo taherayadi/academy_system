@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { publish, grantToken, readPubNubKeySet, PUBNUB_GRANT_TTL_SECONDS } from './_pubnub';
+import { publish, grantToken, readPubNubKeySet, PUBNUB_GRANT_TTL_SECONDS, pubnubGrantTtlMinutes } from './_pubnub';
 
 /** Clés factices — JAMAIS de vraies clés dans le dépôt. */
 const KEYS = { PUBNUB_PUBLISH_KEY: 'test-pub', PUBNUB_SUBSCRIBE_KEY: 'test-sub', PUBNUB_SECRET_KEY: 'test-secret' };
@@ -118,7 +118,12 @@ describe('_pubnub — grantToken (PAM v3, HMAC-SHA256 signé)', () => {
 
     const body = String(init.body);
     const parsedBody = JSON.parse(body);
-    expect(parsedBody.ttl).toBe(PUBNUB_GRANT_TTL_SECONDS);
+    // PAM v3 `ttl` is MINUTES on the wire — the app constant is seconds.
+    // 600 s must be sent as 10 min, never raw 600 (which the provider would
+    // read as 10 HOURS). Regression guard for the unit bug of the combined app.
+    expect(parsedBody.ttl).toBe(pubnubGrantTtlMinutes());
+    expect(parsedBody.ttl).toBe(10);
+    expect(parsedBody.ttl).not.toBe(PUBNUB_GRANT_TTL_SECONDS);
     expect(parsedBody.permissions.uuid).toBe('uuid-1');
     expect(parsedBody.permissions.resources.channels).toEqual({ 'center.c1': 1 }); // read = bit 1
     expect(parsedBody.permissions.patterns).toEqual({});
@@ -141,5 +146,15 @@ describe('_pubnub — grantToken (PAM v3, HMAC-SHA256 signé)', () => {
     await expect(grantToken(envWithKeys as any, 'u', { channels: { platform: { read: true } } })).resolves.toBeNull();
 
     expect(console.warn).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('_pubnub — grant TTL unit conversion (provider API: minutes)', () => {
+  it('converts the seconds constant into whole minutes, minimum 1', () => {
+    expect(pubnubGrantTtlMinutes(600)).toBe(10);   // our 10-minute token
+    expect(pubnubGrantTtlMinutes(90)).toBe(2);     // rounds UP, never below the intended TTL
+    expect(pubnubGrantTtlMinutes(30)).toBe(1);     // sub-minute floors at the provider minimum
+    expect(pubnubGrantTtlMinutes(0)).toBe(1);
+    expect(PUBNUB_GRANT_TTL_SECONDS).toBe(600);    // client-facing value stays SECONDS
   });
 });

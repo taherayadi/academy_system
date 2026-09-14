@@ -22,6 +22,7 @@ import {
 import RenewalReviewModal from './RenewalReviewModal';
 import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
 import { planLabel } from '../utils/pricing';
+import { escapeHtml } from '../utils/html';
 
 const RENEWAL_STATUS_LABEL: Record<string, string> = {
   trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
@@ -2632,17 +2633,21 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   // Print a single invoice in a dedicated, print-ready window.
   const handlePrintInvoice = useCallback((inv: CenterInvoice) => {
     const frDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('fr-FR') : '—');
+    // SECURITY: every operator-entered invoice field is untrusted for the
+    // generated print document (notes / cheque number / center name can all
+    // carry markup) — escape before interpolation, no exceptions.
+    const esc = escapeHtml;
     const statusText = inv.status === 'paid' ? 'PAYÉE'
       : inv.status === 'overdue' ? 'EN RETARD'
       : inv.status === 'cancelled' ? 'ANNULÉE' : 'EN ATTENTE';
     const payLine = inv.paymentMethod === 'cheque'
-      ? `Chèque${inv.chequeNumber ? ` N° ${inv.chequeNumber}` : ''}${inv.chequeDate ? ` daté du ${frDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — en attente d’encaissement' : ''}`
+      ? `Chèque${inv.chequeNumber ? ` N° ${esc(inv.chequeNumber)}` : ''}${inv.chequeDate ? ` daté du ${frDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — en attente d’encaissement' : ''}`
       : inv.paymentMethod === 'cash' ? 'Espèces'
       : '—';
     const w = window.open('', '_blank', 'width=820,height=920');
     if (!w) { toast.error('Autorisez les fenêtres pop-up pour imprimer la facture.'); return; }
     w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" />
-<title>Facture ${inv.invoiceNumber}</title>
+<title>Facture ${esc(inv.invoiceNumber)}</title>
 <style>
   /* Margin 0 supprime l'en-tête/pied de page du navigateur (date, titre, URL « blank », n° de page). */
   @page { size: A4; margin: 0; }
@@ -2677,11 +2682,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 <div class="sheet">
   <div class="head">
     <div><h1>Facture d'abonnement</h1><div class="muted">Plateforme SaaS — gestion de centres</div></div>
-    <div style="text-align:right"><div style="font-weight:800;font-size:14px">${inv.invoiceNumber || '—'}</div>
+    <div style="text-align:right"><div style="font-weight:800;font-size:14px">${esc(inv.invoiceNumber) || '—'}</div>
       <div class="muted">Émise le ${frDate(inv.createdAt)}</div>
       <div style="margin-top:8px"><span class="badge">${statusText}</span></div></div>
   </div>
-  <div class="row"><span>Centre</span><b>${inv.centerName || '—'}</b></div>
+  <div class="row"><span>Centre</span><b>${esc(inv.centerName) || '—'}</b></div>
   <div class="row"><span>Période facturée</span><b>${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</b></div>
   <div class="row"><span>Mode de paiement</span><b>${payLine}</b></div>
   ${inv.paymentDate ? `<div class="row"><span>Payée le</span><b>${frDate(inv.paymentDate)}</b></div>` : ''}
@@ -2689,7 +2694,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   <tbody><tr><td>Abonnement plateforme SaaS — ${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</td>
   <td style="text-align:right;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
   <div class="total">Total : ${inv.amount.toFixed(2)} TND</div>
-  ${inv.notes ? `<div class="notes"><b>Notes :</b> ${inv.notes}</div>` : ''}
+  ${inv.notes ? `<div class="notes"><b>Notes :</b> ${esc(inv.notes)}</div>` : ''}
   <div class="sign"><div class="signbox">
     <div class="signspace"></div>
     <div class="signline"></div>

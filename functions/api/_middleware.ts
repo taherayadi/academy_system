@@ -1,34 +1,36 @@
 /**
- * Cloudflare Pages Functions middleware for /api/* routes.
+ * Cloudflare Pages Functions middleware for /api/* routes of the SaaS
+ * platform administration application.
  *
  * Every request to /api/* is intercepted here BEFORE reaching the handler.
- * The only path exempt from authentication is POST /api/auth/login.
- * Everything else — including /api/state (GET + PUT) and
- * /api/auth/password — requires a valid HttpOnly session cookie.
+ * The only paths exempt from authentication are the platform login itself
+ * and logout (which must be able to clear a broken/expired cookie).
+ *
+ * Unlike the former combined app there are NO public API paths: the landing
+ * page, public pricing and anonymous advertisement feeds live in the center
+ * application. Everything here requires a valid `platform_sessions` cookie
+ * (or Bearer token) whose account still holds the platform_super_admin role —
+ * center accounts can never obtain one.
  */
 import { Env, validateSession, json } from './_lib';
 
-/** Paths that do NOT require an authenticated session. */
+/** Paths that do NOT require an authenticated platform session. */
 const PUBLIC_PATHS: string[] = [
   '/api/auth/login',
   '/api/auth/logout',
-  '/api/demo-requests',
-  '/api/public-pricing',
-  // Read-only, filtered to is_active+is_published+date window (and center
-  // assignments) by the handler itself — needed by the anonymous landing page.
-  '/api/advertisements/active',
 ];
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next } = context;
   const url = new URL(request.url);
 
-  // Allow the login endpoint through without a session check.
+  // Allow the login/logout endpoints through without a session check.
   if (PUBLIC_PATHS.includes(url.pathname)) {
     return next();
   }
 
-  // All other /api/* routes require a valid, non-expired session cookie.
+  // All other /api/* routes require a valid, non-expired platform session
+  // (token issued by THIS app, account still exists, role still platform).
   const session = await validateSession(env.DB, request);
   if (!session) {
     return json({ error: 'غير مصرح. يرجى تسجيل الدخول أولاً.' }, 401);

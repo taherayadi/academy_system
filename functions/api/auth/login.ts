@@ -1,4 +1,19 @@
-import { Env, json, readBody, hashPassword, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow, getCenterAccessState } from '../_lib';
+/**
+ * POST /api/auth/login — platform console login.
+ *
+ * Hard rule of the split: ONLY `platform_super_admin` accounts may obtain a
+ * session here. Center roles (`admin`, `super_admin`, `restricted_admin`) are
+ * rejected exactly like a wrong password (same 401 message, no session row
+ * created, no cookie set), so this endpoint also cannot be used to enumerate
+ * which platform accounts exist. Session state lives in `platform_sessions`
+ * and the `tc_platform_session` cookie; the center application's `sessions`
+ * table / `tc_session` cookie are never consulted or minted from this app.
+ */
+import {
+  Env, json, readBody, verifyPassword,
+  createPlatformSession, makeSessionCookie, purgeExpiredSessions,
+  consumeAuthRateLimit, resetAuthRateLimit, PLATFORM_ROLE
+} from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -26,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     const user = await env.DB
-      .prepare('SELECT email, name, role, description, password_hash, center_id FROM users WHERE email = ?')
+      .prepare('SELECT email, name, role, description, password_hash FROM users WHERE email = ?')
       .bind(cleanEmail)
       .first<any>();
 
@@ -40,46 +55,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
+    // Correct password but not a platform account → indistinguishable from a
+    // wrong password for the caller; absolutely no session is created.
+    if (user.role !== PLATFORM_ROLE) {
+      return json({ error: 'كلمة السر غير صحيحة' }, 401);
+    }
+
     // Reset rate limits for this client IP on successful login.
     resetAuthRateLimit(env.DB, request).catch(() => {});
 
-    const centerId = user.center_id || DEFAULT_CENTER_ID;
-    const centerRow = await env.DB
-      .prepare('SELECT * FROM centers WHERE id = ?')
-      .bind(centerId)
-      .first<any>();
-
-    // A platform account is tenant-independent. Center accounts, however,
-    // must not receive a session after their trial or paid subscription ends.
-    if (user.role !== 'platform_super_admin' && centerRow) {
-      const accessState = getCenterAccessState(centerRow);
-      if (accessState) {
-        // Keep the platform card/status truthful after the first blocked login.
-        if (accessState === 'trial_expired' || accessState === 'subscription_expired') {
-          await env.DB.prepare('UPDATE centers SET status = ? WHERE id = ? AND status NOT IN (?, ?)')
-            .bind('expired', centerId, 'suspended', 'expired')
-            .run();
-        }
-        const messages: Record<string, string> = {
-          trial_expired: 'انتهت فترة التجربة لهذا المركز. يرجى التواصل مع إدارة المنصة.',
-          subscription_expired: 'انتهت صلاحية اشتراك هذا المركز. يرجى التواصل مع إدارة المنصة.',
-          suspended: 'تم تعليق هذا المركز. يرجى التواصل مع إدارة المنصة.',
-          expired: 'انتهت صلاحية هذا المركز. يرجى التواصل مع إدارة المنصة.'
-        };
-        return json({ error: messages[accessState] }, 403);
-      }
-    }
-
-    // Create a server-side session and return it as an HttpOnly cookie.
-    const token = await createSession(env.DB, cleanEmail, centerId);
+    // Create a server-side platform session and return it as an HttpOnly cookie.
+    const token = await createPlatformSession(env.DB, cleanEmail);
 
     // Opportunistically clean up expired sessions (fire-and-forget).
     purgeExpiredSessions(env.DB).catch(() => {});
-
-    // Map the raw DB row (snake_case) to the camelCase CenterTenant shape —
-    // the client reads `enabledModules` to decide which modules a center
-    // admin can see in the menu.
-    const center = centerRow ? mapCenterRow(centerRow) : null;
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -92,10 +81,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          description: user.description,
-          centerId
-        },
-        center
+          description: user.description
+        }
       }),
       {
         status: 200,

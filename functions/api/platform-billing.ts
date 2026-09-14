@@ -4,7 +4,7 @@ import { Env, json, readBody, validateSession } from './_lib';
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح. يتطلب صلاحيات Platform Admin.' }, 403);
     }
 
@@ -140,7 +140,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح.' }, 403);
     }
 
@@ -196,7 +196,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح.' }, 403);
     }
 
@@ -265,7 +265,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'غير مصرح.' }, 403);
     }
 

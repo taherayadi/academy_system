@@ -82,8 +82,11 @@ async function computePeriodAmount(
 }
 
 async function isAuthorized(env: Env, request: Request): Promise<boolean> {
+  // Platform console only: a valid session is already role-checked by
+  // validateSession; the explicit comparison is defense in depth against a
+  // center role ever reaching this handler.
   const session = await validateSession(env.DB, request);
-  return !!session && (session.role === 'super_admin' || session.role === 'platform_super_admin');
+  return !!session && session.role === 'platform_super_admin';
 }
 
 // GET /api/center-plans?centerId=… — everything the plan manager needs

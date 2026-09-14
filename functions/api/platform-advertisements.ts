@@ -61,7 +61,7 @@ function adsRequireCenters(location: unknown): boolean {
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'Accès refusé à la console plateforme.' }, 403);
     }
 
@@ -92,7 +92,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'Accès refusé.' }, 403);
     }
 
@@ -183,7 +183,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'Accès refusé.' }, 403);
     }
 
@@ -334,7 +334,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
+    if (!session || session.role !== 'platform_super_admin') {
       return json({ error: 'Accès refusé.' }, 403);
     }
 

@@ -1,10 +1,29 @@
+/**
+ * /api/renewal-requests — platform-side review queue.
+ *
+ * The split keeps only what the SaaS console needs:
+ *   • GET   — list every center's requests (optionally filtered by centerId)
+ *             together with the plan history of the queried center.
+ *   • PATCH — approve / reject a request (apply the plan, log history,
+ *             publish the realtime refetch signal).
+ *
+ * `POST` (a center depositing a request) intentionally no longer exists here:
+ * centers submit from their own application (academy_system), which keeps its
+ * own copy of the submission handler. A POST against this deployment falls
+ * through to the platform session middleware and then to a 405 from Pages
+ * Functions (no exported onRequestPost) — a controlled rejection, never a
+ * silent success.
+ *
+ * Every route variant is additionally gated by functions/api/_middleware.ts,
+ * which accepts ONLY platform_sessions (tc_platform_session / platform bearer
+ * tokens) — center credentials can never reach this handler at all.
+ */
 import {
   Env,
   json,
   readBody,
-  ensureSessionsTable,
-  getSessionToken,
-  DEFAULT_CENTER_ID,
+  validateSession,
+  PLATFORM_ROLE,
 } from './_lib';
 import { logPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
@@ -15,33 +34,6 @@ const PLANS = new Set(['starter', 'growth', 'pro', 'custom']);
 const CYCLES = new Set(['monthly', 'annual']);
 const KINDS = new Set(['renewal', 'upgrade']);
 const STATUSES = new Set(['pending', 'approved', 'rejected']);
-
-/**
- * Like validateSession, but a center whose trial/subscription has ended keeps
- * its access here: an expired center is exactly the one that must be able to
- * ask for a renewal. Every other endpoint keeps the strict rule.
- */
-async function sessionAllowingExpired(db: D1Database, request: Request) {
-  const token = getSessionToken(request);
-  if (!token) return null;
-  await ensureSessionsTable(db);
-  const row = await db
-    .prepare(
-      `SELECT s.email, s.token, COALESCE(s.center_id, u.center_id, ?) as center_id, u.role
-       FROM sessions s LEFT JOIN users u ON s.email = u.email
-       WHERE s.token = ? AND s.expires_at > ?`
-    )
-    .bind(DEFAULT_CENTER_ID, token, Date.now())
-    .first<any>();
-  if (!row) return null;
-  return {
-    email: String(row.email || ''),
-    centerId: String(row.center_id || DEFAULT_CENTER_ID),
-    role: String(row.role || ''),
-  };
-}
-
-const isPlatformAdmin = (role: string) => role === 'super_admin' || role === 'platform_super_admin';
 
 function parseJson<T>(value: unknown, fallback: T): T {
   if (!value) return fallback;
@@ -85,18 +77,24 @@ async function tableExists(db: D1Database): Promise<boolean> {
   }
 }
 
-// GET /api/renewal-requests — ses propres demandes (centre) ou toutes (plateforme)
+/** Session gate: a valid platform session (role re-checked by validateSession). */
+async function requirePlatform(env: Env, request: Request) {
+  const session = await validateSession(env.DB, request);
+  if (!session || session.role !== PLATFORM_ROLE) return null;
+  return session;
+}
+
+// GET /api/renewal-requests — toutes les demandes (plateforme), filtre centerId optionnel
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
-    const session = await sessionAllowingExpired(env.DB, request);
-    if (!session) return json({ error: 'Session expirée.' }, 401);
+    const session = await requirePlatform(env, request);
+    if (!session) return json({ error: 'غير مصرح.' }, 401);
 
     if (!(await tableExists(env.DB))) return json({ requests: [], history: [] });
 
     const url = new URL(request.url);
     const requestedCenterId = String(url.searchParams.get('centerId') || '').trim();
-    const platform = isPlatformAdmin(session.role);
-    const centerId = platform ? (requestedCenterId || null) : session.centerId;
+    const centerId = requestedCenterId || null;
 
     let requests: any[] = [];
     if (centerId) {
@@ -106,7 +104,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
          WHERE r.center_id = ? ORDER BY r.created_at DESC`
       ).bind(centerId).all<any>();
       requests = (results || []).map(mapRequest);
-    } else if (platform) {
+    } else {
       const { results } = await env.DB.prepare(
         `SELECT r.*, c.name as center_name
          FROM renewal_requests r LEFT JOIN centers c ON c.id = r.center_id
@@ -143,107 +141,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   }
 };
 
-// POST /api/renewal-requests — le centre dépose une demande
-export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { env, request } = context;
-  try {
-    const session = await sessionAllowingExpired(env.DB, request);
-    if (!session) return json({ error: 'Session expirée.' }, 401);
-
-    const centerId = session.centerId;
-    const center = await env.DB.prepare(
-      `SELECT id, name, plan, billing_cycle, enabled_modules, subscription_ends_at, status
-       FROM centers WHERE id = ?`
-    ).bind(centerId).first<any>();
-    if (!center) return json({ error: 'المركز غير موجود.' }, 404);
-
-    const body = await readBody<any>(request);
-    const requestedPlan = String(body.requestedPlan || '').trim();
-    if (!PLANS.has(requestedPlan)) return json({ error: 'Offre demandée invalide.' }, 400);
-
-    const billingCycle = String(body.billingCycle || 'monthly').trim();
-    if (!CYCLES.has(billingCycle)) return json({ error: 'Cycle de facturation invalide.' }, 400);
-
-    const kind = KINDS.has(String(body.kind)) ? String(body.kind) : 'renewal';
-
-    const rawModules = Array.isArray(body.requestedModules) ? body.requestedModules.map(String) : [];
-    const requestedModules = Array.from(new Set(rawModules)).slice(0, 50);
-
-    const amountRaw = Number(body.amount);
-    const amount = Number.isFinite(amountRaw) && amountRaw >= 0 ? amountRaw : null;
-
-    if (!(await tableExists(env.DB))) {
-      return json({ error: 'Table des demandes absente — appliquez la migration 0033.' }, 503);
-    }
-
-    const now = Date.now();
-    const currentEnd = Number(center.subscription_ends_at) || 0;
-    // Renouvellement → à l'échéance en cours ; upgrade → dès que possible.
-    const effectiveAt = kind === 'upgrade'
-      ? now
-      : (currentEnd > now ? currentEnd : now);
-
-    const modulesJson = JSON.stringify(requestedModules);
-    const currentModulesJson = String(center.enabled_modules || '[]');
-
-    // Garde-fou anti double-clic : même demande déjà en attente.
-    const duplicate = await env.DB.prepare(
-      `SELECT id FROM renewal_requests
-       WHERE center_id = ? AND status = 'pending' AND kind = ? AND requested_plan = ?
-         AND billing_cycle = ? AND requested_modules = ? AND COALESCE(amount, -1) = ?
-       LIMIT 1`
-    ).bind(centerId, kind, requestedPlan, billingCycle, modulesJson, amount === null ? -1 : amount).first<any>();
-    if (duplicate) return json({ error: 'Une demande identique est déjà en attente.' }, 409);
-
-    const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO renewal_requests
-         (id, center_id, kind, current_plan, current_status, current_modules, requested_plan, requested_modules,
-          billing_cycle, amount, status, effective_at, note, decision_note, decided_by, decided_at,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, '', '', NULL, ?, ?)`
-    ).bind(
-      id,
-      centerId,
-      kind,
-      String(center.plan || ''),
-      String(center.status || ''),
-      currentModulesJson,
-      requestedPlan,
-      modulesJson,
-      billingCycle,
-      amount,
-      effectiveAt,
-      String(body.note || '').slice(0, 500),
-      now,
-      now
-    ).run();
-
-    // Signal temps réel « nouvelle demande » → tableau de bord plateforme
-    // (fire-and-forget : ne peut jamais faire échouer la requête).
-    publishOnResponse(context, env, ['platform'], {
-      type: 'refetch',
-      topic: 'renewal_request_created',
-      centerId,
-      at: now,
-    });
-
-    return json({ success: true, id, status: 'pending' }, 201);
-  } catch (err) {
-    console.error('Error creating renewal request:', err);
-    return json({ error: 'Erreur lors de la création de la demande.' }, 500);
-  }
-};
-
 // PATCH /api/renewal-requests — la plateforme accepte ou refuse
 export const onRequestPatch: PagesFunction<Env> = async (context) => {
   const { env, request } = context;
   try {
-    const session = await sessionAllowingExpired(env.DB, request);
-    if (!session) return json({ error: 'Session expirée.' }, 401);
-    if (!isPlatformAdmin(session.role)) {
-      return json({ error: 'Accès refusé — réservé à la plateforme.' }, 403);
-    }
+    const session = await requirePlatform(env, request);
+    if (!session) return json({ error: 'غير مصرح.' }, 401);
 
     const body = await readBody<any>(request);
     const id = String(body.id || '').trim();
@@ -313,8 +216,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     ).bind(status, decisionNote, session.email, now, now, id).run();
 
     // Signal temps réel « décision rendue » (acceptée ET refusée, chemin
-    // direct comme chemin modal skipApply) → le centre rafraîchit ses
-    // demandes et son abonnement en ~2 s, sans attendre le tick de polling.
+    // direct comme chemin skipApply). Le centre reçoit l'info sur son propre
+    // canal via l'application centre ; la console plateforme rafraîchit la
+    // sienne sur le canal `platform`.
     publishOnResponse(context, env, ['center.' + String(row.center_id), 'platform'], {
       type: 'refetch',
       topic: 'renewal_request_decided',
@@ -329,4 +233,5 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
   }
 };
 
-export { STATUSES };
+// Exposed for tests: the submission vocabulary accepted by the review flow.
+export { STATUSES, PLANS, CYCLES, KINDS };

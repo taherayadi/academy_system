@@ -28,8 +28,22 @@ const PUBNUB_ORIGIN = 'https://ps.pndsn.com';
 /** UUID used as the publisher identity for server-side publishes. */
 const SERVER_UUID = 'academy-platform-server';
 
-/** Lifetime of granted tokens (seconds) — short on purpose. */
+/**
+ * Lifetime of granted tokens — short on purpose — expressed in SECONDS
+ * because the browser client schedules its refresh in seconds.
+ *
+ * ⚠️ Provider unit check: the PubNub PAM v3 grant REST endpoint
+ * (`POST /v3/pam/{sub-key}/grant`) expects `ttl` in MINUTES, not seconds.
+ * The combined app used to send the seconds value raw (600 ⇒ 10 HOURS,
+ * silently 60× the intended lifetime). Here the value stays seconds in the
+ * app/API boundary and is converted for the wire in `grantToken()` below.
+ */
 export const PUBNUB_GRANT_TTL_SECONDS = 600;
+
+/** Convert our seconds-based TTL to the provider's minutes-based `ttl`. */
+export function pubnubGrantTtlMinutes(ttlSeconds = PUBNUB_GRANT_TTL_SECONDS): number {
+  return Math.max(1, Math.ceil(ttlSeconds / 60));
+}
 
 interface PubNubKeySet {
   publishKey: string;
@@ -199,7 +213,9 @@ export async function grantToken(
   try {
     const path = `/v3/pam/${keys.subscribeKey}/grant`;
     const body = JSON.stringify({
-      ttl: PUBNUB_GRANT_TTL_SECONDS,
+      // PAM v3 grant: `ttl` is in MINUTES (provider API). See the unit note
+      // on PUBNUB_GRANT_TTL_SECONDS — never send raw seconds here.
+      ttl: pubnubGrantTtlMinutes(),
       permissions: {
         uuid: String(uuid || SERVER_UUID),
         resources: { channels },

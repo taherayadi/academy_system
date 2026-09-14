@@ -1,50 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS } from './useLiveSync';
-import type { CenterTenant } from '../types';
+import { useLiveSync, LIVE_SYNC_INTERVAL_MS } from './useLiveSync';
 
-const center = (over: Record<string, unknown> = {}): CenterTenant => ({
-  id: 'c1',
-  name: 'Centre Alpha',
-  plan: 'starter',
-  enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
-  status: 'active',
-  trialEndsAt: null,
-  subscriptionEndsAt: 9999999999999,
-  billingCycle: 'monthly',
-  monthlyPrice: 90,
-  createdAt: 0,
-  ...over,
-} as CenterTenant);
-
-describe('subscriptionSnapshot', () => {
-  it('is stable for identical centers and null-safe', () => {
-    expect(subscriptionSnapshot(center())).toBe(subscriptionSnapshot(center()));
-    expect(subscriptionSnapshot(null)).toBe('none');
-    expect(subscriptionSnapshot(undefined)).toBe('none');
-  });
-
-  it('detects every field the platform may change on accept', () => {
-    const base = subscriptionSnapshot(center());
-    expect(subscriptionSnapshot(center({ plan: 'growth' }))).not.toBe(base);
-    expect(subscriptionSnapshot(center({ status: 'expired' }))).not.toBe(base);
-    expect(subscriptionSnapshot(center({ billingCycle: 'annual' }))).not.toBe(base);
-    expect(subscriptionSnapshot(center({ monthlyPrice: 165 }))).not.toBe(base);
-    expect(subscriptionSnapshot(center({ subscriptionEndsAt: 1111111111111 }))).not.toBe(base);
-    expect(subscriptionSnapshot(center({ trialEndsAt: 1111111111111 }))).not.toBe(base);
-    expect(
-      subscriptionSnapshot(center({ enabledModules: ['scolaire', 'finance', 'studentTimeSheets', 'etude'] }))
-    ).not.toBe(base);
-  });
-
-  it('ignores module order and cosmetic fields', () => {
-    const base = subscriptionSnapshot(center());
-    expect(
-      subscriptionSnapshot(center({ enabledModules: ['finance', 'studentTimeSheets', 'scolaire'] }))
-    ).toBe(base);
-    expect(subscriptionSnapshot(center({ name: 'Renamed', logoUrl: 'https://x/y.png' }))).toBe(base);
-  });
-});
+// (subscriptionSnapshot — the center-side staleness helper — was removed with
+// the center application; the platform shell never compares tenant states.)
 
 describe('useLiveSync', () => {
   beforeEach(() => {

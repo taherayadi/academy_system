@@ -1,17 +1,24 @@
+/**
+ * Platform-console login screen.
+ *
+ * Only a `platform_super_admin` account can get past this screen — and the
+ * role check happens on the SERVER (POST /api/auth/login answers 401 for
+ * every other role, indistinguishable from a wrong password). Center
+ * accounts (admin / super_admin / restricted_admin) belong to the center
+ * application and never see it here.
+ */
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
-import { UserAccount, CenterTenant } from '../types';
+import { UserAccount } from '../types';
 import { verifyPassword } from '../auth';
 import icon from '../assets/icon.png';
 
 interface LoginScreenProps {
-  onLogin: (user: UserAccount, center?: CenterTenant | null) => void;
-  centerName?: string;
-  onBackToLanding?: () => void;
+  onLogin: (user: UserAccount) => void | Promise<void>;
 }
 
-export default function LoginScreen({ onLogin, centerName, onBackToLanding }: LoginScreenProps) {
+export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -38,8 +45,8 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
     }
 
     try {
-      const { user, center } = await verifyPassword(cleanEmail, password.trim());
-      onLogin(user, center);
+      const { user } = await verifyPassword(cleanEmail, password.trim());
+      await onLogin(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'كلمة السر غير صحيحة');
     } finally {
@@ -67,22 +74,13 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
 
         {/* Header — light, landing-style */}
         <div className="px-8 pt-8 pb-6 text-center relative bg-gradient-to-b from-[#257C86]/[0.06] to-transparent border-b border-slate-100">
-          {onBackToLanding && (
-            <button
-              onClick={onBackToLanding}
-              className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-[#257C86] rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
-              title="العودة إلى الموقع التعريفي"
-            >
-              <span>← الموقع التعريفي</span>
-            </button>
-          )}
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-[#257C86] shadow-lg shadow-[#257C86]/25 flex items-center justify-center ring-1 ring-white/40">
-            <img src={icon} alt={centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
+            <img src={icon} alt="System Academy SaaS" className="center-logo-img w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900">{centerName || 'المركز'}</h1>
+          <h1 className="text-2xl font-black text-slate-900">إدارة المنصة</h1>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1.5 rounded-full bg-[#257C86]/10 border border-[#257C86]/20">
             <ShieldCheck className="h-3.5 w-3.5 text-[#257C86]" />
-            <span className="text-[11px] font-black text-[#257C86]">تسجيل الدخول الإداري</span>
+            <span className="text-[11px] font-black text-[#257C86]">دخول إدارة المنصة (SaaS) فقط</span>
           </div>
         </div>
 
@@ -150,7 +148,7 @@ export default function LoginScreen({ onLogin, centerName, onBackToLanding }: Lo
           </form>
 
           <p className="text-[11px] text-slate-400 text-center font-bold pt-1">
-            منظومة {centerName || 'المركز'} © 2026
+            System Academy SaaS © 2026
           </p>
 
         </div>

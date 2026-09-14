@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { onRequestPost, onRequestPatch } from './platform-advertisements';
-import { onRequestGet as onActiveGet } from './advertisements/active';
 
 vi.mock('./_lib', () => ({
   validateSession: vi.fn(async () => ({ role: 'platform_super_admin', email: 'root@test.tn' })),
@@ -160,32 +159,7 @@ describe('platform-advertisements — positions', () => {
   });
 });
 
-describe('advertisements/active — « both » visibility', () => {
-  it('landing page query expands to both; center query joins centers; custom does not expand', async () => {
-    const seen: string[] = [];
-    const spy: any = {
-      prepare(sql: string) {
-        if (!sql.includes('SELECT positions FROM')) seen.push(sql);
-        return {
-          bind() { return { all: async () => ({ results: [] }) }; },
-          first: async () => null,
-        };
-      },
-    };
-    await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=landing_page') } as any);
-    expect(seen[0]).toContain("OR a.location = 'both'");
-    await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=center_admin&centerId=c1') } as any);
-    expect(seen[1]).toContain('INNER JOIN advertisement_centers');
-    expect(seen[1]).toContain("OR a.location = 'both'");
-    await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=cantine') } as any);
-    expect(seen[2]).not.toContain("'both'");
-  });
-
-  it('center_admin without a center context returns nothing (no leak across centers)', async () => {
-    const spy: any = { prepare() { throw new Error('should not query'); } };
-    // (la sonde de colonnes est appelée après le retour anticipé → ne doit jamais être atteinte ici)
-    const res = await onActiveGet({ env: { DB: spy }, request: new Request('https://x.test/api/advertisements/active?location=center_admin') } as any);
-    const data = await res.json() as any;
-    expect(data.advertisements).toEqual([]);
-  });
-});
+// The public GET /api/advertisements/active feed (landing page + center
+// dashboard rendering) now lives in the center application; its "both"
+// visibility tests moved there with the endpoint. This file covers the
+// platform's own management surface: create / update / assign / delete.

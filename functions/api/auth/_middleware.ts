@@ -1,6 +1,10 @@
 /**
- * Rate-limit every POST under /api/auth/* to 5 requests per 60 seconds per IP.
- * The 6th attempt in the window is rejected with 429 + Retry-After.
+ * Rate-limit every POST under /api/auth/* to 10 requests per 60 seconds per IP.
+ * The limit beyond that is rejected with 429 + Retry-After.
+ *
+ * The counter keys live in the shared `rate_limits` table but use the
+ * `platform-auth:` prefix, so brute-force attempts against this app cannot be
+ * used to lock the center application's login (and vice versa).
  */
 import { Env, consumeAuthRateLimit } from '../_lib';
 

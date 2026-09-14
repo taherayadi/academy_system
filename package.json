@@ -1,9 +1,9 @@
 {
-  "name": "system-academy",
+  "name": "system-academy-admin",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "System Academy - school management system (Cloudflare Pages + D1)",
+  "description": "System Academy SaaS — platform administration console (Cloudflare Pages + shared D1)",
   "author": "Taher Ayadi",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -12,8 +12,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "pages:dev": "wrangler pages dev --port 8788",
-    "pages:deploy": "wrangler pages deploy dist",
-    "deploy": "npm run build && wrangler pages deploy dist",
+    "pages:deploy": "wrangler pages deploy dist --project-name system-academy-admin",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name system-academy-admin",
     "d1:migrate": "wrangler d1 migrations apply academy-system-v2 --remote",
     "d1:migrate:local": "wrangler d1 migrations apply academy-system-v2 --local",
     "test": "vitest run --config vitest.config.ts && vitest run --config vitest.config.node.ts",
@@ -29,7 +29,6 @@
     "bcryptjs": "^3.0.3",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "pdfjs-dist": "^4.10.38",
     "pubnub": "^13.0.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1"

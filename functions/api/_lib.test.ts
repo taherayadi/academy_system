@@ -5,12 +5,14 @@ import {
   readBody,
   hashPassword,
   verifyPassword,
-  getSessionToken,
+  getPlatformSessionToken,
   isHttpsRequest,
   makeSessionCookie,
   clearSessionCookie,
   mapCenterRow,
   getCenterAccessState,
+  removedRouteResponse,
+  PLATFORM_SESSION_COOKIE,
 } from './_lib';
 
 // ---------------------------------------------------------------------------
@@ -127,46 +129,58 @@ describe('hashPassword & verifyPassword', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getSessionToken
+// getPlatformSessionToken — platform cookie ONLY, never the center app's
 // ---------------------------------------------------------------------------
-describe('getSessionToken', () => {
+describe('getPlatformSessionToken', () => {
   it('extracts token from Cookie header', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=abc123; other=xyz' },
+      headers: { Cookie: 'tc_platform_session=abc123; other=xyz' },
     });
-    expect(getSessionToken(req)).toBe('abc123');
+    expect(getPlatformSessionToken(req)).toBe('abc123');
   });
 
   it('returns null when no Cookie header', () => {
     const req = new Request('https://x.com');
-    expect(getSessionToken(req)).toBeNull();
+    expect(getPlatformSessionToken(req)).toBeNull();
   });
 
-  it('returns null when tc_session cookie not present', () => {
+  it('returns null when the platform cookie is not present', () => {
     const req = new Request('https://x.com', {
       headers: { Cookie: 'other=value' },
     });
-    expect(getSessionToken(req)).toBeNull();
+    expect(getPlatformSessionToken(req)).toBeNull();
+  });
+
+  it('IGNORES the center application\'s tc_session cookie (session isolation)', () => {
+    const req = new Request('https://x.com', {
+      headers: { Cookie: 'tc_session=center-credential; x=1' },
+    });
+    expect(getPlatformSessionToken(req)).toBeNull();
+  });
+
+  it('reads the Bearer token (validated later against platform_sessions only)', () => {
+    const req = new Request('https://x.com', { headers: { Authorization: 'Bearer bearer-1' } });
+    expect(getPlatformSessionToken(req)).toBe('bearer-1');
   });
 
   it('decodes URL-encoded token', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=hello%20world' },
+      headers: { Cookie: 'tc_platform_session=hello%20world' },
     });
-    expect(getSessionToken(req)).toBe('hello world');
+    expect(getPlatformSessionToken(req)).toBe('hello world');
   });
 
   it('handles cookie with empty value', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=; other=val' },
+      headers: { Cookie: 'tc_platform_session=; other=val' },
     });
-    expect(getSessionToken(req)).toBeNull();
+    expect(getPlatformSessionToken(req)).toBeNull();
   });
 
   it('works with lowercase "cookie" header', () => {
     const req = new Request('https://x.com');
-    req.headers.set('cookie', 'tc_session=token123');
-    expect(getSessionToken(req)).toBe('token123');
+    req.headers.set('cookie', 'tc_platform_session=token123');
+    expect(getPlatformSessionToken(req)).toBe('token123');
   });
 });
 
@@ -206,7 +220,7 @@ describe('makeSessionCookie', () => {
   it('builds cookie with HttpOnly and SameSite=Lax', () => {
     const req = new Request('https://example.com');
     const cookie = makeSessionCookie('tok123', req);
-    expect(cookie).toContain('tc_session=tok123');
+    expect(cookie).toContain('tc_platform_session=tok123');
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Path=/');
@@ -234,7 +248,7 @@ describe('clearSessionCookie', () => {
     const req = new Request('https://example.com');
     const cookie = clearSessionCookie(req);
     expect(cookie).toContain('Max-Age=0');
-    expect(cookie).toContain('tc_session=');
+    expect(cookie).toContain('tc_platform_session=');
   });
 });
 
@@ -316,3 +330,45 @@ describe('getCenterAccessState', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Platform cookie flags + controlled 404
+// ---------------------------------------------------------------------------
+describe('makeSessionCookie — platform session flags', () => {
+  it('uses the platform cookie name with HttpOnly/SameSite=Lax/Path=/', () => {
+    const req = new Request('https://admin.example.tn/api/auth/login', { method: 'POST' });
+    const cookie = makeSessionCookie('tok-1', req);
+    expect(cookie.startsWith('tc_platform_session=tok-1;')).toBe(true);
+    expect(PLATFORM_SESSION_COOKIE).toBe('tc_platform_session');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).toContain('Path=/');
+    expect(cookie).toContain('Secure'); // https request
+    expect(cookie).not.toContain('tc_session='); // never the center cookie name
+  });
+
+  it('omits Secure over plain http (local wrangler dev) but stays HttpOnly', () => {
+    const req = new Request('http://localhost:8788/api/auth/login', { method: 'POST' });
+    const cookie = makeSessionCookie('tok-1', req);
+    expect(cookie).not.toContain('Secure');
+    expect(cookie).toContain('HttpOnly');
+  });
+
+  it('clearSessionCookie expires the platform cookie', () => {
+    const req = new Request('https://admin.example.tn/api/auth/logout', { method: 'POST' });
+    const cookie = clearSessionCookie(req);
+    expect(cookie).toContain('tc_platform_session=;');
+    expect(cookie).toContain('Max-Age=0');
+  });
+});
+
+describe('removedRouteResponse', () => {
+  it('answers removed center routes with a controlled JSON 404', async () => {
+    const res = removedRouteResponse();
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Content-Type')).toContain('application/json');
+    const data = await res.json() as any;
+    expect(data.code).toBe('ROUTE_REMOVED');
+    expect(typeof data.error).toBe('string');
+  });
+});

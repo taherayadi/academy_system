@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
-import type { CenterTenant } from '../types';
 
-/** How often a center session re-checks its subscription state (30 s). */
+/**
+ * Polling cadence used by the platform dashboard while no realtime PubNub
+ * signal is active (30 s). On the SaaS console this refreshes platform
+ * aggregates (centers, invoices, requests) — there are no center sessions.
+ */
 export const LIVE_SYNC_INTERVAL_MS = 30000;
-/** Fast cadence while one of the center's requests is still pending (5 s). */
-export const LIVE_SYNC_FAST_INTERVAL_MS = 5000;
 
 /**
  * Runs `handler` every `intervalMs` while the page is open and visible.
@@ -49,22 +50,4 @@ export function useLiveSync(
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [enabled, intervalMs]);
-}
-
-/**
- * Comparable snapshot of everything the platform may change on a center
- * when it accepts a renewal / plan-change request. Compared as a string:
- * any difference means the UI state is stale and must be replaced.
- */
-export function subscriptionSnapshot(center: CenterTenant | null | undefined): string {
-  if (!center) return 'none';
-  return JSON.stringify({
-    status: center.status ?? null,
-    plan: center.plan ?? null,
-    billingCycle: center.billingCycle ?? null,
-    monthlyPrice: Number(center.monthlyPrice) || 0,
-    modules: [...((center.enabledModules as string[] | undefined) || [])].sort(),
-    subscriptionEndsAt: center.subscriptionEndsAt ?? null,
-    trialEndsAt: center.trialEndsAt ?? null,
-  });
 }
