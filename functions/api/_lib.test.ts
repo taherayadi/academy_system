@@ -1,17 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  getClientIp,
-  json,
-  readBody,
-  hashPassword,
-  verifyPassword,
-  getSessionToken,
-  isHttpsRequest,
-  makeSessionCookie,
-  clearSessionCookie,
-  mapCenterRow,
-  getCenterAccessState,
-} from './_lib';
+import { getClientIp, json, readBody, hashPassword, verifyPassword, getSessionToken, isHttpsRequest, makeSessionCookie, clearSessionCookie, mapCenterRow, getCenterAccessState } from './_lib';
 
 // ---------------------------------------------------------------------------
 // getClientIp
@@ -132,7 +120,7 @@ describe('hashPassword & verifyPassword', () => {
 describe('getSessionToken', () => {
   it('extracts token from Cookie header', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=abc123; other=xyz' },
+      headers: { Cookie: 'tc_center_session=abc123; other=xyz' },
     });
     expect(getSessionToken(req)).toBe('abc123');
   });
@@ -142,7 +130,7 @@ describe('getSessionToken', () => {
     expect(getSessionToken(req)).toBeNull();
   });
 
-  it('returns null when tc_session cookie not present', () => {
+  it('returns null when tc_center_session cookie not present', () => {
     const req = new Request('https://x.com', {
       headers: { Cookie: 'other=value' },
     });
@@ -151,21 +139,21 @@ describe('getSessionToken', () => {
 
   it('decodes URL-encoded token', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=hello%20world' },
+      headers: { Cookie: 'tc_center_session=hello%20world' },
     });
     expect(getSessionToken(req)).toBe('hello world');
   });
 
   it('handles cookie with empty value', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=; other=val' },
+      headers: { Cookie: 'tc_center_session=; other=val' },
     });
     expect(getSessionToken(req)).toBeNull();
   });
 
   it('works with lowercase "cookie" header', () => {
     const req = new Request('https://x.com');
-    req.headers.set('cookie', 'tc_session=token123');
+    req.headers.set('cookie', 'tc_center_session=token123');
     expect(getSessionToken(req)).toBe('token123');
   });
 });
@@ -206,7 +194,7 @@ describe('makeSessionCookie', () => {
   it('builds cookie with HttpOnly and SameSite=Lax', () => {
     const req = new Request('https://example.com');
     const cookie = makeSessionCookie('tok123', req);
-    expect(cookie).toContain('tc_session=tok123');
+    expect(cookie).toContain('tc_center_session=tok123');
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Path=/');
@@ -234,7 +222,7 @@ describe('clearSessionCookie', () => {
     const req = new Request('https://example.com');
     const cookie = clearSessionCookie(req);
     expect(cookie).toContain('Max-Age=0');
-    expect(cookie).toContain('tc_session=');
+    expect(cookie).toContain('tc_center_session=');
   });
 });
 
@@ -315,4 +303,3 @@ describe('getCenterAccessState', () => {
     expect(getCenterAccessState({ status: 'active', subscription_ends_at: null }, now)).toBeNull();
   });
 });
-

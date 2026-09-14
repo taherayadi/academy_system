@@ -130,7 +130,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // enabledModules: undefined = all enabled (backward compat). Otherwise filter by list.
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
 
-  // Services attached to a SaaS module are hidden from every service list
+  // Services attached to a subscription module are hidden from every service list
   // (payment type filter, payment forms...) when the center's plan does not
   // include the module — e.g. no 'Repas' without the Cantine module.
   const SERVICE_MODULE: Record<string, string> = {

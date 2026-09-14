@@ -1,13 +1,11 @@
-import { Env, json, validateSession, deleteSession, clearSessionCookie } from '../_lib';
+import { Env, json, getSessionToken, deleteSession, clearSessionCookie } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
     // Delete the session row if one exists.
     // We handle the case where the session is already expired gracefully.
-    const session = await validateSession(env.DB, request);
-    if (session) {
-      await deleteSession(env.DB, session.token);
-    }
+    const token = getSessionToken(request);
+    if (token) await deleteSession(env.DB, token);
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');

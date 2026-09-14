@@ -71,9 +71,9 @@ describe('_pubnub — publish (fire-and-forget REST publish)', () => {
     );
     const timestamp = url.searchParams.get('timestamp') || '';
     expect(Number(timestamp)).toBeGreaterThan(0);
-    expect(url.searchParams.get('uuid')).toBe('academy-platform-server');
+    expect(url.searchParams.get('uuid')).toBe('academy-center-server');
     expect(url.searchParams.get('signature')).toBe(
-      expectedSignature('GET', 'test-pub', url.pathname, { uuid: 'academy-platform-server', timestamp }, '', 'test-secret')
+      expectedSignature('GET', 'test-pub', url.pathname, { uuid: 'academy-center-server', timestamp }, '', 'test-secret')
     );
   });
 
@@ -118,7 +118,7 @@ describe('_pubnub — grantToken (PAM v3, HMAC-SHA256 signé)', () => {
 
     const body = String(init.body);
     const parsedBody = JSON.parse(body);
-    expect(parsedBody.ttl).toBe(PUBNUB_GRANT_TTL_SECONDS);
+    expect(parsedBody.ttl).toBe(PUBNUB_GRANT_TTL_SECONDS / 60);
     expect(parsedBody.permissions.uuid).toBe('uuid-1');
     expect(parsedBody.permissions.resources.channels).toEqual({ 'center.c1': 1 }); // read = bit 1
     expect(parsedBody.permissions.patterns).toEqual({});

@@ -1,93 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  LayoutDashboard,
-  GraduationCap,
-  BookOpen,
-  Clock,
-  BookMarked,
-  Utensils,
-  DollarSign,
-  Users,
-  Bus,
-  Menu,
-  X,
-  Sparkles,
-  Settings as SettingsIcon,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  BookOpenCheck,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-  Award,
-  CalendarCheck,
-  ShieldCheck,
-  Building2,
-  Inbox,
-  Tags,
-  ImagePlus
-} from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck } from 'lucide-react';
 
-import { 
-  Student, 
-  StaffMember, 
-  EtudeSlot,
-  ExternalCourse, 
-  ExternalCourseSession, 
-  MealPlanDay, 
-  CenterExpense, 
-  TimesheetEntry,
-  CenterSettings,
-  ExternalStudentRegister,
-  RevisionSeance,
-  UserAccount,
-  StudentTimeSheet,
-  StudentAttendanceRecord,
-  Formation,
-  CenterTenant,
-  MealForfaitClosure,
-  initialCenterSettings,
-  initialStudentFeeSet,
-  APP_SUBJECTS,
-  getCurrentAcademicYear,
-  normalizeSettings,
-  normalizePaymentService
-} from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, initialCenterSettings, normalizeSettings } from './types';
 
-import { 
-  fetchDatabase, 
-  saveDatabase, 
-  saveStudents, 
-  saveStaff, 
-  saveSlots, 
-  saveCourses, 
-  saveSessions, 
-  saveMealPlans, 
-  saveExpenses, 
-  saveTimesheets, 
-  saveExternalStudents, 
-  saveRevisionSeances, 
-  saveStudentTimeSheets,
-  saveStudentAttendanceApi,
-  fetchStudentAttendanceApi,
-  saveFormations,
-  saveMealForfaitClosures,
-  fetchMealForfaitClosures,
-  saveSettings,
-  createStudentApi,
-  updateStudentApi,
-  deleteStudentApi,
-  createStaffApi,
-  updateStaffApi,
-  deleteStaffApi,
-  createExpenseApi,
-  deleteExpenseApi,
-  fetchCentersApi,
-  fetchRenewalRequestsApi,
-  UnauthorizedError 
-} from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -111,7 +28,6 @@ import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
 import AdvertisementCarousel from './components/AdvertisementCarousel';
 import AdvertisementInterstitial from './components/AdvertisementInterstitial';
-import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
@@ -120,9 +36,7 @@ import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
 
 
-// Map sidebar tabs to SaaS module keys. A center admin only sees the tabs whose
-// module is enabled for their center (centers.enabled_modules, chosen by the
-// platform admin when creating the center or editing its modules).
+// Map sidebar tabs to subscription modules enabled for the current center.
 const TAB_MODULE: Record<string, string> = {
   module1: 'scolaire',            // تسجيل التلاميذ
   module2: 'scolaire',            // المتابعة الدراسية
@@ -163,7 +77,6 @@ export default function App() {
   const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
   const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
-  const isPlatformSuperAdmin = currentUser?.role === 'platform_super_admin';
 
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -175,11 +88,15 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: UserAccount, center?: CenterTenant | null) => {
+    if (!['admin', 'super_admin', 'restricted_admin'].includes(user.role)) {
+      clearSessionUser();
+      toast.error('هذا التطبيق مخصص لإدارة المركز فقط.');
+      return;
+    }
     setCurrentUser(user);
     if (center) setCurrentCenter(center);
     saveSessionUser(user);
-    // Platform super admin lands on the platform admin dashboard, center admins land on the center dashboard.
-    setActiveTab(user.role === 'platform_super_admin' ? 'platformAdmin' : 'dashboard');
+    setActiveTab('dashboard');
     setReloadKey(prev => prev + 1);
     toast.success(`مرحباً ${user.name}`);
   };
@@ -208,7 +125,7 @@ export default function App() {
     setCenterSyncFast(false);
   }, [currentUser?.email]);
   const syncCenterSubscription = useCallback(async () => {
-    if (!currentUser || isPlatformSuperAdmin) return;
+    if (!currentUser) return;
     try {
       const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
       const fresh = (centers || [])[0] ?? null;
@@ -235,39 +152,39 @@ export default function App() {
       }
       // Network/D1 hiccup: stay silent, the next tick retries.
     }
-  }, [currentUser, isPlatformSuperAdmin, currentCenter]);
+  }, [currentUser, currentCenter]);
 
   // PubNub realtime — while it is `active` the polling below pauses, so a
   // decision lands in ~2 s with zero polling traffic; any PubNub failure
   // (missing keys, grant refused, disconnect) flips the state back and
   // polling resumes exactly as before.
   const centerRealtime = usePubNubSync(
-    !!currentUser && !isPlatformSuperAdmin,
+    !!currentUser,
     syncCenterSubscription,
     currentUser?.email
   );
   useLiveSync(
-    !!currentUser && !isPlatformSuperAdmin && centerRealtime !== 'active',
+    !!currentUser && centerRealtime !== 'active',
     syncCenterSubscription,
     centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
-  // ── SaaS module gating ──
+  // ── Center subscription gating ──
   // Only the modules enabled for the connected center are visible/accessible.
-  // Without center data (legacy default center, platform super admin) → all.
+  // Empty module lists retain the legacy center subscription behavior.
   const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
   const hasCenterModule = (tabId: string): boolean => {
     const moduleKey = TAB_MODULE[tabId];
     if (!moduleKey) return true; // dashboard / settings — always available
-    if (isPlatformSuperAdmin || centerModuleKeys.length === 0) return true;
+    if (centerModuleKeys.length === 0) return true;
     return centerModuleKeys.includes(moduleKey);
   };
 
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
-  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
+  const menuLogoSrc = !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
 
   useEffect(() => {
     if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
@@ -276,24 +193,15 @@ export default function App() {
   }, [hideRestrictedModules, activeTab]);
 
   // If the active tab belongs to a module not enabled for this center (e.g. the
-  // platform admin changed the modules after login), fall back to the dashboard
+  // subscription modules changed after login), fall back to the dashboard
   // so a disabled module can never be opened.
   useEffect(() => {
-    if (currentUser && !isPlatformSuperAdmin && !hasCenterModule(activeTab)) {
+    if (currentUser && !hasCenterModule(activeTab)) {
       setActiveTab('dashboard');
     }
-  }, [currentUser, isPlatformSuperAdmin, currentCenter, activeTab]);
+  }, [currentUser, currentCenter, activeTab]);
 
-  // Keep active tab in sync with user role
-  useEffect(() => {
-    if (isPlatformSuperAdmin && !activeTab.startsWith('platform')) {
-      setActiveTab('platformAdmin');
-    } else if (!isPlatformSuperAdmin && activeTab.startsWith('platform')) {
-      setActiveTab('dashboard');
-    }
-  }, [isPlatformSuperAdmin, activeTab]);
-
-  // Server-backed state (data lives in local SQLite via Express)
+  // Server-backed center state (Cloudflare D1)
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [slots, setSlots] = useState<EtudeSlot[]>([]);
@@ -313,12 +221,8 @@ export default function App() {
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
 
   useEffect(() => {
-    if (isPlatformSuperAdmin) {
-      document.title = 'إدارة المنصة | System Academy SaaS';
-    } else {
-      document.title = settings?.centerName || 'المركز';
-    }
-  }, [settings?.centerName, isPlatformSuperAdmin]);
+    document.title = settings?.centerName || 'المركز';
+  }, [settings?.centerName]);
 
   // Import confirmation state
   const [importPendingData, setImportPendingData] = useState<Record<string, unknown> | null>(null);
@@ -342,12 +246,6 @@ export default function App() {
   // Load full state from the local API on mount or when logged in
   useEffect(() => {
     if (!currentUser) {
-      setIsBootLoading(false);
-      return;
-    }
-
-    // Platform super admin does not manage a specific center's domain data
-    if (currentUser.role === 'platform_super_admin') {
       setIsBootLoading(false);
       return;
     }
@@ -900,7 +798,7 @@ export default function App() {
     );
   }
 
-  if (isBootLoading || (!isPlatformSuperAdmin && !settings)) {
+  if (isBootLoading || (!settings)) {
     return (
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
@@ -943,19 +841,8 @@ export default function App() {
     );
   }
 
-  // Platform super admin sees ONLY the SaaS platform management interface.
-  // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
-  const menuItems = isPlatformSuperAdmin
-    ? [
-        { id: 'platformAdmin', label: 'الرئيسية · SaaS', icon: LayoutDashboard },
-        { id: 'platformCenters', label: 'المراكز والاشتراكات', icon: Building2 },
-        { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
-        { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
-        { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
-        { id: 'platformAdvertisements', label: 'الإعلانات', icon: ImagePlus },
-        { id: 'platformRenewals', label: 'طلبات التجديد', icon: RefreshCw },
-      ]
-    : [
+  // This application contains only center navigation.
+  const menuItems = [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
@@ -973,7 +860,7 @@ export default function App() {
         { id: 'renewal', label: 'التجديد', icon: RefreshCw },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
-  // SaaS gating: keep only the tabs allowed for this center's subscription.
+  // Subscription gating: keep only the tabs allowed for this center's subscription.
   const visibleMenuItems = menuItems.filter(item => hasCenterModule(item.id));
 
 
@@ -984,10 +871,10 @@ export default function App() {
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
           <span className="w-10 h-10 rounded-xl bg-[#257C86] shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+            <img src={menuLogoSrc} alt={(settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">{isPlatformSuperAdmin ? 'إدارة المنصة (SaaS)' : (settings?.centerName || 'المركز')}</h1>
+            <h1 className="font-black text-sm text-slate-900">{(settings?.centerName || 'المركز')}</h1>
             <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
           </div>
         </div>
@@ -1048,12 +935,12 @@ export default function App() {
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+                <img src={menuLogoSrc} alt={(settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
-                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{isPlatformSuperAdmin ? 'إدارة المنصة' : (settings?.centerName || 'المركز')}</h1>
-                  <span className="text-[11px] text-[#257C86] font-bold block truncate">{isPlatformSuperAdmin ? 'لوحة تحكم SaaS' : 'الإدارة والتأطير'}</span>
+                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{(settings?.centerName || 'المركز')}</h1>
+                  <span className="text-[11px] text-[#257C86] font-bold block truncate">{'الإدارة والتأطير'}</span>
                 </div>
               )}
             </div>
@@ -1115,7 +1002,7 @@ export default function App() {
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
               <span className="w-2 h-2 rounded-full bg-[#3A93A0] shadow-sm shadow-[#3A93A0]/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
-                {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
+                {(currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
             </div>
           )}
@@ -1132,7 +1019,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{(settings?.centerName || 'المركز')} © 2026</p>
           )}
         </div>
       </aside>
@@ -1143,7 +1030,7 @@ export default function App() {
           {/* Alerte abonnement — affichée dans TOUS les modules du centre,
               pas seulement sur le tableau de bord, avec un raccourci vers le
               module « Renouvellement ». */}
-          {!isPlatformSuperAdmin && currentCenter && (
+          {currentCenter && (
             <div className="mb-5">
               <SubscriptionStatusCard
                 subscription={{
@@ -1159,7 +1046,7 @@ export default function App() {
           )}
 
           {/* Publicité du centre — formats responsives (rectangle + interstitiel) */}
-          {!isPlatformSuperAdmin && currentCenter && (
+          {currentCenter && (
             <>
               {/* Rectangle responsive : toute la largeur dispo (1100 px max), hauteur fluide */}
               <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="rectangle" className="mb-5" />
@@ -1367,28 +1254,6 @@ export default function App() {
                 <RenewalModule center={currentCenter} />
               )}
 
-              {activeTab.startsWith('platform') && (
-                <PlatformAdminDashboard
-                  page={
-                    activeTab === 'platformCenters' ? 'centers'
-                    : activeTab === 'platformRequests' ? 'requests'
-                    : activeTab === 'platformFinance' ? 'finance'
-                    : activeTab === 'platformPricing' ? 'pricing'
-                    : activeTab === 'platformRenewals' ? 'renewals'
-                    : activeTab === 'platformAdvertisements' ? 'advertisements'
-                    : 'overview'
-                  }
-                  onNavigate={(p) => setActiveTab(
-                    p === 'centers' ? 'platformCenters'
-                    : p === 'requests' ? 'platformRequests'
-                    : p === 'finance' ? 'platformFinance'
-                    : p === 'pricing' ? 'platformPricing'
-                    : p === 'renewals' ? 'platformRenewals'
-                    : p === 'advertisements' ? 'platformAdvertisements'
-                    : 'platformAdmin'
-                  )}
-                />
-              )}
             </motion.div>
           </AnimatePresence>
 

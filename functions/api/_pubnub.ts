@@ -26,7 +26,7 @@ import type { Env } from './_lib';
 const PUBNUB_ORIGIN = 'https://ps.pndsn.com';
 
 /** UUID used as the publisher identity for server-side publishes. */
-const SERVER_UUID = 'academy-platform-server';
+const SERVER_UUID = 'academy-center-server';
 
 /** Lifetime of granted tokens (seconds) — short on purpose. */
 export const PUBNUB_GRANT_TTL_SECONDS = 600;
@@ -199,7 +199,7 @@ export async function grantToken(
   try {
     const path = `/v3/pam/${keys.subscribeKey}/grant`;
     const body = JSON.stringify({
-      ttl: PUBNUB_GRANT_TTL_SECONDS,
+      ttl: PUBNUB_GRANT_TTL_SECONDS / 60,
       permissions: {
         uuid: String(uuid || SERVER_UUID),
         resources: { channels },

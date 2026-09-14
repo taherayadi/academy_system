@@ -1,13 +1,10 @@
-import {
-  CenterSettings, Student, StaffMember, EtudeSlot,
-  ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense,
-  TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount,
-  StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, DemoRequest, MealForfaitClosure,
-  RenewalRequest, PlanHistoryEntry
-} from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry } from './types';
+
 
 const API_BASE = '/api';
-const SESSION_TOKEN_KEY = 'tc_token';
+
+const SESSION_TOKEN_KEY = 'tc_center_token';
+
 
 // Sentinel error thrown when the server returns 401 (session expired/missing).
 // Caught by App.tsx to force the user back to the login screen.
@@ -18,6 +15,7 @@ export class UnauthorizedError extends Error {
   }
 }
 
+
 export function getSessionToken(): string | null {
   try {
     return localStorage.getItem(SESSION_TOKEN_KEY);
@@ -25,6 +23,7 @@ export function getSessionToken(): string | null {
     return null;
   }
 }
+
 
 export function setSessionToken(token: string | null): void {
   try {
@@ -35,6 +34,7 @@ export function setSessionToken(token: string | null): void {
   }
 }
 
+
 /** Builds auth headers (Bearer token + JSON content type as needed). */
 function authHeaders(includeJson: boolean): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -43,6 +43,7 @@ function authHeaders(includeJson: boolean): Record<string, string> {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
+
 
 export interface DatabaseState {
   settings: CenterSettings;
@@ -60,6 +61,7 @@ export interface DatabaseState {
   formations: Formation[];
 }
 
+
 /** Generic PUT helper for granular domain endpoints. */
 async function putDomain(path: string, body: unknown, defaultErrMsg: string): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -74,6 +76,7 @@ async function putDomain(path: string, body: unknown, defaultErrMsg: string): Pr
     throw new Error(data.error || defaultErrMsg);
   }
 }
+
 
 /** Generic POST helper for granular domain endpoints. */
 async function postDomain(path: string, body: unknown, defaultErrMsg: string): Promise<void> {
@@ -90,6 +93,7 @@ async function postDomain(path: string, body: unknown, defaultErrMsg: string): P
   }
 }
 
+
 /** Generic DELETE helper for granular domain endpoints. */
 async function deleteDomain(path: string, defaultErrMsg: string): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -104,39 +108,48 @@ async function deleteDomain(path: string, defaultErrMsg: string): Promise<void> 
   }
 }
 
+
 // ------------------- Atomic Entity Mutators (Concurrent-safe) -------------------
 
 export async function createStudentApi(student: Student): Promise<void> {
   return postDomain('/students', student, 'تعذر إضافة التلميذ.');
 }
 
+
 export async function updateStudentApi(student: Student): Promise<void> {
   return putDomain('/students', student, 'تعذر تعديل بيانات التلميذ.');
 }
+
 
 export async function deleteStudentApi(studentId: string): Promise<void> {
   return deleteDomain(`/students?id=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ.');
 }
 
+
 export async function createStaffApi(staff: StaffMember): Promise<void> {
   return postDomain('/staff', staff, 'تعذر إضافة عضو الإطار.');
 }
+
 
 export async function updateStaffApi(staff: StaffMember): Promise<void> {
   return putDomain('/staff', staff, 'تعذر تعديل بيانات عضو الإطار.');
 }
 
+
 export async function deleteStaffApi(staffId: string): Promise<void> {
   return deleteDomain(`/staff?id=${encodeURIComponent(staffId)}`, 'تعذر حذف عضو الإطار.');
 }
+
 
 export async function createExpenseApi(expense: CenterExpense): Promise<void> {
   return postDomain('/expenses', expense, 'تعذر إضافة المصروف.');
 }
 
+
 export async function deleteExpenseApi(expenseId: string): Promise<void> {
   return deleteDomain(`/expenses?id=${encodeURIComponent(expenseId)}`, 'تعذر حذف المصروف.');
 }
+
 
 // ------------------- Granular Domain Mutators -------------------
 
@@ -144,63 +157,78 @@ export async function saveStudents(students: Student[]): Promise<void> {
   return putDomain('/students', students, 'تعذر حفظ بيانات التلاميذ.');
 }
 
+
 export async function saveStaff(staff: StaffMember[]): Promise<void> {
   return putDomain('/staff', staff, 'تعذر حفظ بيانات الإطار التربوي.');
 }
+
 
 export async function saveSlots(slots: EtudeSlot[]): Promise<void> {
   return putDomain('/slots', slots, 'تعذر حفظ بيانات الحصص.');
 }
 
+
 export async function saveCourses(courses: ExternalCourse[]): Promise<void> {
   return putDomain('/courses', courses, 'تعذر حفظ بيانات الدروس الخصوصية.');
 }
+
 
 export async function saveSessions(sessions: ExternalCourseSession[]): Promise<void> {
   return putDomain('/sessions', sessions, 'تعذر حفظ بيانات الجلسات.');
 }
 
+
 export async function saveMealPlans(mealPlans: MealPlanDay[]): Promise<void> {
   return putDomain('/meals', mealPlans, 'تعذر حفظ بيانات الوجبات.');
 }
+
 
 export async function saveExpenses(expenses: CenterExpense[]): Promise<void> {
   return putDomain('/expenses', expenses, 'تعذر حفظ بيانات المصاريف.');
 }
 
+
 export async function saveTimesheets(timesheets: TimesheetEntry[]): Promise<void> {
   return putDomain('/timesheets', timesheets, 'تعذر حفظ بيانات جداول الحضور.');
 }
+
 
 export async function saveExternalStudents(externalStudents: ExternalStudentRegister[]): Promise<void> {
   return putDomain('/external-students', externalStudents, 'تعذر حفظ بيانات التلاميذ الخارجيين.');
 }
 
+
 export async function saveRevisionSeances(revisionSeances: RevisionSeance[]): Promise<void> {
   return putDomain('/revision-seances', revisionSeances, 'تعذر حفظ بيانات حصص المراجعة.');
 }
 
+
 export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void> {
   return putDomain('/student-timesheets', sheets, 'تعذر حفظ جداول التوقيت.');
 }
+
 
 /** Save daily student check-in records for jardin centers. */
 export function saveStudentAttendanceApi(records: StudentAttendanceRecord[]): Promise<void> {
   return putDomain('/student-attendance', records, 'تعذر حفظ pointage التلاميذ.');
 }
 
+
 /** Fetch daily student check-in records for jardin centers. */
 export function fetchStudentAttendanceApi(): Promise<StudentAttendanceRecord[]> {
   return getDomain<StudentAttendanceRecord[]>('/student-attendance', 'تعذر تحميل pointage التلاميذ.');
 }
 
+
 export async function saveFormations(formations: Formation[]): Promise<void> {
   return putDomain('/formations', formations, 'تعذر حفظ بيانات التكوينات.');
 }
 
+
 export async function saveMealForfaitClosures(closures: MealForfaitClosure[]): Promise<void> {
   return putDomain('/meal-forfait-closures', closures, 'تعذر حفظ بيانات إغلاقات الوجبات.');
 }
+
 
 export async function fetchMealForfaitClosures(): Promise<MealForfaitClosure[]> {
   const res = await fetch(`${API_BASE}/meal-forfait-closures`, {
@@ -216,9 +244,11 @@ export async function fetchMealForfaitClosures(): Promise<MealForfaitClosure[]> 
   return Array.isArray(data) ? data : [];
 }
 
+
 export async function saveSettings(settings: CenterSettings): Promise<void> {
   return putDomain('/settings', settings, 'تعذر حفظ إعدادات المنظومة.');
 }
+
 
 /** Generic GET helper for granular domain endpoints. */
 async function getDomain<T>(path: string, defaultErrMsg: string): Promise<T> {
@@ -233,6 +263,7 @@ async function getDomain<T>(path: string, defaultErrMsg: string): Promise<T> {
   }
   return res.json();
 }
+
 
 // ------------------- Full Database Boot (Concurrent Domain Load) -------------------
 
@@ -284,9 +315,11 @@ export async function fetchDatabase(): Promise<DatabaseState> {
   };
 }
 
+
 export async function saveDatabase(state: DatabaseState): Promise<void> {
   return putDomain('/state', state, 'تعذر حفظ نسخة قاعدة البيانات.');
 }
+
 
 // ------------------- Authentication -------------------
 
@@ -305,6 +338,7 @@ export async function loginRequest(email: string, password: string): Promise<{ u
   return { user: data.user!, center: data.center ?? null };
 }
 
+
 export async function logoutRequest(): Promise<void> {
   await fetch(`${API_BASE}/auth/logout`, {
     method: 'POST',
@@ -312,6 +346,7 @@ export async function logoutRequest(): Promise<void> {
     credentials: 'include'
   });
 }
+
 
 export async function changePasswordRequest(
   email: string,
@@ -331,6 +366,7 @@ export async function changePasswordRequest(
   }
 }
 
+
 /** Upload a logo image to ImageKit (via backend) — returns the CDN URL. */
 export async function uploadCenterLogoApi(file: File): Promise<string> {
   const fd = new FormData();
@@ -343,17 +379,6 @@ export async function uploadCenterLogoApi(file: File): Promise<string> {
   return data.url;
 }
 
-/** Upload a logo selected by the platform admin before creating a center. */
-export async function uploadPlatformLogoApi(file: File): Promise<string> {
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetch(`${API_BASE}/platform-upload-logo`, {
-    method: 'POST', headers: authHeaders(false), credentials: 'include', body: fd
-  });
-  const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok || !data.url) throw new Error(data.error || 'تعذر رفع الشعار.');
-  return data.url;
-}
 
 /** Save (or clear with '') the connected center's logo URL. */
 export async function saveCenterLogoApi(logoUrl: string): Promise<void> {
@@ -366,8 +391,9 @@ export async function saveCenterLogoApi(logoUrl: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || 'تعذر حفظ الشعار.');
 }
 
+
 // ========================================================================
-// SaaS Platform API – Demo Requests
+// Public landing — demo request submission
 // ========================================================================
 
 /** Submit a trial / demo / info request from the landing page (public). */
@@ -391,47 +417,9 @@ export async function submitDemoRequestApi(data: {
   if (!res.ok) throw new Error(json.error || 'Erreur lors de l\'envoi de la demande.');
 }
 
-/** Fetch all demo/trial requests (super-admin only). */
-export async function fetchDemoRequestsApi(): Promise<DemoRequest[]> {
-  const res = await fetch(`${API_BASE}/demo-requests`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { requests?: DemoRequest[]; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la récupération des demandes.');
-  return data.requests || [];
-}
-
-/** Update status / notes of a demo request (super-admin). */
-export async function updateDemoRequestApi(
-  id: string,
-  payload: { status?: string; notes?: string }
-): Promise<void> {
-  const res = await fetch(`${API_BASE}/demo-requests`, {
-    method: 'PATCH',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ id, ...payload })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour.');
-}
-
-/** Delete a demo request (super-admin). */
-export async function deleteDemoRequestApi(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/demo-requests?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  if (!res.ok) throw new Error('Erreur lors de la suppression.');
-}
 
 // ========================================================================
-// SaaS Platform API – Centers
+// Center subscription summary
 // ========================================================================
 
 /** Fetch all centers (super-admin) or the current center (tenant). */
@@ -446,346 +434,6 @@ export async function fetchCentersApi(): Promise<CenterTenant[]> {
   return data.centers || [];
 }
 
-/** Create a new center with its director account (super-admin). */
-export async function createCenterApi(payload: {
-  name: string;
-  logoUrl?: string;
-  phoneNumber?: string;
-  locationCity?: string;
-  plan: string;
-  enabledModules: string[];
-  centerType?: string;
-  billingCycle?: 'monthly' | 'annual';
-  monthlyPrice?: number | string | null;
-  trialDays?: number | string;
-  offerDays?: number | string;
-  directorName: string;
-  directorEmail: string;
-  directorPassword: string;
-  convertFromRequestId?: string;
-}): Promise<{ centerId: string; invoice?: { invoiceNumber: string; amount: number } | null }> {
-  const res = await fetch(`${API_BASE}/centers`, {
-    method: 'POST',
-    headers: authHeaders(true),
-    credentials: 'include',
-    // The backend expects adminName / adminEmail / adminPassword — map the
-    // director* fields so the director account is created correctly.
-    body: JSON.stringify({
-      ...payload,
-      logoUrl: payload.logoUrl,
-      adminName: payload.directorName,
-      adminEmail: payload.directorEmail,
-      adminPassword: payload.directorPassword
-    })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { centerId?: string; error?: string; code?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || 'Erreur lors de la création du centre.') as Error & { code?: string };
-    (err as Error & { code?: string }).code = data.code;
-    throw err;
-  }
-  return { centerId: data.centerId! };
-}
-
-/** Outcome of a plan change, echoed by the backend so the UI can explain it. */
-export interface PlanChangeOutcome {
-  mode: string;
-  applyAt?: number | null;
-  newSubscriptionEndsAt?: number | null;
-  settlement?: {
-    amount: number;
-    paid: boolean;
-    remainingDays: number;
-    invoiceNumber?: string;
-    invoiceId?: string;
-    cancelledOld?: boolean;
-    skipped?: boolean;
-  } | null;
-  scheduledPlan?: { plan: string; billingCycle: string; enabledModules: string[] } | null;
-  /** Pending invoice automatically created for a new/renewed subscription window. */
-  invoice?: { invoiceNumber: string; amount: number } | null;
-}
-
-/**
- * Update center properties (super-admin): status, plan, modules, trial dates,
- * scheduled plan changes and prorated settlements.
- *
- * Response carries `planChange` so the platform admin UI can explain what the
- * system did (invoice created / change scheduled / period extended…).
- */
-export async function updateCenterApi(
-  id: string,
-  payload: {
-    name?: string;
-    logoUrl?: string;
-    phoneNumber?: string;
-    locationCity?: string;
-    centerType?: string;
-    status?: string;
-    plan?: string;
-    enabledModules?: string[];
-    trialEndsAt?: number | null;
-    subscriptionEndsAt?: number | null;
-    billingCycle?: 'monthly' | 'annual';
-    monthlyPrice?: number | null;
-    autoCalculatePrice?: boolean;
-    autoCalculateSubscription?: boolean;
-    addOfferDays?: number;
-    extendTrialDays?: number;
-    /** Store a plan change to apply at the end of the current period. */
-    scheduleChange?: {
-      plan: string;
-      billingCycle?: 'monthly' | 'annual';
-      enabledModules?: string[];
-      monthlyPrice?: number | null;
-    };
-    /** Cancel the pending scheduled plan change of this center. */
-    cancelScheduledChange?: boolean;
-    /** Force-apply the pending scheduled plan change now. */
-    applyScheduledPlan?: boolean;
-    /** How to settle an immediate mid-period price increase. */
-    settlementPolicy?: 'auto' | 'paid' | 'unpaid';
-  }
-): Promise<{ planChange?: PlanChangeOutcome }> {
-  const res = await fetch(`${API_BASE}/centers`, {
-    method: 'PATCH',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ id, ...payload })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { error?: string; planChange?: PlanChangeOutcome } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du centre.');
-  return data;
-}
-
-/** Delete a center (super-admin). Cannot delete the default center. */
-export async function deleteCenterApi(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/centers?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  if (!res.ok) throw new Error('Erreur lors de la suppression du centre.');
-}
-
-// ─── Platform Billing API ─────────────────────────────────────────────────
-
-export interface PlatformBillingSummary {
-  mrr: number;
-  collectedThisMonth: number;
-  collectedThisYear: number;
-  pendingInvoices: number;
-  overdueInvoices: number;
-  activeCount: number;
-  suspendedCount: number;
-  expiredCount: number;
-  endingSoonCount: number;
-  overdueCount: number;
-}
-
-export interface CenterInvoice {
-  id: string;
-  centerId: string;
-  centerName: string;
-  invoiceNumber: string;
-  periodStart: number;
-  periodEnd: number;
-  amount: number;
-  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
-  paymentMethod?: string | null;
-  paymentDate?: number | null;
-  chequeNumber?: string | null;
-  chequeDate?: number | null;
-  notes: string;
-  createdAt: number;
-}
-
-export interface ModulePrice {
-  id: string;
-  school_year: string;
-  module_key: string;
-  price: number;
-  created_at: number;
-}
-
-// ─── Per-center plan manager (Plans & factures) ────────────────────────────
-
-export interface CenterPlanSchedule {
-  id: string;
-  plan: string;
-  billingCycle: 'monthly' | 'annual';
-  monthlyPrice: number | null;
-  applyAt: number | null;
-  notes: string;
-  createdAt: number;
-}
-
-export interface CenterPlanHistoryEntry {
-  id: string;
-  action: string;
-  details: string;
-  amount: number | null;
-  invoiceNumber: string | null;
-  createdAt: number;
-}
-
-export interface CenterPlansView {
-  center: {
-    id: string;
-    name: string;
-    status: string;
-    plan: string;
-    billingCycle: 'monthly' | 'annual';
-    monthlyPrice: number;
-    subscriptionEndsAt: number | null;
-    trialEndsAt: number | null;
-    enabledModules: string[];
-  };
-  invoices: CenterInvoice[];
-  schedules: CenterPlanSchedule[];
-  /** Audit trail (migration 0029) — empty when not yet applied. */
-  history?: CenterPlanHistoryEntry[];
-}
-
-export interface CenterPlanActionResult {
-  success?: boolean;
-  mode?: 'scheduled' | 'replaced' | 'activated' | 'plan_removed' | 'schedule_cancelled' | 'trial_added';
-  placement?: 'start' | 'end';
-  days?: number;
-  message?: string;
-  applyAt?: number | null;
-  amount?: number;
-  subscriptionEndsAt?: number;
-  invoice?: { invoiceNumber: string; amount: number } | null;
-}
-
-/** Load the plan manager view for a center (current plan + invoices + schedules). */
-export async function fetchCenterPlansApi(centerId: string): Promise<CenterPlansView> {
-  const res = await fetch(`${API_BASE}/center-plans?centerId=${encodeURIComponent(centerId)}`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur chargement des abonnements.');
-  return data as CenterPlansView;
-}
-
-/** Run a plan action (set-plan / remove-plan / remove-schedule) for a center. */
-export async function centerPlanActionApi(payload: {
-  action: 'set-plan' | 'remove-plan' | 'remove-schedule' | 'add-trial';
-  centerId: string;
-  plan?: string;
-  billingCycle?: 'monthly' | 'annual';
-  enabledModules?: string[];
-  monthlyPrice?: number | null;
-  mode?: 'scheduled';
-  scheduleId?: string;
-  days?: number;
-}): Promise<CenterPlanActionResult> {
-  const res = await fetch(`${API_BASE}/center-plans`, {
-    method: 'POST',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify(payload)
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour du plan.');
-  return data as CenterPlanActionResult;
-}
-
-/** Fetch platform billing summary (MRR, collected, pending invoices). */
-export async function fetchPlatformBillingApi(): Promise<{
-  summary: PlatformBillingSummary;
-  centersByStatus: {
-    endingSoon: Array<{ id: string; name: string; subscriptionEndsAt: number }>;
-    overdue: Array<{ id: string; name: string; subscriptionEndsAt: number }>;
-  };
-}> {
-  const res = await fetch(`${API_BASE}/platform-billing?mode=summary`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur chargement données financières.');
-  return data;
-}
-
-/** Fetch invoices. */
-export async function fetchInvoicesApi(filters?: { centerId?: string; status?: string; limit?: number }): Promise<CenterInvoice[]> {
-  const params = new URLSearchParams({ mode: 'invoices' });
-  if (filters?.centerId) params.set('centerId', filters.centerId);
-  if (filters?.status) params.set('status', filters.status);
-  if (filters?.limit) params.set('limit', String(filters.limit));
-
-  const res = await fetch(`${API_BASE}/platform-billing?${params.toString()}`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { invoices?: CenterInvoice[]; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur chargement factures.');
-  return data.invoices || [];
-}
-
-/** Create a new invoice. */
-export async function createInvoiceApi(payload: {
-  centerId: string;
-  amount: number;
-  periodStart: number;
-  periodEnd: number;
-  notes?: string;
-}): Promise<{ invoiceId: string; invoiceNumber: string }> {
-  const res = await fetch(`${API_BASE}/platform-billing`, {
-    method: 'POST',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ action: 'create-invoice', ...payload })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur création facture.');
-  return data;
-}
-
-/** Update an invoice (status / payment method / cheque details / notes). */
-export async function updateInvoiceApi(id: string, payload: Partial<{
-  status: string;
-  amount: number;
-  paymentMethod: string | null;
-  paymentDate: number | null;
-  chequeNumber: string | null;
-  chequeDate: number | null;
-  notes: string;
-  periodStart: number;
-  periodEnd: number;
-}>): Promise<void> {
-  const res = await fetch(`${API_BASE}/platform-billing`, {
-    method: 'PATCH',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ id, ...payload })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour facture.');
-}
-
-/** Delete an invoice. */
-export async function deleteInvoiceApi(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/platform-billing?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  if (!res.ok) throw new Error('Erreur suppression facture.');
-}
 
 /** Fetch public module prices for the landing page without a session. */
 export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
@@ -803,100 +451,6 @@ export async function fetchPublicModulePricesApi(year?: string): Promise<Record<
   }, {});
 }
 
-/** Fetch module prices for a school year. */
-export async function fetchModulePricesApi(year?: string): Promise<ModulePrice[]> {
-  const params = new URLSearchParams({ mode: 'module-prices' });
-  if (year) params.set('year', year);
-
-  const res = await fetch(`${API_BASE}/platform-billing?${params.toString()}`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { prices?: ModulePrice[]; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur chargement tarifs modules.');
-  return data.prices || [];
-}
-
-/** Update module prices for a school year. */
-export async function updateModulePricesApi(year: string, prices: Array<{ module_key: string; price: number }>): Promise<void> {
-  const res = await fetch(`${API_BASE}/platform-billing`, {
-    method: 'POST',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ action: 'update-module-prices', year, prices })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour tarifs.');
-}
-
-// ========================================================================
-// Platform Advertisements API
-// ========================================================================
-
-/** Upload multiple images for advertisement carousel (sequential uploads). */
-export async function uploadMultipleImagesApi(files: File[]): Promise<string[]> {
-  const urls: string[] = [];
-  for (const file of files) {
-    const url = await uploadPlatformLogoApi(file);
-    urls.push(url);
-  }
-  return urls;
-}
-
-/** Fetch all advertisements with center assignments (platform admin only). */
-export async function fetchAdvertisementsApi(): Promise<any[]> {
-  const res = await fetch(`${API_BASE}/platform-advertisements`, {
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
-  return data.advertisements || [];
-}
-
-/** Create new advertisement. */
-export async function createAdvertisementApi(payload: any): Promise<{ success: boolean; id: string }> {
-  const res = await fetch(`${API_BASE}/platform-advertisements`, {
-    method: 'POST',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify(payload)
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { success?: boolean; id?: string; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في إنشاء الإعلان.');
-  return { success: data.success || false, id: data.id || '' };
-}
-
-/** Update advertisement. */
-export async function updateAdvertisementApi(id: string, payload: any): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/platform-advertisements`, {
-    method: 'PATCH',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ id, ...payload })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في تحديث الإعلان.');
-  return { success: data.success || false };
-}
-
-/** Delete advertisement. */
-export async function deleteAdvertisementApi(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/platform-advertisements?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(false),
-    credentials: 'include'
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في حذف الإعلان.');
-  return { success: data.success || false };
-}
 
 /** Fetch active advertisements by location and optional centerId (public endpoint). */
 export async function fetchActiveAdvertisementsApi(location: string, centerId?: string): Promise<any[]> {
@@ -913,12 +467,14 @@ export async function fetchActiveAdvertisementsApi(location: string, centerId?: 
 
 
 
+
 // ─── Demandes de renouvellement (migration 0033) ───────────────────────────
 
 export interface RenewalRequestsPayload {
   requests: RenewalRequest[];
   history: PlanHistoryEntry[];
 }
+
 
 /** Demandes du centre connecté (ou de toutes les demandes pour la plateforme). */
 export async function fetchRenewalRequestsApi(centerId?: string): Promise<RenewalRequestsPayload> {
@@ -935,6 +491,7 @@ export async function fetchRenewalRequestsApi(centerId?: string): Promise<Renewa
   return { requests: data.requests || [], history: data.history || [] };
 }
 
+
 export interface CreateRenewalRequestInput {
   kind: 'renewal' | 'upgrade';
   requestedPlan: string;
@@ -943,6 +500,7 @@ export interface CreateRenewalRequestInput {
   amount: number | null;
   note?: string;
 }
+
 
 /** Dépose une demande de renouvellement / de passage à une offre supérieure. */
 export async function createRenewalRequestApi(payload: CreateRenewalRequestInput): Promise<{ success: boolean; id: string }> {
@@ -956,25 +514,4 @@ export async function createRenewalRequestApi(payload: CreateRenewalRequestInput
   const data: { success?: boolean; id?: string; error?: string } = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'خطأ في إرسال طلب التجديد.');
   return { success: data.success || false, id: data.id || '' };
-}
-
-/** Accepter ou refuser une demande — réservé à la plateforme.
- * `skipApply` : le plan a déjà été appliqué via le moteur « Plans & factures »
- * (modal « Examiner et appliquer ») — ne fait qu'enregistrer la décision. */
-export async function decideRenewalRequestApi(
-  id: string,
-  status: 'approved' | 'rejected',
-  decisionNote = '',
-  opts?: { skipApply?: boolean }
-): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/renewal-requests`, {
-    method: 'PATCH',
-    headers: authHeaders(true),
-    credentials: 'include',
-    body: JSON.stringify({ id, status, decisionNote, ...(opts?.skipApply ? { skipApply: true } : {}) })
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  const data: { success?: boolean; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في معالجة طلب التجديد.');
-  return { success: data.success || false };
 }

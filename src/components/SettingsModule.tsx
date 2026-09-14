@@ -40,14 +40,14 @@ interface SettingsModuleProps {
   centerLogoUrl?: string;
   /** Called after the logo was uploaded/saved/cleared to refresh the menu. */
   onCenterLogoChange?: (url: string) => void;
-  /** SaaS plan: modules enabled for this center (undefined = all, legacy compat). */
+  /** Center subscription: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
 }
 
 const YEAR_OPTIONS = DEFAULT_ACADEMIC_YEARS;
 
 export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail, centerLogoUrl, onCenterLogoChange, enabledModules }: SettingsModuleProps) {
-  // SaaS gating: fees can only be set for services included in the center's plan.
+  // Subscription gating: fees can only be set for services included in the center's plan.
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
   const toast = useToast();
   const [formData, setFormData] = useState<CenterSettings>(settings || initialCenterSettings);

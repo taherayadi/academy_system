@@ -30,12 +30,12 @@ interface DashboardProps {
   settings?: CenterSettings;
   /** 'jardin' | 'formation' — drives the time-sheet module naming. */
   centerType?: string;
-  /** SaaS gating: returns false when the tab's module is not enabled for this center. */
+  /** Subscription gating: returns false when the tab's module is not enabled for this center. */
   isModuleAllowed?: (tabId: string) => boolean;
 }
 
 export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed }: DashboardProps) {
-  // SaaS module gating (default: everything allowed).
+  // Center subscription gating (default: everything allowed).
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
   const totalStaff = staff.length;
   const totalStudents = students.length;

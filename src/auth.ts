@@ -1,7 +1,7 @@
 import { UserAccount, CenterTenant } from './types';
 import { loginRequest, logoutRequest, changePasswordRequest, setSessionToken } from './api';
 
-const SESSION_KEY = 'tc_user';
+const SESSION_KEY = 'tc_center_user';
 
 export function loadSessionUser(): UserAccount | null {
   try {
@@ -26,8 +26,9 @@ export function clearLocalSession(): void {
  * Use for explicit user logout.
  */
 export function clearSessionUser(): void {
+  const pendingLogout = logoutRequest();
   clearLocalSession();
-  logoutRequest().catch(() => {
+  pendingLogout.catch(() => {
     // Ignore network errors on logout — the cookie will expire naturally.
   });
 }

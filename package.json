@@ -1,9 +1,9 @@
 {
-  "name": "system-academy",
+  "name": "academy-system-center",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "System Academy - school management system (Cloudflare Pages + D1)",
+  "description": "System Academy \u2014 center-only frontend and Cloudflare Pages API",
   "author": "Taher Ayadi",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -14,8 +14,6 @@
     "pages:dev": "wrangler pages dev --port 8788",
     "pages:deploy": "wrangler pages deploy dist",
     "deploy": "npm run build && wrangler pages deploy dist",
-    "d1:migrate": "wrangler d1 migrations apply academy-system-v2 --remote",
-    "d1:migrate:local": "wrangler d1 migrations apply academy-system-v2 --local",
     "test": "vitest run --config vitest.config.ts && vitest run --config vitest.config.node.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:node": "vitest run --config vitest.config.node.ts"
@@ -54,5 +52,8 @@
     "vite": "^6.2.3",
     "vitest": "^4.1.10",
     "wrangler": "^4.123.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

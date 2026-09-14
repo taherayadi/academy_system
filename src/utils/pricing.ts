@@ -11,7 +11,7 @@ import {
   Calendar,
   ShieldCheck,
 } from 'lucide-react';
-import type { SaaSPlan } from '../types';
+import type { SubscriptionPlan } from '../types';
 
 /**
  * Catalogue des modules facturables + offres, partagé par le simulateur de la
@@ -53,7 +53,7 @@ export const modulesPrice = (keys: readonly string[], prices: Record<string, num
 // ─── Offres ────────────────────────────────────────────────────────────────
 
 export interface PlanTier {
-  key: SaaSPlan;
+  key: SubscriptionPlan;
   label: string;
   labelAr: string;
   order: number;
@@ -114,7 +114,7 @@ export const ANNUAL_DISCOUNT = 0.2;
  *   • tous les modules             → Pro
  * Ainsi cocher un module fait évoluer l'offre affichée et envoyée.
  */
-export function derivePlanFromModules(selected: readonly string[]): SaaSPlan {
+export function derivePlanFromModules(selected: readonly string[]): SubscriptionPlan {
   const all = ALL_MODULES.map(m => m.key);
   if (all.length > 0 && all.every(k => selected.includes(k))) return 'pro';
   const hasExtra = selected.some(k => !(BASE_KEYS as readonly string[]).includes(k));

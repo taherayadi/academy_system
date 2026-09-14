@@ -1,4 +1,5 @@
-import { Env, json, readBody, hashPassword, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow, getCenterAccessState } from '../_lib';
+import { isDeploymentRole } from '../_deployment';
+import { Env, json, readBody, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, mapCenterRow, getCenterAccessState } from '../_lib';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -30,7 +31,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       .bind(cleanEmail)
       .first<any>();
 
-    if (!user) {
+    if (!user || !isDeploymentRole(user.role)) {
       // Return the same error as wrong password to prevent user enumeration.
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
@@ -43,7 +44,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     // Reset rate limits for this client IP on successful login.
     resetAuthRateLimit(env.DB, request).catch(() => {});
 
-    const centerId = user.center_id || DEFAULT_CENTER_ID;
+    const centerId = user.center_id || '';
+    if (!centerId) return json({ error: 'الحساب غير مرتبط بمركز.' }, 403);
     const centerRow = await env.DB
       .prepare('SELECT * FROM centers WHERE id = ?')
       .bind(centerId)
@@ -51,7 +53,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     // A platform account is tenant-independent. Center accounts, however,
     // must not receive a session after their trial or paid subscription ends.
-    if (user.role !== 'platform_super_admin' && centerRow) {
+    if (!centerRow) return json({ error: 'المركز غير موجود.' }, 403);
+    if (centerRow) {
       const accessState = getCenterAccessState(centerRow);
       if (accessState) {
         // Keep the platform card/status truthful after the first blocked login.
@@ -83,6 +86,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('Cache-Control', 'no-store');
     headers.set('Set-Cookie', makeSessionCookie(token, request));
 
     return new Response(
@@ -103,6 +107,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       }
     );
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تسجيل الدخول.' }, 500);
+    return json({ error: 'خطأ في تسجيل الدخول.' }, 500);
   }
 };

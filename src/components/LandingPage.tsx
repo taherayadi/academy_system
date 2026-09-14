@@ -44,7 +44,7 @@ interface LandingPageProps {
 }
 
 // ─── Module catalogue — shared with the center « Renouvellement » module ─────
-// (see src/utils/pricing.ts : prices are loaded from Platform Admin)
+// (see src/utils/pricing.ts: prices are loaded from the public pricing endpoint)
 
 // ─── Animated counter (stats band) ─────────────────────────────────
 function Counter({ to, duration = 1500 }: { to: number; duration?: number }) {
@@ -596,7 +596,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
-      {/* ─── PUBLICITÉ — formats responsives (gérés dans l'admin SaaS) ─── */}
+      {/* ─── PUBLICITÉ — formats responsives du site public ─── */}
       {/* Conteneur centré : marges latérales généreuses, jamais plein écran.
           Les classes verticales vivent sur le carrousel (il rend null sans
           annonce → aucun espace fantôme sur la landing). */}

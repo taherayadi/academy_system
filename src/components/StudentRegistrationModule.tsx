@@ -41,7 +41,7 @@ interface StudentRegistrationModuleProps {
   setOpenAddFormTrigger?: (val: boolean) => void;
   hideRestrictedModules?: boolean;
   sidebarCollapsed?: boolean;
-  /** SaaS plan: modules enabled for this center (undefined = all, legacy compat). */
+  /** Center subscription: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
 }
 
@@ -91,7 +91,7 @@ export default function StudentRegistrationModule({
   const toast = useToast();
   const centerName = settings?.centerName || 'المركز';
 
-  // SaaS gating: a student can only be enrolled in services included in the
+  // Subscription gating: a student can only be enrolled in services included in the
   // center's plan (undefined = all modules, legacy compat).
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
   const [searchTerm, setSearchTerm] = useState('');

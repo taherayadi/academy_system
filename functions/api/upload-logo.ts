@@ -1,4 +1,5 @@
-import { Env, json, validateSession, DEFAULT_CENTER_ID } from './_lib';
+import { isDeploymentRole } from './_deployment';
+import { Env, json, validateSession } from './_lib';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -7,7 +8,7 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
-    if (!session || session.role === 'platform_super_admin') {
+    if (!session || !isDeploymentRole(session.role) || !session.centerId) {
       return json({ error: 'غير مصرح.' }, 403);
     }
 
@@ -28,7 +29,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'حجم الصورة كبير جداً (الحد الأقصى 2 ميغا).' }, 400);
     }
 
-    const centerId = session.centerId || DEFAULT_CENTER_ID;
+    const centerId = session.centerId;
     const fileName = `${centerId}-logo-${Date.now()}`;
     const auth = btoa(`${env.IMAGEKIT_PRIVATE_KEY}:`);
     const ikForm = new FormData();

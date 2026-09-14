@@ -1,4 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
+import { isDeploymentRole } from './_deployment';
 
 /**
  * Shared helpers for the Cloudflare Pages Functions.
@@ -90,7 +91,7 @@ function extractFeeValues(f: any): any {
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
   });
 }
 
@@ -161,7 +162,7 @@ async function ensureRateLimitTable(db: D1Database): Promise<void> {
 export async function consumeAuthRateLimit(
   db: D1Database,
   request: Request,
-  prefix = 'auth',
+  prefix = 'center:auth',
   maxLimit = AUTH_RATE_LIMIT,
   windowMs = AUTH_RATE_WINDOW_MS
 ): Promise<{ allowed: true } | { allowed: false; retryAfterSec: number }> {
@@ -184,7 +185,7 @@ export async function consumeAuthRateLimit(
 export async function resetAuthRateLimit(db: D1Database, request: Request): Promise<void> {
   await ensureRateLimitTable(db);
   const ip = getClientIp(request);
-  await db.prepare('DELETE FROM rate_limits WHERE key = ?').bind('auth:' + ip).run();
+  await db.prepare('DELETE FROM rate_limits WHERE key = ?').bind('center:auth:' + ip).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -192,14 +193,14 @@ export async function resetAuthRateLimit(db: D1Database, request: Request): Prom
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_CENTER_ID = 'e1000000-0000-4000-8000-000000000001';
-const SESSION_COOKIE = 'tc_session';
+const SESSION_COOKIE = 'tc_center_session';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 let sessionsTableReady = false;
 export async function ensureSessionsTable(db: D1Database): Promise<void> {
   if (sessionsTableReady) return;
-  await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, center_id TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
-  try { await db.prepare('ALTER TABLE sessions ADD COLUMN center_id TEXT').run(); } catch {}
+  await db.prepare('CREATE TABLE IF NOT EXISTS center_sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, center_id TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
+  try { await db.prepare('ALTER TABLE center_sessions ADD COLUMN center_id TEXT').run(); } catch {}
   sessionsTableReady = true;
 }
 
@@ -216,7 +217,7 @@ export function getSessionToken(request: Request): string | null {
     const name = part.slice(0, eqIdx).trim();
     if (name === SESSION_COOKIE) {
       const val = part.slice(eqIdx + 1).trim();
-      return val ? decodeURIComponent(val) : null;
+      try { return val ? decodeURIComponent(val) : null; } catch { return null; }
     }
   }
   return null;
@@ -226,7 +227,7 @@ export async function createSession(db: D1Database, email: string, centerId: str
   await ensureSessionsTable(db);
   const token = crypto.randomUUID();
   const now = Date.now();
-  await db.prepare('INSERT INTO sessions (token, email, center_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').bind(token, email, centerId, now + SESSION_DURATION_MS, now).run();
+  await db.prepare('INSERT INTO center_sessions (token, email, center_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').bind(token, email, centerId, now + SESSION_DURATION_MS, now).run();
   return token;
 }
 
@@ -251,35 +252,30 @@ export async function validateSession(db: D1Database, request: Request): Promise
   const token = getSessionToken(request);
   if (!token) return null;
   await ensureSessionsTable(db);
-  const row = await db.prepare('SELECT s.email, s.token, COALESCE(s.center_id, u.center_id, ?) as center_id, u.role FROM sessions s LEFT JOIN users u ON s.email = u.email WHERE s.token = ? AND s.expires_at > ?')
-    .bind(DEFAULT_CENTER_ID, token, Date.now())
+  const row = await db.prepare('SELECT s.email, s.token, u.center_id as center_id, u.role FROM center_sessions s JOIN users u ON s.email = u.email WHERE s.token = ? AND s.expires_at > ? AND s.center_id = u.center_id')
+    .bind(token, Date.now())
     .first<{ email: string; token: string; center_id: string; role?: string }>();
-  if (!row) return null;
+  if (!row || !isDeploymentRole(row.role) || !row.center_id) return null;
 
-  // Platform accounts have no tenant subscription and must remain usable even
-  // when the default center is expired. Center accounts are checked on every
-  // authenticated request, not only during the login request.
-  if (row.role !== 'platform_super_admin') {
-    const center = await db.prepare('SELECT status, trial_ends_at, subscription_ends_at FROM centers WHERE id = ?')
-      .bind(row.center_id || DEFAULT_CENTER_ID)
-      .first<any>();
-    if (getCenterAccessState(center)) return null;
-  }
+  const center = await db.prepare('SELECT status, trial_ends_at, subscription_ends_at FROM centers WHERE id = ?')
+    .bind(row.center_id).first<any>();
+  if (!center || getCenterAccessState(center)) return null;
 
   return { email: row.email, token: row.token, centerId: row.center_id || DEFAULT_CENTER_ID, role: row.role };
 }
 
 export function getContextCenterId(context: any): string {
   const session = context?.data?.session;
-  return session?.centerId || DEFAULT_CENTER_ID;
+  if (!session?.centerId || !isDeploymentRole(session.role)) throw new Error('Missing center context');
+  return session.centerId;
 }
 
 export async function deleteSession(db: D1Database, token: string): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
+  await db.prepare('DELETE FROM center_sessions WHERE token = ?').bind(token).run();
 }
 
 export async function purgeExpiredSessions(db: D1Database): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
+  await db.prepare('DELETE FROM center_sessions WHERE expires_at < ?').bind(Date.now()).run();
 }
 
 export function makeSessionCookie(token: string, request: Request): string {
@@ -297,12 +293,7 @@ export function clearSessionCookie(request: Request): string {
 // Role enforcement
 // ---------------------------------------------------------------------------
 
-export async function requireSuperAdmin(db: D1Database, email: string): Promise<void> {
-  const row = await db.prepare('SELECT role FROM users WHERE email = ?').bind(email).first<{ role: string }>();
-  if (!row || row.role !== 'super_admin') {
-    throw Object.assign(new Error('Acc\u00e8s refus\u00e9. Droits insuffisants.'), { status: 403 });
-  }
-}
+
 
 // ---------------------------------------------------------------------------
 // AppState interface
