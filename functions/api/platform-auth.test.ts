@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import { onRequestPost as login } from './auth/login';
 import { onRequestPost as logout } from './auth/logout';
@@ -108,6 +109,15 @@ function post(body: unknown, cookie?: string) {
   });
 }
 
+/** Seed an account whose row still holds the pre-salt-fix UNSALTED SHA-256 digest. */
+function seedLegacyUser(db: FakeDb, email: string, role: string, password: string) {
+  db.users.set(email, {
+    email, name: 'Legacy', role, description: '',
+    password_hash: createHash('sha256').update(password).digest('hex'),
+    center_id: role === 'platform_super_admin' ? null : 'c1',
+  });
+}
+
 beforeEach(() => {
   // Fresh module state is not needed (no cross-test globals beyond the db).
 });
@@ -152,6 +162,62 @@ describe('POST /api/auth/login — platform_super_admin ONLY', () => {
     expect(unknown.status).toBe(401);
     expect(wrongPw.status).toBe(401);
     expect(await unknown.json()).toEqual(await wrongPw.json());
+  });
+});
+
+describe('POST /api/auth/login — legacy unsalted SHA-256 one-time upgrade', () => {
+  it('accepts the legacy-format account ONCE, then stores a bcrypt hash and flags the upgrade', async () => {
+    const db = makeDb();
+    seedLegacyUser(db, 'old@p.tn', 'platform_super_admin', 'PlatformAdmin2026!');
+    const before = db.users.get('old@p.tn')!.password_hash;
+    expect(before).toMatch(/^[0-9a-f]{64}$/);
+
+    const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'old@p.tn', password: 'PlatformAdmin2026!' }) } as any);
+    expect(res.status).toBe(200);
+    const data: any = await res.json();
+    expect(data.passwordUpgraded).toBe(true);
+    expect(db.sessions.size).toBe(1);
+
+    // The row is rewritten with a real bcrypt hash of the same password.
+    const after = db.users.get('old@p.tn')!.password_hash;
+    expect(after).not.toBe(before);
+    expect(after).toMatch(/^\$2[aby]\$\d{2}\$/);
+    expect(await bcrypt.compare('PlatformAdmin2026!', after)).toBe(true);
+
+    // Second login goes through the normal bcrypt path: no flag, works fine.
+    const res2 = await login({ env: { DB: d1(db) } as any, request: post({ email: 'old@p.tn', password: 'PlatformAdmin2026!' }) } as any);
+    expect(res2.status).toBe(200);
+    expect((await res2.json() as any).passwordUpgraded).toBeUndefined();
+  });
+
+  it('wrong password against a legacy hash: 401, row untouched', async () => {
+    const db = makeDb();
+    seedLegacyUser(db, 'old@p.tn', 'platform_super_admin', 'PlatformAdmin2026!');
+    const before = db.users.get('old@p.tn')!.password_hash;
+    const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'old@p.tn', password: 'guessed-wrong' }) } as any);
+    expect(res.status).toBe(401);
+    expect(db.users.get('old@p.tn')!.password_hash).toBe(before);
+    expect(db.sessions.size).toBe(0);
+  });
+
+  it('center-role account with a legacy hash: 401 AND its row is NEVER rewritten', async () => {
+    const db = makeDb();
+    seedLegacyUser(db, 'boss@c1.tn', 'super_admin', 'CenterBoss!2026');
+    const before = db.users.get('boss@c1.tn')!.password_hash;
+    const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'boss@c1.tn', password: 'CenterBoss!2026' }) } as any);
+    expect(res.status).toBe(401);
+    expect(db.users.get('boss@c1.tn')!.password_hash).toBe(before);
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+  });
+
+  it('64-hex lookalikes that are not SHA-256(password) are rejected', async () => {
+    const db = makeDb();
+    db.users.set('fake@p.tn', {
+      email: 'fake@p.tn', name: 'x', role: 'platform_super_admin', description: '',
+      password_hash: 'a'.repeat(64), center_id: null,
+    });
+    const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'fake@p.tn', password: 'whatever' }) } as any);
+    expect(res.status).toBe(401);
   });
 });
 

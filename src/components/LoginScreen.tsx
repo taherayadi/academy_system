@@ -15,7 +15,7 @@ import { verifyPassword } from '../auth';
 import icon from '../assets/icon.png';
 
 interface LoginScreenProps {
-  onLogin: (user: UserAccount) => void | Promise<void>;
+  onLogin: (user: UserAccount, passwordUpgraded?: boolean) => void | Promise<void>;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -45,8 +45,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }
 
     try {
-      const { user } = await verifyPassword(cleanEmail, password.trim());
-      await onLogin(user);
+      const { user, passwordUpgraded } = await verifyPassword(cleanEmail, password.trim());
+      await onLogin(user, passwordUpgraded);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'كلمة السر غير صحيحة');
     } finally {

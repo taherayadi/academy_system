@@ -10,7 +10,8 @@
  * table / `tc_session` cookie are never consulted or minted from this app.
  */
 import {
-  Env, json, readBody, verifyPassword,
+  Env, json, readBody, verifyPassword, hashPassword,
+  isLegacySha256Hash, verifyLegacySha256,
   createPlatformSession, makeSessionCookie, purgeExpiredSessions,
   consumeAuthRateLimit, resetAuthRateLimit, PLATFORM_ROLE
 } from '../_lib';
@@ -50,15 +51,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
-    const isPasswordValid = await verifyPassword(cleanPassword, user.password_hash);
+    // Password check. Accounts whose row still holds the pre-salt-fix
+    // unsalted SHA-256 digest are accepted through the legacy path BELOW —
+    // exactly once, and only for a platform account, after which the row is
+    // rewritten with a fresh bcrypt hash (see _lib rules).
+    let upgradedFromLegacy = false;
+    const isPasswordValid = isLegacySha256Hash(user.password_hash)
+      ? await verifyLegacySha256(cleanPassword, user.password_hash)
+      : await verifyPassword(cleanPassword, user.password_hash);
     if (!isPasswordValid) {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
     // Correct password but not a platform account → indistinguishable from a
-    // wrong password for the caller; absolutely no session is created.
+    // wrong password for the caller; absolutely no session is created. This
+    // gate also runs BEFORE any legacy rewrite, so a center-role row is never
+    // touched from this application.
     if (user.role !== PLATFORM_ROLE) {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
+    }
+
+    // Retire the legacy digest now: this branch can only ever run once per
+    // account. A rewrite failure must not lock the operator out — the
+    // password-change UI still upgrades the hash on next save.
+    if (isLegacySha256Hash(user.password_hash)) {
+      upgradedFromLegacy = true;
+      try {
+        const freshHash = await hashPassword(cleanPassword);
+        await env.DB
+          .prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+          .bind(freshHash, user.email)
+          .run();
+      } catch {
+        /* keep the login working; see README rotation note */
+      }
     }
 
     // Reset rate limits for this client IP on successful login.
@@ -77,6 +103,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     return new Response(
       JSON.stringify({
         token,
+        // Set once, when this login retired a legacy unsalted-SHA-256 row.
+        // The UI uses it to demand an immediate password rotation.
+        ...(upgradedFromLegacy ? { passwordUpgraded: true } : {}),
         user: {
           email: user.email,
           name: user.name,

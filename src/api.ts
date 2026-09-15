@@ -60,19 +60,22 @@ function authHeaders(includeJson: boolean): Record<string, string> {
  * the localStorage/Bearer path and the HttpOnly `tc_platform_session` cookie
  * is set by the server.
  */
-export async function loginRequest(email: string, password: string): Promise<{ user: UserAccount }> {
+export async function loginRequest(email: string, password: string): Promise<{ user: UserAccount; passwordUpgraded?: boolean }> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ email, password })
   });
-  const data: { error?: string; user?: UserAccount; token?: string } = await res.json().catch(() => ({}));
+  const data: { error?: string; user?: UserAccount; token?: string; passwordUpgraded?: boolean } = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.error || 'خطأ في تسجيل الدخول.');
   }
   if (data.token) setSessionToken(data.token);
-  return { user: data.user! };
+  return {
+    user: data.user!,
+    ...(data.passwordUpgraded ? { passwordUpgraded: true } : {})
+  };
 }
 
 export async function logoutRequest(): Promise<void> {

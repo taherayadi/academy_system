@@ -105,6 +105,52 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 // ---------------------------------------------------------------------------
+// Legacy unsalted SHA-256 support — ONE-TIME UPGRADE PATH, login only
+// ---------------------------------------------------------------------------
+// Accounts seeded before the bcrypt "salt fix" commit (notably the platform
+// admin from migration 0020) can still carry an unsalted hex SHA-256 digest
+// in `users.password_hash`. bcrypt can never validate that format, so —
+// without migration 0036 or an out-of-band reset — even the rightful owner is
+// locked out forever. The platform LOGIN endpoint may therefore accept that
+// format exactly once per account: on a successful check the caller MUST
+// immediately rewrite the row with a fresh bcrypt hash, retiring this path
+// permanently for that account. Hard rules:
+//   * triggers ONLY when the stored value matches ^[0-9a-f]{64}$ — any
+//     bcrypt-hashed account never consults the legacy path;
+//   * used by LOGIN ONLY — never by session validation, bearer compat, or
+//     the password-change handler;
+//   * the caller enforces the platform role gate BEFORE any rewrite, so
+//     center-role rows are never touched from this app;
+//   * the seeded legacy digest (and its plaintext) is public in git history,
+//     so the UI must prompt an immediate password rotation after the first
+//     upgraded login.
+
+const LEGACY_SHA256_RE = /^[0-9a-f]{64}$/;
+
+export function isLegacySha256Hash(hash: unknown): hash is string {
+  return typeof hash === 'string' && LEGACY_SHA256_RE.test(hash);
+}
+
+/** SHA-256 hex digest via WebCrypto (available in Workers and Node >= 18). */
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Constant-time compare of SHA-256(password) against the stored digest. */
+export async function verifyLegacySha256(password: string, storedHash: string): Promise<boolean> {
+  if (!isLegacySha256Hash(storedHash)) return false;
+  const computed = await sha256Hex(password);
+  let diff = 0;
+  for (let i = 0; i < computed.length; i++) {
+    diff |= computed.charCodeAt(i) ^ storedHash.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+// ---------------------------------------------------------------------------
 // Client IP
 // ---------------------------------------------------------------------------
 

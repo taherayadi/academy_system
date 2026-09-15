@@ -5,6 +5,9 @@ import {
   readBody,
   hashPassword,
   verifyPassword,
+  isLegacySha256Hash,
+  sha256Hex,
+  verifyLegacySha256,
   getPlatformSessionToken,
   isHttpsRequest,
   makeSessionCookie,
@@ -131,6 +134,38 @@ describe('hashPassword & verifyPassword', () => {
 // ---------------------------------------------------------------------------
 // getPlatformSessionToken — platform cookie ONLY, never the center app's
 // ---------------------------------------------------------------------------
+describe('legacy unsalted SHA-256 helpers (one-time upgrade path)', () => {
+  it('isLegacySha256Hash accepts only a full 64-char lowercase-hex digest', () => {
+    expect(isLegacySha256Hash('7bbf0487d35eea207efbc20ae0cbaa8166201777c4a38d7607ddf868490dcca1')).toBe(true);
+    expect(isLegacySha256Hash('A'.repeat(64).toLowerCase())).toBe(true);
+    expect(isLegacySha256Hash('a'.repeat(63))).toBe(false);
+    expect(isLegacySha256Hash('a'.repeat(65))).toBe(false);
+    expect(isLegacySha256Hash('zz' + 'a'.repeat(62))).toBe(false);
+    expect(isLegacySha256Hash('$2b$10$abcdefghijklmnopqrstuv')).toBe(false);
+    expect(isLegacySha256Hash('')).toBe(false);
+    expect(isLegacySha256Hash(undefined)).toBe(false);
+    expect(isLegacySha256Hash(null)).toBe(false);
+  });
+
+  it('sha256Hex matches node crypto for the known seeded credential', async () => {
+    const { createHash } = await import('node:crypto');
+    const expected = createHash('sha256').update('PlatformAdmin2026!').digest('hex');
+    await expect(sha256Hex('PlatformAdmin2026!')).resolves.toBe(expected);
+    // The value actually stored by historical migration 0020:
+    await expect(sha256Hex('PlatformAdmin2026!')).resolves.toBe('7bbf0487d35eea207efbc20ae0cbaa8166201777c4a38d7607ddf868490dcca1');
+  });
+
+  it('verifyLegacySha256: correct password true, wrong false, non-legacy stored value false', async () => {
+    const stored = await sha256Hex('S3cret-Passw0rd');
+    await expect(verifyLegacySha256('S3cret-Passw0rd', stored)).resolves.toBe(true);
+    await expect(verifyLegacySha256('S3cret-Passw0rd ', stored)).resolves.toBe(false);
+    await expect(verifyLegacySha256('wrong', stored)).resolves.toBe(false);
+    // A bcrypt-stored account must never be checked through this path.
+    const bcryptHash = await hashPassword('whatever');
+    await expect(verifyLegacySha256('whatever', bcryptHash)).resolves.toBe(false);
+  });
+});
+
 describe('getPlatformSessionToken', () => {
   it('extracts token from Cookie header', () => {
     const req = new Request('https://x.com', {

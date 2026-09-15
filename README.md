@@ -203,12 +203,20 @@ UPDATE users SET role = 'platform_super_admin', center_id = NULL
 WHERE email = 'someone@yourdomain.tn';
 -- …or INSERT a new platform admin with the same role. The historical
 -- migration 0020 created the first platform account with an unsalted
--- SHA-256 hash that the bcrypt auth code can no longer validate;
--- migration 0036 replaces it with a salted bcrypt hash of the one-time
--- temporary password `Adm1n-R0tate-M3-N0w!`. Rotate it through the UI
--- ("تغيير كلمة السر") immediately after the first login — 0036 only
--- rewrites the exact legacy value, so an out-of-band reset that already
--- happened is never clobbered.
+-- SHA-256 hash that the bcrypt auth code can no longer validate. There are
+-- two sanctioned ways back in:
+--   1) Deploy this branch and simply log in with the ORIGINAL seeded
+--      password. The login endpoint accepts the legacy unsalted digest at
+--      most ONCE per account: on a correct check it re-hashes with bcrypt,
+--      persists it immediately (the path self-retires) and the UI prompts a
+--      mandatory rotation. No center-role row can ever be rewritten from
+--      this endpoint — the platform role gate runs first.
+--   2) Run migration 0036, which replaces the exact legacy value with a
+--      salted bcrypt hash of the one-time temporary password
+--      `Adm1n-R0tate-M3-N0w!` (an out-of-band reset already performed is
+--      never clobbered).
+-- Either way, rotate through the UI ("تغيير كلمة السر") immediately: the
+-- seeded plaintext is public in git history.
 ```
 
 * Center admins keep using the center application; granting them access to the

@@ -200,7 +200,7 @@ export default function App() {
   if (!currentUser) {
     return (
       <LoginScreen
-        onLogin={(user) => {
+        onLogin={(user, passwordUpgraded) => {
           // The server already rejected any non-platform identity before this
           // callback can fire (loginRequest resolves only for a created
           // platform_sessions row).
@@ -208,6 +208,13 @@ export default function App() {
           setCurrentUser(user);
           setActiveTab('platformAdmin');
           toast.success(`أهلاً ${user.name || user.email}`);
+          if (passwordUpgraded) {
+            // The account still carried the pre-salt-fix unsalted SHA-256
+            // digest; the server accepted it ONCE and re-hashed it with
+            // bcrypt. That digest is public in git history, so rotation is
+            // mandatory here.
+            toast.warning('تمت ترقية كلمة السر القديمة تلقائيًا إلى التشفير الحديث — غيّرها الآن من زر «تغيير كلمة السر».');
+          }
         }}
       />
     );

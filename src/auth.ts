@@ -64,7 +64,7 @@ export async function resolveSessionUser(): Promise<UserAccount | null> {
   }
 }
 
-export async function verifyPassword(email: string, password: string): Promise<{ user: UserAccount }> {
+export async function verifyPassword(email: string, password: string): Promise<{ user: UserAccount; passwordUpgraded?: boolean }> {
   return loginRequest(email, password);
 }
 

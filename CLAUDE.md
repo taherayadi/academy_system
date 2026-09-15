@@ -49,7 +49,8 @@ runbook.
   the section inside `src/components/PlatformAdminDashboard.tsx`.
 * `src/api.ts` — the ONLY fetch layer (Bearer+cookie, `UnauthorizedError` on 401).
 * `src/auth.ts` — `tc_platform_user` storage, boot resolution via `/api/auth/me`.
-* `functions/api/_lib.ts` — platform data layer: json/readBody, bcrypt helpers,
+* `functions/api/_lib.ts` — platform data layer: json/readBody, bcrypt helpers
+  (+ the ONE-TIME legacy unsalted-SHA-256 upgrade helpers used by login only),
   rate limiting (`platform-auth` prefix), `platform_sessions` lifecycle,
   `getCenterAccessState`, `mapCenterRow`, `removedRouteResponse`.
 * `functions/api/centers.ts` — tenant lifecycle: create (with director account),
