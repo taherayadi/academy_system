@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { onRequestGet, onRequestPatch } from './platform-billing';
 
-vi.mock('./_lib', () => ({
-  validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
-  readBody: vi.fn(async (request: Request) => request.json()),
-  json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
-}));
+vi.mock('./_lib', async (importOriginal) => {
+  const lib = await importOriginal<typeof import('./_lib')>();
+  return {
+    ...lib,
+    validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
+    readBody: vi.fn(async (request: Request) => request.json()),
+    json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
+  };
+});
 
 interface InvoiceRow {
   id: string;
@@ -141,6 +145,15 @@ describe('platform-billing PATCH — revenue & cheque rules', () => {
   it('returns 404 for an unknown invoice', async () => {
     const res = await patch({ id: 'nope', status: 'paid' });
     expect(res.status).toBe(404);
+  });
+
+  it('truncates notes longer than 1000 chars before writing (PATCH)', async () => {
+    seed({ status: 'pending' });
+    const longNotes = 'y'.repeat(2500);
+    const res = await patch({ id: INV, notes: longNotes });
+    expect(res.status).toBe(200);
+    expect(rows[0].notes).toBe('y'.repeat(1000));
+    expect(rows[0].notes).not.toBe(longNotes);
   });
 });
 

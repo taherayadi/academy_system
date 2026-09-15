@@ -159,6 +159,88 @@ describe('platform-advertisements — positions', () => {
   });
 });
 
+describe('platform-advertisements — input length limits', () => {
+  it('POST rejects a title over 200 chars', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'landing_page', title: 't'.repeat(201),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST rejects a linkUrl over 500 chars', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'landing_page', linkUrl: 'https://x.test/' + 'a'.repeat(500),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST rejects imageUrls containing a non-string element', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'landing_page', imageUrls: ['https://cdn/a.jpg', 42],
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST rejects imageUrls with an over-length element (500)', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'landing_page', imageUrls: ['https://cdn/' + 'a'.repeat(500)],
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST rejects more than 20 imageUrls', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'landing_page', imageUrls: Array.from({ length: 21 }, (_, i) => `https://cdn/${i}.jpg`),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST rejects centerIds containing a non-string element', async () => {
+    const res = await onRequestPost({ env: { DB: makeDb() }, request: req('POST', {
+      ...base, location: 'center_admin', centerIds: ['c1', 42],
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('POST trims and stores imageUrls elements', async () => {
+    const db = makeDb();
+    const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
+      ...base, location: 'landing_page', imageUrls: ['  https://cdn/a.jpg  '],
+    }) } as any);
+    expect(res.status).toBe(201);
+    const insert = db.calls.find(c => c.sql.includes('INSERT INTO platform_advertisements'));
+    expect(insert.args).toContain(JSON.stringify(['https://cdn/a.jpg']));
+  });
+
+  it('PATCH rejects a title over 200 chars', async () => {
+    const res = await onRequestPatch({ env: { DB: makeDb({ id: 'ADV_1', location: 'landing_page' }) }, request: req('PATCH', {
+      id: 'ADV_1', title: 't'.repeat(201),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH rejects a linkUrl over 500 chars', async () => {
+    const res = await onRequestPatch({ env: { DB: makeDb({ id: 'ADV_1', location: 'landing_page' }) }, request: req('PATCH', {
+      id: 'ADV_1', linkUrl: 'https://x.test/' + 'a'.repeat(500),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH rejects imageUrls with an over-length element', async () => {
+    const res = await onRequestPatch({ env: { DB: makeDb({ id: 'ADV_1', location: 'landing_page' }) }, request: req('PATCH', {
+      id: 'ADV_1', imageUrls: ['https://cdn/' + 'a'.repeat(500)],
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH rejects more than 50 centerIds', async () => {
+    const res = await onRequestPatch({ env: { DB: makeDb({ id: 'ADV_1', location: 'center_admin' }) }, request: req('PATCH', {
+      id: 'ADV_1', centerIds: Array.from({ length: 51 }, (_, i) => `c${i}`),
+    }) } as any);
+    expect(res.status).toBe(400);
+  });
+});
+
 // The public GET /api/advertisements/active feed (landing page + center
 // dashboard rendering) now lives in the center application; its "both"
 // visibility tests moved there with the endpoint. This file covers the

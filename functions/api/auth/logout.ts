@@ -1,4 +1,5 @@
 import { Env, json, validateSession, deleteSession, clearSessionCookie } from '../_lib';
+import { logError } from '../_logger';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -19,6 +20,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       headers
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تسجيل الخروج.' }, 500);
+    logError('logout', err);
+    return json({ error: 'خطأ في تسجيل الخروج.' }, 500);
   }
 };

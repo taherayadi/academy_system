@@ -1,4 +1,5 @@
 import { Env, json, validateSession } from './_lib';
+import { logError } from './_logger';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -47,6 +48,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     }
     return json({ url: ikData.url, fileId: ikData.fileId || '' });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في رفع الشعار.' }, 500);
+    logError('upload logo', err);
+    return json({ error: 'خطأ في رفع الشعار.' }, 500);
   }
 };

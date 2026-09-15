@@ -1,4 +1,5 @@
-import { Env, json, readBody, validateSession } from './_lib';
+import { Env, json, readBody, validateSession, truncateField } from './_lib';
+import { logError } from './_logger';
 
 // GET /api/platform-billing — SaaS finance dashboard aggregates + invoices
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
@@ -132,7 +133,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       }
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب البيانات المالية.' }, 500);
+    logError('fetch billing data', err);
+    return json({ error: 'خطأ في جلب البيانات المالية.' }, 500);
   }
 };
 
@@ -152,7 +154,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       const amount = Number(body.amount) || 0;
       const periodStart = Number(body.periodStart) || Date.now();
       const periodEnd = Number(body.periodEnd) || Date.now();
-      const notes = String(body.notes || '').trim();
+      const notes = truncateField(body.notes, 1000);
 
       if (!centerId) return json({ error: 'معرف المركز مطلوب.' }, 400);
 
@@ -188,7 +190,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ error: 'Action inconnue.' }, 400);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في إنشاء الفاتورة.' }, 500);
+    logError('create invoice', err);
+    return json({ error: 'خطأ في إنشاء الفاتورة.' }, 500);
   }
 };
 
@@ -246,7 +249,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       binds.push(body.chequeDate ? Number(body.chequeDate) : null);
     }
     if (body.paymentDate !== undefined) { updates.push('payment_date = ?'); binds.push(body.paymentDate ? Number(body.paymentDate) : null); }
-    if (body.notes !== undefined) { updates.push('notes = ?'); binds.push(String(body.notes).trim()); }
+    if (body.notes !== undefined) { updates.push('notes = ?'); binds.push(truncateField(body.notes, 1000)); }
     if (body.periodStart !== undefined) { updates.push('period_start = ?'); binds.push(Number(body.periodStart)); }
     if (body.periodEnd !== undefined) { updates.push('period_end = ?'); binds.push(Number(body.periodEnd)); }
 
@@ -257,7 +260,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث الفاتورة.' }, 500);
+    logError('update invoice', err);
+    return json({ error: 'خطأ في تحديث الفاتورة.' }, 500);
   }
 };
 
@@ -276,7 +280,8 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
     await env.DB.prepare('DELETE FROM center_invoices WHERE id = ?').bind(id).run();
     return json({ success: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في حذف الفاتورة.' }, 500);
+    logError('delete invoice', err);
+    return json({ error: 'خطأ في حذف الفاتورة.' }, 500);
   }
 };
 

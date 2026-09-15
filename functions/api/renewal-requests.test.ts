@@ -32,18 +32,22 @@ vi.mock('./_pubnub', () => ({
  */
 const sessionMock = vi.hoisted(() => ({ role: 'platform_super_admin' }));
 
-vi.mock('./_lib', () => ({
-  readBody: vi.fn(async (request: Request) => request.json()),
-  json: (data: unknown, status = 200) =>
-    new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
-  PLATFORM_ROLE: 'platform_super_admin',
-  validateSession: vi.fn(async (db: any, request: Request) => {
-    const raw = request.headers.get('X-Test-Role');
-    const role = raw === null ? sessionMock.role : raw; // '' = anonymous
-    if (role !== 'platform_super_admin') return null;
-    return { email: 'root@test.tn', token: 'tok-platform', role };
-  }),
-}));
+vi.mock('./_lib', async (importOriginal) => {
+  const lib = await importOriginal<typeof import('./_lib')>();
+  return {
+    ...lib,
+    readBody: vi.fn(async (request: Request) => request.json()),
+    json: (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
+    PLATFORM_ROLE: 'platform_super_admin',
+    validateSession: vi.fn(async (db: any, request: Request) => {
+      const raw = request.headers.get('X-Test-Role');
+      const role = raw === null ? sessionMock.role : raw; // '' = anonymous
+      if (role !== 'platform_super_admin') return null;
+      return { email: 'root@test.tn', token: 'tok-platform', role };
+    }),
+  };
+});
 
 vi.mock('./_planHistory', () => ({
   logPlanHistory: vi.fn(async (_db: any, entry: any) => { loggedHistory.push(entry); }),
@@ -282,8 +286,11 @@ describe('renewal-requests — PubNub signals', () => {
   it('PATCH publishes on center.{id} AND platform — approved AND rejected', async () => {
     const approved = makeDb(patchRows());
     await onRequestPatch({ env: { DB: approved }, request: req('PATCH', { id: 'r1', status: 'approved' }) } as any);
-    expect(publishMock.calls).toHaveLength(1);
-    expect(publishMock.calls[0].channels).toEqual(['center.c1', 'platform']);
+    // The decision signal is published twice in the platform console: once on
+    // the center's own channel, once on the shared `platform` channel.
+    expect(publishMock.calls).toHaveLength(2);
+    expect(publishMock.calls[0].channels).toEqual(['center.c1']);
+    expect(publishMock.calls[1].channels).toEqual(['platform']);
     expect(publishMock.calls[0].payload).toMatchObject({ topic: 'renewal_request_decided', centerId: 'c1' });
 
     publishMock.calls.length = 0;
@@ -291,8 +298,9 @@ describe('renewal-requests — PubNub signals', () => {
     const rejected = makeDb(patchRows());
     const res = await onRequestPatch({ env: { DB: rejected }, request: req('PATCH', { id: 'r1', status: 'rejected', skipApply: true }) } as any);
     expect(res.status).toBe(200);
-    expect(publishMock.calls).toHaveLength(1);
-    expect(publishMock.calls[0].channels).toEqual(['center.c1', 'platform']);
+    expect(publishMock.calls).toHaveLength(2);
+    expect(publishMock.calls[0].channels).toEqual(['center.c1']);
+    expect(publishMock.calls[1].channels).toEqual(['platform']);
   });
 
   it('no publication when the decision fails (409 already handled)', async () => {

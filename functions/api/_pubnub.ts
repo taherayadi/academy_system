@@ -21,6 +21,7 @@
  *     the request that triggered it.
  */
 import type { Env } from './_lib';
+import { logError } from './_logger';
 
 /** PubNub REST origin (the `ps.pndsn.com` cluster handles publish + PAM). */
 const PUBNUB_ORIGIN = 'https://ps.pndsn.com';
@@ -137,6 +138,10 @@ export async function publish(env: Env, channels: string[], payload: unknown): P
     const res = await fetch(url, { method: 'GET' });
     return res.ok;
   } catch (err) {
+    // Sanitized log only — never the raw error. Fire-and-forget still holds:
+    // callers pass the promise to waitUntil or void it, so a failure here
+    // must never reject the request that triggered the publish.
+    logError('pubnub publish', err);
     return false;
   }
 }
@@ -161,7 +166,7 @@ export function publishOnResponse(
       void promise;
     }
   } catch (err) {
-    console.error('[pubnub] publishOnResponse error:', err);
+    logError('pubnub publishOnResponse', err);
   }
 }
 
@@ -242,7 +247,7 @@ export async function grantToken(
     }
     return token;
   } catch (err) {
-    console.warn('[pubnub] grant failed — clients fall back to polling.', err);
+    logError('pubnub grant', err);
     return null;
   }
 }

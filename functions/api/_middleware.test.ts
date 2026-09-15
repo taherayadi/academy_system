@@ -19,6 +19,28 @@ const validateSessionMock = vi.hoisted(() => vi.fn(async (_db: unknown, request:
 vi.mock('./_lib', () => ({
   validateSession: validateSessionMock,
   json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status }),
+  addCorsHeaders: (response: Response, request: Request) => {
+    const origin = request.headers.get('Origin');
+    if (!origin) return response;
+    const url = new URL(request.url);
+    const isSameOrigin = origin === `${url.protocol}//${url.host}`;
+    if (isSameOrigin) {
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    return response;
+  },
+  addSecurityHeaders: (response: Response, request: Request) => {
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    const url = new URL(request.url);
+    if (url.protocol === 'https:') {
+      response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    return response;
+  },
 }));
 
 function ctx(pathname: string, headers: Record<string, string> = {}) {
@@ -75,5 +97,92 @@ describe('functions/api/_middleware — platform-only gate', () => {
     expect(res.status).toBe(200);
     expect(next).toHaveBeenCalled();
     expect((context.data as any).session).toMatchObject({ role: 'platform_super_admin' });
+  });
+});
+
+describe('functions/api/_middleware — CORS', () => {
+  it('handles OPTIONS preflight with 204 and CORS headers for same-origin', async () => {
+    const { context } = ctx('/api/centers');
+    context.request = new Request('https://x.test/api/centers', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://x.test' },
+    });
+    const res = await onRequest(context as any);
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://x.test');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('OPTIONS');
+  });
+
+  it('adds CORS headers to same-origin authenticated responses', async () => {
+    const { context, next } = ctx('/api/centers', {
+      Cookie: 'tc_platform_session=valid-platform',
+      Origin: 'https://x.test',
+    });
+    const res = await onRequest(context as any);
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalled();
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://x.test');
+  });
+
+  it('adds CORS headers to same-origin auth-rejection responses (401)', async () => {
+    const { context } = ctx('/api/centers', { Origin: 'https://x.test' });
+    const res = await onRequest(context as any);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://x.test');
+  });
+
+  it('does NOT set CORS headers for cross-origin requests', async () => {
+    const { context } = ctx('/api/centers', { Origin: 'https://evil.com' });
+    const res = await onRequest(context as any);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
+  it('does NOT set CORS headers when Origin header is absent', async () => {
+    const { context } = ctx('/api/centers');
+    const res = await onRequest(context as any);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});
+
+describe('functions/api/_middleware — security headers', () => {
+  it('adds security headers to all API responses', async () => {
+    const { context } = ctx('/api/centers');
+    const res = await onRequest(context as any);
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+  });
+
+  it('adds HSTS header for HTTPS requests', async () => {
+    const { context } = ctx('/api/centers');
+    context.request = new Request('https://x.test/api/centers', { headers: { Cookie: 'tc_platform_session=valid-platform' } });
+    const res = await onRequest(context as any);
+    expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
+  });
+
+  it('does not add HSTS header for HTTP requests', async () => {
+    const { context } = ctx('/api/centers');
+    context.request = new Request('http://x.test/api/centers', { headers: { Cookie: 'tc_platform_session=valid-platform' } });
+    const res = await onRequest(context as any);
+    expect(res.headers.get('Strict-Transport-Security')).toBeNull();
+  });
+
+  it('security headers present on OPTIONS preflight', async () => {
+    const { context } = ctx('/api/centers');
+    context.request = new Request('https://x.test/api/centers', { method: 'OPTIONS', headers: { Origin: 'https://x.test' } });
+    const res = await onRequest(context as any);
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+    expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
+  });
+
+  it('security headers present on 401 rejection responses', async () => {
+    const { context } = ctx('/api/centers');
+    const res = await onRequest(context as any);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
   });
 });

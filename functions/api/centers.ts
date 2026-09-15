@@ -1,10 +1,11 @@
-import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState } from './_lib';
+import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState, isValidEmail, validatePasswordStrength, clampMonthlyPrice, isValidPlan } from './_lib';
 import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
 } from './planLogic';
 import { logPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
+import { logError } from './_logger';
 
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
@@ -347,7 +348,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       return json({ centers: withSchedules });
     }
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات المراكز.' }, 500);
+    logError('fetch centers', err);
+    return json({ error: 'خطأ في جلب بيانات المراكز.' }, 500);
   }
 };
 
@@ -361,7 +363,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const body = await readBody(request);
     const name = String(body.name || '').trim();
-    const slug = String(body.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || '').trim();
+    // slug is either client-supplied or auto-generated from the name. A
+    // client-supplied slug over 100 chars is rejected; the auto-generated one
+    // is sliced so a long (but valid) centre name never 400s. The existing
+    // duplicate-slug check below handles any truncation collision with a 409.
+    const requestedSlug = body.slug ? String(body.slug).trim() : '';
+    if (requestedSlug.length > 100) {
+      return json({ error: 'الرابط المختصر طويل جداً (الحد الأقصى 100 حرف).' }, 400);
+    }
+    const slug = (requestedSlug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')).slice(0, 100);
     const phoneNumber = String(body.phoneNumber || body.phone || '').trim();
     if (!/^[0-9]{8}$/.test(phoneNumber)) {
       return json({ error: 'رقم الهاتف مطلوب ويجب أن يتكون من 8 أرقام.' }, 400);
@@ -390,9 +400,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       : (body.convertFromRequestId ? String(body.convertFromRequestId).trim() : null);
 
     if (!name) return json({ error: 'اسم المركز مطلوب.' }, 400);
+    if (name.length > 200) return json({ error: 'اسم المركز طويل جداً (الحد الأقصى 200 حرف).' }, 400);
+    if (locationCity.length > 100) return json({ error: 'اسم المدينة طويل جداً (الحد الأقصى 100 حرف).' }, 400);
+    if (adminName.length > 200) return json({ error: 'اسم المدير طويل جداً (الحد الأقصى 200 حرف).' }, 400);
     if (!adminEmail || !adminPassword) {
       return json({ error: 'البريد الإلكتروني وكلمة السر لحساب مدير المركز مطلوبان.' }, 400);
     }
+    if (!isValidEmail(adminEmail)) return json({ error: 'البريد الإلكتروني غير صالح.' }, 400);
+    const passwordError = validatePasswordStrength(adminPassword);
+    if (passwordError) return json({ error: passwordError }, 400);
 
     const existingUser = await env.DB.prepare('SELECT email FROM users WHERE email = ?').bind(adminEmail).first();
     if (existingUser) {
@@ -443,7 +459,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const schoolStartYear = billingMonth >= 8 ? billingYear : billingYear - 1;
     const currentSchoolYear = `${schoolStartYear}/${schoolStartYear + 1}`;
 
-    let monthlyPrice = isCustomPlan ? (Number(body.monthlyPrice) || 0) : 0;
+    let monthlyPrice = isCustomPlan ? clampMonthlyPrice(body.monthlyPrice) : 0;
     if (autoPrice) {
       const placeholders = enabledModules.map(() => '?').join(',');
       const { results: priceRows } = await env.DB.prepare(
@@ -570,7 +586,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // Race between the pre-check and the INSERT — map to the friendly code.
       return json({ error: 'Ce nom de centre (slug) ou cet email administrateur est déjà utilisé.', code: 'duplicate' }, 409);
     }
-    return json({ error: raw }, 500);
+    logError('create center', err);
+    return json({ error: 'خطأ في إنشاء المركز.' }, 500);
   }
 };
 
@@ -588,6 +605,12 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     if (body.phoneNumber !== undefined && !/^[0-9]{8}$/.test(String(body.phoneNumber).trim())) {
       return json({ error: 'رقم الهاتف يجب أن يتكون من 8 أرقام.' }, 400);
+    }
+    if (body.name !== undefined && String(body.name).trim().length > 200) {
+      return json({ error: 'اسم المركز طويل جداً (الحد الأقصى 200 حرف).' }, 400);
+    }
+    if (body.locationCity !== undefined && String(body.locationCity).trim().length > 100) {
+      return json({ error: 'اسم المدينة طويل جداً (الحد الأقصى 100 حرف).' }, 400);
     }
 
     const requestedAutoCalculatePrice = body.autoCalculatePrice === true;
@@ -720,6 +743,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     const normalizedBodyPlan = body.plan === undefined
       ? null
       : (String(body.plan).trim() === 'basic' ? 'starter' : String(body.plan).trim());
+    if (normalizedBodyPlan !== null && !isValidPlan(normalizedBodyPlan)) {
+      return json({ error: 'خطة غير صالحة.' }, 400);
+    }
     const currentPlan = current?.plan || 'starter';
     const currentModules = parseModulesJson(current?.enabled_modules);
     const currentCycle = (current?.billing_cycle as BillingCycle) || 'monthly';
@@ -1061,9 +1087,18 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     // Also update admin password if requested
     if (body.newAdminPassword && body.adminEmail) {
-      const newHash = await hashPassword(String(body.newAdminPassword).trim());
+      const resetEmail = String(body.adminEmail).trim().toLowerCase();
+      const resetPassword = String(body.newAdminPassword).trim();
+      if (!isValidEmail(resetEmail)) {
+        return json({ error: 'البريد الإلكتروني غير صالح.' }, 400);
+      }
+      const passwordError = validatePasswordStrength(resetPassword);
+      if (passwordError) {
+        return json({ error: passwordError }, 400);
+      }
+      const newHash = await hashPassword(resetPassword);
       await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ? AND center_id = ?')
-        .bind(newHash, String(body.adminEmail).trim().toLowerCase(), id).run();
+        .bind(newHash, resetEmail, id).run();
     }
 
     // Also cancel a pending schedule when this live change supersedes it but
@@ -1085,7 +1120,8 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     publishOnResponse(context, env, ['platform'],{ type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
     return json({ success: true, planChange: planChangeResponse });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث المركز.' }, 500);
+    logError('update center', err);
+    return json({ error: 'خطأ في تحديث المركز.' }, 500);
   }
 };
 
@@ -1170,6 +1206,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true, message: 'تم حذف المركز بنجاح.' });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في حذف المركز.' }, 500);
+    logError('delete center', err);
+    return json({ error: 'خطأ في حذف المركز.' }, 500);
   }
 };

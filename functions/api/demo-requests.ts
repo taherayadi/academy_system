@@ -2,7 +2,8 @@
  * /api/demo-requests — platform-side management of demo / trial requests
  * deposited through the center application's landing page.
  */
-import { Env, json, readBody, validateSession } from './_lib';
+import { Env, json, readBody, validateSession, truncateField } from './_lib';
+import { logError } from './_logger';
 
 /**
  * POST deliberately absent: public demo/trial submission belongs to the
@@ -57,7 +58,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ requests: formatted });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب طلبات التجربة.' }, 500);
+    logError('fetch demo requests', err);
+    return json({ error: 'خطأ في جلب طلبات التجربة.' }, 500);
   }
 };
 
@@ -73,7 +75,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
     if (!id) return json({ error: 'معرف الطلب مفقود.' }, 400);
 
     const status = body.status ? String(body.status).trim() : null;
-    const notes = body.notes !== undefined ? String(body.notes).trim() : null;
+    const notes = body.notes !== undefined ? truncateField(body.notes, 1000) : null;
 
     // 'converted' is one-way: a request that already became a center can only
     // be archived afterwards (never reopened, never converted a second time).
@@ -94,7 +96,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث الطلب.' }, 500);
+    logError('update demo request', err);
+    return json({ error: 'خطأ في تحديث الطلب.' }, 500);
   }
 };
 
@@ -112,6 +115,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
     await env.DB.prepare('DELETE FROM demo_requests WHERE id = ?').bind(id).run();
     return json({ success: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في حذف الطلب.' }, 500);
+    logError('delete demo request', err);
+    return json({ error: 'خطأ في حذف الطلب.' }, 500);
   }
 };

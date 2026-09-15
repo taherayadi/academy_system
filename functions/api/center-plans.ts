@@ -2,6 +2,7 @@ import { Env, json, readBody, validateSession } from './_lib';
 import { round2, planLabel, BillingCycle } from './planLogic';
 import { logPlanHistory, fetchPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
+import { logError } from './_logger';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
 // Editing a center's basic info must NEVER touch its plan or invoices.
@@ -157,7 +158,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       history: await fetchPlanHistory(env.DB, centerId),
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات الاشتراك.' }, 500);
+    logError('fetch subscription data', err);
+    return json({ error: 'خطأ في جلب بيانات الاشتراك.' }, 500);
   }
 };
 
@@ -456,6 +458,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     return json({ error: 'Action inconnue.' }, 400);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث الخطة.' }, 500);
+    logError('update plan', err);
+    return json({ error: 'خطأ في تحديث الخطة.' }, 500);
   }
 };

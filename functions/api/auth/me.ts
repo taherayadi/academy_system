@@ -6,6 +6,7 @@
  * platform_super_admin is rejected by validateSession (401).
  */
 import { Env, json, validateSession, PLATFORM_ROLE } from '../_lib';
+import { logError } from '../_logger';
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -30,6 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       }
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات المستخدم.' }, 500);
+    logError('fetch current user', err);
+    return json({ error: 'خطأ في جلب بيانات المستخدم.' }, 500);
   }
 };

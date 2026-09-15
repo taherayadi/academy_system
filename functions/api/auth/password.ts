@@ -12,6 +12,7 @@
  *     so a stolen cookie cannot outlive a deliberate password rotation.
  */
 import { Env, json, readBody, validateSession, hashPassword, verifyPassword, consumeAuthRateLimit, PLATFORM_ROLE } from '../_lib';
+import { logError } from '../_logger';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -72,6 +73,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ ok: true, sessionsRevoked: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تغيير كلمة السر.' }, 500);
+    logError('change password', err);
+    return json({ error: 'خطأ في تغيير كلمة السر.' }, 500);
   }
 };

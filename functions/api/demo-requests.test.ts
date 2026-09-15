@@ -1,25 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { onRequestPatch } from './demo-requests';
 
-vi.mock('./_lib', () => ({
-  validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
-  readBody: vi.fn(async (request: Request) => request.json()),
-  json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
-}));
+vi.mock('./_lib', async (importOriginal) => {
+  const lib = await importOriginal<typeof import('./_lib')>();
+  return {
+    ...lib,
+    validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
+    readBody: vi.fn(async (request: Request) => request.json()),
+    json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
+  };
+});
 
 function makeDb(demoStatus: string | null) {
   const updates: string[] = [];
+  const updateBinds: Array<{ sql: string; args: any[] }> = [];
   return {
     updates,
+    updateBinds,
     prepare(sql: string) {
       return {
-        bind() {
+        bind(...args: any[]) {
           return {
             async first() {
               return sql.includes('SELECT status') && demoStatus ? { status: demoStatus } : null;
             },
             async run() {
               updates.push(sql);
+              updateBinds.push({ sql, args });
               return { meta: { changes: 1 } };
             },
           };
@@ -65,5 +72,14 @@ describe('demo-requests PATCH — converted is a one-way status', () => {
     const { res, db } = await patch({ id: 'r1', status: 'contacted' }, 'new');
     expect(res.status).toBe(200);
     expect(db.updates.some(u => u.includes('SET status'))).toBe(true);
+  });
+
+  it('truncates notes longer than 1000 chars before writing', async () => {
+    const longNotes = 'x'.repeat(2500);
+    const { res, db } = await patch({ id: 'r1', notes: longNotes }, 'converted');
+    expect(res.status).toBe(200);
+    const update = db.updateBinds.find(b => b.sql.includes('SET notes'))!;
+    expect(update.args[0]).toBe('x'.repeat(1000));
+    expect(update.args[0]).not.toBe(longNotes);
   });
 });

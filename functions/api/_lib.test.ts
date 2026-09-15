@@ -16,6 +16,14 @@ import {
   getCenterAccessState,
   removedRouteResponse,
   PLATFORM_SESSION_COOKIE,
+  isValidEmail,
+  validatePasswordStrength,
+  VALID_PLANS,
+  isValidPlan,
+  clampMonthlyPrice,
+  truncateField,
+  addCorsHeaders,
+  addSecurityHeaders,
 } from './_lib';
 
 // ---------------------------------------------------------------------------
@@ -405,5 +413,147 @@ describe('removedRouteResponse', () => {
     const data = await res.json() as any;
     expect(data.code).toBe('ROUTE_REMOVED');
     expect(typeof data.error).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Input validation helpers (centers POST/PATCH)
+// ---------------------------------------------------------------------------
+describe('isValidEmail', () => {
+  it('accepts well-formed emails', () => {
+    expect(isValidEmail('admin@example.tn')).toBe(true);
+    expect(isValidEmail('user.name+tag@sub.domain.co')).toBe(true);
+    expect(isValidEmail('  spaced@example.com  ')).toBe(true);
+  });
+
+  it('rejects malformed emails and non-strings', () => {
+    expect(isValidEmail('not-an-email')).toBe(false);
+    expect(isValidEmail('a@b')).toBe(false); // no TLD
+    expect(isValidEmail('@example.com')).toBe(false);
+    expect(isValidEmail('user@')).toBe(false);
+    expect(isValidEmail('user@.com')).toBe(false);
+    expect(isValidEmail('user name@example.com')).toBe(false);
+    expect(isValidEmail('')).toBe(false);
+    expect(isValidEmail(null)).toBe(false);
+    expect(isValidEmail(undefined)).toBe(false);
+    expect(isValidEmail(42)).toBe(false);
+    expect(isValidEmail('a'.repeat(250) + '@example.com')).toBe(false); // > 254
+  });
+});
+
+describe('validatePasswordStrength', () => {
+  it('accepts 8–128 char passwords', () => {
+    expect(validatePasswordStrength('8chars!?')).toBeNull();
+    expect(validatePasswordStrength('x'.repeat(128))).toBeNull();
+  });
+
+  it('rejects too-short and too-long passwords with a message', () => {
+    expect(validatePasswordStrength('short')).toBe('كلمة السر يجب أن تتكون من 8 أحرف على الأقل.');
+    expect(validatePasswordStrength('')).toBe('كلمة السر يجب أن تتكون من 8 أحرف على الأقل.');
+    expect(validatePasswordStrength('x'.repeat(129))).toBe('كلمة السر طويلة جداً (الحد الأقصى 128 حرفاً).');
+    expect(validatePasswordStrength(null)).toBe('كلمة السر يجب أن تتكون من 8 أحرف على الأقل.');
+  });
+});
+
+describe('VALID_PLANS / isValidPlan', () => {
+  it('exposes the four DB-accepted storage plans', () => {
+    expect(VALID_PLANS).toEqual(['starter', 'growth', 'pro', 'custom']);
+  });
+
+  it('accepts whitelisted plans and normalizes basic → starter', () => {
+    for (const plan of ['starter', 'growth', 'pro', 'custom']) expect(isValidPlan(plan)).toBe(true);
+    expect(isValidPlan('basic')).toBe(true); // UI alias, stored as starter
+    expect(isValidPlan(' starter ')).toBe(true);
+  });
+
+  it('rejects unknown, empty and non-string plans', () => {
+    expect(isValidPlan('trial')).toBe(false); // trial is a status, not a plan
+    expect(isValidPlan('enterprise')).toBe(false);
+    expect(isValidPlan('')).toBe(false);
+    expect(isValidPlan(null)).toBe(false);
+    expect(isValidPlan(42)).toBe(false);
+  });
+});
+
+describe('clampMonthlyPrice', () => {
+  it('clamps to the [0, 1_000_000] window', () => {
+    expect(clampMonthlyPrice(0)).toBe(0);
+    expect(clampMonthlyPrice(240)).toBe(240);
+    expect(clampMonthlyPrice(-50)).toBe(0);
+    expect(clampMonthlyPrice(5_000_000)).toBe(1_000_000);
+  });
+
+  it('falls back to 0 on non-numeric input', () => {
+    expect(clampMonthlyPrice(undefined)).toBe(0);
+    expect(clampMonthlyPrice(null)).toBe(0);
+    expect(clampMonthlyPrice('abc')).toBe(0);
+    expect(clampMonthlyPrice('')).toBe(0);
+  });
+});
+
+describe('truncateField', () => {
+  it('trims and slices to maxLen', () => {
+    expect(truncateField('  hello  ', 5)).toBe('hello');
+    expect(truncateField('a'.repeat(600), 500)).toBe('a'.repeat(500));
+    expect(truncateField('', 5)).toBe('');
+  });
+
+  it('handles null/undefined', () => {
+    expect(truncateField(null, 5)).toBe('');
+    expect(truncateField(undefined, 5)).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addCorsHeaders
+// ---------------------------------------------------------------------------
+describe('addCorsHeaders', () => {
+  it('reflects Origin when same-origin', () => {
+    const req = new Request('https://admin.example.tn/api/centers', {
+      headers: { Origin: 'https://admin.example.tn' },
+    });
+    const res = addCorsHeaders(new Response('ok'), req);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://admin.example.tn');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('OPTIONS');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+  });
+
+  it('does NOT set CORS headers for cross-origin requests', () => {
+    const req = new Request('https://admin.example.tn/api/centers', {
+      headers: { Origin: 'https://evil.com' },
+    });
+    const res = addCorsHeaders(new Response('ok'), req);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
+  it('does NOT set CORS headers when Origin is absent', () => {
+    const req = new Request('https://admin.example.tn/api/centers');
+    const res = addCorsHeaders(new Response('ok'), req);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addSecurityHeaders
+// ---------------------------------------------------------------------------
+describe('addSecurityHeaders', () => {
+  it('sets X-Frame-Options, X-Content-Type-Options, Referrer-Policy', () => {
+    const req = new Request('http://admin.example.tn/api/centers');
+    const res = addSecurityHeaders(new Response('ok'), req);
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+  });
+
+  it('adds HSTS for HTTPS requests', () => {
+    const req = new Request('https://admin.example.tn/api/centers');
+    const res = addSecurityHeaders(new Response('ok'), req);
+    expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
+  });
+
+  it('omits HSTS for HTTP requests', () => {
+    const req = new Request('http://admin.example.tn/api/centers');
+    const res = addSecurityHeaders(new Response('ok'), req);
+    expect(res.headers.get('Strict-Transport-Security')).toBeNull();
   });
 });

@@ -24,9 +24,11 @@ import {
   readBody,
   validateSession,
   PLATFORM_ROLE,
+  truncateField,
 } from './_lib';
 import { logPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
+import { logError } from './_logger';
 
 const DAY_MS = 86400000;
 
@@ -136,7 +138,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ requests, history });
   } catch (err) {
-    console.error('Error loading renewal requests:', err);
+    logError('load renewal requests', err);
     return json({ error: 'Erreur lors du chargement des demandes.' }, 500);
   }
 };
@@ -163,7 +165,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     }
 
     const now = Date.now();
-    const decisionNote = String(body.decisionNote || '').slice(0, 500);
+    const decisionNote = truncateField(body.decisionNote, 500);
     // Modal « Examiner et appliquer » : le plan a déjà été appliqué via le
     // moteur « Plans & factures » (régularisation / programmation / facture).
     // On enregistre seulement la décision pour éviter une double application.
@@ -230,7 +232,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     return json({ success: true, id, status });
   } catch (err) {
-    console.error('Error deciding renewal request:', err);
+    logError('decide renewal request', err);
     return json({ error: 'Erreur lors du traitement de la demande.' }, 500);
   }
 };

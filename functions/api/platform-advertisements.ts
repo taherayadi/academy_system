@@ -1,5 +1,6 @@
 import { Env, json, readBody, validateSession } from './_lib';
 import { normalizeAdPositions } from './_adPositions';
+import { logError } from './_logger';
 
 // Helper to parse JSON safely
 function parseJson<T>(value: unknown, fallback: T): T {
@@ -57,6 +58,25 @@ function adsRequireCenters(location: unknown): boolean {
   return CENTER_SCOPED_ADS_LOCATIONS.has(String(location || '').trim());
 }
 
+/**
+ * Validates and trims a list of short strings (ad image URLs, center IDs).
+ * Returns null when the input is not an array, holds more than `maxItems`
+ * entries, or any entry is not a string / trims to empty / exceeds
+ * `itemMaxLen`. An empty array passes (the callers enforce "at least one"
+ * with their own field-specific messages).
+ */
+function sanitizeStringList(raw: unknown, maxItems: number, itemMaxLen: number): string[] | null {
+  if (!Array.isArray(raw) || raw.length > maxItems) return null;
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') return null;
+    const s = item.trim();
+    if (s.length === 0 || s.length > itemMaxLen) return null;
+    out.push(s);
+  }
+  return out;
+}
+
 // GET /api/platform-advertisements - List all advertisements with center assignments
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -83,8 +103,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ advertisements });
   } catch (err) {
-    console.error('Error fetching advertisements:', err);
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب الإعلانات.' }, 500);
+    logError('fetch advertisements', err);
+    return json({ error: 'خطأ في جلب الإعلانات.' }, 500);
   }
 };
 
@@ -101,7 +121,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const dateStart = Number(body.dateStart);
     const dateEnd = Number(body.dateEnd);
     const location = String(body.location || '').trim();
-    const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+    let imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
     const linkUrl = String(body.linkUrl || '').trim();
     const priority = Number(body.priority) || 100;
     const isActive = body.isActive !== undefined ? !!body.isActive : true;
@@ -125,6 +145,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     } else if (adsRequireCenters(location) && centerIds.length === 0) {
       return json({ error: 'Choisissez au moins un centre cible.' }, 400);
     }
+    if (title.length > 200) {
+      return json({ error: 'Le titre de l’annonce est trop long (200 caractères max).' }, 400);
+    }
+    if (linkUrl.length > 500) {
+      return json({ error: 'Le lien est trop long (500 caractères max).' }, 400);
+    }
+    const cleanImageUrls = sanitizeStringList(imageUrls, 20, 500);
+    if (cleanImageUrls === null) {
+      return json({ error: 'URL d’image invalide.' }, 400);
+    }
+    imageUrls = cleanImageUrls;
+    const cleanCenterIds = sanitizeStringList(centerIds, 50, 100);
+    if (cleanCenterIds === null) {
+      return json({ error: 'Liste de centres cibles invalide.' }, 400);
+    }
+    centerIds = cleanCenterIds;
     if (!dateStart || !dateEnd) {
       return json({ error: 'Dates de début et de fin requises.' }, 400);
     }
@@ -174,8 +210,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true, id }, 201);
   } catch (err) {
-    console.error('Error creating advertisement:', err);
-    return json({ error: err instanceof Error ? err.message : 'خطأ في إنشاء الإعلان.' }, 500);
+    logError('create advertisement', err);
+    return json({ error: 'خطأ في إنشاء الإعلان.' }, 500);
   }
 };
 
@@ -214,6 +250,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       if (!title) {
         return json({ error: 'Le titre de l’annonce est requis.' }, 400);
       }
+      if (title.length > 200) {
+        return json({ error: 'Le titre de l’annonce est trop long (200 caractères max).' }, 400);
+      }
       updates.push('title = ?');
       binds.push(title);
     }
@@ -242,13 +281,21 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
       if (imageUrls.length === 0) {
         return json({ error: 'Ajoutez au moins une image.' }, 400);
       }
+      const cleanImageUrls = sanitizeStringList(imageUrls, 20, 500);
+      if (cleanImageUrls === null) {
+        return json({ error: 'URL d’image invalide.' }, 400);
+      }
       updates.push('image_urls = ?');
-      binds.push(JSON.stringify(imageUrls));
+      binds.push(JSON.stringify(cleanImageUrls));
     }
 
     if (body.linkUrl !== undefined) {
+      const linkUrl = String(body.linkUrl).trim();
+      if (linkUrl.length > 500) {
+        return json({ error: 'Le lien est trop long (500 caractères max).' }, 400);
+      }
       updates.push('link_url = ?');
-      binds.push(String(body.linkUrl).trim());
+      binds.push(linkUrl);
     }
 
     if (body.positions !== undefined && await hasAdPositionsColumn(env.DB)) {
@@ -285,7 +332,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     // Update center assignments if provided
     if (body.centerIds !== undefined) {
-      const centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
+      let centerIds = Array.isArray(body.centerIds) ? body.centerIds : [];
       const finalLocation = body.location !== undefined
         ? String(body.location).trim()
         : String(existing?.location || '');
@@ -301,6 +348,11 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
         }
       } else {
         // Replace assignments
+        const cleanCenterIds = sanitizeStringList(centerIds, 50, 100);
+        if (cleanCenterIds === null) {
+          return json({ error: 'Liste de centres cibles invalide.' }, 400);
+        }
+        centerIds = cleanCenterIds;
         statements.push(
           env.DB.prepare('DELETE FROM advertisement_centers WHERE advertisement_id = ?').bind(id)
         );
@@ -325,8 +377,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true });
   } catch (err) {
-    console.error('Error updating advertisement:', err);
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث الإعلان.' }, 500);
+    logError('update advertisement', err);
+    return json({ error: 'خطأ في تحديث الإعلان.' }, 500);
   }
 };
 
@@ -350,7 +402,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ success: true });
   } catch (err) {
-    console.error('Error deleting advertisement:', err);
-    return json({ error: err instanceof Error ? err.message : 'خطأ في حذف الإعلان.' }, 500);
+    logError('delete advertisement', err);
+    return json({ error: 'خطأ في حذف الإعلان.' }, 500);
   }
 };

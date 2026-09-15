@@ -36,6 +36,7 @@ beforeEach(() => {
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -77,14 +78,18 @@ describe('_pubnub — publish (fire-and-forget REST publish)', () => {
     );
   });
 
-  it('never throws — network failures and non-2xx only warn', async () => {
+  it('never throws — genuine failures log sanitized, non-2xx stays silent', async () => {
     fetchMock.mockRejectedValueOnce(new Error('network down'));
     await expect(publish(envWithKeys as any, ['platform'], {})).resolves.toBe(false);
 
     fetchMock.mockResolvedValueOnce(new Response('err', { status: 400 }));
     await expect(publish(envWithKeys as any, ['platform'], {})).resolves.toBe(false);
 
-    expect(console.warn).toHaveBeenCalledTimes(2);
+    // Exceptions are logged through logError (sanitized, message only — no raw error).
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect((console.error as any).mock.calls[0][0]).toBe('[platform] pubnub publish: network down');
+    // Provider-side rejections stay silent (fire-and-forget, polling fallback).
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('survives payloads with unicode / Arabic channel-safe content', async () => {
@@ -145,7 +150,11 @@ describe('_pubnub — grantToken (PAM v3, HMAC-SHA256 signé)', () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: {} }), { status: 200 }));
     await expect(grantToken(envWithKeys as any, 'u', { channels: { platform: { read: true } } })).resolves.toBeNull();
 
-    expect(console.warn).toHaveBeenCalledTimes(3);
+    // Exceptions go through logError (console.error, sanitized). Expected
+    // provider rejections (403 = denied, empty body = no token) stay console.warn.
+    expect(console.warn).toHaveBeenCalledTimes(2);
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect((console.error as any).mock.calls[0][0]).toBe('[platform] pubnub grant: boom');
   });
 });
 

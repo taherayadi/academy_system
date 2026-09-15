@@ -16,3 +16,4 @@ test-results/
 playwright-report/
 release/
 .dev.vars*
+_worker.bundle

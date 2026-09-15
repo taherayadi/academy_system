@@ -90,6 +90,90 @@ export async function readBody<T = any>(request: Request): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
+// Input validation helpers — one place for the shape rules the platform
+// handlers apply to untrusted request bodies (names, emails, passwords,
+// plans, prices). Rejection is explicit; nothing here throws.
+// ---------------------------------------------------------------------------
+
+/** Simplified RFC 5322-style email check (local@domain.tld), length-capped. */
+export function isValidEmail(email: unknown): boolean {
+  if (typeof email !== 'string') return false;
+  const value = email.trim();
+  if (value.length === 0 || value.length > 254) return false;
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
+}
+
+/** Password strength rule: 8–128 chars. Returns null when OK, else an error message. */
+export function validatePasswordStrength(password: unknown): string | null {
+  const value = typeof password === 'string' ? password : String(password ?? '');
+  if (value.length < 8) return 'كلمة السر يجب أن تتكون من 8 أحرف على الأقل.';
+  if (value.length > 128) return 'كلمة السر طويلة جداً (الحد الأقصى 128 حرفاً).';
+  return null;
+}
+
+/** The only plan values the DB CHECK constraint accepts (storage values). */
+export const VALID_PLANS = ['starter', 'growth', 'pro', 'custom'] as const;
+
+/** true when the plan is a whitelisted storage value (`basic` normalizes to `starter`). */
+export function isValidPlan(plan: unknown): boolean {
+  const value = typeof plan === 'string' ? plan.trim() : '';
+  return (VALID_PLANS as readonly string[]).includes(value === 'basic' ? 'starter' : value);
+}
+
+/** Clamps a monthly price (TND) to a sane [0, 1_000_000] window. */
+export function clampMonthlyPrice(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(n, 1_000_000));
+}
+
+/** Trims and hard-truncates a free-text field to `maxLen` characters. */
+export function truncateField(value: unknown, maxLen: number): string {
+  const s = typeof value === 'string' ? value : value == null ? '' : String(value);
+  return s.trim().slice(0, maxLen);
+}
+
+/**
+ * Adds CORS headers to the response if the request Origin is same-origin.
+ * Reflects the Origin header back as Access-Control-Allow-Origin.
+ * Also sets Access-Control-Allow-Methods and Access-Control-Allow-Headers.
+ */
+export function addCorsHeaders(response: Response, request: Request): Response {
+  const origin = request.headers.get('Origin');
+  if (!origin) return response;
+
+  const url = new URL(request.url);
+  const isSameOrigin = origin === `${url.protocol}//${url.host}`;
+
+  if (isSameOrigin) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  }
+
+  return response;
+}
+
+/**
+ * Adds security headers to every API response.
+ * X-Frame-Options: DENY — prevent clickjacking via iframe.
+ * X-Content-Type-Options: nosniff — prevent MIME-type sniffing.
+ * Referrer-Policy: strict-origin-when-cross-origin — limit referrer leakage.
+ * Strict-Transport-Security: 1 year — enforce HTTPS (only on HTTPS requests).
+ */
+export function addSecurityHeaders(response: Response, request: Request): Response {
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  if (isHttpsRequest(request)) {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  return response;
+}
+
+// ---------------------------------------------------------------------------
 // Password hashing (bcrypt)
 // ---------------------------------------------------------------------------
 
