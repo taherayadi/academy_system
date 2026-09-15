@@ -179,7 +179,7 @@ export function addSecurityHeaders(response: Response, request: Request): Respon
   // clickjacking of API responses.
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data: blob:; connect-src 'self' https://*.pndsn.com; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data: blob:; font-src 'self'; connect-src 'self' https://*.pndsn.com; frame-ancestors 'none'"
   );
 
   return response;

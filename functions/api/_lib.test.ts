@@ -557,6 +557,7 @@ describe('addSecurityHeaders', () => {
     // Inline styles stay permitted (Tailwind dynamic styles) and PubNub is the
     // only external connect target (wildcard for cluster hosts like ps12.pndsn.com).
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("font-src 'self'");
     expect(csp).toContain('https://*.pndsn.com');
     expect(csp).toContain('blob:');
   });
