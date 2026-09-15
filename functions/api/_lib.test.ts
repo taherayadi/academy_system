@@ -555,9 +555,10 @@ describe('addSecurityHeaders', () => {
     // frame-ancestors 'none' — API responses cannot be framed.
     expect(csp).toContain("frame-ancestors 'none'");
     // Inline styles stay permitted (Tailwind dynamic styles) and PubNub is the
-    // only external connect target.
+    // only external connect target (wildcard for cluster hosts like ps12.pndsn.com).
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).toContain('https://ps.pndsn.com');
+    expect(csp).toContain('https://*.pndsn.com');
+    expect(csp).toContain('blob:');
   });
 
   it('adds HSTS for HTTPS requests', () => {

@@ -171,13 +171,15 @@ export function addSecurityHeaders(response: Response, request: Request): Respon
   }
   // The platform console is a React SPA: all JS comes from 'self', styles from
   // the Tailwind bundle (inline styles needed for dynamic layout), images from
-  // the ImageKit CDN (center logos / ad creatives), and WebSockets from PubNub
-  // `ps.pndsn.com` (the only third-party endpoint the SPA ever talks to). This
-  // mirrors the policy served on static assets via public/_headers — keep the
-  // two in sync. frame-ancestors 'none' blocks clickjacking of API responses.
+  // the ImageKit CDN (center logos / ad creatives) plus blob: object URLs
+  // (logo preview before upload), and WebSockets from PubNub — the SDK dials
+  // cluster-specific hosts like `ps12.pndsn.com`, hence the `*.pndsn.com`
+  // wildcard. This mirrors the policy served on static assets via
+  // public/_headers — keep the two in sync. frame-ancestors 'none' blocks
+  // clickjacking of API responses.
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data:; connect-src 'self' https://ps.pndsn.com; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data: blob:; connect-src 'self' https://*.pndsn.com; frame-ancestors 'none'"
   );
 
   return response;
