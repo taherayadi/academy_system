@@ -161,10 +161,16 @@ export function publishOnResponse(
   channels: string[],
   payload: unknown
 ): void {
+  console.log('[pubnub] publishOnResponse called with channels:', channels);
   try {
     const promise = publish(env, channels, payload);
-    if (typeof context?.waitUntil === 'function') context.waitUntil(promise);
-    else void promise;
+    if (typeof context?.waitUntil === 'function') {
+      console.log('[pubnub] Using waitUntil to schedule publish');
+      context.waitUntil(promise);
+    } else {
+      console.warn('[pubnub] No waitUntil available, publish may not complete');
+      void promise;
+    }
   } catch (err) {
     console.warn('[pubnub] publish scheduling failed.', err);
   }
