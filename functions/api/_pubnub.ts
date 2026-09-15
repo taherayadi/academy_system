@@ -126,7 +126,7 @@ async function buildSignedUrl(
  */
 export async function publish(env: Env, channels: string[], payload: unknown): Promise<boolean> {
   const keys = readPubNubKeySet(env);
-   if (!keys || !channels.length) {
+  if (!keys || !channels.length) {
     console.warn('[pubnub] keys missing — cannot publish; clients fall back to polling.');
     return false;
   }
@@ -135,11 +135,14 @@ export async function publish(env: Env, channels: string[], payload: unknown): P
     const message = JSON.stringify(payload ?? {});
     const path = `/publish/${keys.publishKey}/${keys.subscribeKey}/0/${channelList}/0/${encodeString(message)}`;
     const url = await buildSignedUrl(keys, 'GET', path, { uuid: SERVER_UUID });
+    console.log('[pubnub] Publishing to:', channelList, 'payload:', payload);
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) {
-      console.warn(`[pubnub] publish rejected (${res.status}) — clients fall back to polling.`);
+      const body = await res.text().catch(() => 'no body');
+      console.warn(`[pubnub] publish rejected (${res.status}) body: ${body} — clients fall back to polling.`);
       return false;
     }
+    console.log('[pubnub] Published successfully to:', channelList);
     return true;
   } catch (err) {
     console.warn('[pubnub] publish failed — clients fall back to polling.', err);
