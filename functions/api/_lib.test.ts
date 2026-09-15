@@ -545,6 +545,21 @@ describe('addSecurityHeaders', () => {
     expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
   });
 
+  it('sets a strict content security policy on every response', () => {
+    const req = new Request('https://admin.example.tn/api/centers');
+    const res = addSecurityHeaders(new Response('ok'), req);
+    const csp = res.headers.get('Content-Security-Policy') || '';
+    // 'self' only — no inline scripts, no eval, no unsafe script sources.
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("script-src 'self'");
+    // frame-ancestors 'none' — API responses cannot be framed.
+    expect(csp).toContain("frame-ancestors 'none'");
+    // Inline styles stay permitted (Tailwind dynamic styles) and PubNub is the
+    // only external connect target.
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain('https://ps.pndsn.com');
+  });
+
   it('adds HSTS for HTTPS requests', () => {
     const req = new Request('https://admin.example.tn/api/centers');
     const res = addSecurityHeaders(new Response('ok'), req);
