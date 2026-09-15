@@ -42,6 +42,11 @@ runbook.
    the `platform` channel for this app.
 7. **`document.write`/print HTML must escape every interpolated untrusted
    field** with `src/utils/html.ts → escapeHtml`.
+8. **Never create a pull request for `arena/*` branches.** These are throwaway
+   working branches (e.g. `arena/01a0a1b2-academy-system`); commit and push to
+   them directly and move on. Do not open a PR, offer to open one, or create
+   any PR whose head branch matches `arena/*`. Approved changes move to the
+   `master` branch by direct push, not by PR.
 
 ## Repo map
 
