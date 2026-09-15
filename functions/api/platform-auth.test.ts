@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import { onRequestPost as login } from './auth/login';
@@ -11,6 +11,7 @@ import {
   getPlatformSessionToken,
   PLATFORM_SESSION_COOKIE,
 } from './_lib';
+import * as lib from './_lib';
 
 /**
  * Integration-style negative tests for the platform authentication boundary.
@@ -218,6 +219,28 @@ describe('POST /api/auth/login — legacy unsalted SHA-256 one-time upgrade', ()
     });
     const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'fake@p.tn', password: 'whatever' }) } as any);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /api/auth/login — timing normalisation (no account / legacy vs bcrypt)', () => {
+  it('unknown-email branch burns one real bcrypt compare against the dummy hash', async () => {
+    const db = makeDb();
+    await seedUser(db, 'sa@p.tn', 'platform_super_admin');
+    const spy = vi.spyOn(lib, 'verifyPassword');
+    const res = await login({ env: { DB: d1(db) } as any, request: post({ email: 'ghost@p.tn', password: 'whatever' }) } as any);
+    expect(res.status).toBe(401);
+    expect(spy).toHaveBeenCalledWith('whatever', lib.AUTH_TIMING_DUMMY_HASH);
+    spy.mockRestore();
+  });
+
+  it('legacy-hash path also burns one bcrypt (wrong password included)', async () => {
+    const db = makeDb();
+    seedLegacyUser(db, 'old@p.tn', 'platform_super_admin', 'LegacyPass!2026');
+    const spy = vi.spyOn(lib, 'verifyPassword');
+    const wrong = await login({ env: { DB: d1(db) } as any, request: post({ email: 'old@p.tn', password: 'wrong-pw' }) } as any);
+    expect(wrong.status).toBe(401);
+    expect(spy).toHaveBeenCalledWith('wrong-pw', lib.AUTH_TIMING_DUMMY_HASH);
+    spy.mockRestore();
   });
 });
 

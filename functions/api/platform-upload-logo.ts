@@ -1,7 +1,11 @@
 import { Env, json, validateSession } from './_lib';
 import { logError } from './_logger';
 
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
+// SVG is intentionally excluded: it is an HTML-capable format, and while the
+// logo renders as <img src> here (which cannot execute SVG script), any future
+// renderer that fetches the URL as a document (<object>, direct navigation)
+// would turn a stored SVG into an XSS vector. PNG/WebP/GIF cover logo use.
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 /** Upload a logo selected by the platform admin before a center is created. */
@@ -22,7 +26,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'لم يتم إرسال أي صورة.' }, 400);
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return json({ error: 'صيغة الصورة غير مدعومة (PNG, JPG, WEBP, SVG).' }, 400);
+      return json({ error: 'صيغة الصورة غير مدعومة (PNG, JPG, WEBP, GIF).' }, 400);
     }
     if (file.size > MAX_LOGO_BYTES) {
       return json({ error: 'حجم الصورة كبير جداً (الحد الأقصى 2 ميغا).' }, 400);

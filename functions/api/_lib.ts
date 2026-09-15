@@ -188,6 +188,18 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
+/**
+ * Throwaway bcrypt hash used ONLY to normalise login response timing.
+ * The legacy login path verifies an unsalted SHA-256 digest in microseconds,
+ * and a missing account performs no hash work at all, while a bcrypt-hashed
+ * account takes ~100 ms of real bcrypt work. The login handler runs one real
+ * bcrypt compare against this hash in those two branches, so all three
+ * outcomes cost ~one bcrypt and a remote attacker cannot time the response to
+ * tell "no account" / "legacy-hashed account" apart from "bcrypt account".
+ * Its plaintext is deliberately meaningless; only format validity matters.
+ */
+export const AUTH_TIMING_DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
 // ---------------------------------------------------------------------------
 // Legacy unsalted SHA-256 support — ONE-TIME UPGRADE PATH, login only
 // ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@
  */
 import {
   Env, json, readBody, verifyPassword, hashPassword,
+  AUTH_TIMING_DUMMY_HASH,
   isLegacySha256Hash, verifyLegacySha256,
   createPlatformSession, makeSessionCookie, purgeExpiredSessions,
   consumeAuthRateLimit, resetAuthRateLimit, PLATFORM_ROLE
@@ -48,7 +49,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       .first<any>();
 
     if (!user) {
-      // Return the same error as wrong password to prevent user enumeration.
+      // Same 401 as a wrong password to prevent user enumeration — and, on top
+      // of the identical message, burn the ~one bcrypt a real account would,
+      // so the RESPONSE TIMING does not distinguish "no account" from "account".
+      await verifyPassword(cleanPassword, AUTH_TIMING_DUMMY_HASH);
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
@@ -60,6 +64,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const isPasswordValid = isLegacySha256Hash(user.password_hash)
       ? await verifyLegacySha256(cleanPassword, user.password_hash)
       : await verifyPassword(cleanPassword, user.password_hash);
+
+    // The unsalted SHA-256 comparison completes in microseconds. Burn the
+    // ~one bcrypt a modern account takes (for BOTH the correct and the wrong
+    // password) so the response cannot be timed to spot legacy-hashed rows.
+    if (isLegacySha256Hash(user.password_hash)) {
+      await verifyPassword(cleanPassword, AUTH_TIMING_DUMMY_HASH);
+    }
+
     if (!isPasswordValid) {
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
