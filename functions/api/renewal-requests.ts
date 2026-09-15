@@ -219,14 +219,14 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     // direct comme chemin skipApply). Le centre reçoit l'info sur son propre
     // canal via l'application centre ; la console plateforme rafraîchit la
     // sienne sur le canal `platform`.
-    console.log('[renewal] About to publish PubNub notification for centerId:', String(row.center_id));
-    publishOnResponse(context, env, ['center.' + String(row.center_id), 'platform'], {
+    const payload = {
       type: 'refetch',
       topic: 'renewal_request_decided',
       centerId: String(row.center_id),
       at: now,
-    });
-    console.log('[renewal] publishOnResponse called');
+    };
+    publishOnResponse(context, env, ['center.' + String(row.center_id)], payload);
+    publishOnResponse(context, env, ['platform'], payload);
 
     return json({ success: true, id, status });
   } catch (err) {

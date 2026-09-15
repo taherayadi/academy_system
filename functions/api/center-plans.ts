@@ -187,9 +187,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const signalCenterUpdated = (action: string) => publishOnResponse(
       context,
       env,
-      ['center.' + centerId, 'platform'],
+      ['center.' + centerId],
       { type: 'refetch', topic: 'center_plan_updated', centerId, action, at: Date.now() }
     );
+     
 
     if (action === 'remove-schedule') {
       const scheduleId = String(body.scheduleId || '').trim();

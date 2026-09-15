@@ -127,7 +127,6 @@ async function buildSignedUrl(
 export async function publish(env: Env, channels: string[], payload: unknown): Promise<boolean> {
   const keys = readPubNubKeySet(env);
   if (!keys || !channels.length) {
-    console.warn('[pubnub] keys missing — cannot publish; clients fall back to polling.');
     return false;
   }
   try {
@@ -135,17 +134,9 @@ export async function publish(env: Env, channels: string[], payload: unknown): P
     const message = JSON.stringify(payload ?? {});
     const path = `/publish/${keys.publishKey}/${keys.subscribeKey}/0/${channelList}/0/${encodeString(message)}`;
     const url = await buildSignedUrl(keys, 'GET', path, { uuid: SERVER_UUID });
-    console.log('[pubnub] Publishing to:', channelList, 'payload:', payload);
     const res = await fetch(url, { method: 'GET' });
-    if (!res.ok) {
-      const body = await res.text().catch(() => 'no body');
-      console.warn(`[pubnub] publish rejected (${res.status}) body: ${body} — clients fall back to polling.`);
-      return false;
-    }
-    console.log('[pubnub] Published successfully to:', channelList);
-    return true;
+    return res.ok;
   } catch (err) {
-    console.warn('[pubnub] publish failed — clients fall back to polling.', err);
     return false;
   }
 }
@@ -161,18 +152,16 @@ export function publishOnResponse(
   channels: string[],
   payload: unknown
 ): void {
-  console.log('[pubnub] publishOnResponse called with channels:', channels);
   try {
     const promise = publish(env, channels, payload);
     if (typeof context?.waitUntil === 'function') {
-      console.log('[pubnub] Using waitUntil to schedule publish');
       context.waitUntil(promise);
     } else {
-      console.warn('[pubnub] No waitUntil available, publish may not complete');
+      // No waitUntil available — just let the promise fire in background
       void promise;
     }
   } catch (err) {
-    console.warn('[pubnub] publish scheduling failed.', err);
+    console.error('[pubnub] publishOnResponse error:', err);
   }
 }
 

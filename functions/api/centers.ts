@@ -549,12 +549,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
 
     // Signal temps réel (fire-and-forget) — plateforme + canal du centre.
-    publishOnResponse(context, env, ['center.' + id, 'platform'], {
-      type: 'refetch',
-      topic: 'center_created',
-      centerId: id,
-      at: Date.now(),
-    });
+   // publishOnResponse(context, env, ['center.' + id, 'platform'], {
+   //   type: 'refetch',
+   //   topic: 'center_created',
+   //   centerId: id,
+   //   at: Date.now(),
+   // });
+     publishOnResponse(context, env, ['center.' +id], { type: 'refetch', topic: 'center_created', centerId: id, at: Date.now() });
+    publishOnResponse(context, env, ['platform'],{ type: 'refetch', topic: 'center_created', centerId: id, at: Date.now() });
 
     return json({
       success: true,
@@ -626,7 +628,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       const res = await env.DB.prepare(
         `UPDATE center_plan_schedules SET status = 'cancelled', applied_at = NULL WHERE center_id = ? AND status = 'pending'`
       ).bind(id).run();
-      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    //  publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+       publishOnResponse(context, env, ['center.' +id], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    publishOnResponse(context, env, ['platform'],{ type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({ success: true, planChange: { mode: 'schedule_cancelled', cancelled: (res.meta.changes || 0) > 0 } });
     }
 
@@ -692,7 +696,10 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
         await env.DB.prepare(`UPDATE center_settings SET ${scheduleSettingsUpdates.join(', ')} WHERE center_id = ?`).bind(...scheduleSettingsBinds).run();
       }
 
-      publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+      //publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+
+       publishOnResponse(context, env, ['center.' +id], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    publishOnResponse(context, env, ['platform'],{ type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
       return json({
         success: true,
         planChange: {
@@ -1073,7 +1080,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     }
 
     // Platform edit published to the center's channel (fire-and-forget).
-    publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    //publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    publishOnResponse(context, env, ['center.' +id], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
+    publishOnResponse(context, env, ['platform'],{ type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
     return json({ success: true, planChange: planChangeResponse });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث المركز.' }, 500);
