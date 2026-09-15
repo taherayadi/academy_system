@@ -41,7 +41,13 @@ runbook.
    constant stays SECONDS — convert in `grantToken()`. Grants are read-only on
    the `platform` channel for this app.
 7. **`document.write`/print HTML must escape every interpolated untrusted
-   field** with `src/utils/html.ts → escapeHtml`.
+   field** with `src/utils/html.ts → escapeHtml` — **and must stay
+   script-free**: the print popup is an `about:blank` document, so it
+   INHERITS this app's CSP (`script-src 'self'`, no `'unsafe-inline'`) and the
+   browser silently refuses any `<script>` or `onclick="…"` written into it (the
+   invoice still renders, because `style-src` allows inline CSS — that asymmetry
+   is what makes the bug look like a dead button). Print behaviour is attached
+   from `src/utils/invoicePrint.ts` via `addEventListener`; never inline it.
 8. **Never create a pull request for `arena/*` branches.** These are throwaway
    working branches (e.g. `arena/01a0a1b2-academy-system`); commit and push to
    them directly and move on. Do not open a PR, offer to open one, or create
