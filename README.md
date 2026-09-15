@@ -202,8 +202,13 @@ The `users` table row alone is not access — the role must be `platform_super_a
 UPDATE users SET role = 'platform_super_admin', center_id = NULL
 WHERE email = 'someone@yourdomain.tn';
 -- …or INSERT a new platform admin with the same role. The historical
--- migration 0020 created the first platform account; rotate its password
--- through the UI before relying on it.
+-- migration 0020 created the first platform account with an unsalted
+-- SHA-256 hash that the bcrypt auth code can no longer validate;
+-- migration 0036 replaces it with a salted bcrypt hash of the one-time
+-- temporary password `Adm1n-R0tate-M3-N0w!`. Rotate it through the UI
+-- ("تغيير كلمة السر") immediately after the first login — 0036 only
+-- rewrites the exact legacy value, so an out-of-band reset that already
+-- happened is never clobbered.
 ```
 
 * Center admins keep using the center application; granting them access to the
