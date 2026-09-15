@@ -126,7 +126,10 @@ async function buildSignedUrl(
  */
 export async function publish(env: Env, channels: string[], payload: unknown): Promise<boolean> {
   const keys = readPubNubKeySet(env);
-  if (!keys || !channels.length) return false; // silent no-op — polling fallback stays in charge
+   if (!keys || !channels.length) {
+    console.warn('[pubnub] keys missing — cannot publish; clients fall back to polling.');
+    return false;
+  }
   try {
     const channelList = channels.map(encodeString).join(',');
     const message = JSON.stringify(payload ?? {});
