@@ -167,6 +167,55 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     openSpy.mockRestore();
   });
 
+  // REGRESSION (deployed site only): the print popup is an about:blank window,
+  // so it inherits the production CSP (`script-src 'self'` from public/_headers).
+  // Any inline JS in the generated document — <script> or onclick="" — is
+  // refused, which is exactly what made the green « Imprimer » button dead.
+  it('writes a script-free print document (its CSP-inherited popup refuses inline JS)', async () => {
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getAllByText('INV-2026-0002').length).toBeGreaterThanOrEqual(1));
+
+    const written: string[] = [];
+    const fakeWin = {
+      document: { write: (html: string) => written.push(html), close: () => {} },
+      focus: () => {},
+      print: () => {},
+    };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
+    const row = screen.getAllByText('INV-2026-0002')[0].closest('tr')!;
+    fireEvent.click(row.querySelector('button[title="Imprimer la facture"]') as HTMLElement);
+    openSpy.mockRestore();
+
+    const html = written.join('');
+    expect(html).toContain('Facture');
+    expect(html).not.toMatch(/<script\b/i);
+    expect(html).not.toMatch(/\son[a-z]+\s*=\s*["']/i);
+    // The button is identified so the bundle can attach its own listener.
+    expect(html).toContain('id="print-btn"');
+  });
+
+  it('the invoice dialog can print the invoice it shows', async () => {
+    render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getAllByText('INV-2026-0002').length).toBeGreaterThanOrEqual(1));
+
+    // Open the invoice dialog (« Modifier » in the grouped invoice table).
+    const row = screen.getAllByText('INV-2026-0002')[0].closest('tr')!;
+    fireEvent.click(row.querySelector('button[title="Modifier"]') as HTMLElement);
+    await waitFor(() => expect(screen.getByText('Facture INV-2026-0002')).toBeTruthy());
+
+    const written: string[] = [];
+    const fakeWin = {
+      document: { write: (html: string) => written.push(html), close: () => {} },
+      focus: () => {},
+      print: () => {},
+    };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimer' }));
+    expect(openSpy).toHaveBeenCalled();
+    expect(written.join('')).toContain('INV-2026-0002');
+    openSpy.mockRestore();
+  });
+
   it('filters grouped invoices by month', async () => {
     (api.fetchInvoicesApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       {

@@ -22,7 +22,7 @@ import {
 import RenewalReviewModal from './RenewalReviewModal';
 import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
 import { planLabel } from '../utils/pricing';
-import { escapeHtml } from '../utils/html';
+import { openInvoicePrintWindow } from '../utils/invoicePrint';
 
 const RENEWAL_STATUS_LABEL: Record<string, string> = {
   trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
@@ -850,7 +850,17 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 }
 
 // ─── Edit Invoice Modal (statut / paiement / chèque) ────────────────────────
-function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoice; onClose: () => void; onSaved: () => void }) {
+// `onPrint` reuses the Finance list's print path (src/utils/invoicePrint.ts):
+// the printable copy always opens in its own window rather than being printed
+// straight from this dialog (a `backdrop-blur` overlay + scaled modal print
+// badly). The window's script-free markup, and the CSP reason for it, live
+// with that module.
+function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
+  invoice: CenterInvoice;
+  onClose: () => void;
+  onSaved: () => void;
+  onPrint?: (invoice: CenterInvoice) => void;
+}) {
   const toast = useToast();
   const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-[#257C86] focus:ring-0 outline-none transition';
   const [saving, setSaving] = useState(false);
@@ -913,9 +923,17 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
             <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
             <h2 className="text-base font-black text-slate-900">Facture {invoice.invoiceNumber}</h2>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-            <X className="h-5 w-5 text-slate-400" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onPrint && (
+              <button type="button" onClick={() => onPrint(invoice)} title="Imprimer la facture"
+                className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+                <Printer className="h-4 w-4 text-slate-400" />
+              </button>
+            )}
+            <button type="button" onClick={onClose} title="Fermer" className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+              <X className="h-5 w-5 text-slate-400" />
+            </button>
+          </div>
         </div>
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 mb-4 text-xs font-bold text-slate-600">
@@ -980,16 +998,25 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: CenterInvoic
             <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="px-4 py-2.5 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer">
-              Annuler
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Sauvegarder
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            {onPrint ? (
+              <button type="button" onClick={() => onPrint(invoice)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                title="Ouvre la facture dans une fenêtre prête à imprimer">
+                <Printer className="h-4 w-4 text-slate-400" /> Imprimer
+              </button>
+            ) : <span />}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={onClose}
+                className="px-4 py-2.5 text-sm font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer">
+                Annuler
+              </button>
+              <button type="submit" disabled={saving}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Sauvegarder
+              </button>
+            </div>
           </div>
         </form>
       </motion.div>
@@ -2630,85 +2657,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     inv.status === 'pending' && inv.paymentMethod === 'cheque' && !!inv.chequeNumber
   ), [invoices]);
 
-  // Print a single invoice in a dedicated, print-ready window.
+  // Print a single invoice in a dedicated, print-ready window. The document is
+  // generated by src/utils/invoicePrint.ts: the popup is an about:blank window,
+  // so it inherits this app's CSP (`script-src 'self'`) and would refuse any
+  // inline <script>/onclick inside it — the printing behaviour is wired from
+  // there instead. Only the "popup blocked" case is reported here.
   const handlePrintInvoice = useCallback((inv: CenterInvoice) => {
-    const frDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('fr-FR') : '—');
-    // SECURITY: every operator-entered invoice field is untrusted for the
-    // generated print document (notes / cheque number / center name can all
-    // carry markup) — escape before interpolation, no exceptions.
-    const esc = escapeHtml;
-    const statusText = inv.status === 'paid' ? 'PAYÉE'
-      : inv.status === 'overdue' ? 'EN RETARD'
-      : inv.status === 'cancelled' ? 'ANNULÉE' : 'EN ATTENTE';
-    const payLine = inv.paymentMethod === 'cheque'
-      ? `Chèque${inv.chequeNumber ? ` N° ${esc(inv.chequeNumber)}` : ''}${inv.chequeDate ? ` daté du ${frDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — en attente d’encaissement' : ''}`
-      : inv.paymentMethod === 'cash' ? 'Espèces'
-      : '—';
-    const w = window.open('', '_blank', 'width=820,height=920');
-    if (!w) { toast.error('Autorisez les fenêtres pop-up pour imprimer la facture.'); return; }
-    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" />
-<title>Facture ${esc(inv.invoiceNumber)}</title>
-<style>
-  /* Margin 0 supprime l'en-tête/pied de page du navigateur (date, titre, URL « blank », n° de page). */
-  @page { size: A4; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: auto; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; padding: 40px 24px; background: #fff; }
-  .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #257C86; padding-bottom: 18px; margin-bottom: 24px; }
-  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.02em; }
-  .muted { color: #64748b; font-size: 12px; }
-  .badge { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid ${inv.status === 'paid' ? '#059669' : '#d97706'}; color: ${inv.status === 'paid' ? '#059669' : '#d97706'}; }
-  .row { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; }
-  .row b { font-weight: 700; }
-  table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 13px; }
-  th { text-align: left; background: #f1f5f9; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
-  td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-  .total { text-align: right; font-size: 16px; font-weight: 800; margin-top: 10px; }
-  .notes { margin-top: 16px; font-size: 12px; color: #475569; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
-  .sign { display: flex; justify-content: flex-end; margin-top: 46px; }
-  .signbox { text-align: center; }
-  .signspace { height: 46px; }
-  .signline { width: 230px; border-bottom: 1px solid #334155; }
-  .signcap { font-size: 11px; font-weight: 700; color: #334155; margin-top: 6px; }
-  footer { margin-top: 14px; font-size: 11px; color: #94a3b8; text-align: center; }
-  @media print {
-    body { padding: 0; }
-    /* Le contenu porte lui-même ses marges → pas de 2e page vide. */
-    .sheet { max-width: none; border: none; border-radius: 0; padding: 18mm 16mm; margin: 0; }
-    .noprint { display: none !important; }
-  }
-</style></head><body>
-<div class="sheet">
-  <div class="head">
-    <div><h1>Facture d'abonnement</h1><div class="muted">Plateforme SaaS — gestion de centres</div></div>
-    <div style="text-align:right"><div style="font-weight:800;font-size:14px">${esc(inv.invoiceNumber) || '—'}</div>
-      <div class="muted">Émise le ${frDate(inv.createdAt)}</div>
-      <div style="margin-top:8px"><span class="badge">${statusText}</span></div></div>
-  </div>
-  <div class="row"><span>Centre</span><b>${esc(inv.centerName) || '—'}</b></div>
-  <div class="row"><span>Période facturée</span><b>${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</b></div>
-  <div class="row"><span>Mode de paiement</span><b>${payLine}</b></div>
-  ${inv.paymentDate ? `<div class="row"><span>Payée le</span><b>${frDate(inv.paymentDate)}</b></div>` : ''}
-  <table><thead><tr><th>Désignation</th><th style="text-align:right">Montant</th></tr></thead>
-  <tbody><tr><td>Abonnement plateforme SaaS — ${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</td>
-  <td style="text-align:right;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
-  <div class="total">Total : ${inv.amount.toFixed(2)} TND</div>
-  ${inv.notes ? `<div class="notes"><b>Notes :</b> ${esc(inv.notes)}</div>` : ''}
-  <div class="sign"><div class="signbox">
-    <div class="signspace"></div>
-    <div class="signline"></div>
-    <div class="signcap">Signature de la plateforme SaaS</div>
-  </div></div>
-  <footer>Document généré depuis l'espace administrateur SaaS.</footer>
-  <div class="noprint" style="text-align:center;margin-top:18px">
-    <button onclick="window.print()" style="background:#257C86;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 Imprimer</button>
-  </div>
-</div>
-<script>window.onload = function () { setTimeout(function () { window.print(); }, 250); };</script>
-</body></html>`);
-    w.document.close();
-    w.focus();
+    if (!openInvoicePrintWindow(inv)) {
+      toast.error('Autorisez les fenêtres pop-up pour imprimer la facture.');
+    }
   }, [toast]);
 
   const invoiceGroups = useMemo(() => {
@@ -4229,6 +4186,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             invoice={editInvoice}
             onClose={() => setEditInvoice(null)}
             onSaved={loadFinanceData}
+            onPrint={handlePrintInvoice}
           />
         )}
         {(showNewAd || editAd) && (

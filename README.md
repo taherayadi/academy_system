@@ -113,7 +113,15 @@ Credential isolation:
 * **No default/seed passwords** were added; secrets stay out of the repo; no
   authentication bypass exists (there is no dev-mode flag, no header override).
 * **Invoice print HTML** escapes every untrusted field (invoice number, center
-  name, cheque number, notes) via `src/utils/html.ts` before `document.write`.
+  name, cheque number, notes) via `src/utils/html.ts` before `document.write`,
+  and carries **no inline JavaScript at all**: the print window is an
+  `about:blank` popup that inherits the console's CSP
+  (`script-src 'self'` from `public/_headers`), so inline `<script>`/`onclick`
+  written into it are refused by the browser — only the `style-src`
+  `'unsafe-inline'` exception keeps the invoice *rendering*, which is why a
+  CSP-blocked print button looks like a working page with a dead button. The
+  🖨 Imprimer listener and the auto-print are wired from
+  `src/utils/invoicePrint.ts` instead (covered by `src/utils/invoicePrint.test.ts`).
 
 ## Shared database & migration ownership
 
