@@ -159,8 +159,7 @@ export default function App() {
         setCurrentUser(serverUser);
       } else {
         // Stale local state that the server does not confirm → drop it.
-        if (!serverUser) clearLocalSession();
-        else clearLocalSession();
+        clearLocalSession();
       }
       setIsBootLoading(false);
     })();
@@ -174,6 +173,9 @@ export default function App() {
   }, []);
 
   // Any API call answering 401 anywhere in the tree ⇒ force back to login.
+// Fallback handler for unhandled promise rejections that result in 401.
+// Most API calls properly catch and handle UnauthorizedError, this catches
+// cases where rejection was not handled (e.g., forgot .catch()).
   useEffect(() => {
     const handler = (event: PromiseRejectionEvent | Event) => {
       const reason = (event as PromiseRejectionEvent).reason;

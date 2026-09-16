@@ -179,7 +179,7 @@ export function addSecurityHeaders(response: Response, request: Request): Respon
   // clickjacking of API responses.
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data: blob:; font-src 'self'; connect-src 'self' https://*.pndsn.com; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://ik.imagekit.io data: blob:; font-src 'self'; object-src 'none'; base-uri 'self'; connect-src 'self' https://*.pndsn.com; frame-ancestors 'none'"
   );
 
   return response;
@@ -251,8 +251,12 @@ export async function sha256Hex(text: string): Promise<string> {
 export async function verifyLegacySha256(password: string, storedHash: string): Promise<boolean> {
   if (!isLegacySha256Hash(storedHash)) return false;
   const computed = await sha256Hex(password);
+  // Both sides are always 64 hex chars here (the guard above + SHA-256 digest);
+  // the explicit check keeps the constant-time loop fixed-length if that ever
+  // changes, so a length mismatch can never leak through a short-circuited loop.
+  if (computed.length !== 64 || storedHash.length !== 64) return false;
   let diff = 0;
-  for (let i = 0; i < computed.length; i++) {
+  for (let i = 0; i < 64; i++) {
     diff |= computed.charCodeAt(i) ^ storedHash.charCodeAt(i);
   }
   return diff === 0;

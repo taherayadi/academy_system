@@ -70,10 +70,15 @@ async function computePeriodAmount(
 ): Promise<number> {
   if (args.plan === 'custom') return Math.max(0, Number(args.customPrice) || 0);
   if (!AUTO_PRICED_PLANS.has(args.plan)) return 0;
-  const placeholders = args.modules.map(() => '?').join(',');
+  // Defensive: keep the dynamic IN (...) clause bounded — modules are
+  // normalised upstream, but cap the list so a runaway array can never
+  // build an oversized (or empty) placeholder list.
+  const cleanModules = args.modules.slice(0, 40).filter(m => /^[a-z0-9-]+$/i.test(m));
+  if (cleanModules.length === 0) return 0;
+  const placeholders = cleanModules.map(() => '?').join(',');
   const { results } = await db.prepare(
     `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
-  ).bind(currentSchoolYear(), ...args.modules).all<any>();
+  ).bind(currentSchoolYear(), ...cleanModules).all<any>();
   let total = (results || []).reduce(
     (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
     0
@@ -216,10 +221,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       //       the subscription end date moves out and the unpaid invoice
       //       covering the window is stretched. Paid invoices are never
       //       touched, so no paid day is ever discarded.
-      const days = Math.floor(Number(body.days));
-      if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      const rawDays = Number(body.days);
+      if (!Number.isFinite(rawDays) || rawDays < 1 || rawDays > 3650) {
         return json({ error: 'Nombre de jours invalide (1 à 3650).' }, 400);
       }
+      const days = Math.floor(rawDays);
       const nowTs = Date.now();
       const oldTrialEnd = Number(center.trial_ends_at) || 0;
       const trialOngoing = center.status === 'trial' && oldTrialEnd > nowTs;

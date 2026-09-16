@@ -175,14 +175,11 @@ const REQ_TYPE_LABEL: Record<string, string> = {
   trial: 'Essai gratuit', demo: 'Démo guidée', info: 'Infos'
 };
 
+import { fmtDate } from '../utils/format';
+
 function daysLeft(ts?: number | null): number | null {
   if (!ts) return null;
   return Math.ceil((ts - Date.now()) / 86400000);
-}
-
-function fmtDate(ts?: number | null): string {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function normalizePhoneInput(value?: string): string {

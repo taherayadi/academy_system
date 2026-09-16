@@ -11,7 +11,7 @@
  *   • revokes all other platform sessions of the account after the change,
  *     so a stolen cookie cannot outlive a deliberate password rotation.
  */
-import { Env, json, readBody, validateSession, hashPassword, verifyPassword, consumeAuthRateLimit, PLATFORM_ROLE } from '../_lib';
+import { Env, json, readBody, validateSession, hashPassword, verifyPassword, consumeAuthRateLimit, resetAuthRateLimit, PLATFORM_ROLE } from '../_lib';
 import { logError } from '../_logger';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
@@ -65,6 +65,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const newHash = await hashPassword(cleanNew);
     await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
       .bind(newHash, user.email).run();
+
+    // Reset rate limit for this IP on successful password change
+    resetAuthRateLimit(env.DB, request, 'platform-auth-pw').catch(() => {});
 
     // Rotate sessions: drop every platform session for this account and let
     // the caller re-login with the new password (the current tab too — safe

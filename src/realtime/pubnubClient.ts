@@ -210,9 +210,12 @@ async function startClient(): Promise<void> {
   disconnectClient();
   setState('connecting');
 
-  // Keys not baked at build time → behave exactly as before (polling), silently.
+  // Keys not baked at build time → behave exactly as before (polling), but warn in development.
   const subscribeKey = pubnubSubscribeKey();
   if (!subscribeKey) {
+    if (import.meta.env.DEV) {
+      console.info('[realtime] PubNub keys not configured — using polling fallback.');
+    }
     setState('fallback');
     return;
   }

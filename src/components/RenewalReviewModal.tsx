@@ -73,10 +73,7 @@ function currentSchoolYear(): string {
   return `${y}/${y + 1}`;
 }
 
-function fmtDate(ts?: number | null): string {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleDateString('fr-TN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+import { fmtDate } from '../utils/format';
 
 function formatTnd(value: number): string {
   return `${value.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;

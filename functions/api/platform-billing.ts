@@ -95,6 +95,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     // e.g. 30-day windows → amount). Pending invoices and pending cheques
     // never count toward MRR.
     let mrr = 0;
+    // Average month duration (365.25 days / 12 months ≈ 30.44 days) for MRR normalization
     const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
     const countedCenters = new Set<string>();
     (latestPaidRes.results || []).forEach((inv: { center_id?: string; amount?: number | string; period_start?: number; period_end?: number }) => {
@@ -160,6 +161,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
       const id = crypto.randomUUID();
       const createdAt = Date.now();
+      // Invoice number uses first 8 chars of UUID (collision risk negligible: ~1 in 4 billion)
+      // UNIQUE constraint on invoice_number in DB handles any edge cases
       const invoiceNumber = `INV-${new Date(createdAt).getFullYear()}-${String(id).slice(0, 8).toUpperCase()}`;
 
       await env.DB.prepare(`
