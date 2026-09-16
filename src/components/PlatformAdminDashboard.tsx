@@ -23,6 +23,9 @@ import RenewalReviewModal from './RenewalReviewModal';
 import { CenterTenant, DemoRequest, ModuleKey, PlatformAdvertisement, AD_POSITION_SPECS, adPositionLabel, RenewalRequest } from '../types';
 import { planLabel } from '../utils/pricing';
 import { openInvoicePrintWindow } from '../utils/invoicePrint';
+import { RevenueChart } from './charts/RevenueChart';
+import { PlanDistributionChart } from './charts/PlanDistributionChart';
+import { SubscriptionGrowthChart } from './charts/SubscriptionGrowthChart';
 
 const RENEWAL_STATUS_LABEL: Record<string, string> = {
   trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
@@ -33,6 +36,9 @@ import ConfirmDialog from './ConfirmDialog';
 import { useLiveSync, LIVE_SYNC_INTERVAL_MS } from '../hooks/useLiveSync';
 import { usePubNubSync } from '../hooks/usePubNubSync';
 import icon from '../assets/icon.png';
+
+// Phase 2 design system primitives (src/components/ui)
+import { BaseModal, FormField, PrimaryButton, SecondaryButton, StatusBadge, SkeletonCard } from './ui';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 // Base plan: Scolaire + Finance (priced) + Jd. Horaires (bundled, no tarif)
@@ -269,8 +275,9 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
       </span>
       <div className="flex items-center gap-1.5">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
-          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <ChevronLeft className="h-4 w-4" />
+          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          aria-label="Page précédente">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
         {pageNumbers(page, totalPages).map((p, i) => p === '…' ? (
           <span key={`gap-${i}`} className="h-9 min-w-6 flex items-center justify-center text-xs font-black text-slate-300">…</span>
@@ -285,8 +292,9 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
           </button>
         ))}
         <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
-          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <ChevronRight className="h-4 w-4" />
+          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-[#257C86]/40 hover:text-[#257C86] transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          aria-label="Page suivante">
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -341,12 +349,12 @@ function NoticeDialog({ notice, onDismiss }: {
             <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-amber-500">
-                  <AlertTriangle className="h-5 w-5 text-white" />
+                  <AlertTriangle aria-hidden="true" className="h-5 w-5 text-white" />
                 </div>
                 <h3 className="font-black text-sm">{notice.title}</h3>
               </div>
               <button onClick={onDismiss} aria-label="Fermer" className="p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer">
-                <X className="h-5 w-5 text-white/70" />
+                <X className="h-5 w-5 text-white/70" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6">
@@ -556,28 +564,22 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
-          <div className="flex items-center gap-3">
-            <span className="w-11 h-11 rounded-2xl overflow-hidden bg-[#257C86] shadow-sm shadow-[#257C86]/20 flex items-center justify-center">
-              <img src={icon} alt="" className="w-full h-full object-cover" />
-            </span>
-            <div>
-              <h2 className="text-base font-black text-slate-900">{convertRequestId ? 'Convertir en centre' : 'Nouveau Centre'}</h2>
-              {convertRequestId && <p className="text-[11px] font-bold text-[#257C86]">Type et modules demandés présélectionnés</p>}
-            </div>
+    <>
+    <BaseModal onClose={onClose}>
+      <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
+        <div className="flex items-center gap-3">
+          <span className="w-11 h-11 rounded-2xl overflow-hidden bg-brand-500 shadow-sm shadow-brand-500/20 flex items-center justify-center">
+            <img src={icon} alt="" className="w-full h-full object-cover" />
+          </span>
+          <div>
+            <h2 className="text-base font-black text-slate-900">{convertRequestId ? 'Convertir en centre' : 'Nouveau Centre'}</h2>
+            {convertRequestId && <p className="text-[11px] font-bold text-brand-500">Type et modules demandés présélectionnés</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-            <X className="h-5 w-5 text-slate-400" />
-          </button>
         </div>
+        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer" aria-label="Fermer">
+          <X className="h-5 w-5 text-slate-400" aria-hidden="true" />
+        </button>
+      </div>
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
           {/* Centre info */}
@@ -625,7 +627,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
-                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      <ImagePlus aria-hidden="true" className="h-4 w-4 text-[#257C86]" />
                       Choisir une image
                       <input
                         type="file"
@@ -640,7 +642,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                       disabled={!logoFile || logoUploading}
                       className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#257C86] text-white rounded-xl text-xs font-black shadow-md shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      {logoUploading ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
                       Télécharger et enregistrer
                     </button>
                     {(form.logoUrl || logoFile) && (
@@ -650,7 +652,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                         disabled={logoUploading}
                         className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 aria-hidden="true" className="h-4 w-4" />
                         Supprimer
                       </button>
                     )}
@@ -791,13 +793,13 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             <div className="flex flex-wrap gap-2 mb-3">
               {BASE_MODULE_KEYS.map(key => (
                 <span key={key} className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-[#257C86] text-white shadow-sm shadow-[#257C86]/25 cursor-default">
-                  <Lock className="h-3 w-3" />
+                  <Lock aria-hidden="true" className="h-4 w-4" />
                   {MODULE_LABEL(key)}
                   <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
                 </span>
               ))}
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-[#257C86] text-white shadow-sm shadow-[#257C86]/25 cursor-default">
-                <Lock className="h-3 w-3" />
+                <Lock aria-hidden="true" className="h-4 w-4" />
                 {MODULE_LABEL(BUNDLED_MODULE_KEY)}
                 <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
               </span>
@@ -818,7 +820,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                           ? 'bg-[#257C86] text-white border-[#257C86]'
                           : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'
                       }`}>
-                      {on && <Check className="h-3 w-3" />}
+                      {on && <Check aria-hidden="true" className="h-4 w-4" />}
                       {m.label}
                     </button>
                   );
@@ -829,20 +831,20 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">
-              Annuler
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            <SecondaryButton type="button" onClick={onClose}>Annuler</SecondaryButton>
+            <PrimaryButton
+              type="submit"
+              disabled={saving}
+              loading={saving}
+              icon={saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+            >
               Créer le centre
-            </button>
+            </PrimaryButton>
           </div>
         </form>
-      </motion.div>
+      </BaseModal>
       <NoticeDialog notice={notice} onDismiss={() => setNotice(null)} />
-    </div>
+    </>
   );
 }
 
@@ -917,18 +919,18 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
+            <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt aria-hidden="true" className="h-4 w-4 text-[#257C86]" /></span>
             <h2 className="text-base font-black text-slate-900">Facture {invoice.invoiceNumber}</h2>
           </div>
           <div className="flex items-center gap-1">
             {onPrint && (
-              <button type="button" onClick={() => onPrint(invoice)} title="Imprimer la facture"
+              <button type="button" onClick={() => onPrint(invoice)} title="Imprimer la facture" aria-label="Imprimer la facture"
                 className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-                <Printer className="h-4 w-4 text-slate-400" />
+                <Printer className="h-4 w-4 text-slate-400" aria-hidden="true" />
               </button>
             )}
             <button type="button" onClick={onClose} title="Fermer" className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-              <X className="h-5 w-5 text-slate-400" />
+              <X className="h-5 w-5 text-slate-400" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -1000,7 +1002,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
               <button type="button" onClick={() => onPrint(invoice)}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer"
                 title="Ouvre la facture dans une fenêtre prête à imprimer">
-                <Printer className="h-4 w-4 text-slate-400" /> Imprimer
+                <Printer aria-hidden="true" className="h-4 w-4 text-slate-400" /> Imprimer
               </button>
             ) : <span />}
             <div className="flex justify-end gap-3">
@@ -1010,7 +1012,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
               </button>
               <button type="submit" disabled={saving}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" className="h-4 w-4" />}
                 Sauvegarder
               </button>
             </div>
@@ -1267,26 +1269,20 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
-          <div className="flex items-center gap-3">
-            <span className="p-2.5 rounded-xl bg-[#257C86]/10"><Edit className="h-4 w-4 text-[#257C86]" /></span>
-            <div>
-              <h2 className="text-base font-black text-slate-900">Modifier le centre</h2>
-              <p className="text-[11px] font-semibold text-slate-400 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
-            </div>
+    <>
+    <BaseModal onClose={onClose}>
+      <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
+        <div className="flex items-center gap-3">
+          <span className="p-2.5 rounded-xl bg-brand-500/10"><Edit aria-hidden="true" className="h-4 w-4 text-brand-500" /></span>
+          <div>
+            <h2 className="text-base font-black text-slate-900">Modifier le centre</h2>
+            <p className="text-[11px] font-semibold text-slate-400 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-            <X className="h-5 w-5 text-slate-400" />
-          </button>
         </div>
+        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer" aria-label="Fermer">
+          <X className="h-5 w-5 text-slate-400" aria-hidden="true" />
+        </button>
+      </div>
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1304,13 +1300,13 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
-                      <ImagePlus className="h-4 w-4 text-[#257C86]" />
+                      <ImagePlus aria-hidden="true" className="h-4 w-4 text-[#257C86]" />
                       Choisir une image
                       <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" className="hidden" onChange={e => handleLogoSelect(e.target.files?.[0])} />
                     </label>
                     {(form.logoUrl || logoFile) && (
                       <button type="button" onClick={handleRemoveLogo} disabled={saving} className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 aria-hidden="true" className="h-4 w-4" />
                         Supprimer
                       </button>
                     )}
@@ -1347,21 +1343,25 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
           <div className="rounded-2xl bg-[#257C86]/[0.05] border border-[#257C86]/15 px-4 py-3.5">
             <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
               L’abonnement (plan, cycle, tarif, date de fin, modules et factures) ne se gère plus ici :
-              utilisez le bouton <span className="text-[#257C86] font-black">« Plans &amp; factures »</span> de la carte du centre.
+              utilisez le bouton <span className="text-brand-500 font-black">« Plans &amp; factures »</span> de la carte du centre.
               Cette modification n’entraînera jamais la création d’une nouvelle facture.
             </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition cursor-pointer">Annuler</button>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-[#257C86]/40 transition cursor-pointer disabled:opacity-60">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            <SecondaryButton type="button" onClick={onClose}>Annuler</SecondaryButton>
+            <PrimaryButton
+              type="submit"
+              disabled={saving}
+              loading={saving}
+              icon={saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+            >
               Enregistrer
-            </button>
+            </PrimaryButton>
           </div>
         </form>
-      </motion.div>
-    </div>
+      </BaseModal>
+    </>
   );
 }
 
@@ -1713,7 +1713,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
               return (
                 <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}
                   className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-500 border-slate-200 hover:border-[#257C86]/40'}`}>
-                  {selected && <Check className="h-3 w-3" />} {module.label}
+                  {selected && <Check className="h-4 w-4" aria-hidden="true" />} {module.label}
                 </button>
               );
             })}
@@ -1745,18 +1745,18 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div className="min-w-0">
             <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-[#257C86]" /> Plans &amp; factures
+              <Receipt className="h-4 w-4 text-[#257C86]" aria-hidden="true" /> Plans &amp; factures
             </h2>
             <p className="text-[11px] font-bold text-slate-400 truncate">{center.name}</p>
           </div>
           <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
-            <X className="h-4 w-4 text-slate-500" />
+            <X className="h-4 w-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[#257C86]" />
           </div>
         ) : !view ? (
           <p className="text-center text-sm font-bold text-slate-400 py-16">Données indisponibles</p>
@@ -1824,25 +1824,25 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="flex flex-wrap items-center gap-2">
                   <button onClick={() => openForm('edit')} disabled={saving}
                     className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
-                    <Edit className="h-3.5 w-3.5" /> {isTrial ? 'Choisir un plan et activer' : hasLiveWindow ? 'Modifier le plan' : 'Relancer un abonnement'}
+                    <Edit className="h-4 w-4" aria-hidden="true" /> {isTrial ? 'Choisir un plan et activer' : hasLiveWindow ? 'Modifier le plan' : 'Relancer un abonnement'}
                   </button>
                   <button onClick={() => openForm('schedule')} disabled={saving || isTrial || !hasLiveWindow}
                     className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     title={isTrial ? 'Disponible une fois le centre abonné — le plan programmé s’applique à la fin de la période.' : !hasLiveWindow ? 'Aucune période en cours — relancez d’abord un abonnement.' : 'Appliqué à la fin de la période en cours'}>
-                    <CalendarClock className="h-3.5 w-3.5" /> Programmer un plan
+                    <CalendarClock className="h-4 w-4" aria-hidden="true" /> Programmer un plan
                   </button>
                   {(hasLiveWindow || isTrial) && (
                     <button onClick={() => setMode('trial')} disabled={saving}
                       className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/30 rounded-xl hover:bg-[#257C86]/[0.12] transition cursor-pointer disabled:opacity-40"
                       title="Offrir des jours : au début si l’abonnement ne court pas encore, sinon ajoutés à la fin de la période">
-                      <Clock className="h-3.5 w-3.5" /> Ajouter une période d’essai
+                      <Clock className="h-4 w-4" aria-hidden="true" /> Ajouter une période d’essai
                     </button>
                   )}
                   {!isTrial && (
                     <button onClick={() => setConfirmRemove(true)} disabled={!hasLiveWindow || saving}
                       className={`flex items-center gap-1.5 ml-auto px-3.5 py-2 text-xs font-bold rounded-xl border transition ${hasLiveWindow ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'}`}
                       title={hasLiveWindow ? undefined : 'Aucun abonnement actif à supprimer'}>
-                      <Trash2 className="h-3.5 w-3.5" /> Supprimer le plan
+                      <Trash2 className="h-4 w-4" aria-hidden="true" /> Supprimer le plan
                     </button>
                   )}
                 </div>
@@ -1880,7 +1880,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
                   <button onClick={submitTrial} disabled={saving}
                     className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+                    {saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" aria-hidden="true" />}
                     Ajouter l’essai ({Math.max(1, trialDaysNum)} j)
                   </button>
                 </div>
@@ -1982,7 +1982,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   <button onClick={() => setMode('view')} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
                   <button onClick={mode === 'schedule' ? submitScheduled : submitPlan} disabled={saving}
                     className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white rounded-xl shadow-md transition cursor-pointer disabled:opacity-60 ${mode === 'schedule' ? 'bg-amber-500 shadow-sm shadow-amber-500/20 hover:shadow-md' : 'bg-[#257C86] shadow-sm shadow-[#257C86]/20 hover:shadow-md'}`}>
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mode === 'schedule' ? <CalendarClock className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                    {saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : mode === 'schedule' ? <CalendarClock className="h-4 w-4" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
                     {mode === 'schedule' ? 'Programmer' : isTrial ? 'Activer l’abonnement' : 'Enregistrer le plan'}
                   </button>
                 </div>
@@ -2000,7 +2000,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="space-y-2">
                   {view.schedules.map(s => (
                     <div key={s.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
-                      <CalendarClock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                      <CalendarClock className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden="true" />
                       <span className="text-xs font-black text-slate-800">{PLAN_LABEL[s.plan === 'starter' ? 'basic' : s.plan] || s.plan}</span>
                       <span className="text-[10px] font-bold text-slate-400">
                         {s.billingCycle === 'annual' ? 'Annuel' : 'Mensuel'}
@@ -2012,7 +2012,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       <button onClick={() => runAction({ action: 'remove-schedule', centerId: center.id, scheduleId: s.id }, 'Plan programmé supprimé')}
                         disabled={saving}
                         className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer disabled:opacity-50" title="Supprimer ce plan programmé">
-                        <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                        <Trash2 className="h-4 w-4 text-red-400" aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -2239,10 +2239,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
           <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-            <ImagePlus className="h-4 w-4 text-[#257C86]" /> {isEdit ? 'Modifier l’annonce' : 'Nouvelle annonce'}
+            <ImagePlus className="h-4 w-4 text-[#257C86]" aria-hidden="true" /> {isEdit ? 'Modifier l’annonce' : 'Nouvelle annonce'}
           </h2>
           <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-            <X className="h-4 w-4 text-slate-500" />
+            <X className="h-4 w-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
 
@@ -2295,8 +2295,8 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
                     <span className="absolute top-1 left-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
-                      className="absolute top-1 right-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="Retirer cette image">
-                      <X className="h-3.5 w-3.5" />
+                      className="absolute top-1 right-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="Retirer cette image" aria-label="Supprimer l'image">
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 ))}
@@ -2304,10 +2304,10 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             )}
             <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-100 transition">
-                <ImagePlus className="h-4 w-4 text-[#257C86]" /> Choisir des images
+                <ImagePlus className="h-4 w-4 text-[#257C86]" aria-hidden="true" /> Choisir des images
                 <input type="file" accept="image/*" multiple className="hidden" onChange={e => handleFiles(e.target.files)} />
               </label>
-              {uploading && <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin text-[#257C86]" /> Téléversement…</span>}
+              {uploading && <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-[#257C86]" /> Téléversement…</span>}
               <div className="flex items-center gap-2 flex-1 min-w-[220px]">
                 <input id="ad-image-url" value={extraImageUrl} onChange={e => setExtraImageUrl(e.target.value)} placeholder="…ou coller une URL d’image"
                   className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none" dir="ltr" />
@@ -2345,7 +2345,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             ) : (
               <>
                 <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
                     id="ad-center-search"
                     value={centerQuery}
@@ -2384,7 +2384,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">Annuler</button>
             <button type="submit" disabled={saving || uploading}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer disabled:opacity-60">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" aria-hidden="true" />}
               {isEdit ? 'Enregistrer les modifications' : 'Créer l’annonce'}
             </button>
           </div>
@@ -2793,8 +2793,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     return months;
   }, [invoices]);
 
-  const maxRevenue = Math.max(...revenueChart.map(m => m.total), 1);
-
   // ── Filtered lists ──
   const q = search.trim().toLowerCase();
   const filteredCenters = centers.filter(c => {
@@ -2932,7 +2930,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <div className="flex items-center gap-2 flex-wrap">
           {(page === 'centers' || page === 'requests') && (
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -2941,12 +2939,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
           )}
-          <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer" title="Actualiser">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer" title="Actualiser" aria-label="Actualiser">
+            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button onClick={() => setShowNewCenter(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#257C86] hover:shadow-md text-white text-sm font-black rounded-xl shadow-sm shadow-[#257C86]/20 transition cursor-pointer">
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden="true" className="h-4 w-4" />
             <span className="hidden sm:inline">Nouveau Centre</span>
             <span className="sm:hidden">Centre</span>
           </button>
@@ -2969,7 +2967,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             ].map(kpi => (
               <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/5 hover:-translate-y-0.5 transition-all">
                 <div className={`inline-flex p-2.5 rounded-xl mb-3 ${kpi.tint}`}>
-                  <kpi.icon className="h-5 w-5" />
+                  <kpi.icon className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <p className="text-xl font-black text-slate-900 leading-none tracking-tight">{kpi.value}</p>
                 <p className="text-[11px] font-bold text-slate-500 mt-1.5 uppercase tracking-wider">{kpi.label}</p>
@@ -2980,55 +2978,25 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           <div className="grid lg:grid-cols-5 gap-5">
 
             {/* Revenue chart */}
-            <div className="lg:col-span-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-              <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2.5 bg-[#257C86]/10 rounded-xl"><BarChart3 className="h-4 w-4 text-[#257C86]" /></span>
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900">Revenus encaissés</h3>
-                    <p className="text-[11px] font-bold text-slate-400">6 derniers mois</p>
-                  </div>
-                </div>
-                {billingSummary && (
-                  <span className="text-xs font-black text-[#1e626b] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-full px-3 py-1">
-                    {billingSummary.collectedThisYear.toFixed(0)} TND / an
-                  </span>
-                )}
-              </div>
-
-              {financeLoading ? (
-                <div className="flex items-center justify-center py-14"><Loader2 className="h-6 w-6 animate-spin text-[#257C86]" /></div>
-              ) : (
-                <div className="flex items-end justify-between gap-3 h-44">
-                  {revenueChart.map((m, i) => (
-                    <div key={m.key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                      <span className="text-[10px] font-black text-slate-500">{m.total > 0 ? m.total.toFixed(0) : ''}</span>
-                      <motion.div
-
-                        animate={{ height: `${Math.max(4, (m.total / maxRevenue) * 100)}%` }}
-
-                        className={`w-full rounded-xl ${i === revenueChart.length - 1 ? 'bg-[#257C86] shadow-sm shadow-[#257C86]/20' : 'bg-[#257C86]/15'}`}
-                      />
-                      <span className="text-[10px] font-bold text-slate-400 capitalize">{m.label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <RevenueChart
+              monthlyData={revenueChart}
+              loading={financeLoading}
+              collectedThisYear={billingSummary?.collectedThisYear}
+            />
 
             {/* Recent requests */}
             <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <span className="p-2.5 bg-[#257C86]/10 rounded-xl"><FileText className="h-4 w-4 text-[#257C86]" /></span>
+                  <span className="p-2.5 bg-[#257C86]/10 rounded-xl"><FileText aria-hidden="true" className="h-4 w-4 text-[#257C86]" /></span>
                   <h3 className="text-sm font-black text-slate-900">Dernières demandes</h3>
                 </div>
                 <button onClick={() => onNavigate?.('requests')} className="text-[11px] font-black text-[#257C86] hover:text-[#1e626b] transition inline-flex items-center gap-1 cursor-pointer">
-                  Tout voir <ArrowRight className="h-3 w-3" />
+                  Tout voir <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </button>
               </div>
               {loading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-[#257C86]" /></div>
+                <div className="flex items-center justify-center py-12"><Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[#257C86]" /></div>
               ) : requests.length === 0 ? (
                 <p className="text-center py-12 text-sm font-bold text-slate-400">Aucune demande</p>
               ) : (
@@ -3054,14 +3022,20 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
           </div>
 
+          {/* Charts placeholders — future chart components */}
+          <div className="grid lg:grid-cols-2 gap-5">
+            <PlanDistributionChart />
+            <SubscriptionGrowthChart />
+          </div>
+
           {/* Trials to watch */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
             <div className="flex items-center gap-2.5 mb-5">
-              <span className="p-2.5 bg-amber-100 rounded-xl"><CalendarClock className="h-4 w-4 text-amber-600" /></span>
+              <span className="p-2.5 bg-amber-100 rounded-xl"><CalendarClock aria-hidden="true" className="h-4 w-4 text-amber-600" /></span>
               <h3 className="text-sm font-black text-slate-900">Essais à surveiller</h3>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-[#257C86]" /></div>
+              <div className="flex items-center justify-center py-10"><Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[#257C86]" /></div>
             ) : centers.filter(c => c.status === 'trial').length === 0 ? (
               <p className="text-center py-10 text-sm font-bold text-slate-400">Aucun centre en essai</p>
             ) : (
@@ -3157,12 +3131,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
-              <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+            <div className="grid gap-6 py-20">
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
             </div>
           ) : filteredCenters.length === 0 ? (
             <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-400">
-              <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <Building2 aria-hidden="true" className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucun centre'}</p>
             </div>
           ) : (
@@ -3214,10 +3193,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         ? 'bg-[#257C86]/10 text-[#257C86] border-[#257C86]/20'
                         : 'bg-slate-50 text-slate-500 border-slate-200'
                   }`}>
-                    <CalendarClock className="h-3.5 w-3.5" />
+                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
                     {days !== null && days > 0
-                      ? `Période d’essai : encore ${days} jour${days > 1 ? 's' : ''} · fin le ${fmtDate(c.trialEndsAt)}`
-                      : `Période d’essai terminée le ${fmtDate(c.trialEndsAt)}`}
+                      ? `Période d'essai : encore ${days} jour${days > 1 ? 's' : ''} · fin le ${fmtDate(c.trialEndsAt)}`
+                      : `Période d'essai terminée le ${fmtDate(c.trialEndsAt)}`}
                   </div>
                 )}
                 {c.status !== 'trial' && (c.subscriptionEndsAt || c.trialEndsAt) && (
@@ -3236,7 +3215,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {c.scheduledPlan && (
                   <div className="mt-3.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="text-[11px] font-black text-amber-800 inline-flex items-center gap-1.5">
-                      <CalendarClock className="h-3.5 w-3.5" />
+                      <CalendarClock className="h-4 w-4" aria-hidden="true" />
                       → {PLAN_LABEL[c.scheduledPlan.plan === 'starter' ? 'basic' : c.scheduledPlan.plan]}
                       <span className="font-semibold text-amber-700">
                         planifié{c.scheduledPlan.applyAt ? ` pour le ${fmtDate(c.scheduledPlan.applyAt)}` : ' (prochaine reconduction)'}
@@ -3255,8 +3234,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         onClick={() => handleCancelScheduledPlan(c)}
                         title="Annuler le changement planifié"
                         className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-100 transition cursor-pointer"
+                        aria-label="Annuler le changement planifié"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </span>
                   </div>
@@ -3267,7 +3247,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <div className="mt-3.5 flex flex-wrap gap-1.5">
                     {mods.filter(mk => isBaseModule(mk)).map(mk => (
                       <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#257C86] text-white inline-flex items-center gap-1">
-                        <Lock className="h-2.5 w-2.5" /> {MODULE_LABEL(mk)}
+                        <Lock className="h-2.5 w-2.5" aria-hidden="true" /> {MODULE_LABEL(mk)}
                       </span>
                     ))}
                     {mods.filter(mk => !isBaseModule(mk)).map(mk => (
@@ -3284,7 +3264,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <button onClick={() => setEditCenter(c)}
                     className="text-[11px] font-bold px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5"
                     title="Informations de base du centre">
-                    <Edit className="h-3.5 w-3.5" /> Modifier
+                    <Edit className="h-4 w-4" aria-hidden="true" /> Modifier
                   </button>
                   <button onClick={() => handleToggleStatus(c)}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
@@ -3292,16 +3272,16 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20 hover:bg-[#257C86]/10'
                         : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
                     }`}>
-                    {c.status === 'suspended' ? <><CheckCircle2 className="h-3.5 w-3.5" /> Activer</> : <><PauseCircle className="h-3.5 w-3.5" /> Suspendre</>}
+                    {c.status === 'suspended' ? <><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Activer</> : <><PauseCircle className="h-4 w-4" aria-hidden="true" /> Suspendre</>}
                   </button>
                   <button onClick={() => setPlanCenter(c)}
                     className="text-[11px] font-bold px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/30 rounded-xl hover:bg-[#257C86]/20 transition cursor-pointer flex items-center gap-1.5"
                     title="Gérer le plan, les modules, les factures et les changements programmés">
-                    <Layers className="h-3.5 w-3.5" /> Plans &amp; factures
+                    <Layers className="h-4 w-4" aria-hidden="true" /> Plans &amp; factures
                   </button>
                   <button onClick={() => setDeleteCenter(c)}
                     className="ml-auto text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
-                    <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Supprimer
                   </button>
                 </div>
                 </div>
@@ -3356,12 +3336,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
-              <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+            <div className="grid gap-6 py-20">
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
+              <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
             </div>
           ) : filteredRequests.length === 0 ? (
             <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-400">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <FileText aria-hidden="true" className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-bold">{q ? 'Aucun résultat pour cette recherche' : 'Aucune demande reçue'}</p>
             </div>
           ) : (
@@ -3403,13 +3388,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   {req.email && (
                     <a href={`mailto:${req.email}`}
                       className="flex items-center gap-1.5 text-xs font-bold text-[#257C86] hover:underline">
-                      <Mail className="h-3.5 w-3.5" /> {req.email}
+                      <Mail aria-hidden="true" className="h-4 w-4" /> {req.email}
                     </a>
                   )}
                   {req.phone && (
                     <a href={`tel:${req.phone}`}
                       className="flex items-center gap-1.5 text-xs font-bold text-[#257C86] hover:underline">
-                      <Phone className="h-3.5 w-3.5" /> {req.phone}
+                      <Phone aria-hidden="true" className="h-4 w-4" /> {req.phone}
                     </a>
                   )}
                 </div>
@@ -3422,13 +3407,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {mods.length > 0 && (
                   <div className="mt-3.5">
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
-                      <GraduationCap className="h-3 w-3" />
+                      <GraduationCap aria-hidden="true" className="h-4 w-4" />
                       Modules demandés ({mods.length})
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {mods.map(mk => isBaseModule(mk) ? (
                         <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#257C86] text-white inline-flex items-center gap-1">
-                          <Lock className="h-2.5 w-2.5" /> {MODULE_LABEL(mk)}
+                          <Lock aria-hidden="true" className="h-2.5 w-2.5" /> {MODULE_LABEL(mk)}
                         </span>
                       ) : (
                         <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#257C86]/10 text-[#257C86]">
@@ -3466,20 +3451,20 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <button
                       onClick={() => { setConvertRequest(req); setShowNewCenter(true); }}
                       className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-[#257C86] text-white rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer">
-                      <Building2 className="h-3.5 w-3.5" /> Convertir en Centre
+                      <Building2 aria-hidden="true" className="h-4 w-4" /> Convertir en Centre
                     </button>
                   ) : (
                     <span
                       className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-xl"
                       title="Cette demande a déjà été convertie en centre — la conversion n'est possible qu'une seule fois."
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Déjà converti
+                      <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> Déjà converti
                     </span>
                   )}
 
                   <button onClick={() => setDeleteRequest(req)}
                     className="ml-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
-                    <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                    <Trash2 aria-hidden="true" className="h-4 w-4" /> Supprimer
                   </button>
                 </div>
                 </div>
@@ -3503,7 +3488,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <motion.div key="finance" className="relative space-y-6">
           {financeLoading ? (
             <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
-              <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+              <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : (
             <>
@@ -3518,7 +3503,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   ].map(kpi => (
                     <div key={kpi.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
                       <div className={`inline-flex p-2.5 rounded-xl mb-3 ${kpi.tint}`}>
-                        <kpi.icon className="h-5 w-5" />
+                        <kpi.icon className="h-5 w-5" aria-hidden="true" />
                       </div>
                       <p className="text-xl font-black text-slate-900 tracking-tight">{kpi.value}</p>
                       <p className="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-wider">{kpi.label}</p>
@@ -3532,7 +3517,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="bg-white rounded-3xl border border-[#257C86]/20 p-6 shadow-sm shadow-slate-900/5">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
-                      <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
+                      <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt aria-hidden="true" className="h-4 w-4 text-[#257C86]" /></span>
                       Chèques en attente
                       <span className="text-[11px] font-bold text-slate-400 font-sans">{pendingCheques.length}</span>
                     </h3>
@@ -3574,14 +3559,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                   }}
                                   className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition cursor-pointer"
                                   title="Le chèque est encaissé : la facture devient payée et compte dans les revenus"
+                                  aria-label="Encaisser le chèque"
                                 >
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Encaisser
+                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Encaisser
                                 </button>
-                                <button onClick={() => handlePrintInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture">
-                                  <Printer className="h-3.5 w-3.5 text-slate-500" />
+                                <button onClick={() => handlePrintInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture" aria-label="Imprimer la facture">
+                                  <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
                                 </button>
-                                <button onClick={() => setEditInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
-                                  <Edit className="h-3.5 w-3.5 text-slate-500" />
+                                <button onClick={() => setEditInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier" aria-label="Modifier la facture">
+                                  <Edit className="h-4 w-4 text-slate-500" aria-hidden="true" />
                                 </button>
                               </div>
                             </td>
@@ -3597,7 +3583,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm shadow-slate-900/5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5">
-                    <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt className="h-4 w-4 text-[#257C86]" /></span>
+                    <span className="p-2 bg-[#257C86]/10 rounded-xl"><Receipt aria-hidden="true" className="h-4 w-4 text-[#257C86]" /></span>
                     Factures
                     <span className="text-[11px] font-bold text-slate-400 font-sans">{invoiceGroups.length} centre{invoiceGroups.length > 1 ? 's' : ''} · {filteredInvoices.length} facture{filteredInvoices.length > 1 ? 's' : ''}</span>
                   </h3>
@@ -3605,7 +3591,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   {/* Filters — centre + statut */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         value={invoiceSearch}
                         onChange={e => setInvoiceSearch(e.target.value)}
@@ -3640,7 +3626,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         onClick={() => { setInvoiceSearch(''); setInvoiceStatusFilter('all'); setInvoiceMonthFilter('all'); }}
                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer"
                       >
-                        <X className="h-3.5 w-3.5" /> Réinitialiser
+                        <X className="h-4 w-4" aria-hidden="true" /> Réinitialiser
                       </button>
                     )}
                   </div>
@@ -3666,7 +3652,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                             onClick={() => setCollapsedGroupIds(prev => ({ ...prev, [group.centerId]: !prev[group.centerId] }))}
                             className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-left cursor-pointer border-b border-slate-200">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} />
+                              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} aria-hidden="true" />
                               <span className="h-8 w-8 rounded-lg bg-[#257C86] text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
                                 {group.centerName.split(' ').map((word: string) => word[0]).join('').slice(0, 2).toUpperCase()}
                               </span>
@@ -3719,12 +3705,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                       <td className="py-3 px-3 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
                                           <button onClick={() => handlePrintInvoice(inv)}
-                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture">
-                                            <Printer className="h-3.5 w-3.5 text-slate-500" />
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Imprimer la facture" aria-label="Imprimer la facture">
+                                            <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
                                           </button>
                                           <button onClick={() => setEditInvoice(inv)}
-                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier">
-                                            <Edit className="h-3.5 w-3.5 text-slate-500" />
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="Modifier" aria-label="Modifier la facture">
+                                            <Edit className="h-4 w-4 text-slate-500" aria-hidden="true" />
                                           </button>
                                           <button onClick={async () => {
                                             try {
@@ -3735,8 +3721,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                               toast.error(err instanceof Error ? err.message : 'Erreur');
                                             }
                                           }}
-                                            className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Supprimer">
-                                            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                            className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer" title="Supprimer" aria-label="Supprimer la facture">
+                                            <Trash2 className="h-4 w-4 text-red-400" aria-hidden="true" />
                                           </button>
                                         </div>
                                       </td>
@@ -3796,7 +3782,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 className="ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-dashed border-[#257C86]/50 text-[#257C86] text-xs sm:text-sm font-black whitespace-nowrap hover:bg-[#257C86]/5 transition cursor-pointer disabled:opacity-60"
                 title={`Crée ${nextSchoolYear} avec les tarifs copiés depuis ${priceYears[priceYears.length - 1] || ''}`}
               >
-                {addingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {addingYear ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
                 Ajouter l'année scolaire {nextSchoolYear}
               </button>
             </div>
@@ -3804,7 +3790,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
           {pricesLoading ? (
             <div className="flex items-center justify-center py-20 rounded-3xl bg-white border border-slate-200">
-              <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+              <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[#257C86]" />
             </div>
           ) : (
             <div className="grid lg:grid-cols-3 gap-5">
@@ -3814,7 +3800,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="absolute -top-16 -right-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Lock className="h-3.5 w-3.5 text-white/80" />
+                    <Lock className="h-4 w-4 text-white/80" aria-hidden="true" />
                     <span className="text-[10px] font-black text-white/80 uppercase tracking-[0.15em]">Le plan de base</span>
                   </div>
                   <h3 className="text-lg font-black mb-1">Scolaire + Finance</h3>
@@ -3827,15 +3813,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   </div>
                   <div className="space-y-2.5 text-xs font-bold">
                     <div className="flex items-center justify-between rounded-xl bg-white/10 px-3.5 py-2.5">
-                      <span className="flex items-center gap-2"><GraduationCap className="h-3.5 w-3.5" /> Scolaire</span>
+                      <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" aria-hidden="true" /> Scolaire</span>
                       <span className="font-black">{priceList['scolaire'] ?? '—'} TND</span>
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-white/10 px-3.5 py-2.5">
-                      <span className="flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Finance</span>
+                      <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" aria-hidden="true" /> Finance</span>
                       <span className="font-black">{priceList['finance'] ?? '—'} TND</span>
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-white/10 border border-white/20 px-3.5 py-2.5">
-                      <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> Jd. Horaires</span>
+                      <span className="flex items-center gap-2"><Clock className="h-4 w-4" aria-hidden="true" /> Jd. Horaires</span>
                       <span className="font-black text-white/90">Inclus — offert</span>
                     </div>
                   </div>
@@ -3893,7 +3879,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </p>
             <button onClick={savePrices} disabled={savingPrices || pricesLoading}
               className="flex items-center gap-2 px-6 py-3 bg-[#257C86] hover:shadow-md text-white text-sm font-black rounded-2xl shadow-sm shadow-[#257C86]/20 transition cursor-pointer disabled:opacity-60">
-              {savingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {savingPrices ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" aria-hidden="true" />}
               Sauvegarder les tarifs
             </button>
           </div>
@@ -3928,11 +3914,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             <div className="flex items-center gap-2">
               <button onClick={loadAdvertisements} disabled={adsLoading} title="Actualiser"
                 className="p-2 hover:bg-slate-100 rounded-xl transition cursor-pointer">
-                <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               </button>
               <button onClick={() => setShowNewAd(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white text-sm font-black rounded-xl shadow-md hover:shadow-md transition cursor-pointer">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Nouvelle publicité
               </button>
             </div>
@@ -3940,11 +3926,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
           {adsLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-[#257C86]" />
+              <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-[#257C86]" />
             </div>
           ) : advertisements.length === 0 ? (
             <div className="text-center py-20 text-slate-500">
-              <ImagePlus className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+              <ImagePlus className="h-12 w-12 mx-auto mb-3 text-slate-300" aria-hidden="true" />
               <p className="font-bold">{advertisements.length === 0 ? 'Aucune publicité' : 'Aucune publicité pour ce filtre'}</p>
               <p className="text-sm">{advertisements.length === 0 ? 'Créez la première bannière de la vitrine ou des tableaux de bord.' : 'Changez de filtre pour voir d’autres statuts.'}</p>
             </div>
@@ -3983,12 +3969,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <div className="flex gap-2">
                     <button onClick={() => setEditAd(ad)}
                       className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition">
-                      <Edit className="h-4 w-4 inline mr-1" />
+                      <Edit className="h-4 w-4 inline mr-1" aria-hidden="true" />
                       Modifier
                     </button>
                     <button onClick={() => setDeleteAd(ad)} title="Supprimer"
                       className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition cursor-pointer">
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -4002,8 +3988,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <button
                 onClick={() => setAdsPage(p => Math.max(1, p - 1))}
                 disabled={adsPage === 1}
-                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
-                <ChevronLeft className="h-4 w-4" />
+                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition"
+                aria-label="Page précédente">
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               </button>
               <span className="px-4 py-2 text-sm font-bold text-slate-600">
                 {adsPage} / {Math.ceil(visibleAds.length / PAGE_SIZE)}
@@ -4011,8 +3998,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <button
                 onClick={() => setAdsPage(p => Math.min(Math.ceil(visibleAds.length / PAGE_SIZE), p + 1))}
                 disabled={adsPage >= Math.ceil(visibleAds.length / PAGE_SIZE)}
-                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition">
-                <ChevronRight className="h-4 w-4" />
+                className="px-3 py-2 border border-slate-200 rounded-lg disabled:opacity-50 hover:border-[#257C86] transition"
+                aria-label="Page suivante">
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -4051,13 +4039,13 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             </div>
             <button onClick={loadRenewals} title="Actualiser"
               className="ml-auto p-2.5 rounded-xl bg-white border border-slate-200 hover:border-[#257C86]/40 hover:text-[#257C86] text-slate-600 transition cursor-pointer">
-              <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           </div>
 
           {renewalsLoading ? (
             <p className="flex items-center gap-2 text-sm font-bold text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin text-[#257C86]" /> Chargement…
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-[#257C86]" /> Chargement…
             </p>
           ) : renewalRequests.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
@@ -4120,7 +4108,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         onClick={() => setReviewRenewal(r)}
                         className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#257C86] rounded-xl shadow-sm shadow-[#257C86]/20 hover:shadow-md transition cursor-pointer"
                       >
-                        <FileText className="h-3.5 w-3.5" />
+                        <FileText className="h-4 w-4" aria-hidden="true" />
                         Examiner et appliquer
                       </button>
                     </div>
@@ -4135,7 +4123,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         onClick={() => setReviewRenewal(r)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-[#257C86] bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/30 rounded-xl transition cursor-pointer"
                       >
-                        <FileText className="h-3 w-3" />
+                        <FileText className="h-4 w-4" aria-hidden="true" />
                         Voir le détail
                       </button>
                     </div>

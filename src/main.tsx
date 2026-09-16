@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ToastProvider } from './components/Toast';
+import { ThemeProvider } from './theme-provider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MotionConfig } from 'motion/react';
 import { installGlobalHandlers } from './utils/logger';
@@ -42,9 +43,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MotionConfig reducedMotion="user">
       <ErrorBoundary>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </MotionConfig>
   </StrictMode>,
