@@ -1,7 +1,9 @@
 import { isDeploymentRole } from './_deployment';
-import { Env, json, validateSession } from './_lib';
+import { Env, json, validateSession, getClientIp } from './_lib';
+import { requireImageKitKey } from './_validate-env';
+import { logAudit } from './_audit';
 
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 /** Upload a center logo to ImageKit without exposing the private key to the browser. */
@@ -12,7 +14,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'غير مصرح.' }, 403);
     }
 
-    if (!env.IMAGEKIT_PRIVATE_KEY) {
+    try {
+      requireImageKitKey(env);
+    } catch {
       return json({ error: 'خدمة رفع الشعار غير مهيأة: أضف IMAGEKIT_PRIVATE_KEY في متغيرات البيئة على Cloudflare.' }, 500);
     }
 
@@ -31,6 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const centerId = session.centerId;
     const fileName = `${centerId}-logo-${Date.now()}`;
+    const ip = getClientIp(request);
     const auth = btoa(`${env.IMAGEKIT_PRIVATE_KEY}:`);
     const ikForm = new FormData();
     ikForm.append('file', file, fileName);
@@ -46,10 +51,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     });
     const ikData: { url?: string; fileId?: string; message?: string } = await ikRes.json().catch(() => ({}));
     if (!ikRes.ok || !ikData.url) {
-      return json({ error: ikData.message || 'تعذر رفع الصورة إلى ImageKit.' }, 502);
+      console.error('ImageKit upload failed:', ikRes.status, ikData.message || 'no message');
+      logAudit(env, request, { email: session.email, action: 'logo_upload', details: 'upload_failed', entityType: 'center', entityId: centerId, ip }).catch(() => {});
+      return json({ error: 'تعذر رفع الصورة إلى ImageKit.' }, 502);
     }
+    logAudit(env, request, { email: session.email, action: 'logo_upload', details: `fileName:${fileName}`, entityType: 'center', entityId: centerId, ip }).catch(() => {});
     return json({ url: ikData.url, fileId: ikData.fileId || '' });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في رفع الشعار.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في رفع الشعار.' }, 500);
   }
 };

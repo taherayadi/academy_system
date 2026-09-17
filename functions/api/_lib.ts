@@ -281,12 +281,12 @@ export async function purgeExpiredSessions(db: D1Database): Promise<void> {
 export function makeSessionCookie(token: string, request: Request): string {
   const secure = isHttpsRequest(request) ? '; Secure' : '';
   const maxAge = Math.floor(SESSION_DURATION_MS / 1000);
-  return SESSION_COOKIE + '=' + token + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + maxAge + secure;
+  return SESSION_COOKIE + '=' + token + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=' + maxAge + secure;
 }
 
 export function clearSessionCookie(request: Request): string {
   const secure = isHttpsRequest(request) ? '; Secure' : '';
-  return SESSION_COOKIE + '=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' + secure;
+  return SESSION_COOKIE + '=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' + secure;
 }
 
 // ---------------------------------------------------------------------------

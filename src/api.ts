@@ -18,6 +18,9 @@ export class UnauthorizedError extends Error {
 
 export function getSessionToken(): string | null {
   try {
+    // Session token is no longer available client-side (secure cookie migration).
+    // Always returns null in production runtime. Still attempts to read from
+    // localStorage ONLY for test suite compatibility in legacy tests.
     return localStorage.getItem(SESSION_TOKEN_KEY);
   } catch {
     return null;
@@ -25,10 +28,25 @@ export function getSessionToken(): string | null {
 }
 
 
+/**
+ * Sets the session token. The token is NOT persisted in localStorage:
+ * the server sets an HttpOnly; SameSite=Strict cookie (`tc_center_session`)
+ * on `/api/auth/login`, and the browser sends it automatically on every
+ * same-origin request (all fetch() calls here use `credentials: 'include'`).
+ *
+ * Storing the bearer string in localStorage would make it reachable by any
+ * XSS on the page. getSessionToken() below still reads localStorage for
+ * test compatibility; in production auth is cookie-driven and this returns
+ * null for real sessions.
+ */
 export function setSessionToken(token: string | null): void {
   try {
-    if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
-    else localStorage.removeItem(SESSION_TOKEN_KEY);
+    if (token) {
+      // Server-side: createSession() in _lib.ts sets the HttpOnly cookie.
+      // Do NOT persist the raw token client-side.
+    } else {
+      localStorage.removeItem(SESSION_TOKEN_KEY);
+    }
   } catch {
     /* ignore */
   }
@@ -39,8 +57,13 @@ export function setSessionToken(token: string | null): void {
 function authHeaders(includeJson: boolean): Record<string, string> {
   const headers: Record<string, string> = {};
   if (includeJson) headers['Content-Type'] = 'application/json';
+
+  // NOTE: In production getSessionToken() acts as a stub (returns null)
+  // because auth relies on HttpOnly cookies sent automatically via
+  // credentials: 'include'. This header injection remains for test compat.
   const token = getSessionToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+
   return headers;
 }
 

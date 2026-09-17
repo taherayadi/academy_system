@@ -138,19 +138,21 @@ describe('fetchDatabase', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Session token persistence (Bearer header for app-restart auto-login)
+// Session token persistence (HttpOnly cookie migration - no localStorage token)
 // ---------------------------------------------------------------------------
 describe('session token', () => {
   beforeEach(() => {
     localStorage.removeItem('tc_center_token');
   });
 
-  it('stores login token and returns user', async () => {
+  it('handles login response and does NOT persist bearer token in localStorage (security)', async () => {
     const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
     mockFetch.mockResolvedValue(jsonResponse({ user, token: 'tok123' }));
     const result = await loginRequest('a@b.com', 'pass');
     expect(result.user).toEqual(user);
-    expect(getSessionToken()).toBe('tok123');
+    // Security: Token is NOT stored in localStorage (cookie-driven auth)
+    expect(localStorage.getItem('tc_center_token')).toBeNull();
+    expect(getSessionToken()).toBeNull();
   });
 
   it('does not crash when login returns no token', async () => {
@@ -167,7 +169,7 @@ describe('session token', () => {
     expect(getSessionToken()).toBeNull();
   });
 
-  it('sends Authorization Bearer header on authed requests', async () => {
+  it('sends Authorization Bearer header on authed requests if legacy token present', async () => {
     localStorage.setItem('tc_center_token', 'secret-token');
     mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
     await saveStudents([]);

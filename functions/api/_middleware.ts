@@ -30,5 +30,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'no-store');
   headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Content Security Policy - allow only trusted sources
+  headers.set('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' https://*.pndsn.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://ik.imagekit.io",
+    "font-src 'self'",
+    "connect-src 'self' https://*.pndsn.com wss://*.pndsn.com",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 };

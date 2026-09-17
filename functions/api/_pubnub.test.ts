@@ -52,11 +52,11 @@ describe('_pubnub — readPubNubKeySet', () => {
 });
 
 describe('_pubnub — publish (fire-and-forget REST publish)', () => {
-  it('is a silent no-op without keys: no fetch, no throw', async () => {
+  it('is a safe no-op with warning without keys: no fetch, no throw', async () => {
     await expect(publish({ DB: {} } as any, ['platform'], { type: 'refetch' })).resolves.toBe(false);
     await expect(publish({ DB: {} } as any, [], { type: 'refetch' })).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledTimes(2);
   });
 
   it('publishes to every channel in one REST call and signs the request', async () => {

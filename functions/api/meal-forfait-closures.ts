@@ -6,7 +6,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const closures = await readMealForfaitClosures(context.env.DB, centerId);
     return json(closures);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر قراءة بيانات إغلاقات الوجبات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر قراءة بيانات إغلاقات الوجبات.' }, 500);
   }
 };
 
@@ -20,7 +21,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await createMealForfaitClosure(context.env.DB, closure, centerId);
     return json({ ok: true, closure });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر إنشاء إغلاق الشهر.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر إنشاء إغلاق الشهر.' }, 500);
   }
 };
 
@@ -34,6 +36,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await writeMealForfaitClosures(context.env.DB, closures, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حفظ بيانات الإغلاقات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حفظ بيانات الإغلاقات.' }, 500);
   }
 };

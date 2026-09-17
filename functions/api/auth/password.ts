@@ -1,4 +1,5 @@
-import { Env, json, readBody, hashPassword, verifyPassword, consumeAuthRateLimit, validateSession } from '../_lib';
+import { Env, json, readBody, hashPassword, verifyPassword, consumeAuthRateLimit, validateSession, getClientIp } from '../_lib';
+import { logAudit } from '../_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -24,6 +25,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanCurrent = String(currentPassword || '').trim();
     const cleanNew = String(newPassword || '').trim();
+    const ip = getClientIp(request);
 
     if (!cleanEmail || !cleanCurrent || !cleanNew) {
       return json({ error: 'أدخل كلمة السر الحالية والجديدة.' }, 400);
@@ -52,8 +54,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       .bind(newHash, cleanEmail).run();
 
     await env.DB.prepare('DELETE FROM center_sessions WHERE email = ?').bind(cleanEmail).run();
+    logAudit(env, request, { email: cleanEmail, action: 'password_change', entityType: 'user', entityId: cleanEmail, ip }).catch(() => {});
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تغيير كلمة السر.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في تغيير كلمة السر.' }, 500);
   }
 };

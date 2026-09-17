@@ -41,6 +41,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     return json({ schoolYear, prices });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'Erreur chargement des tarifs publics.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'Erreur chargement des tarifs publics.' }, 500);
   }
 };

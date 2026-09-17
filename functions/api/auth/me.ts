@@ -36,6 +36,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       center
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب بيانات المستخدم.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في جلب بيانات المستخدم.' }, 500);
   }
 };

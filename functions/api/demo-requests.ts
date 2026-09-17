@@ -1,7 +1,23 @@
-import { Env, json, readBody } from './_lib';
+import { Env, json, readBody, consumeAuthRateLimit, getClientIp } from './_lib';
+import { logAudit } from './_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
+    const rateCheck = await consumeAuthRateLimit(env.DB, request, 'center:demo', 5, 15 * 60_000);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = (rateCheck as { retryAfterSec: number }).retryAfterSec;
+      return new Response(
+        JSON.stringify({ error: 'تم تقديم طلب مشابه مؤخرا. يرجى الانتظار.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Retry-After': String(retryAfterSec)
+          }
+        }
+      );
+    }
+
     const body = await readBody(request);
     const fullName = String(body.fullName || body.full_name || '').trim();
     const academyName = String(body.academyName || body.academy_name || '').trim();
@@ -21,6 +37,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const id = 'REQ_' + Date.now() + '_' + crypto.randomUUID().slice(0, 8);
     const createdAt = Date.now();
+    const ip = getClientIp(request);
 
     await env.DB.prepare(`
       INSERT INTO demo_requests (
@@ -30,12 +47,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       id, fullName, academyName, email, phone, estimatedSize, requestedModules, message, requestType, centerType, createdAt
     ).run();
 
+    logAudit(env, request, { email, action: 'demo_request', entityType: 'demo_request', entityId: id, details: `type:${requestType},center:${centerType}`, ip }).catch(() => {});
+
     return json({ 
       success: true, 
       id, 
       message: 'تم تسجيل طلبك بنجاح! سيتصل بك فريقنا في أقرب وقت لتفعيل حساب المركز.' 
     }, 201);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تسجيل الطلب.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في تسجيل الطلب.' }, 500);
   }
 };

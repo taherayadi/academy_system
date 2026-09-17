@@ -191,12 +191,12 @@ describe('isHttpsRequest', () => {
 // makeSessionCookie
 // ---------------------------------------------------------------------------
 describe('makeSessionCookie', () => {
-  it('builds cookie with HttpOnly and SameSite=Lax', () => {
+  it('builds cookie with HttpOnly and SameSite=Strict', () => {
     const req = new Request('https://example.com');
     const cookie = makeSessionCookie('tok123', req);
     expect(cookie).toContain('tc_center_session=tok123');
     expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).toContain('SameSite=Strict');
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('Max-Age=');
   });

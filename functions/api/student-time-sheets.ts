@@ -6,7 +6,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const sheets = await readStudentTimeSheets(context.env.DB, centerId);
     return json(sheets);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر قراءة جداول التوقيت.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر قراءة جداول التوقيت.' }, 500);
   }
 };
 
@@ -20,6 +21,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await writeStudentTimeSheets(context.env.DB, sheets, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حفظ جداول التوقيت.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حفظ جداول التوقيت.' }, 500);
   }
 };

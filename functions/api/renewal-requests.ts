@@ -129,7 +129,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const amount = Number.isFinite(amountRaw) && amountRaw >= 0 ? amountRaw : null;
 
     if (!(await tableExists(env.DB))) {
-      return json({ error: 'Table des demandes absente — appliquez la migration 0033.' }, 503);
+      console.error('renewal_requests table missing (migration 0033 not applied)');
+      return json({ error: 'Le service de renouvellement est temporairement indisponible.' }, 503);
     }
 
     const now = Date.now();
