@@ -36,6 +36,7 @@ interface FinanceModuleProps {
   revisions?: RevisionSeance[];
   formations?: Formation[];
   onUpdateFormations?: (formations: Formation[]) => void;
+  onUpdateEvents?: (events: SchoolEvent[]) => void;
   events?: SchoolEvent[];
   slots?: EtudeSlot[];
   hideRestrictedModules?: boolean;
@@ -124,7 +125,7 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'المركز';
@@ -369,12 +370,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         service: 'Événements' as const,
         month: `فعالية: ${ev.name} (${ev.schoolYear || '2026/2027'})`,
         paymentType: 'full' as const,
-        // Pas de module d'encaissement des chèques côté événements : si un
-        // paiement par chèque a été enregistré sur l'événement, on le traite
-        // comme encaissé dès qu'il est marqué `paid` pour éviter des chèques
-        // en attente gérés par nulle part.
+        // Un chèque événement reste « en attente » jusqu'à son encaissement
+        // dans l'onglet تحصيل الشيكات : il n'entre dans le revenu qu'une fois
+        // marqué chequePaid côté participant (mis à jour via onUpdateEvents).
         method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
-        chequePaid: isCheque ? true : undefined,
+        chequePaid: isCheque ? (pt.chequePaid === true ? true : undefined) : undefined,
         receiptNumber: pt.receiptNumber || `EVT-${ev.id.slice(-4)}-${pt.id.slice(-4)}`,
         notes: `فعالية: ${ev.name} - ${pt.participantType === 'student' ? 'تلميذ' : pt.participantType === 'parent' ? 'ولي أمر' : pt.participantType === 'sibling' ? 'أخ/أخت' : 'خارجي'}${pt.attended === false && isPast ? ' — غائب' : ''}`,
         chequeNumber: pt.chequeNumber,
@@ -2806,6 +2806,25 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             });
             if (formationChanged) {
               onUpdateFormations(updatedFormations);
+            }
+          }
+
+          // Also validate event participants if any payment is from Événements
+          if (events && onUpdateEvents) {
+            let eventsChanged = false;
+            const updatedEvents = events.map(ev => {
+              const updatedParticipants = (ev.participants || []).map(pt => {
+                const eventPayId = `event_${ev.id}_${pt.id}`;
+                if (paymentIds.has(eventPayId) || (pt.chequeNumber && pt.chequeNumber === cheque.chequeNumber)) {
+                  eventsChanged = true;
+                  return { ...pt, chequePaid: true, paid: (pt.remainingBalance || 0) <= 0, paidAt: pt.paidAt || new Date().toISOString() };
+                }
+                return pt;
+              });
+              return { ...ev, participants: updatedParticipants };
+            });
+            if (eventsChanged) {
+              onUpdateEvents(updatedEvents);
             }
           }
 

@@ -288,6 +288,7 @@ export default function App() {
         setRevisionSeances(db.revisionSeances || []);
         setStudentTimeSheets(db.studentTimeSheets || []);
         setFormations(db.formations || []);
+        setEvents(db.events || []);
         setSettings(db.settings);
       })
       .catch((err) => {
@@ -1239,6 +1240,7 @@ export default function App() {
                   formations={formations}
                   events={events}
                   onUpdateFormations={handleUpdateFormations}
+                  onUpdateEvents={handleUpdateEvents}
                   slots={slots}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}

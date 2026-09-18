@@ -1153,6 +1153,13 @@ export interface EventParticipant {
   paymentMethod?: 'Espèces' | 'Chèque';
   chequeNumber?: string;
   chequeDate?: string;               // YYYY-MM-DD
+  /** Réduction accordée sur le tarif du type de participant (dérive totalRequired). */
+  discount?: number;
+  /**
+   * Chèque encaissé par le module Finance. Un participant payé par chèque
+   * reste `paid: false` jusqu'à la validation du chèque côté Finance.
+   */
+  chequePaid?: boolean;
   paid: boolean;
   paidAt?: string;                   // ISO timestamp
   attended: boolean;

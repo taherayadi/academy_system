@@ -1213,7 +1213,7 @@ function buildEventsStmts(db: D1Database, events: any[], centerId: string = DEFA
   for (const e of events || []) {
     if (!e || !e.id) continue;
     stmts.push(db.prepare(
-      'INSERT INTO events (id, center_id, name, description, category, date, time, location, price_student, price_parent, price_sibling, price_external, max_capacity, bus_included, status, school_year, participants, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO events (id, center_id, name, description, category, date, time, location, price_student, price_parent, price_sibling, price_external, max_capacity, bus_included, status, school_year, participants, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, category = excluded.category, date = excluded.date, time = excluded.time, location = excluded.location, price_student = excluded.price_student, price_parent = excluded.price_parent, price_sibling = excluded.price_sibling, price_external = excluded.price_external, max_capacity = excluded.max_capacity, bus_included = excluded.bus_included, status = excluded.status, school_year = excluded.school_year, participants = excluded.participants'
     ).bind(
       str(e.id), centerId, str(e.name), e.description ?? null, str(e.category) || 'other',
       str(e.date), e.time ?? null, str(e.location),
@@ -1229,16 +1229,39 @@ function buildEventsStmts(db: D1Database, events: any[], centerId: string = DEFA
 }
 
 /**
- * Synchronisation par snapshot : on remplace tous les événements du centre.
+ * Synchronisation par upsert : on insère/met à jour les événements reçus sans
+ * jamais vider la table. Un wipe complet (DELETE + réinsertion) a déjà détruit
+ * des événements existants quand le client envoyait un snapshot incomplet
+ * (ex. état local vide au login). Seules les lignes connues du client et
+ * absentes de son payload sont supprimées (suppression réelle depuis l'UI),
+ * et un payload vide n'efface rien.
  * No-op silencieux si la table `events` n'existe pas encore (migration D1 pas
  * encore appliquée) afin de ne jamais faire échouer l'enregistrement de l'état.
  */
 export async function writeEvents(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   try {
-    const stmts = [
-      db.prepare('DELETE FROM events WHERE center_id = ?').bind(centerId),
-      ...buildEventsStmts(db, events, centerId)
-    ];
+    // Dédupliquer par id : un seul upsert par événement.
+    const clean: any[] = [];
+    const seen = new Set<string>();
+    for (const e of events || []) {
+      if (!e || e.id == null || seen.has(String(e.id))) continue;
+      seen.add(String(e.id));
+      clean.push(e);
+    }
+
+    const stmts = buildEventsStmts(db, clean, centerId);
+
+    // D1 limite chaque requête à 100 paramètres liés : lots de 50 ids.
+    if (clean.length > 0) {
+      const ids = clean.map(e => String(e.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM events WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    }
+
     for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
   } catch (err) {
     console.error('writeEvents skipped (events table unavailable):', err);

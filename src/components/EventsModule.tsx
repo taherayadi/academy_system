@@ -67,6 +67,9 @@ const PARTICIPANT_TYPES: { type: EventParticipantType; label: string; priceField
   { type: 'external', label: 'خارجي', priceField: 'priceExternal' },
 ];
 
+/** Chèque pas encore encaissé par le module Finance : exclu du « المحصل ». */
+const isChequePending = (p: EventParticipant) => p.paymentMethod === 'Chèque' && p.chequePaid !== true;
+
 export default function EventsModule({
   events,
   onUpdateEvents,
@@ -74,6 +77,7 @@ export default function EventsModule({
   settings
 }: EventsModuleProps) {
   const { success, error, info } = useToast();
+  const centerName = settings?.centerName || 'المركز';
   // --- State ---
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,7 +147,7 @@ export default function EventsModule({
     const participants = selectedEvent.participants;
     const total = participants.length;
     const capacity = selectedEvent.maxCapacity || Infinity;
-    const collected = participants.reduce((sum, p) => sum + p.amountPaid, 0);
+    const collected = participants.filter(p => !isChequePending(p)).reduce((sum, p) => sum + p.amountPaid, 0);
     const expected = participants.reduce((sum, p) => sum + p.totalRequired, 0);
     const unpaid = expected - collected;
     const attendedCount = participants.filter(p => p.attended).length;
@@ -215,29 +219,65 @@ export default function EventsModule({
     }
     if (!selectedEvent) return;
 
+    const phone = (participantForm.contactPhone || '').replace(/\D/g, '');
+    if (phone && phone.length !== 8) {
+      error('رقم الهاتف يجب أن يتكون من 8 أرقام بالضبط');
+      return;
+    }
+
     const type = (participantForm.participantType as EventParticipantType) || 'student';
-    const price = eventPriceFor(selectedEvent, type);
+    const method = participantForm.paymentMethod || 'Espèces';
+    const isCheque = method === 'Chèque';
+    if (isCheque && !(participantForm.chequeNumber || '').trim()) {
+      error('يرجى إدخال رقم الشيك');
+      return;
+    }
+
+    // المبلغ المطلوب يُحتسب تلقائياً من نوع المشارك ناقص التخفيض.
+    const disc = Math.max(0, participantForm.discount || 0);
+    const effectiveRequired = Math.max(0, eventPriceFor(selectedEvent, type) - disc);
+    const amountPaid = Math.max(0, participantForm.amountPaid || 0);
+    const remaining = round2(Math.max(0, effectiveRequired - amountPaid));
 
     if (participantModal.id) {
-      patchParticipant(selectedEvent.id, participantModal.id, p => ({ ...p, ...participantForm }));
+      patchParticipant(selectedEvent.id, participantModal.id, p => ({
+        ...p,
+        participantName: participantForm.participantName ?? p.participantName,
+        participantType: type,
+        linkedStudentId: participantForm.linkedStudentId,
+        contactPhone: phone,
+        notes: participantForm.notes,
+        paymentMethod: method,
+        chequeNumber: isCheque ? participantForm.chequeNumber : undefined,
+        chequeDate: isCheque ? participantForm.chequeDate : undefined,
+        discount: disc > 0 ? disc : undefined,
+        amountPaid,
+        totalRequired: effectiveRequired,
+        remainingBalance: remaining,
+        // الشيك يبقى غير مخلّص حتى تحصيله من وحدة المالية.
+        paid: isCheque ? (p.chequePaid === true && remaining <= 0) : remaining <= 0,
+        paidAt: remaining <= 0 && (!isCheque || p.chequePaid === true) ? (p.paidAt || new Date().toISOString()) : undefined,
+      }));
     } else {
       const newPart: EventParticipant = {
         id: 'prt_' + crypto.randomUUID(),
         participantName: participantForm.participantName || '',
         participantType: type,
         linkedStudentId: participantForm.linkedStudentId,
-        contactPhone: participantForm.contactPhone || '',
-        amountPaid: participantForm.amountPaid || 0,
-        totalRequired: price,
-        remainingBalance: price - (participantForm.amountPaid || 0),
-        paymentMethod: participantForm.paymentMethod,
-        chequeNumber: participantForm.chequeNumber,
-        chequeDate: participantForm.chequeDate,
-        paid: (participantForm.amountPaid || 0) >= price,
-        paidAt: participantForm.paidAt,
+        contactPhone: phone,
+        amountPaid,
+        totalRequired: effectiveRequired,
+        remainingBalance: remaining,
+        paymentMethod: method,
+        chequeNumber: isCheque ? participantForm.chequeNumber : undefined,
+        chequeDate: isCheque ? participantForm.chequeDate : undefined,
+        discount: disc > 0 ? disc : undefined,
+        // الشيك يبقى غير مخلّص حتى تحصيله من وحدة المالية.
+        paid: isCheque ? false : remaining <= 0,
+        paidAt: !isCheque && remaining <= 0 ? new Date().toISOString() : undefined,
         attended: false,
         notes: participantForm.notes,
-        receiptNumber: (participantForm.amountPaid || 0) > 0 ? generateEventReceiptNumber(events) : undefined,
+        receiptNumber: amountPaid > 0 ? generateEventReceiptNumber(events) : undefined,
       };
       patchEvent(selectedEvent.id, e => ({ ...e, participants: [...e.participants, newPart] }));
     }
@@ -259,20 +299,32 @@ export default function EventsModule({
     const part = selectedEvent.participants.find(p => p.id === paymentModal.participantId);
     if (!part) return;
 
+    if (paymentForm.amount <= 0) {
+      error('يرجى إدخال مبلغ الدفعة');
+      return;
+    }
+
+    const isCheque = paymentForm.method === 'Chèque';
+    if (isCheque && !paymentForm.chequeNumber.trim()) {
+      error('يرجى إدخال رقم الشيك');
+      return;
+    }
+
     const newPaidAmount = round2(part.amountPaid + paymentForm.amount);
     const total = part.totalRequired;
-    const paid = newPaidAmount >= total;
+    const remaining = round2(Math.max(0, total - newPaidAmount));
     const receiptNumber = part.receiptNumber || generateEventReceiptNumber(events);
 
     patchParticipant(selectedEvent.id, part.id, p => ({
       ...p,
       amountPaid: newPaidAmount,
-      remainingBalance: round2(total - newPaidAmount),
-      paid,
-      paidAt: paid ? new Date().toISOString() : p.paidAt,
+      remainingBalance: remaining,
       paymentMethod: paymentForm.method,
-      chequeNumber: paymentForm.chequeNumber,
-      chequeDate: paymentForm.chequeDate,
+      chequeNumber: isCheque ? paymentForm.chequeNumber : undefined,
+      chequeDate: isCheque ? paymentForm.chequeDate : undefined,
+      // الشيك يبقى معلقاً (غير مخلّص) حتى تحصيله من وحدة المالية.
+      paid: isCheque ? false : remaining <= 0,
+      paidAt: !isCheque && remaining <= 0 ? new Date().toISOString() : p.paidAt,
       receiptNumber: receiptNumber
     }));
 
@@ -403,7 +455,7 @@ export default function EventsModule({
               filteredEvents.map(e => {
                 const isSelected = selectedId === e.id;
                 const Icon = CATEGORY_CONFIG[e.category].icon;
-                const collected = e.participants.reduce((sum, p) => sum + p.amountPaid, 0);
+                const collected = e.participants.filter(p => !isChequePending(p)).reduce((sum, p) => sum + p.amountPaid, 0);
                 const registrationRate = e.maxCapacity ? (e.participants.length / e.maxCapacity) * 100 : 0;
 
                 return (
@@ -706,6 +758,11 @@ export default function EventsModule({
                                 <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-flex items-center gap-1">
                                   <CheckCircle2 className="h-3 w-3" />
                                   مدفوع
+                                </span>
+                              ) : p.paymentMethod === 'Chèque' ? (
+                                <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-black inline-flex items-center gap-1" title="بانتظار التحصيل من وحدة المالية">
+                                  <Clock className="h-3 w-3" />
+                                  شيك معلق
                                 </span>
                               ) : (
                                 <span className="px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-[10px] font-black inline-flex items-center gap-1">
@@ -1018,25 +1075,70 @@ export default function EventsModule({
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-phone">رقم الهاتف</label>
+                    <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-phone">رقم الهاتف (8 أرقام)</label>
                     <input
                       id="part-phone"
                       type="text"
+                      inputMode="numeric"
+                      maxLength={8}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                       value={participantForm.contactPhone || ''}
-                      onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value })}
+                      onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value.replace(/\D/g, '').slice(0, 8) })}
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['Espèces', 'Chèque'] as const).map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setParticipantForm({ ...participantForm, paymentMethod: m })}
+                        className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          (participantForm.paymentMethod || 'Espèces') === m
+                            ? 'bg-[#257C86] text-white border-[#257C86]'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {m === 'Espèces' ? 'نقداً (Espèces)' : 'شيك (Par Chèque)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {(participantForm.paymentMethod || 'Espèces') === 'Chèque' && (
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="part-cheque-num">رقم الشيك *</label>
+                      <input
+                        id="part-cheque-num"
+                        type="text"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        value={participantForm.chequeNumber || ''}
+                        onChange={e => setParticipantForm({ ...participantForm, chequeNumber: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="part-cheque-date">تاريخ الشيك</label>
+                      <DateField
+                        id="part-cheque-date"
+                        value={participantForm.chequeDate || ''}
+                        onChange={e => setParticipantForm({ ...participantForm, chequeDate: e.target.value })}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-required">المبلغ المطلوب (د.ت)</label>
+                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-discount">التخفيض (د.ت)</label>
                     <input
-                      id="part-required"
+                      id="part-discount"
                       type="number"
+                      min="0"
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                      value={participantForm.totalRequired || (selectedEvent ? eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student') : 0)}
-                      onChange={e => setParticipantForm({ ...participantForm, totalRequired: parseFloat(e.target.value) || 0 })}
+                      value={participantForm.discount || 0}
+                      onChange={e => setParticipantForm({ ...participantForm, discount: Math.max(0, parseFloat(e.target.value) || 0) })}
                     />
                   </div>
                   <div>
@@ -1044,11 +1146,24 @@ export default function EventsModule({
                     <input
                       id="part-paid"
                       type="number"
+                      min="0"
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                       value={participantForm.amountPaid || 0}
-                      onChange={e => setParticipantForm({ ...participantForm, amountPaid: parseFloat(e.target.value) || 0 })}
+                      onChange={e => setParticipantForm({ ...participantForm, amountPaid: Math.max(0, parseFloat(e.target.value) || 0) })}
                     />
                   </div>
+                  {selectedEvent && (() => {
+                    const price = eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student');
+                    const remainingAfter = round2(Math.max(0, price - (participantForm.discount || 0) - (participantForm.amountPaid || 0)));
+                    return (
+                      <div className={`col-span-2 p-2.5 rounded-xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-[#257C86]/20 text-[#1e626b]'}`}>
+                        <span>{remainingAfter > 0 ? 'المتبقي بعد الدفع (Reste):' : 'حالة الخلاص:'}</span>
+                        <span className="font-mono font-black">
+                          {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-notes">ملاحظات</label>
@@ -1102,11 +1217,27 @@ export default function EventsModule({
                   <input
                     id="pay-amount"
                     type="number"
+                    min="0"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b] font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
                     value={paymentForm.amount || ''}
-                    onChange={e => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
+                    onChange={e => setPaymentForm({ ...paymentForm, amount: Math.max(0, parseFloat(e.target.value) || 0) })}
                   />
                 </div>
+                {(() => {
+                  const part = selectedEvent && paymentModal.participantId
+                    ? selectedEvent.participants.find(p => p.id === paymentModal.participantId)
+                    : null;
+                  if (!part) return null;
+                  const remainingAfter = round2(Math.max(0, part.totalRequired - (part.amountPaid + (paymentForm.amount || 0))));
+                  return (
+                    <div className={`p-3 rounded-2xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-[#257C86]/[0.06] border-[#257C86]/20 text-[#1e626b]'}`}>
+                      <span>{remainingAfter > 0 ? 'المتبقي بعد هذه الدفعة (Reste):' : 'بعد هذه الدفعة:'}</span>
+                      <span className="font-mono font-black">
+                        {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1169,114 +1300,269 @@ export default function EventsModule({
         )}
       </AnimatePresence>
 
-      {/* Print Overlays */}
+      {/* PRINT RECEIPT MODAL (نفس نظام الطباعة في وحدة المتابعة والمكتبة) */}
       <AnimatePresence>
-        {printReceipt.open && selectedEvent && printReceipt.participantId && (
-          <PrintOverlay onClose={() => setPrintReceipt({ open: false, participantId: null })}>
-            <div className="bg-white p-8 w-[100mm] mx-auto text-right font-sans border shadow-sm rounded-2xl">
-              <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
-                <h1 className="text-xl font-black">وصل استلام مالي</h1>
-                <p className="text-xs text-slate-500 font-bold">فعالية: {selectedEvent.name}</p>
-              </div>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 font-bold">رقم الوصل:</span>
-                  <span className="font-mono font-bold">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.receiptNumber}</span>
+        {printReceipt.open && selectedEvent && printReceipt.participantId && (() => {
+          const part = selectedEvent.participants.find(p => p.id === printReceipt.participantId);
+          if (!part) return null;
+          const receiptRemaining = round2(Math.max(0, part.remainingBalance || 0));
+          return (
+            <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
+              >
+                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+                  <span className="font-bold text-sm">وصل خلاص رسمي — فعالية {selectedEvent.name}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="h-4 w-4" />
+                      طباعة الوصل 🖨️
+                    </button>
+                    <button
+                      onClick={() => setPrintReceipt({ open: false, participantId: null })}
+                      className="p-2 hover:bg-slate-800 rounded-xl text-slate-400"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 font-bold">تاريخ الاستلام:</span>
-                  <span className="font-mono font-bold">{new Date().toLocaleDateString('ar-TN')}</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 font-bold">اسم المشارك:</span>
-                  <span className="font-extrabold text-slate-900">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.participantName}</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
-                  <span className="text-[#1e626b] font-bold">المبلغ المستلم:</span>
-                  <span className="font-mono font-black text-base text-[#1e626b]">{round2(selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.amountPaid || 0)} د.ت</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 font-bold">طريقة الدفع:</span>
-                  <span className="font-bold">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.paymentMethod}</span>
-                </div>
-              </div>
-              <div className="mt-12 flex justify-between items-end">
-                <div className="text-center">
-                  <div className="text-[10px] text-slate-400 font-bold mb-8">توقيع الإدارة</div>
-                  <div className="w-32 border-b-2 border-dotted border-slate-400 h-8"></div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[10px] text-slate-400 font-bold mb-8">توقيع المستلم</div>
-                  <div className="w-32 border-b-2 border-dotted border-slate-400 h-8"></div>
-                </div>
-              </div>
-            </div>
-          </PrintOverlay>
-        )}
 
-        {printAttendance.open && selectedEvent && (
-          <PrintOverlay onClose={() => setPrintAttendance({ open: false, eventId: null })}>
-            <div className="bg-white p-8 w-[210mm] mx-auto text-right font-sans">
-              <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
-                <div>
-                  <h1 className="text-2xl font-black">كشف حضور ومغادرة</h1>
-                  <p className="text-xs font-bold">الفعالية: {selectedEvent.name} | التاريخ: {selectedEvent.date}</p>
+                <div className="min-h-0 overflow-y-auto">
+                  {/* RECEIPT PRINT TEMPLATE */}
+                  <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
+                    <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
+                      <div>
+                        <h2 className="text-lg font-black text-slate-950">{centerName} — وصل خلاص فعالية</h2>
+                        <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {part.receiptNumber || '—'}</p>
+                        <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {part.paidAt ? part.paidAt.split('T')[0] : todayIso}</p>
+                      </div>
+                      <div className="text-left font-mono font-bold text-xs bg-slate-100 p-2 rounded border border-slate-300">
+                        <p>الخدمة: <strong>فعالية / خرجة</strong></p>
+                        <p className="text-[11px] text-[#1e626b] mt-0.5">الفعالية: {selectedEvent.name}</p>
+                        <p className="text-[11px] text-slate-500">{selectedEvent.date}{selectedEvent.location ? ` — ${selectedEvent.location}` : ''}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-slate-500 font-bold">اسم المشارك(ة):</span>
+                        <span className="font-extrabold text-slate-900">
+                          {part.participantName} ({PARTICIPANT_TYPES.find(t => t.type === part.participantType)?.label})
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-slate-500 font-bold">رقم الهاتف:</span>
+                        <span className="font-bold text-slate-800 font-mono" dir="ltr">{part.contactPhone || 'غير مدون'}</span>
+                      </div>
+
+                      {/* Payment record table */}
+                      <div className="space-y-1.5 pt-2">
+                        <h4 className="font-extrabold text-xs text-slate-900 flex justify-between items-center">
+                          <span>سجل الدفعات المسجلة:</span>
+                          <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: 1</span>
+                        </h4>
+
+                        <div className="border border-slate-300 rounded-xl overflow-x-auto">
+                          <table className="min-w-[560px] w-full text-right text-[11px]">
+                            <thead className="bg-slate-100 text-slate-800 font-black border-b border-slate-300">
+                              <tr>
+                                <th className="p-2">#</th>
+                                <th className="p-2">التاريخ</th>
+                                <th className="p-2">رقم الوصل</th>
+                                <th className="p-2">طريقة الدفع / ملاحظات</th>
+                                <th className="p-2 text-left">المبلغ المقبوض</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 bg-white">
+                              <tr>
+                                <td className="p-2 font-bold text-slate-400">1</td>
+                                <td className="p-2 font-mono text-slate-700">{part.paidAt ? part.paidAt.split('T')[0] : todayIso}</td>
+                                <td className="p-2 font-mono text-slate-500 text-[10px]">{part.receiptNumber || '—'}</td>
+                                <td className="p-2 text-slate-800 font-medium">
+                                  <span className="font-bold">{part.paymentMethod === 'Chèque' ? 'Chèque' : 'Espèces'}</span>
+                                  {part.chequeNumber && (
+                                    <span className="text-slate-500 text-[10px] block">
+                                      شيك رقم: {part.chequeNumber}{part.chequeDate ? ` — ${part.chequeDate}` : ''}
+                                    </span>
+                                  )}
+                                  {part.discount ? <span className="text-[#1e626b] text-[10px] block font-bold">التخفيض: {part.discount} د.ت</span> : null}
+                                  {part.notes && <span className="text-slate-500 text-[10px] block">{part.notes}</span>}
+                                </td>
+                                <td className="p-2 text-left font-black font-mono text-[#1e626b]">{round2(part.amountPaid)} د.ت</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2">
+                        <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-300">
+                          <span className="text-[10px] text-slate-600 block font-bold">مبلغ المشاركة:</span>
+                          <span className="text-base font-black text-slate-900 font-mono">{round2(part.totalRequired)} د.ت</span>
+                        </div>
+
+                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
+                          <span className="text-[10px] text-[#1e626b] block font-bold">المسدد حتى الآن:</span>
+                          <span className="text-base font-black text-[#1e626b] font-mono">{round2(part.amountPaid)} د.ت</span>
+                        </div>
+
+                        <div className={`p-2.5 rounded-xl border ${receiptRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-[#257C86]/[0.06] border-[#257C86]/20'}`}>
+                          <span className="text-[10px] text-[#1e626b] block font-bold">الرصيد المتبقي:</span>
+                          <span className={`text-base font-black font-mono ${receiptRemaining === 0 ? 'text-slate-400' : 'text-red-700'}`}>{receiptRemaining} د.ت</span>
+                        </div>
+                      </div>
+
+                      {part.discount ? (
+                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20 flex justify-between items-center">
+                          <span className="text-[10px] text-[#1e626b] font-bold">التخفيض الممنوح:</span>
+                          <span className="text-base font-black text-[#1e626b] font-mono">-{part.discount} د.ت</span>
+                        </div>
+                      ) : null}
+
+                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center font-bold">
+                        {receiptRemaining === 0 ? (
+                          <span className="text-[#1e626b] text-xs flex items-center justify-center gap-1">
+                            <CheckCircle2 className="h-4 w-4" />
+                            حالة المشاركة: مسدد بالكامل
+                          </span>
+                        ) : part.paymentMethod === 'Chèque' ? (
+                          <span className="text-amber-700 text-xs flex items-center justify-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            حالة المشاركة: شيك معلق — بانتظار التحصيل من وحدة المالية
+                          </span>
+                        ) : (
+                          <span className="text-[#1e626b] text-xs">
+                            حالة المشاركة: خلاص جزئي — باقي: {receiptRemaining} د.ت
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-8 pt-4 border-t border-slate-300">
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
+                        <p>نشكركم على ثقتكم في مركز {centerName}.</p>
+                        <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
+                      </div>
+                      <div className="w-1/2 text-center mr-auto">
+                        <div className="border-b-2 border-dotted border-slate-400 h-20 mb-1"></div>
+                        <p className="text-[10px] text-slate-500 font-bold">ختم وإمضاء إدارة المركز</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-left text-xs font-bold">
-                  <div>الوجهة: {selectedEvent.location}</div>
-                  <div>السنة الدراسية: {selectedEvent.schoolYear || getCurrentAcademicYear()}</div>
-                </div>
-              </div>
-              <table className="w-full text-right text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 border border-black">
-                    <th className="border border-black px-4 py-2 w-12">#</th>
-                    <th className="border border-black px-4 py-2">اسم المشارك</th>
-                    <th className="border border-black px-4 py-2 w-24 text-center">النوع</th>
-                    <th className="border border-black px-4 py-2 w-20 text-center">ذهاب</th>
-                    <th className="border border-black px-4 py-2 w-20 text-center">إياب</th>
-                    <th className="border border-black px-4 py-2">ملاحظات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedEvent.participants.map((p, i) => (
-                    <tr key={p.id} className="border border-black">
-                      <td className="border border-black px-4 py-2 text-center">{i + 1}</td>
-                      <td className="border border-black px-4 py-2">{p.participantName}</td>
-                      <td className="border border-black px-4 py-2 text-center">{PARTICIPANT_TYPES.find(t => t.type === p.participantType)?.label}</td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                    </tr>
-                  ))}
-                  {Array.from({ length: Math.max(0, 20 - selectedEvent.participants.length) }).map((_, i) => (
-                    <tr key={`filler-${i}`} className="border border-black">
-                      <td className="border border-black px-4 py-2 text-center"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                      <td className="border border-black px-4 py-2"></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="mt-12 grid grid-cols-3 gap-8">
-                <div className="text-center">
-                  <div className="text-xs font-black mb-8">توقيع المرافق(ة)</div>
-                  <div className="border-b border-black w-full h-8 mx-auto"></div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs font-black mb-8">توقيع السائق</div>
-                  <div className="border-b border-black w-full h-8 mx-auto"></div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs font-black mb-8">ختم الإدارة</div>
-                  <div className="border-b border-black w-full h-8 mx-auto"></div>
-                </div>
-              </div>
+              </motion.div>
             </div>
-          </PrintOverlay>
+          );
+        })()}
+
+        {/* PRINT ATTENDANCE MODAL (نفس نظام الطباعة في التطبيق) */}
+        {printAttendance.open && selectedEvent && (
+          <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden my-8"
+            >
+              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+                <span className="font-bold text-sm">كشف حضور ومغادرة — {selectedEvent.name}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="h-4 w-4" />
+                    طباعة الكشف (A4) 🖨️
+                  </button>
+                  <button
+                    onClick={() => setPrintAttendance({ open: false, eventId: null })}
+                    className="p-2 hover:bg-slate-800 rounded-xl text-slate-400"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 overflow-y-auto">
+                {/* ATTENDANCE PRINT TEMPLATE */}
+                <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 w-full mx-auto text-xs font-sans flex flex-col">
+                  <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
+                    <div>
+                      <h2 className="text-lg font-black text-slate-950">{centerName} — كشف حضور ومغادرة</h2>
+                      <p className="text-[10px] text-slate-500 font-bold">الفعالية: {selectedEvent.name} | التاريخ: {selectedEvent.date}{selectedEvent.time ? ` — ${selectedEvent.time}` : ''}</p>
+                    </div>
+                    <div className="text-left font-mono font-bold text-[11px] bg-slate-100 p-2 rounded border border-slate-300">
+                      <p>الوجهة: {selectedEvent.location}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">السنة الدراسية: {selectedEvent.schoolYear || getCurrentAcademicYear()}</p>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-right text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 border border-slate-900">
+                        <th className="border border-slate-900 px-4 py-2 w-12">#</th>
+                        <th className="border border-slate-900 px-4 py-2">اسم المشارك</th>
+                        <th className="border border-slate-900 px-4 py-2 w-24 text-center">النوع</th>
+                        <th className="border border-slate-900 px-4 py-2 w-20 text-center">ذهاب</th>
+                        <th className="border border-slate-900 px-4 py-2 w-20 text-center">إياب</th>
+                        <th className="border border-slate-900 px-4 py-2">ملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedEvent.participants.map((p, i) => (
+                        <tr key={p.id} className="border border-slate-900">
+                          <td className="border border-slate-900 px-4 py-2 text-center">{i + 1}</td>
+                          <td className="border border-slate-900 px-4 py-2">{p.participantName}</td>
+                          <td className="border border-slate-900 px-4 py-2 text-center">{PARTICIPANT_TYPES.find(t => t.type === p.participantType)?.label}</td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                        </tr>
+                      ))}
+                      {Array.from({ length: Math.max(0, 20 - selectedEvent.participants.length) }).map((_, i) => (
+                        <tr key={`filler-${i}`} className="border border-slate-900">
+                          <td className="border border-slate-900 px-4 py-2 text-center"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                          <td className="border border-slate-900 px-4 py-2"></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="mt-8 pt-4 border-t border-slate-300">
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 mb-8">
+                      <p>عدد المشاركين المسجلين: {selectedEvent.participants.length}</p>
+                      <p className="font-bold text-slate-900">ختم وإدارة مركز {centerName}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-8">
+                      <div className="text-center">
+                        <div className="text-xs font-black mb-8">توقيع المرافق(ة)</div>
+                        <div className="border-b-2 border-dotted border-slate-400 w-full h-8 mx-auto"></div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-black mb-8">توقيع السائق</div>
+                        <div className="border-b-2 border-dotted border-slate-400 w-full h-8 mx-auto"></div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-black mb-8">ختم الإدارة</div>
+                        <div className="border-b-2 border-dotted border-slate-400 w-full h-8 mx-auto"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -1317,39 +1603,6 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
           {children}
         </div>
       </motion.div>
-    </div>
-  );
-}
-
-function PrintOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-auto">
-      <div className="absolute top-6 left-6 flex gap-2 no-print z-10">
-        <button
-          onClick={() => window.print()}
-          className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5"
-        >
-          <Printer size={16} />
-          طباعة الآن
-        </button>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 bg-white text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition cursor-pointer"
-        >
-          إغلاق
-        </button>
-      </div>
-      <div className="print-area print-one">
-        {children}
-      </div>
     </div>
   );
 }
