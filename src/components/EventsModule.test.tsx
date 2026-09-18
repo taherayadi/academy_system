@@ -27,9 +27,9 @@ const mockEvents: SchoolEvent[] = [
         participantType: 'student',
         contactPhone: '12345678',
         amountPaid: 10,
-        totalRequired: 10,
-        remainingBalance: 0,
-        paid: true,
+        totalRequired: 20,
+        remainingBalance: 10,
+        paid: false,
         attended: false,
         receiptNumber: 'REC-EVT-001',
       }

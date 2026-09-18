@@ -234,8 +234,13 @@ export default function EventsModule({
     }
 
     // المبلغ المطلوب يُحتسب تلقائياً من نوع المشارك ناقص التخفيض.
+    const price = eventPriceFor(selectedEvent, type);
     const disc = Math.max(0, participantForm.discount || 0);
-    const effectiveRequired = Math.max(0, eventPriceFor(selectedEvent, type) - disc);
+    if (price > 0 && disc >= price) {
+      error(`قيمة التخفيض (${disc} د.ت) يجب أن تكون أقل تماماً من مبلغ المشاركة (${price} د.ت)!`);
+      return;
+    }
+    const effectiveRequired = Math.max(0, price - disc);
     const amountPaid = Math.max(0, participantForm.amountPaid || 0);
     const remaining = round2(Math.max(0, effectiveRequired - amountPaid));
 
@@ -301,6 +306,12 @@ export default function EventsModule({
 
     if (paymentForm.amount <= 0) {
       error('يرجى إدخال مبلغ الدفعة');
+      return;
+    }
+
+    const remainingBefore = round2(Math.max(0, part.totalRequired - part.amountPaid));
+    if (paymentForm.amount > remainingBefore) {
+      error(`عذراً، مبلغ الدفعة (${paymentForm.amount} د.ت) يتجاوز المتبقي المستحق (${remainingBefore} د.ت)!`);
       return;
     }
 
@@ -775,8 +786,13 @@ export default function EventsModule({
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   onClick={() => setPaymentModal({ open: true, participantId: p.id })}
-                                  title="تسجيل دفعة"
-                                  className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
+                                  disabled={p.remainingBalance <= 0}
+                                  title={p.remainingBalance <= 0 ? 'تم الخلاص بالكامل — لا توجد دفعات مطلوبة' : 'تسجيل دفعة'}
+                                  className={`p-1 rounded-lg transition ${
+                                    p.remainingBalance <= 0
+                                      ? 'text-slate-300 cursor-not-allowed'
+                                      : 'text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] cursor-pointer'
+                                  }`}
                                 >
                                   <CreditCard className="h-3.5 w-3.5" />
                                 </button>
@@ -1129,42 +1145,53 @@ export default function EventsModule({
                     </div>
                   </div>
                 )}
-                <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-discount">التخفيض (د.ت)</label>
-                    <input
-                      id="part-discount"
-                      type="number"
-                      min="0"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                      value={participantForm.discount || 0}
-                      onChange={e => setParticipantForm({ ...participantForm, discount: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
-                    <input
-                      id="part-paid"
-                      type="number"
-                      min="0"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                      value={participantForm.amountPaid || 0}
-                      onChange={e => setParticipantForm({ ...participantForm, amountPaid: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  {selectedEvent && (() => {
-                    const price = eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student');
-                    const remainingAfter = round2(Math.max(0, price - (participantForm.discount || 0) - (participantForm.amountPaid || 0)));
-                    return (
+                {selectedEvent && (() => {
+                  const price = eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student');
+                  const maxDiscount = Math.max(0, price - 1);
+                  const remainingAfter = round2(Math.max(0, price - (participantForm.discount || 0) - (participantForm.amountPaid || 0)));
+                  return (
+                    <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-discount">التخفيض (د.ت)</label>
+                        <input
+                          id="part-discount"
+                          type="number"
+                          min="0"
+                          max={maxDiscount}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          value={participantForm.discount || 0}
+                          onChange={e => setParticipantForm({ ...participantForm, discount: Math.max(0, Math.min(maxDiscount, parseFloat(e.target.value) || 0)) })}
+                        />
+                        {price > 0 && (
+                          <p className="text-[10px] font-bold text-slate-400 mt-1">
+                            يجب أن يكون أقل تماماً من مبلغ المشاركة ({price} د.ت)
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
+                        <input
+                          id="part-paid"
+                          type="number"
+                          min="0"
+                          max={Math.max(0, price - (participantForm.discount || 0))}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          value={participantForm.amountPaid || 0}
+                          onChange={e => setParticipantForm({
+                            ...participantForm,
+                            amountPaid: Math.min(Math.max(0, price - (participantForm.discount || 0)), Math.max(0, parseFloat(e.target.value) || 0))
+                          })}
+                        />
+                      </div>
                       <div className={`col-span-2 p-2.5 rounded-xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-[#257C86]/20 text-[#1e626b]'}`}>
                         <span>{remainingAfter > 0 ? 'المتبقي بعد الدفع (Reste):' : 'حالة الخلاص:'}</span>
                         <span className="font-mono font-black">
                           {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
                         </span>
                       </div>
-                    );
-                  })()}
-                </div>
+                    </div>
+                  );
+                })()}
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-notes">ملاحظات</label>
                   <input
@@ -1212,30 +1239,43 @@ export default function EventsModule({
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="pay-amount">المبلغ (د.ت)</label>
-                  <input
-                    id="pay-amount"
-                    type="number"
-                    min="0"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b] font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
-                    value={paymentForm.amount || ''}
-                    onChange={e => setPaymentForm({ ...paymentForm, amount: Math.max(0, parseFloat(e.target.value) || 0) })}
-                  />
-                </div>
                 {(() => {
                   const part = selectedEvent && paymentModal.participantId
                     ? selectedEvent.participants.find(p => p.id === paymentModal.participantId)
                     : null;
-                  if (!part) return null;
-                  const remainingAfter = round2(Math.max(0, part.totalRequired - (part.amountPaid + (paymentForm.amount || 0))));
+                  const remainingBefore = part ? round2(Math.max(0, part.totalRequired - part.amountPaid)) : 0;
+                  const remainingAfter = part ? round2(Math.max(0, remainingBefore - (paymentForm.amount || 0))) : 0;
                   return (
-                    <div className={`p-3 rounded-2xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-[#257C86]/[0.06] border-[#257C86]/20 text-[#1e626b]'}`}>
-                      <span>{remainingAfter > 0 ? 'المتبقي بعد هذه الدفعة (Reste):' : 'بعد هذه الدفعة:'}</span>
-                      <span className="font-mono font-black">
-                        {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
-                      </span>
-                    </div>
+                    <>
+                      <div>
+                        <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="pay-amount">المبلغ (د.ت)</label>
+                        <input
+                          id="pay-amount"
+                          type="number"
+                          min="0"
+                          max={part ? remainingBefore : undefined}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b] font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          value={paymentForm.amount || ''}
+                          onChange={e => setPaymentForm({
+                            ...paymentForm,
+                            amount: Math.min(remainingBefore, Math.max(0, parseFloat(e.target.value) || 0))
+                          })}
+                        />
+                        {part && remainingBefore > 0 && (
+                          <p className="text-[10px] font-bold text-slate-400 mt-1">
+                            الحد الأقصى لهذه الدفعة: {remainingBefore} د.ت (المتبقي المستحق)
+                          </p>
+                        )}
+                      </div>
+                      {part && (
+                        <div className={`p-3 rounded-2xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-[#257C86]/[0.06] border-[#257C86]/20 text-[#1e626b]'}`}>
+                          <span>{remainingAfter > 0 ? 'المتبقي بعد هذه الدفعة (Reste):' : 'بعد هذه الدفعة:'}</span>
+                          <span className="font-mono font-black">
+                            {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
                 <div>
