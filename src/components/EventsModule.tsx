@@ -17,10 +17,8 @@ import {
   Bus,
   Gift,
   Sparkles,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import {
   SchoolEvent,
@@ -34,7 +32,7 @@ import {
 import { Student, CenterSettings, getCurrentAcademicYear, DEFAULT_ACADEMIC_YEARS } from '../types';
 import DateField from './DateField';
 import ConfirmDialog from './ConfirmDialog';
-import { ToastProvider, useToast } from './Toast';
+import { useToast } from './Toast';
 
 interface EventsModuleProps {
   events: SchoolEvent[];
@@ -53,11 +51,11 @@ const CATEGORY_CONFIG: Record<EventCategory, { label: string; icon: React.Elemen
 
 const CATEGORY_ORDER: EventCategory[] = ['trip', 'party', 'workshop', 'other'];
 
-const STATUS_CONFIG: Record<EventStatus, { label: string; color: string }> = {
-  planned: { label: 'مخطط لها', color: 'bg-blue-100 text-blue-700' },
-  confirmed: { label: 'مؤكدة', color: 'bg-green-100 text-green-700' },
-  completed: { label: 'مكتملة', color: 'bg-gray-100 text-gray-700' },
-  cancelled: { label: 'ملغاة', color: 'bg-red-100 text-red-700' },
+const STATUS_CONFIG: Record<EventStatus, { label: string; badge: string }> = {
+  planned: { label: 'مخطط لها', badge: 'bg-slate-100 text-slate-600 border-slate-200' },
+  confirmed: { label: 'مؤكدة', badge: 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20' },
+  completed: { label: 'مكتملة', badge: 'bg-slate-50 text-slate-500 border-slate-200' },
+  cancelled: { label: 'ملغاة', badge: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 const STATUS_ORDER: EventStatus[] = ['planned', 'confirmed', 'completed', 'cancelled'];
@@ -73,8 +71,7 @@ export default function EventsModule({
   events,
   onUpdateEvents,
   students = [],
-  settings,
-  sidebarCollapsed
+  settings
 }: EventsModuleProps) {
   const { success, error, info } = useToast();
   // --- State ---
@@ -289,377 +286,461 @@ export default function EventsModule({
 
   // --- Renderers ---
   return (
-    <div className="flex h-full w-full bg-gray-50 text-right" dir="rtl">
-      {/* Sidebar */}
-      <div className={`flex flex-col border-l bg-white transition-all ${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-80'}`}>
-        <div className="p-4 border-b space-y-4">
-          <button
-            onClick={() => {
-              setEventForm({ schoolYear: getCurrentAcademicYear() });
-              setEventModal({ open: true, id: null });
-            }}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
-          >
-            <Plus size={18} />
-            <span>فعالية جديدة</span>
-          </button>
+    <div className="space-y-6" dir="rtl">
 
+      {/* Module Banner */}
+      <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+              الفعاليات والخرجات
+            </span>
+            <span className="text-xs text-slate-400 font-bold">الرحلات والحفلات والورشات</span>
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
+            <Calendar className="h-6 w-6 text-[#257C86]" />
+            إدارة الفعاليات والخرجات
+          </h2>
+          <p className="text-slate-500 text-xs mt-1">
+            تنظيم الفعاليات، تسجيل المشاركين ومتابعة الحضور والمحاصيل المالية.
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setEventForm({ schoolYear: getCurrentAcademicYear() });
+            setEventModal({ open: true, id: null });
+          }}
+          className="px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+        >
+          <Plus className="h-4 w-4" />
+          فعالية جديدة
+        </button>
+      </div>
+
+      {/* Main Grid: Left List (Events) & Right Panel (Detail & Participants) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        {/* Left Events List */}
+        <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5 space-y-3 no-print">
+          <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 px-1">
+            <Calendar className="h-4 w-4 text-[#257C86]" />
+            قائمة الفعاليات ({filteredEvents.length})
+          </span>
+
+          {/* Filter bar: school year + category */}
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={filterYear}
+              onChange={e => setFilterYear(e.target.value)}
+              title="السنة الدراسية"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            >
+              <option value="">السنة: الكل</option>
+              {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <select
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value as any)}
+              title="الفئة"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            >
+              <option value="all">الفئة: الكل</option>
+              {CATEGORY_ORDER.map(cat => (
+                <option key={cat} value={cat}>{CATEGORY_CONFIG[cat].label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search event */}
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="بحث عن فعالية..."
-              className="w-full pr-9 pl-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-[#257C86] outline-none"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              placeholder="بحث عن فعالية..."
+              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-2">
-            <div className="flex items-center gap-2 text-xs text-gray-500 font-medium uppercase tracking-wider">
-              <Filter size={12} />
-              <span>تصفية</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <select
-                className="text-xs border rounded px-2 py-1 bg-gray-50 outline-none"
-                value={filterYear}
-                onChange={e => setFilterYear(e.target.value)}
+          {/* Status segmented filter */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            {(['all', ...STATUS_ORDER] as const).map(st => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(filterStatus === st ? 'all' : (st as any))}
+                className={`px-2 py-1 text-[11px] font-extrabold rounded-lg transition cursor-pointer flex-1 ${
+                  filterStatus === st
+                    ? 'bg-white text-slate-900 shadow-lg shadow-slate-900/5'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
               >
-                <option value="">كل السنوات</option>
-                {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              <select
-                className="text-xs border rounded px-2 py-1 bg-gray-50 outline-none"
-                value={filterCategory}
-                onChange={e => setFilterCategory(e.target.value as any)}
-              >
-                <option value="all">كل الفئات</option>
-                {CATEGORY_ORDER.map(cat => (
-                  <option key={cat} value={cat}>{CATEGORY_CONFIG[cat].label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {STATUS_ORDER.map(status => (
+                {st === 'all' ? 'الكل' : STATUS_CONFIG[st as EventStatus].label}
+              </button>
+            ))}
+          </div>
+
+          {/* Events Cards */}
+          <div className="space-y-2.5 max-h-[calc(100vh-420px)] overflow-y-auto pr-0.5 no-scrollbar">
+            {filteredEvents.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs font-bold text-slate-400">لا توجد فعاليات مطابقة</p>
                 <button
-                  key={status}
-                  onClick={() => setFilterStatus(filterStatus === status ? 'all' : status)}
-                  className={`px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
-                    filterStatus === status
-                      ? 'bg-[#257C86] text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  onClick={() => {
+                    setEventForm({ schoolYear: getCurrentAcademicYear() });
+                    setEventModal({ open: true, id: null });
+                  }}
+                  className="mt-3 px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] rounded-xl text-xs font-extrabold hover:bg-[#257C86]/20 transition cursor-pointer inline-flex items-center gap-1"
                 >
-                  {STATUS_CONFIG[status].label}
+                  <Plus className="h-3.5 w-3.5" />
+                  إنشاء أول فعالية
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : (
+              filteredEvents.map(e => {
+                const isSelected = selectedId === e.id;
+                const Icon = CATEGORY_CONFIG[e.category].icon;
+                const collected = e.participants.reduce((sum, p) => sum + p.amountPaid, 0);
+                const registrationRate = e.maxCapacity ? (e.participants.length / e.maxCapacity) * 100 : 0;
+
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => setSelectedId(e.id)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-right relative ${
+                      isSelected
+                        ? 'bg-[#257C86]/[0.06] border-[#257C86] shadow-sm ring-1 ring-[#257C86]/30'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <h3 className="text-xs font-black text-slate-900 leading-snug line-clamp-1 flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5 text-[#257C86] shrink-0" />
+                        {e.name}
+                      </h3>
+                      <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${STATUS_CONFIG[e.status].badge}`}>
+                        {STATUS_CONFIG[e.status].label}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold mb-1.5">
+                      <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span>{e.date}{e.time ? ` — ${e.time}` : ''}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500 font-bold mb-1.5">
+                      <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{e.location}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-100">
+                      <div className="flex items-center gap-2 font-bold text-slate-600">
+                        <span>{CATEGORY_CONFIG[e.category].label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#257C86] font-extrabold">{e.participants.length}{e.maxCapacity ? ` / ${e.maxCapacity}` : ''} مشارك</span>
+                        <span className="font-mono font-black text-[#257C86] bg-white px-2 py-0.5 rounded-md border border-[#257C86]/20">
+                          {round2(collected)} د.ت
+                        </span>
+                      </div>
+                    </div>
+
+                    {e.maxCapacity && (
+                      <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-[#257C86]'}`}
+                          style={{ width: `${Math.min(100, registrationRate)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {filteredEvents.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">لا توجد فعاليات مطابقة</div>
+        {/* Right Detail Panel */}
+        <div className="lg:col-span-8 space-y-5">
+          {!selectedEvent ? (
+            <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl border border-[#257C86]/20 flex items-center justify-center">
+                <Calendar className="h-7 w-7" />
+              </div>
+              <h3 className="text-sm font-black text-slate-900">لم يتم اختيار فعالية</h3>
+              <p className="text-xs font-bold text-slate-400 mt-1">
+                اختر فعالية من القائمة لإدارة المشاركين والمدفوعات والحضور
+              </p>
+            </div>
           ) : (
-            filteredEvents.map(e => {
-              const Icon = CATEGORY_CONFIG[e.category].icon;
-              const collected = e.participants.reduce((sum, p) => sum + p.amountPaid, 0);
-              const registrationRate = e.maxCapacity ? (e.participants.length / e.maxCapacity) * 100 : 0;
-
-              return (
-                <button
-                  key={e.id}
-                  onClick={() => setSelectedId(e.id)}
-                  className={`w-full text-right p-3 rounded-xl border transition-all ${
-                    selectedId === e.id
-                      ? 'border-[#257C86] bg-[#257C86]/[0.06] ring-1 ring-[#257C86]'
-                      : 'border-gray-200 bg-white hover:border-[#257C86]/50 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="p-1.5 bg-[#257C86]/10 text-[#257C86] rounded-lg">
-                      <Icon size={16} />
+            <>
+              {/* Event Overview Card */}
+              <div className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-4 no-print">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 bg-[#257C86]/[0.06] text-[#257C86] rounded-xl border border-[#257C86]/20 shrink-0">
+                      {(() => {
+                        const CategoryIcon = CATEGORY_CONFIG[selectedEvent.category].icon;
+                        return <CategoryIcon className="h-5 w-5" />;
+                      })()}
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_CONFIG[e.status].color}`}>
-                      {STATUS_CONFIG[e.status].label}
-                    </span>
-                  </div>
-                  <div className="font-bold text-sm text-gray-800 truncate mb-1">{e.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
-                    <MapPin size={12} />
-                    <span className="truncate">{e.location}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                    <div className="text-left">
-                      <div className="text-[10px] text-gray-400 uppercase">المشاركين</div>
-                      <div className="text-xs font-bold text-gray-700">{e.participants.length} {e.maxCapacity ? `/ ${e.maxCapacity}` : ''}</div>
-                    </div>
-                    <div className="text-left">
-                      <div className="text-[10px] text-gray-400 uppercase">المحصل</div>
-                      <div className="text-xs font-bold text-[#257C86]">{round2(collected)} د.ت</div>
-                    </div>
-                  </div>
-                  {e.maxCapacity && (
-                    <div className="mt-2 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-[#257C86]'}`}
-                        style={{ width: `${Math.min(100, registrationRate)}%` }}
-                      />
-                    </div>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
-        {!selectedEvent ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-400">
-            <div className="p-4 bg-gray-100 rounded-full mb-4 text-gray-300">
-              <Calendar size={48} />
-            </div>
-            <h3 className="text-lg font-medium text-gray-600">لم يتم اختيار فعالية</h3>
-            <p className="text-sm max-w-xs">اختر فعالية من القائمة الجانبية لإدارة المشاركين والمدفوعات</p>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="bg-white border-b p-4 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[#257C86] text-white rounded-2xl shadow-lg shadow-[#257C86]/20">
-                  {React.createElement(CATEGORY_CONFIG[selectedEvent.category].icon, { size: 24 })}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-xl font-bold text-gray-800">{selectedEvent.name}</h2>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_CONFIG[selectedEvent.status].color}`}>
-                      {STATUS_CONFIG[selectedEvent.status].label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <Calendar size={14} />
-                      <span>{selectedEvent.date}</span>
-                    </div>
-                    {selectedEvent.time && (
-                      <div className="flex items-center gap-1">
-                        <Clock size={14} />
-                        <span>{selectedEvent.time}</span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-base font-black text-slate-900">{selectedEvent.name}</h2>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${STATUS_CONFIG[selectedEvent.status].badge}`}>
+                          {STATUS_CONFIG[selectedEvent.status].label}
+                        </span>
                       </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <MapPin size={14} />
-                      <span>{selectedEvent.location}</span>
+                      <p className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {selectedEvent.date}
+                        </span>
+                        {selectedEvent.time && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {selectedEvent.time}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {selectedEvent.location}
+                        </span>
+                        {selectedEvent.busIncluded && (
+                          <span className="flex items-center gap-1 text-[#257C86] font-black">
+                            <Bus className="h-3.5 w-3.5" />
+                            حافلة متوفرة
+                          </span>
+                        )}
+                      </p>
                     </div>
-                    {selectedEvent.busIncluded && (
-                      <div className="flex items-center gap-1 text-[#257C86] font-medium">
-                        <Bus size={14} />
-                        <span>حافلة متوفرة</span>
-                      </div>
-                    )}
                   </div>
-                </div>
-              </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEventForm(selectedEvent);
-                    setEventModal({ open: true, id: selectedEvent.id });
-                  }}
-                  className="p-2 text-gray-500 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition-all border border-transparent hover:border-[#257C86]/40"
-                  title="تعديل الفعالية"
-                >
-                  <Edit3 size={20} />
-                </button>
-                <button
-                  onClick={() => {
-                    setConfirmDialog({
-                      open: true,
-                      title: 'حذف الفعالية',
-                      message: `هل أنت متأكد من حذف ${selectedEvent.name}؟ سيتم حذف جميع سجلات المشاركين المرتبطة.`,
-                      onConfirm: () => handleDeleteEvent(selectedEvent.id)
-                    });
-                  }}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-200"
-                  title="حذف الفعالية"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 shrink-0">
-              <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                  <UserPlus size={24} />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-400 font-medium uppercase">المشاركون</div>
-                  <div className="text-lg font-bold text-gray-800">
-                    {stats?.total} <span className="text-sm font-normal text-gray-400">/ {stats?.capacity}</span>
-                  </div>
-                  {stats?.overCapacity && (
-                    <div className="text-[10px] text-amber-600 flex items-center gap-1 mt-1 font-medium">
-                      <AlertCircle size={10} />
-                      <span>تجاوز السعة المحددة</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <CreditCard size={24} />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-400 font-medium uppercase">المالية (د.ت)</div>
-                  <div className="text-lg font-bold text-gray-800">
-                    {round2(stats?.collected || 0)} <span className="text-sm font-normal text-gray-400">من {round2(stats?.expected || 0)}</span>
-                  </div>
-                  <div className="text-[10px] text-red-500 mt-1 font-medium">
-                    متبقي: {round2(stats?.unpaid || 0)} د.ت
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-[#257C86]/10 text-[#257C86] rounded-xl">
-                  <CheckCircle2 size={24} />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-400 font-medium uppercase">نسبة الحضور</div>
-                  <div className="text-lg font-bold text-gray-800">
-                    {round2(stats?.attendanceRate || 0)}%
-                  </div>
-                  <div className="w-full h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                    <div
-                      className="h-full bg-[#257C86] transition-all"
-                      style={{ width: `${stats?.attendanceRate || 0}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Participants Section */}
-            <div className="flex-1 flex flex-col overflow-hidden p-4 pt-0 gap-4">
-              <div className="bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden">
-                <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="relative flex-1 max-w-md">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                      <input
-                        type="text"
-                        placeholder="بحث عن مشارك..."
-                        className="w-full pr-9 pl-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#257C86] outline-none"
-                        value={participantSearch}
-                        onChange={e => setParticipantSearch(e.target.value)}
-                      />
-                    </div>
-                    <select
-                      className="text-xs border rounded-lg px-3 py-2 bg-gray-50 outline-none"
-                      value={participantStatusFilter}
-                      onChange={e => setParticipantStatusFilter(e.target.value as any)}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => {
+                        setEventForm(selectedEvent);
+                        setEventModal({ open: true, id: selectedEvent.id });
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
                     >
-                      <option value="all">كل الحالات</option>
-                      <option value="paid">مدفوع</option>
-                      <option value="unpaid">غير مدفوع</option>
-                    </select>
+                      <Edit3 className="h-3.5 w-3.5" />
+                      تعديل
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmDialog({
+                          open: true,
+                          title: 'حذف الفعالية',
+                          message: `هل أنت متأكد من حذف ${selectedEvent.name}؟ سيتم حذف جميع سجلات المشاركين المرتبطة.`,
+                          onConfirm: () => handleDeleteEvent(selectedEvent.id)
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      حذف
+                    </button>
                   </div>
+                </div>
+
+                {/* Metrics Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/60">
+                    <span className="text-[11px] font-bold text-slate-400 block mb-1">المشاركون</span>
+                    <span className="font-mono text-base font-black text-slate-900">
+                      {stats?.total}{stats && stats.capacity !== Infinity ? ` / ${stats.capacity}` : ''}
+                    </span>
+                    {stats?.overCapacity && (
+                      <span className="text-[10px] text-amber-700 font-black flex items-center gap-1 mt-1">
+                        <AlertCircle className="h-3 w-3" />
+                        تجاوز السعة المحددة
+                      </span>
+                    )}
+                  </div>
+                  <div className="bg-[#257C86]/[0.06] rounded-2xl p-3 border border-[#257C86]/20">
+                    <span className="text-[11px] font-bold text-[#1e626b] block mb-1">المحصل (د.ت)</span>
+                    <span className="font-mono text-base font-black text-[#257C86]">{round2(stats?.collected || 0)}</span>
+                    <span className="text-[10px] font-bold text-slate-400 block mt-0.5">من {round2(stats?.expected || 0)} د.ت</span>
+                  </div>
+                  <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200/70">
+                    <span className="text-[11px] font-bold text-amber-700 block mb-1">المتبقي (د.ت)</span>
+                    <span className="font-mono text-base font-black text-amber-800">{round2(stats?.unpaid || 0)}</span>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/60">
+                    <span className="text-[11px] font-bold text-slate-400 block mb-1">نسبة الحضور</span>
+                    <span className="font-mono text-base font-black text-slate-900">{round2(stats?.attendanceRate || 0)}%</span>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden">
+                      <div
+                        className="h-full bg-[#257C86] transition-all"
+                        style={{ width: `${stats?.attendanceRate || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Participants Section */}
+              <div className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-4 no-print">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-[#257C86]" />
+                      المشاركون ({filteredParticipants.length})
+                    </h3>
+                    <p className="text-xs font-bold text-slate-400 mt-0.5">
+                      قائمة المشاركين، الحضور والمدفوعات وتفاصيل الاستخلاص
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => {
                       setParticipantForm({});
                       setParticipantModal({ open: true, id: null });
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-all text-sm font-medium shadow-sm"
+                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
-                    <UserPlus size={16} />
-                    <span>إضافة مشارك</span>
+                    <UserPlus className="h-4 w-4" />
+                    إضافة مشارك
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs">حضور</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs">المشارك</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs">النوع</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs text-left">المبلغ المطلوب</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs text-left">المدفوع</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs text-left">المتبقي</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs text-center">الحالة</th>
-                        <th className="px-4 py-3 font-medium text-gray-500 text-xs text-center">إجراءات</th>
+
+                {/* Filter & Search Participants */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={participantSearch}
+                      onChange={e => setParticipantSearch(e.target.value)}
+                      placeholder="بحث عن مشارك..."
+                      className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                    {(['all', 'paid', 'unpaid'] as const).map(st => {
+                      const labels = { all: 'الكل', paid: 'مدفوع', unpaid: 'غير مدفوع' };
+                      return (
+                        <button
+                          key={st}
+                          onClick={() => setParticipantStatusFilter(st)}
+                          className={`px-3 py-1 text-[11px] font-extrabold rounded-lg transition cursor-pointer flex-1 sm:flex-initial ${
+                            participantStatusFilter === st
+                              ? 'bg-white text-slate-900 shadow-lg shadow-slate-900/5'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          {labels[st]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Participants Table */}
+                <div className="overflow-auto max-h-[60vh] rounded-2xl border border-slate-100 no-scrollbar">
+                  <table className="min-w-[760px] w-full text-right text-xs">
+                    <thead>
+                      <tr className="bg-slate-50/80 text-slate-500 font-black border-b border-slate-100">
+                        <th className="p-3 text-center">حضور</th>
+                        <th className="p-3">المشارك</th>
+                        <th className="p-3 text-center">النوع</th>
+                        <th className="p-3 text-center">المبلغ المطلوب</th>
+                        <th className="p-3 text-center">المدفوع</th>
+                        <th className="p-3 text-center">المتبقي</th>
+                        <th className="p-3 text-center">الحالة</th>
+                        <th className="p-3 text-center">إجراءات</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y divide-slate-100 font-semibold">
                       {filteredParticipants.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-10 text-center text-gray-400">لا يوجد مشاركين مطابقين</td>
+                          <td colSpan={8} className="p-8 text-center text-slate-400 font-bold">
+                            لا يوجد مشاركين مطابقين
+                          </td>
                         </tr>
                       ) : (
                         filteredParticipants.map(p => (
-                          <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 text-center">
+                          <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                            <td className="p-3 text-center">
                               <input
                                 type="checkbox"
                                 checked={p.attended}
                                 onChange={() => toggleAttendance(selectedEvent.id, p.id)}
-                                className="w-4 h-4 rounded text-[#257C86] focus:ring-[#257C86]"
+                                className="h-4 w-4 accent-[#257C86] cursor-pointer"
+                                title="تسجيل الحضور"
                               />
                             </td>
-                            <td className="px-4 py-3 font-medium text-gray-800">{p.participantName}</td>
-                            <td className="px-4 py-3">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                            <td className="p-3">
+                              <span className="font-bold text-slate-900 block">{p.participantName}</span>
+                              {p.contactPhone && (
+                                <span className="text-[10px] text-slate-400 font-bold font-mono flex items-center gap-1 mt-0.5">
+                                  {p.contactPhone}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-extrabold inline-block">
                                 {PARTICIPANT_TYPES.find(t => t.type === p.participantType)?.label}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-left font-mono">{round2(p.totalRequired)}</td>
-                            <td className="px-4 py-3 text-left font-mono">{round2(p.amountPaid)}</td>
-                            <td className="px-4 py-3 text-left font-mono text-red-500">{round2(p.remainingBalance)}</td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="p-3 text-center font-mono font-bold text-slate-700">
+                              {round2(p.totalRequired)} د.ت
+                            </td>
+                            <td className="p-3 text-center font-mono font-black text-[#1e626b]">
+                              {round2(p.amountPaid)} د.ت
+                            </td>
+                            <td className="p-3 text-center font-mono font-black">
+                              {p.remainingBalance > 0 ? (
+                                <span className="text-red-600">{round2(p.remainingBalance)} د.ت</span>
+                              ) : (
+                                <span className="text-slate-300">0 د.ت</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
                               {p.paid ? (
-                                <span className="inline-flex items-center gap-1 text-green-600 text-[10px] font-bold">
-                                  <CheckCircle2 size={12} />
+                                <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-flex items-center gap-1">
+                                  <CheckCircle2 className="h-3 w-3" />
                                   مدفوع
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-bold">
-                                  <XCircle size={12} />
+                                <span className="px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-[10px] font-black inline-flex items-center gap-1">
+                                  <XCircle className="h-3 w-3" />
                                   غير مدفوع
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="flex justify-center gap-1">
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   onClick={() => setPaymentModal({ open: true, participantId: p.id })}
-                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="تسجيل دفعة"
+                                  title="تسجيل دفعة"
+                                  className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
                                 >
-                                  <CreditCard size={16} />
+                                  <CreditCard className="h-3.5 w-3.5" />
                                 </button>
                                 {p.receiptNumber && (
                                   <button
                                     onClick={() => setPrintReceipt({ open: true, participantId: p.id })}
-                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="طباعة وصل"
-                                >
-                                    <Printer size={16} />
-                                </button>
+                                    title="طباعة وصل"
+                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
+                                  >
+                                    <Printer className="h-3.5 w-3.5" />
+                                  </button>
                                 )}
                                 <button
                                   onClick={() => {
                                     setParticipantForm(p);
                                     setParticipantModal({ open: true, id: p.id });
                                   }}
-                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors" title="تعديل"
+                                  title="تعديل"
+                                  className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                 >
-                                  <Edit3 size={16} />
+                                  <Edit3 className="h-3.5 w-3.5" />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -670,9 +751,10 @@ export default function EventsModule({
                                       onConfirm: () => handleDeleteParticipant(selectedEvent.id, p.id)
                                     });
                                   }}
-                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors" title="حذف"
+                                  title="حذف"
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                 >
-                                  <Trash2 size={16} />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             </td>
@@ -682,545 +764,556 @@ export default function EventsModule({
                     </tbody>
                   </table>
                 </div>
-                <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setPrintAttendance({ open: true, eventId: selectedEvent.id })}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium"
-                    >
-                      <FileText size={16} />
-                      <span>طباعة كشف الحضور (A4)</span>
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-400 font-medium">
+
+                {/* Footer */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setPrintAttendance({ open: true, eventId: selectedEvent.id })}
+                    className="px-3 py-1.5 bg-[#257C86]/10 hover:bg-[#257C86]/20 text-[#257C86] font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    طباعة كشف الحضور (A4)
+                  </button>
+                  <span className="text-xs font-bold text-slate-400">
                     إجمالي المشاركين: {filteredParticipants.length}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {eventModal.open && (
+          <Modal
+            title={eventModal.id ? 'تعديل الفعالية' : 'فعالية جديدة'}
+            onClose={() => setEventModal({ open: false, id: null })}
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-name">اسم الفعالية *</label>
+                  <input
+                    id="event-name"
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.name || ''}
+                    onChange={e => setEventForm({ ...eventForm, name: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-description">الوصف</label>
+                  <textarea
+                    id="event-description"
+                    rows={3}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.description || ''}
+                    onChange={e => setEventForm({ ...eventForm, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-category">الفئة</label>
+                  <select
+                    id="event-category"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.category || 'other'}
+                    onChange={e => setEventForm({ ...eventForm, category: e.target.value as any })}
+                  >
+                    {CATEGORY_ORDER.map(cat => (
+                      <option key={cat} value={cat}>{CATEGORY_CONFIG[cat].label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-status">الحالة</label>
+                  <select
+                    id="event-status"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.status || 'planned'}
+                    onChange={e => setEventForm({ ...eventForm, status: e.target.value as any })}
+                  >
+                    {STATUS_ORDER.map(status => (
+                      <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-date">التاريخ *</label>
+                  <DateField
+                    id="event-date"
+                    value={eventForm.date || ''}
+                    onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-time">الوقت</label>
+                  <input
+                    id="event-time"
+                    type="time"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.time || ''}
+                    onChange={e => setEventForm({ ...eventForm, time: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-location">الموقع *</label>
+                  <input
+                    id="event-location"
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.location || ''}
+                    onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-capacity">السعة القصوى</label>
+                  <input
+                    id="event-capacity"
+                    type="number"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.maxCapacity || ''}
+                    onChange={e => setEventForm({ ...eventForm, maxCapacity: parseInt(e.target.value) || undefined })}
+                  />
+                </div>
+                <div className="flex items-center gap-2 self-end pb-0.5">
+                  <input
+                    type="checkbox"
+                    id="bus-included"
+                    className="h-4 w-4 accent-[#257C86] cursor-pointer"
+                    checked={!!eventForm.busIncluded}
+                    onChange={e => setEventForm({ ...eventForm, busIncluded: e.target.checked })}
+                  />
+                  <label htmlFor="bus-included" className="text-xs font-bold text-slate-600 cursor-pointer">تشمل الحافلة</label>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-year">السنة الدراسية</label>
+                  <select
+                    id="event-year"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={eventForm.schoolYear || getCurrentAcademicYear()}
+                    onChange={e => setEventForm({ ...eventForm, schoolYear: e.target.value })}
+                  >
+                    {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 space-y-3">
+                <div className="text-xs font-black text-[#1e626b]">تسعيرة المشاركين (د.ت)</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1" htmlFor="price-student">تلميذ</label>
+                    <input
+                      id="price-student"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={eventForm.priceStudent || 0}
+                      onChange={e => setEventForm({ ...eventForm, priceStudent: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1" htmlFor="price-parent">ولي أمر</label>
+                    <input
+                      id="price-parent"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={eventForm.priceParent || 0}
+                      onChange={e => setEventForm({ ...eventForm, priceParent: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1" htmlFor="price-sibling">أخ / أخت</label>
+                    <input
+                      id="price-sibling"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={eventForm.priceSibling || 0}
+                      onChange={e => setEventForm({ ...eventForm, priceSibling: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1" htmlFor="price-external">خارجي</label>
+                    <input
+                      id="price-external"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={eventForm.priceExternal || 0}
+                      onChange={e => setEventForm({ ...eventForm, priceExternal: parseFloat(e.target.value) || 0 })}
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+            <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setEventModal({ open: false, id: null })}
+                className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSubmitEvent}
+                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                حفظ الفعالية
+              </button>
+            </div>
+          </Modal>
         )}
 
-        {/* Modals */}
-        <AnimatePresence>
-          {eventModal.open && (
-            <Modal
-              title={eventModal.id ? 'تعديل الفعالية' : 'فعالية جديدة'}
-              onClose={() => setEventModal({ open: false, id: null })}
-            >
-              <div className="space-y-4 py-2">
+        {participantModal.open && (
+          <Modal
+            title={participantModal.id ? 'تعديل مشارك' : 'إضافة مشارك'}
+            onClose={() => setParticipantModal({ open: false, id: null })}
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-name">اسم المشارك *</label>
+                  <div className="flex gap-2">
+                    <input
+                      id="part-name"
+                      type="text"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={participantForm.participantName || ''}
+                      onChange={e => setParticipantForm({ ...participantForm, participantName: e.target.value })}
+                    />
+                    {students.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setParticipantModal({ open: true, id: null });
+                          info('يرجى اختيار التلميذ من قائمة الأسماء إذا كان مسجلاً');
+                        }}
+                        className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition cursor-pointer shrink-0"
+                        title="اختيار تلميذ مسجل"
+                      >
+                        <UserPlus size={18} />
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-name">اسم الفعالية *</label>
-                    <input
-                      id="event-name"
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.name || ''}
-                      onChange={e => setEventForm({ ...eventForm, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-description">الوصف</label>
-                    <textarea
-                      id="event-description"
-                      rows={3}
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.description || ''}
-                      onChange={e => setEventForm({ ...eventForm, description: e.target.value })}
-                    />
-                  </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-category">الفئة</label>
-                    <select
-                      id="event-category"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.category || 'other'}
-                      onChange={e => setEventForm({ ...eventForm, category: e.target.value as any })}
-                    >
-                      {CATEGORY_ORDER.map(cat => (
-                        <option key={cat} value={cat}>{CATEGORY_CONFIG[cat].label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-status">الحالة</label>
-                    <select
-                      id="event-status"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.status || 'planned'}
-                      onChange={e => setEventForm({ ...eventForm, status: e.target.value as any })}
-                    >
-                      {STATUS_ORDER.map(status => (
-                        <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-date">التاريخ *</label>
-                    <DateField
-                      id="event-date"
-                      value={eventForm.date || ''}
-                      onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-time">الوقت</label>
-                    <input
-                      id="event-time"
-                      type="time"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.time || ''}
-                      onChange={e => setEventForm({ ...eventForm, time: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-location">الموقع *</label>
-                    <input
-                      id="event-location"
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.location || ''}
-                      onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-capacity">سعة الحد الأقصى</label>
-                    <input
-                      id="event-capacity"
-                      type="number"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.maxCapacity || ''}
-                      onChange={e => setEventForm({ ...eventForm, maxCapacity: parseInt(e.target.value) || undefined })}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-6">
-                    <input
-                      type="checkbox"
-                      id="bus-included"
-                      className="w-4 h-4 text-[#257C86] rounded"
-                      checked={!!eventForm.busIncluded}
-                      onChange={e => setEventForm({ ...eventForm, busIncluded: e.target.checked })}
-                    />
-                    <label htmlFor="bus-included" className="text-sm text-gray-700">تشمل الحافلة</label>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-year">السنة الدراسية</label>
-                    <select
-                      id="event-year"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={eventForm.schoolYear || getCurrentAcademicYear()}
-                      onChange={e => setEventForm({ ...eventForm, schoolYear: e.target.value })}
-                    >
-                      {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-gray-50 rounded-xl border space-y-3">
-                  <div className="text-xs font-bold text-gray-500 uppercase mb-2">تسعيرة المشاركين (د.ت)</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1" htmlFor="price-student">تلميذ</label>
-                      <input
-                        id="price-student"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none"
-                        value={eventForm.priceStudent || 0}
-                        onChange={e => setEventForm({ ...eventForm, priceStudent: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1" htmlFor="price-parent">ولي أمر</label>
-                      <input
-                        id="price-parent"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none"
-                        value={eventForm.priceParent || 0}
-                        onChange={e => setEventForm({ ...eventForm, priceParent: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1" htmlFor="price-sibling">أخ / أخت</label>
-                      <input
-                        id="price-sibling"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none"
-                        value={eventForm.priceSibling || 0}
-                        onChange={e => setEventForm({ ...eventForm, priceSibling: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1" htmlFor="price-external">خارجي</label>
-                      <input
-                        id="price-external"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none"
-                        value={eventForm.priceExternal || 0}
-                        onChange={e => setEventForm({ ...eventForm, priceExternal: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  onClick={() => setEventModal({ open: false, id: null })}
-                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleSubmitEvent}
-                  className="px-4 py-2 text-sm bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
-                >
-                  حفظ الفعالية
-                </button>
-              </div>
-            </Modal>
-          )}
-
-          {participantModal.open && (
-            <Modal
-              title={participantModal.id ? 'تعديل مشارك' : 'إضافة مشارك'}
-              onClose={() => setParticipantModal({ open: false, id: null })}
-            >
-              <div className="space-y-4 py-2">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="part-name">اسم المشارك *</label>
-                    <div className="flex gap-2">
-                      <input
-                        id="part-name"
-                        type="text"
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                        value={participantForm.participantName || ''}
-                        onChange={e => setParticipantForm({ ...participantForm, participantName: e.target.value })}
-                      />
-                      {students.length > 0 && (
+                    <label className="text-xs font-bold text-slate-600 block mb-1">نوع المشارك</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PARTICIPANT_TYPES.map(t => (
                         <button
-                          onClick={() => {
-                            setParticipantModal({ open: true, id: null });
-                            info('يرجى اختيار التلميذ من قائمة الأسماء إذا كان مسجلاً');
-                          }}
-                          className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                          title="اختيار تلميذ مسجل"
+                          key={t.type}
+                          onClick={() => setParticipantForm({ ...participantForm, participantType: t.type })}
+                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                            participantForm.participantType === t.type
+                              ? 'bg-[#257C86] text-white border-[#257C86]'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}
                         >
-                          <UserPlus size={18} />
+                          {t.label}
                         </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">نوع المشارك</label>
-                      <div className="flex flex-wrap gap-2">
-                        {PARTICIPANT_TYPES.map(t => (
-                          <button
-                            key={t.type}
-                            onClick={() => setParticipantForm({ ...participantForm, participantType: t.type })}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                              participantForm.participantType === t.type
-                                ? 'bg-[#257C86] text-white border-[#257C86] shadow-sm'
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-[#257C86]/50'
-                            }`}
-                          >
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="part-phone">رقم الهاتف</label>
-                      <input
-                        id="part-phone"
-                        type="text"
-                        className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                        value={participantForm.contactPhone || ''}
-                        onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-xl border grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1" htmlFor="part-required">المبلغ المطلوب (د.ت)</label>
-                      <input
-                        id="part-required"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none font-mono"
-                        value={participantForm.totalRequired || (selectedEvent ? eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student') : 0)}
-                        onChange={e => setParticipantForm({ ...participantForm, totalRequired: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
-                      <input
-                        id="part-paid"
-                        type="number"
-                        className="w-full px-3 py-1.5 border rounded-md text-sm outline-none font-mono"
-                        value={participantForm.amountPaid || 0}
-                        onChange={e => setParticipantForm({ ...participantForm, amountPaid: parseFloat(e.target.value) || 0 })}
-                      />
+                      ))}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="part-notes">ملاحظات</label>
+                    <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-phone">رقم الهاتف</label>
                     <input
-                      id="part-notes"
+                      id="part-phone"
                       type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                      value={participantForm.notes || ''}
-                      onChange={e => setParticipantForm({ ...participantForm, notes: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={participantForm.contactPhone || ''}
+                      onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value })}
                     />
                   </div>
                 </div>
+                <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-required">المبلغ المطلوب (د.ت)</label>
+                    <input
+                      id="part-required"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={participantForm.totalRequired || (selectedEvent ? eventPriceFor(selectedEvent, (participantForm.participantType as EventParticipantType) || 'student') : 0)}
+                      onChange={e => setParticipantForm({ ...participantForm, totalRequired: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
+                    <input
+                      id="part-paid"
+                      type="number"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      value={participantForm.amountPaid || 0}
+                      onChange={e => setParticipantForm({ ...participantForm, amountPaid: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="part-notes">ملاحظات</label>
+                  <input
+                    id="part-notes"
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={participantForm.notes || ''}
+                    onChange={e => setParticipantForm({ ...participantForm, notes: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  onClick={() => setParticipantModal({ open: false, id: null })}
-                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleSubmitParticipant}
-                  className="px-4 py-2 text-sm bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
-                >
-                  حفظ المشارك
-                </button>
-              </div>
-            </Modal>
-          )}
+            </div>
+            <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setParticipantModal({ open: false, id: null })}
+                className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSubmitParticipant}
+                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                حفظ المشارك
+              </button>
+            </div>
+          </Modal>
+        )}
 
-          {paymentModal.open && (
-            <Modal
-              title="تسجيل دفعة مالية"
-              onClose={() => setPaymentModal({ open: false, participantId: null })}
-            >
-              <div className="space-y-4 py-2">
-                {selectedEvent && paymentModal.participantId && (
-                  <div className="p-3 bg-[#257C86]/10 rounded-lg border border-[#257C86]/10 flex justify-between items-center">
-                    <div className="text-sm font-bold text-[#1e626b]">
-                      {selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.participantName}
+        {paymentModal.open && (
+          <Modal
+            title="تسجيل دفعة مالية"
+            onClose={() => setPaymentModal({ open: false, participantId: null })}
+          >
+            <div className="space-y-4">
+              {selectedEvent && paymentModal.participantId && (
+                <div className="p-3.5 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 flex justify-between items-center text-xs font-bold text-[#1e626b]">
+                  <span className="font-black text-sm">
+                    {selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.participantName}
+                  </span>
+                  <span className="font-mono">
+                    المتبقي: {round2(selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.remainingBalance || 0)} د.ت
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="pay-amount">المبلغ (د.ت)</label>
+                  <input
+                    id="pay-amount"
+                    type="number"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b] font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    value={paymentForm.amount || ''}
+                    onChange={e => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Espèces', 'Chèque'].map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
+                        className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          paymentForm.method === m
+                            ? 'bg-[#257C86] text-white border-[#257C86]'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {m === 'Espèces' ? 'نقداً (Espèces)' : 'شيك (Par Chèque)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {paymentForm.method === 'Chèque' && (
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="pay-cheque-num">رقم الشيك</label>
+                      <input
+                        id="pay-cheque-num"
+                        type="text"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        value={paymentForm.chequeNumber || ''}
+                        onChange={e => setPaymentForm({ ...paymentForm, chequeNumber: e.target.value })}
+                      />
                     </div>
-                    <div className="text-xs text-[#257C86]">
-                      المتبقي: {round2(selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.remainingBalance || 0)} د.ت
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="pay-cheque-date">تاريخ الشيك</label>
+                      <DateField
+                        id="pay-cheque-date"
+                        value={paymentForm.chequeDate || ''}
+                        onChange={e => setPaymentForm({ ...paymentForm, chequeDate: e.target.value })}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="pay-amount">المبلغ (د.ت)</label>
-                    <input
-                      id="pay-amount"
-                      type="number"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86] font-mono"
-                      value={paymentForm.amount || ''}
-                      onChange={e => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">طريقة الدفع</label>
-                    <div className="flex gap-2">
-                      {['Espèces', 'Chèque'].map(m => (
-                        <button
-                          key={m}
-                          onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                            paymentForm.method === m
-                              ? 'bg-[#257C86] text-white border-[#257C86] shadow-sm'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#257C86]/50'
-                          }`}
-                        >
-                          {m === 'Espèces' ? 'نقداً' : 'شيك'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {paymentForm.method === 'Chèque' && (
-                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="pay-cheque-num">رقم الشيك</label>
-                        <input
-                          id="pay-cheque-num"
-                          type="text"
-                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                          value={paymentForm.chequeNumber || ''}
-                          onChange={e => setPaymentForm({ ...paymentForm, chequeNumber: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="pay-cheque-date">تاريخ الشيك</label>
-                        <input
-                          id="pay-cheque-date"
-                          type="date"
-                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
-                          value={paymentForm.chequeDate || ''}
-                          onChange={e => setPaymentForm({ ...paymentForm, chequeDate: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  onClick={() => setPaymentModal({ open: false, participantId: null })}
-                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleSubmitPayment}
-                  className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-                >
-                  تسجيل الدفعة
-                </button>
-              </div>
-            </Modal>
-          )}
-        </AnimatePresence>
+            </div>
+            <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setPaymentModal({ open: false, participantId: null })}
+                className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSubmitPayment}
+                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <CreditCard className="h-4 w-4" />
+                تسجيل الدفعة
+              </button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
 
-        {/* Print Overlays */}
-        <AnimatePresence>
-          {printReceipt.open && selectedEvent && printReceipt.participantId && (
-            <PrintOverlay onClose={() => setPrintReceipt({ open: false, participantId: null })}>
-              <div className="bg-white p-8 w-[100mm] mx-auto text-right font-sans border shadow-sm">
-                <div className="text-center border-b-2 border-double pb-4 mb-6">
-                  <h1 className="text-xl font-bold">وصل استلام مالي</h1>
-                  <p className="text-sm text-gray-500">فعالية: {selectedEvent.name}</p>
+      {/* Print Overlays */}
+      <AnimatePresence>
+        {printReceipt.open && selectedEvent && printReceipt.participantId && (
+          <PrintOverlay onClose={() => setPrintReceipt({ open: false, participantId: null })}>
+            <div className="bg-white p-8 w-[100mm] mx-auto text-right font-sans border shadow-sm rounded-2xl">
+              <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
+                <h1 className="text-xl font-black">وصل استلام مالي</h1>
+                <p className="text-xs text-slate-500 font-bold">فعالية: {selectedEvent.name}</p>
+              </div>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-slate-500 font-bold">رقم الوصل:</span>
+                  <span className="font-mono font-bold">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.receiptNumber}</span>
                 </div>
-                <div className="space-y-4 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold">رقم الوصل:</span>
-                    <span>{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.receiptNumber}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold">تاريخ الاستلام:</span>
-                    <span>{new Date().toLocaleDateString('ar-TN')}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold">اسم المشارك:</span>
-                    <span>{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.participantName}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold">المبلغ المستلم:</span>
-                    <span className="font-bold text-lg">{round2(selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.amountPaid || 0)} د.ت</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold">طريقة الدفع:</span>
-                    <span>{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.paymentMethod}</span>
-                  </div>
+                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-slate-500 font-bold">تاريخ الاستلام:</span>
+                  <span className="font-mono font-bold">{new Date().toLocaleDateString('ar-TN')}</span>
                 </div>
-                <div className="mt-12 flex justify-between items-end">
-                  <div className="text-center">
-                    <div className="text-xs text-gray-400 mb-8">توقيع الإدارة</div>
-                    <div className="w-32 border-b border-gray-300 h-8"></div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs text-gray-400 mb-8">توقيع المستلم</div>
-                    <div className="w-32 border-b border-gray-300 h-8"></div>
-                  </div>
+                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-slate-500 font-bold">اسم المشارك:</span>
+                  <span className="font-extrabold text-slate-900">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.participantName}</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                  <span className="text-[#1e626b] font-bold">المبلغ المستلم:</span>
+                  <span className="font-mono font-black text-base text-[#1e626b]">{round2(selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.amountPaid || 0)} د.ت</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-slate-500 font-bold">طريقة الدفع:</span>
+                  <span className="font-bold">{selectedEvent.participants.find(p => p.id === printReceipt.participantId)?.paymentMethod}</span>
                 </div>
               </div>
-            </PrintOverlay>
-          )}
-
-          {printAttendance.open && selectedEvent && (
-            <PrintOverlay onClose={() => setPrintAttendance({ open: false, eventId: null })}>
-              <div className="bg-white p-8 w-[210mm] mx-auto text-right font-sans">
-                <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
-                  <div>
-                    <h1 className="text-2xl font-bold">كشف حضور ومغادرة</h1>
-                    <p className="text-sm">الفعالية: {selectedEvent.name} | التاريخ: {selectedEvent.date}</p>
-                  </div>
-                  <div className="text-left text-sm">
-                    <div>الوجهة: {selectedEvent.location}</div>
-                    <div>السنة الدراسية: {selectedEvent.schoolYear || getCurrentAcademicYear()}</div>
-                  </div>
+              <div className="mt-12 flex justify-between items-end">
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-400 font-bold mb-8">توقيع الإدارة</div>
+                  <div className="w-32 border-b-2 border-dotted border-slate-400 h-8"></div>
                 </div>
-                <table className="w-full text-right text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100 border border-black">
-                      <th className="border border-black px-4 py-2 w-12">#</th>
-                      <th className="border border-black px-4 py-2">اسم المشارك</th>
-                      <th className="border border-black px-4 py-2 w-24 text-center">النوع</th>
-                      <th className="border border-black px-4 py-2 w-20 text-center">ذهاب</th>
-                      <th className="border border-black px-4 py-2 w-20 text-center">إياب</th>
-                      <th className="border border-black px-4 py-2">ملاحظات</th>
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-400 font-bold mb-8">توقيع المستلم</div>
+                  <div className="w-32 border-b-2 border-dotted border-slate-400 h-8"></div>
+                </div>
+              </div>
+            </div>
+          </PrintOverlay>
+        )}
+
+        {printAttendance.open && selectedEvent && (
+          <PrintOverlay onClose={() => setPrintAttendance({ open: false, eventId: null })}>
+            <div className="bg-white p-8 w-[210mm] mx-auto text-right font-sans">
+              <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
+                <div>
+                  <h1 className="text-2xl font-black">كشف حضور ومغادرة</h1>
+                  <p className="text-xs font-bold">الفعالية: {selectedEvent.name} | التاريخ: {selectedEvent.date}</p>
+                </div>
+                <div className="text-left text-xs font-bold">
+                  <div>الوجهة: {selectedEvent.location}</div>
+                  <div>السنة الدراسية: {selectedEvent.schoolYear || getCurrentAcademicYear()}</div>
+                </div>
+              </div>
+              <table className="w-full text-right text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border border-black">
+                    <th className="border border-black px-4 py-2 w-12">#</th>
+                    <th className="border border-black px-4 py-2">اسم المشارك</th>
+                    <th className="border border-black px-4 py-2 w-24 text-center">النوع</th>
+                    <th className="border border-black px-4 py-2 w-20 text-center">ذهاب</th>
+                    <th className="border border-black px-4 py-2 w-20 text-center">إياب</th>
+                    <th className="border border-black px-4 py-2">ملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedEvent.participants.map((p, i) => (
+                    <tr key={p.id} className="border border-black">
+                      <td className="border border-black px-4 py-2 text-center">{i + 1}</td>
+                      <td className="border border-black px-4 py-2">{p.participantName}</td>
+                      <td className="border border-black px-4 py-2 text-center">{PARTICIPANT_TYPES.find(t => t.type === p.participantType)?.label}</td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {selectedEvent.participants.map((p, i) => (
-                      <tr key={p.id} className="border border-black">
-                        <td className="border border-black px-4 py-2 text-center">{i + 1}</td>
-                        <td className="border border-black px-4 py-2">{p.participantName}</td>
-                        <td className="border border-black px-4 py-2 text-center">{PARTICIPANT_TYPES.find(t => t.type === p.participantType)?.label}</td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                      </tr>
-                    ))}
-                    {Array.from({ length: Math.max(0, 20 - selectedEvent.participants.length) }).map((_, i) => (
-                      <tr key={`filler-${i}`} className="border border-black">
-                        <td className="border border-black px-4 py-2 text-center"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                        <td className="border border-black px-4 py-2"></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="mt-12 grid grid-cols-3 gap-8">
-                  <div className="text-center">
-                    <div className="text-sm font-bold mb-8">توقيع المرافق(ة)</div>
-                    <div className="border-b border-black w-full h-8 mx-auto"></div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-bold mb-8">توقيع السائق</div>
-                    <div className="border-b border-black w-full h-8 mx-auto"></div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-bold mb-8">ختم الإدارة</div>
-                    <div className="border-b border-black w-full h-8 mx-auto"></div>
-                  </div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 20 - selectedEvent.participants.length) }).map((_, i) => (
+                    <tr key={`filler-${i}`} className="border border-black">
+                      <td className="border border-black px-4 py-2 text-center"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                      <td className="border border-black px-4 py-2"></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-12 grid grid-cols-3 gap-8">
+                <div className="text-center">
+                  <div className="text-xs font-black mb-8">توقيع المرافق(ة)</div>
+                  <div className="border-b border-black w-full h-8 mx-auto"></div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs font-black mb-8">توقيع السائق</div>
+                  <div className="border-b border-black w-full h-8 mx-auto"></div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs font-black mb-8">ختم الإدارة</div>
+                  <div className="border-b border-black w-full h-8 mx-auto"></div>
                 </div>
               </div>
-            </PrintOverlay>
-          )}
-        </AnimatePresence>
-      </div>
+            </div>
+          </PrintOverlay>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={() => {
+          confirmDialog.onConfirm();
+          setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
+        }}
+        onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} })}
+      />
     </div>
   );
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-      />
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
       >
-        <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-          <h3 className="font-bold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
-            <XCircle size={20} className="text-gray-400" />
+        <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+          <h3 className="text-lg font-black">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 transition cursor-pointer"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-6 max-h-[80vh] overflow-y-auto">
+        <div className="p-6 max-h-[75vh] overflow-y-auto">
           {children}
         </div>
       </motion.div>
@@ -1238,18 +1331,18 @@ function PrintOverlay({ children, onClose }: { children: React.ReactNode; onClos
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-800/90 overflow-auto">
-      <div className="absolute top-6 left-6 flex gap-3">
+    <div className="fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-auto">
+      <div className="absolute top-6 left-6 flex gap-2 no-print z-10">
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-all font-medium"
+          className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5"
         >
-          <Printer size={18} />
-          <span>طباعة الآن</span>
+          <Printer size={16} />
+          طباعة الآن
         </button>
         <button
           onClick={onClose}
-          className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all font-medium"
+          className="px-4 py-2 bg-white text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition cursor-pointer"
         >
           إغلاق
         </button>
