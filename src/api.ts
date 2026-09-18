@@ -327,7 +327,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     externalStudents,
     revisionSeances,
     studentTimeSheets,
-    formations
+    formations,
+    events
   ] = await Promise.all([
     getDomain<CenterSettings>('/settings', 'تعذر تحميل إعدادات المنظومة.'),
     getDomain<Student[]>('/students', 'تعذر تحميل بيانات التلاميذ.'),
@@ -341,7 +342,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     getDomain<ExternalStudentRegister[]>('/external-students', 'تعذر تحميل بيانات التلاميذ الخارجيين.'),
     getDomain<RevisionSeance[]>('/revision-seances', 'تعذر تحميل بيانات حصص المراجعة.'),
     getDomain<StudentTimeSheet[]>('/student-timesheets', 'تعذر تحميل جداول التوقيت.'),
-    getDomain<Formation[]>('/formations', 'تعذر تحميل بيانات التكوينات.')
+    getDomain<Formation[]>('/formations', 'تعذر تحميل بيانات التكوينات.'),
+    fetchEventsApi()
   ]);
 
   return {
@@ -358,7 +360,7 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     revisionSeances: revisionSeances || [],
     studentTimeSheets: studentTimeSheets || [],
     formations: formations || [],
-    events: []
+    events: events || []
   };
 }
 

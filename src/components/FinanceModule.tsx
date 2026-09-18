@@ -21,7 +21,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -36,6 +36,7 @@ interface FinanceModuleProps {
   revisions?: RevisionSeance[];
   formations?: Formation[];
   onUpdateFormations?: (formations: Formation[]) => void;
+  events?: SchoolEvent[];
   slots?: EtudeSlot[];
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
@@ -67,6 +68,7 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
   { value: 'Cours Particuliers', label: 'دروس خصوصية' },
   { value: 'Revision', label: 'حصة مراجعة' },
   { value: 'Formation', label: 'تكوينات' },
+  { value: 'Événements', label: 'فعاليات' },
   { value: 'Bibliothèque', label: 'مكتبة' },
   { value: 'Inscription Bibliothèque', label: 'تسجيل المكتبة' },
   { value: 'Repas', label: 'وجبات (Déjeuner)' },
@@ -122,7 +124,7 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'المركز';
@@ -138,6 +140,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Cours Particuliers': 'coursParticuliers',
     'Revision': 'revision',
     'Formation': 'formations',
+    'Événements': 'events',
     'Bibliothèque': 'bibliotheque', 'Inscription Bibliothèque': 'bibliotheque',
     'Repas': 'cantine', 'Goûter': 'cantine',
     'Assurance': 'coursParticuliers' // تأمين الدروس الخصوصية (كراس خارجي)
@@ -348,7 +351,43 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     })
   );
 
-  const allPaymentsMerged = [...allPayments, ...(hideRestrictedModules ? [] : externalPayments), ...(hideRestrictedModules ? [] : revisionPayments), ...(hideRestrictedModules ? [] : formationPayments)]
+  // Event/outing revenue: each participant who paid is reflected here as a
+  // PaymentRecord with service 'Événements'. This mirrors the Formation pattern:
+  // Finance reads from the domain data directly (events), no write-back to
+  // students is needed.
+  type EventPaymentRec = PaymentRecord & { studentName: string; studentGrade: string; studentYear: string; eventName: string };
+  const eventPayments: EventPaymentRec[] = (events || []).flatMap(ev =>
+    (ev.participants || []).filter(pt => (pt.amountPaid || 0) > 0).map(pt => {
+      const isCheque = pt.paymentMethod === 'Chèque';
+      const isPast = ev.date && ev.date < new Date().toISOString().split('T')[0];
+      return {
+        id: `event_${ev.id}_${pt.id}`,
+        date: ev.date || new Date().toISOString().split('T')[0],
+        amountPaid: pt.amountPaid,
+        totalRequired: pt.totalRequired,
+        remainingBalance: pt.remainingBalance,
+        service: 'Événements' as const,
+        month: `فعالية: ${ev.name} (${ev.schoolYear || '2026/2027'})`,
+        paymentType: 'full' as const,
+        // Pas de module d'encaissement des chèques côté événements : si un
+        // paiement par chèque a été enregistré sur l'événement, on le traite
+        // comme encaissé dès qu'il est marqué `paid` pour éviter des chèques
+        // en attente gérés par nulle part.
+        method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
+        chequePaid: isCheque ? true : undefined,
+        receiptNumber: pt.receiptNumber || `EVT-${ev.id.slice(-4)}-${pt.id.slice(-4)}`,
+        notes: `فعالية: ${ev.name} - ${pt.participantType === 'student' ? 'تلميذ' : pt.participantType === 'parent' ? 'ولي أمر' : pt.participantType === 'sibling' ? 'أخ/أخت' : 'خارجي'}${pt.attended === false && isPast ? ' — غائب' : ''}`,
+        chequeNumber: pt.chequeNumber,
+        chequeDate: pt.chequeDate,
+        studentName: pt.participantName,
+        studentGrade: 'فعالية',
+        studentYear: ev.schoolYear || '2026/2027',
+        eventName: ev.name
+      };
+    })
+  );
+
+  const allPaymentsMerged = [...allPayments, ...(hideRestrictedModules ? [] : externalPayments), ...(hideRestrictedModules ? [] : revisionPayments), ...(hideRestrictedModules ? [] : formationPayments), ...(hideRestrictedModules ? [] : eventPayments)]
     .filter(p => !hideRestrictedModules || (p.service !== 'Repas' && p.service !== 'Cours Particuliers' && p.service !== 'Revision' && p.service !== 'Formation'));
 
   const paymentYearOf = (p: PaymentRecord) => {
@@ -569,6 +608,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Cours Particuliers': 'دروس خصوصية',
     'Revision': 'حصة مراجعة',
     'Formation': 'تكوينات ودورات',
+    'Événements': 'فعاليات',
     'Bibliothèque': 'مكتبة',
     'Inscription Bibliothèque': 'تسجيل المكتبة',
     'Repas': 'وجبات',
@@ -721,6 +761,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     CoursParticuliers: externalCenterTotal,
     Revision: revisionCenterTotal,
     Formation: filteredPayments.filter(p => p.service === 'Formation').reduce((s, p) => s + (p.refund ? -p.amountPaid : p.amountPaid), 0),
+    Événements: filteredPayments.filter(p => p.service === 'Événements').reduce((s, p) => s + p.amountPaid, 0),
     Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
     Gouter: filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0),
     Assurance: filteredPayments.filter(p => p.service === 'Assurance').reduce((s, p) => s + p.amountPaid, 0),
@@ -1112,6 +1153,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">5. رسوم التأمين المدرسي (Assurance):</span>
                 <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Assurance)} د.ت</span>
+              </div>
+              )}
+              {hasModule('events') && (
+              <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
+                <span className="text-slate-700">5ب. مداخيل الفعاليات والخرجات:</span>
+                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Événements)} د.ت</span>
               </div>
               )}
               {revenueByService.Refunds !== 0 && (

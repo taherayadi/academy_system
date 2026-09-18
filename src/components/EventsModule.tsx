@@ -31,7 +31,7 @@ import {
   eventPriceFor,
   generateEventReceiptNumber
 } from '../types';
-import { Student, CenterSettings } from '../types';
+import { Student, CenterSettings, getCurrentAcademicYear, DEFAULT_ACADEMIC_YEARS } from '../types';
 import DateField from './DateField';
 import ConfirmDialog from './ConfirmDialog';
 import { ToastProvider, useToast } from './Toast';
@@ -117,7 +117,7 @@ export default function EventsModule({
   const filteredEvents = useMemo(() => {
     return events.filter(e => {
       const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.location.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesYear = !filterYear || e.schoolYear === filterYear;
+      const matchesYear = !filterYear || !e.schoolYear || e.schoolYear === filterYear;
       const matchesCat = filterCategory === 'all' || e.category === filterCategory;
       const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
       return matchesSearch && matchesYear && matchesCat && matchesStatus;
@@ -187,7 +187,7 @@ export default function EventsModule({
         maxCapacity: eventForm.maxCapacity,
         busIncluded: !!eventForm.busIncluded,
         status: (eventForm.status as EventStatus) || 'planned',
-        schoolYear: eventForm.schoolYear || '',
+        schoolYear: eventForm.schoolYear || getCurrentAcademicYear(),
         participants: [],
         createdAt: new Date().toISOString(),
       };
@@ -295,10 +295,10 @@ export default function EventsModule({
         <div className="p-4 border-b space-y-4">
           <button
             onClick={() => {
-              setEventForm({});
+              setEventForm({ schoolYear: getCurrentAcademicYear() });
               setEventModal({ open: true, id: null });
             }}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+            className="w-full flex items-center justify-center gap-2 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
           >
             <Plus size={18} />
             <span>فعالية جديدة</span>
@@ -309,7 +309,7 @@ export default function EventsModule({
             <input
               type="text"
               placeholder="بحث عن فعالية..."
-              className="w-full pr-9 pl-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full pr-9 pl-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-[#257C86] outline-none"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -327,7 +327,7 @@ export default function EventsModule({
                 onChange={e => setFilterYear(e.target.value)}
               >
                 <option value="">كل السنوات</option>
-                {[...new Set(events.map(e => e.schoolYear))].sort().reverse().map(y => (
+                {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
@@ -349,7 +349,7 @@ export default function EventsModule({
                   onClick={() => setFilterStatus(filterStatus === status ? 'all' : status)}
                   className={`px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
                     filterStatus === status
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-[#257C86] text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -375,12 +375,12 @@ export default function EventsModule({
                   onClick={() => setSelectedId(e.id)}
                   className={`w-full text-right p-3 rounded-xl border transition-all ${
                     selectedId === e.id
-                      ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600'
-                      : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
+                      ? 'border-[#257C86] bg-[#257C86]/[0.06] ring-1 ring-[#257C86]'
+                      : 'border-gray-200 bg-white hover:border-[#257C86]/50 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                    <div className="p-1.5 bg-[#257C86]/10 text-[#257C86] rounded-lg">
                       <Icon size={16} />
                     </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_CONFIG[e.status].color}`}>
@@ -400,13 +400,13 @@ export default function EventsModule({
                     </div>
                     <div className="text-left">
                       <div className="text-[10px] text-gray-400 uppercase">المحصل</div>
-                      <div className="text-xs font-bold text-indigo-600">{round2(collected)} د.ت</div>
+                      <div className="text-xs font-bold text-[#257C86]">{round2(collected)} د.ت</div>
                     </div>
                   </div>
                   {e.maxCapacity && (
                     <div className="mt-2 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                        className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-[#257C86]'}`}
                         style={{ width: `${Math.min(100, registrationRate)}%` }}
                       />
                     </div>
@@ -433,7 +433,7 @@ export default function EventsModule({
             {/* Header */}
             <div className="bg-white border-b p-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
+                <div className="p-3 bg-[#257C86] text-white rounded-2xl shadow-lg shadow-[#257C86]/20">
                   {React.createElement(CATEGORY_CONFIG[selectedEvent.category].icon, { size: 24 })}
                 </div>
                 <div>
@@ -459,7 +459,7 @@ export default function EventsModule({
                       <span>{selectedEvent.location}</span>
                     </div>
                     {selectedEvent.busIncluded && (
-                      <div className="flex items-center gap-1 text-indigo-600 font-medium">
+                      <div className="flex items-center gap-1 text-[#257C86] font-medium">
                         <Bus size={14} />
                         <span>حافلة متوفرة</span>
                       </div>
@@ -474,7 +474,7 @@ export default function EventsModule({
                     setEventForm(selectedEvent);
                     setEventModal({ open: true, id: selectedEvent.id });
                   }}
-                  className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-transparent hover:border-indigo-200"
+                  className="p-2 text-gray-500 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition-all border border-transparent hover:border-[#257C86]/40"
                   title="تعديل الفعالية"
                 >
                   <Edit3 size={20} />
@@ -530,7 +530,7 @@ export default function EventsModule({
                 </div>
               </div>
               <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                <div className="p-3 bg-[#257C86]/10 text-[#257C86] rounded-xl">
                   <CheckCircle2 size={24} />
                 </div>
                 <div>
@@ -540,7 +540,7 @@ export default function EventsModule({
                   </div>
                   <div className="w-full h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden">
                     <div
-                      className="h-full bg-indigo-500 transition-all"
+                      className="h-full bg-[#257C86] transition-all"
                       style={{ width: `${stats?.attendanceRate || 0}%` }}
                     />
                   </div>
@@ -558,7 +558,7 @@ export default function EventsModule({
                       <input
                         type="text"
                         placeholder="بحث عن مشارك..."
-                        className="w-full pr-9 pl-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full pr-9 pl-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#257C86] outline-none"
                         value={participantSearch}
                         onChange={e => setParticipantSearch(e.target.value)}
                       />
@@ -578,7 +578,7 @@ export default function EventsModule({
                       setParticipantForm({});
                       setParticipantModal({ open: true, id: null });
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-medium shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-all text-sm font-medium shadow-sm"
                   >
                     <UserPlus size={16} />
                     <span>إضافة مشارك</span>
@@ -611,7 +611,7 @@ export default function EventsModule({
                                 type="checkbox"
                                 checked={p.attended}
                                 onChange={() => toggleAttendance(selectedEvent.id, p.id)}
-                                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                className="w-4 h-4 rounded text-[#257C86] focus:ring-[#257C86]"
                               />
                             </td>
                             <td className="px-4 py-3 font-medium text-gray-800">{p.participantName}</td>
@@ -715,7 +715,7 @@ export default function EventsModule({
                     <input
                       id="event-name"
                       type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.name || ''}
                       onChange={e => setEventForm({ ...eventForm, name: e.target.value })}
                     />
@@ -725,7 +725,7 @@ export default function EventsModule({
                     <textarea
                       id="event-description"
                       rows={3}
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.description || ''}
                       onChange={e => setEventForm({ ...eventForm, description: e.target.value })}
                     />
@@ -734,7 +734,7 @@ export default function EventsModule({
                     <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-category">الفئة</label>
                     <select
                       id="event-category"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.category || 'other'}
                       onChange={e => setEventForm({ ...eventForm, category: e.target.value as any })}
                     >
@@ -747,7 +747,7 @@ export default function EventsModule({
                     <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-status">الحالة</label>
                     <select
                       id="event-status"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.status || 'planned'}
                       onChange={e => setEventForm({ ...eventForm, status: e.target.value as any })}
                     >
@@ -769,7 +769,7 @@ export default function EventsModule({
                     <input
                       id="event-time"
                       type="time"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.time || ''}
                       onChange={e => setEventForm({ ...eventForm, time: e.target.value })}
                     />
@@ -779,7 +779,7 @@ export default function EventsModule({
                     <input
                       id="event-location"
                       type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.location || ''}
                       onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
                     />
@@ -789,7 +789,7 @@ export default function EventsModule({
                     <input
                       id="event-capacity"
                       type="number"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={eventForm.maxCapacity || ''}
                       onChange={e => setEventForm({ ...eventForm, maxCapacity: parseInt(e.target.value) || undefined })}
                     />
@@ -798,7 +798,7 @@ export default function EventsModule({
                     <input
                       type="checkbox"
                       id="bus-included"
-                      className="w-4 h-4 text-indigo-600 rounded"
+                      className="w-4 h-4 text-[#257C86] rounded"
                       checked={!!eventForm.busIncluded}
                       onChange={e => setEventForm({ ...eventForm, busIncluded: e.target.checked })}
                     />
@@ -806,13 +806,16 @@ export default function EventsModule({
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="event-year">السنة الدراسية</label>
-                    <input
+                    <select
                       id="event-year"
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      value={eventForm.schoolYear || ''}
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
+                      value={eventForm.schoolYear || getCurrentAcademicYear()}
                       onChange={e => setEventForm({ ...eventForm, schoolYear: e.target.value })}
-                    />
+                    >
+                      {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -871,7 +874,7 @@ export default function EventsModule({
                 </button>
                 <button
                   onClick={handleSubmitEvent}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  className="px-4 py-2 text-sm bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
                 >
                   حفظ الفعالية
                 </button>
@@ -892,7 +895,7 @@ export default function EventsModule({
                       <input
                         id="part-name"
                         type="text"
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                         value={participantForm.participantName || ''}
                         onChange={e => setParticipantForm({ ...participantForm, participantName: e.target.value })}
                       />
@@ -920,8 +923,8 @@ export default function EventsModule({
                             onClick={() => setParticipantForm({ ...participantForm, participantType: t.type })}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                               participantForm.participantType === t.type
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+                                ? 'bg-[#257C86] text-white border-[#257C86] shadow-sm'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-[#257C86]/50'
                             }`}
                           >
                             {t.label}
@@ -934,7 +937,7 @@ export default function EventsModule({
                       <input
                         id="part-phone"
                         type="text"
-                        className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                         value={participantForm.contactPhone || ''}
                         onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value })}
                       />
@@ -967,7 +970,7 @@ export default function EventsModule({
                     <input
                       id="part-notes"
                       type="text"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                       value={participantForm.notes || ''}
                       onChange={e => setParticipantForm({ ...participantForm, notes: e.target.value })}
                     />
@@ -983,7 +986,7 @@ export default function EventsModule({
                 </button>
                 <button
                   onClick={handleSubmitParticipant}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  className="px-4 py-2 text-sm bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-colors font-medium"
                 >
                   حفظ المشارك
                 </button>
@@ -998,11 +1001,11 @@ export default function EventsModule({
             >
               <div className="space-y-4 py-2">
                 {selectedEvent && paymentModal.participantId && (
-                  <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex justify-between items-center">
-                    <div className="text-sm font-bold text-indigo-800">
+                  <div className="p-3 bg-[#257C86]/10 rounded-lg border border-[#257C86]/10 flex justify-between items-center">
+                    <div className="text-sm font-bold text-[#1e626b]">
                       {selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.participantName}
                     </div>
-                    <div className="text-xs text-indigo-600">
+                    <div className="text-xs text-[#257C86]">
                       المتبقي: {round2(selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.remainingBalance || 0)} د.ت
                     </div>
                   </div>
@@ -1013,7 +1016,7 @@ export default function EventsModule({
                     <input
                       id="pay-amount"
                       type="number"
-                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86] font-mono"
                       value={paymentForm.amount || ''}
                       onChange={e => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
                     />
@@ -1027,8 +1030,8 @@ export default function EventsModule({
                           onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
                           className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                             paymentForm.method === m
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+                              ? 'bg-[#257C86] text-white border-[#257C86] shadow-sm'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#257C86]/50'
                           }`}
                         >
                           {m === 'Espèces' ? 'نقداً' : 'شيك'}
@@ -1043,7 +1046,7 @@ export default function EventsModule({
                         <input
                           id="pay-cheque-num"
                           type="text"
-                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                           value={paymentForm.chequeNumber || ''}
                           onChange={e => setPaymentForm({ ...paymentForm, chequeNumber: e.target.value })}
                         />
@@ -1053,7 +1056,7 @@ export default function EventsModule({
                         <input
                           id="pay-cheque-date"
                           type="date"
-                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#257C86]"
                           value={paymentForm.chequeDate || ''}
                           onChange={e => setPaymentForm({ ...paymentForm, chequeDate: e.target.value })}
                         />
@@ -1135,7 +1138,7 @@ export default function EventsModule({
                   </div>
                   <div className="text-left text-sm">
                     <div>الوجهة: {selectedEvent.location}</div>
-                    <div>السنة الدراسية: {selectedEvent.schoolYear}</div>
+                    <div>السنة الدراسية: {selectedEvent.schoolYear || getCurrentAcademicYear()}</div>
                   </div>
                 </div>
                 <table className="w-full text-right text-sm border-collapse">
@@ -1239,7 +1242,7 @@ function PrintOverlay({ children, onClose }: { children: React.ReactNode; onClos
       <div className="absolute top-6 left-6 flex gap-3">
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-[#257C86] text-white rounded-lg hover:bg-[#1e626b] transition-all font-medium"
         >
           <Printer size={18} />
           <span>طباعة الآن</span>

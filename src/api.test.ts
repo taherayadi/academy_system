@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi } from './api';
+import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveEventsApi, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi } from './api';
 import { normalizeSettings, normalizeFeeSet } from './types';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,7 @@ describe('save domain functions route paths', () => {
     ['/api/revision-seances', saveRevisionSeances],
     ['/api/student-timesheets', saveStudentTimeSheets],
     ['/api/formations', saveFormations],
+    ['/api/events', saveEventsApi],
     ['/api/settings', saveSettings],
   ];
 
@@ -110,12 +111,12 @@ describe('saveDatabase', () => {
 // fetchDatabase (concurrent domain load)
 // ---------------------------------------------------------------------------
 describe('fetchDatabase', () => {
-  it('calls all 13 domain endpoints concurrently', async () => {
-    const responses = Array.from({ length: 13 }, () => jsonResponse([]));
+  it('calls all 14 domain endpoints concurrently', async () => {
+    const responses = Array.from({ length: 14 }, () => jsonResponse([]));
     mockFetch.mockImplementation(() => Promise.resolve(responses.shift()));
 
     const db = await fetchDatabase();
-    expect(mockFetch).toHaveBeenCalledTimes(13);
+    expect(mockFetch).toHaveBeenCalledTimes(14);
     expect(db.students).toEqual([]);
     expect(db.staff).toEqual([]);
     expect(db.settings).toEqual([]);
@@ -129,6 +130,7 @@ describe('fetchDatabase', () => {
     expect(db.revisionSeances).toEqual([]);
     expect(db.studentTimeSheets).toEqual([]);
     expect(db.formations).toEqual([]);
+    expect(db.events).toEqual([]);
   });
 
   it('throws UnauthorizedError if any endpoint returns 401', async () => {

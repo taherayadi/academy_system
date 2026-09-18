@@ -1176,8 +1176,9 @@ export async function writeFormations(db: D1Database, formations: any[], centerI
 // ===========================================================================
 
 /**
- * Lit les événements du centre. Le schéma `events` appartient au dépôt admin
- * (aucune migration concurrente n'est créée ici) : tant que la table n'est pas
+ * Lit les événements du centre. La table `events` est créée par la migration
+ * SQL appliquée manuellement dans Cloudflare D1 (dépôt admin propriétaire du
+ * schéma, aucune migration concurrente créée ici) : tant qu'elle n'est pas
  * déployée, on renvoie une liste vide plutôt que de casser /api/state.
  */
 export async function readEvents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
@@ -1229,8 +1230,8 @@ function buildEventsStmts(db: D1Database, events: any[], centerId: string = DEFA
 
 /**
  * Synchronisation par snapshot : on remplace tous les événements du centre.
- * No-op silencieux si la table `events` n'existe pas encore (déploiement admin
- * en retard) afin de ne jamais faire échouer l'enregistrement de l'état.
+ * No-op silencieux si la table `events` n'existe pas encore (migration D1 pas
+ * encore appliquée) afin de ne jamais faire échouer l'enregistrement de l'état.
  */
 export async function writeEvents(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   try {

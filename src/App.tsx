@@ -553,6 +553,7 @@ export default function App() {
       studentTimeSheets: studentTimeSheets.length > 0 ? studentTimeSheets : (stateRef.current.studentTimeSheets || []),
       studentAttendance: studentAttendance.length > 0 ? studentAttendance : (stateRef.current.studentAttendance || []),
       formations: formations.length > 0 ? formations : (stateRef.current.formations || []),
+      events: events.length > 0 ? events : (stateRef.current.events || []),
       exportedAt: new Date().toISOString()
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
@@ -724,10 +725,6 @@ export default function App() {
     if (next.formations !== undefined) {
       if (!validateArray(next.formations as unknown[], ['id', 'name'], 'التكوينات')) return;
       setFormations(next.formations as Formation[]);
-    }
-    if (next.events !== undefined) {
-      if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
-      setEvents(next.events as SchoolEvent[]);
     }
     if (next.events !== undefined) {
       if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
@@ -1240,6 +1237,7 @@ export default function App() {
                   courses={courses}
                   revisions={revisionSeances}
                   formations={formations}
+                  events={events}
                   onUpdateFormations={handleUpdateFormations}
                   slots={slots}
                   hideRestrictedModules={hideRestrictedModules}
