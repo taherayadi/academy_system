@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent } from './types';
 
 
 const API_BASE = '/api';
@@ -82,6 +82,7 @@ export interface DatabaseState {
   revisionSeances: RevisionSeance[];
   studentTimeSheets: StudentTimeSheet[];
   formations: Formation[];
+  events: SchoolEvent[];
 }
 
 
@@ -248,6 +249,28 @@ export async function saveFormations(formations: Formation[]): Promise<void> {
 }
 
 
+// ─── Événements & Sorties ───────────────────────────────────────────────────
+
+export async function saveEventsApi(events: SchoolEvent[]): Promise<void> {
+  return putDomain('/events', events, 'تعذر حفظ بيانات الفعاليات.');
+}
+
+
+export async function fetchEventsApi(): Promise<SchoolEvent[]> {
+  const res = await fetch(`${API_BASE}/events`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data = await res.json().catch(() => ([]));
+  if (!res.ok) {
+    const errObj = (data && typeof data === 'object' && 'error' in data) ? (data as { error?: string }) : {};
+    throw new Error(errObj.error || 'تعذر تحميل بيانات الفعاليات.');
+  }
+  return Array.isArray(data) ? data : [];
+}
+
+
 export async function saveMealForfaitClosures(closures: MealForfaitClosure[]): Promise<void> {
   return putDomain('/meal-forfait-closures', closures, 'تعذر حفظ بيانات إغلاقات الوجبات.');
 }
@@ -334,7 +357,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     externalStudents: externalStudents || [],
     revisionSeances: revisionSeances || [],
     studentTimeSheets: studentTimeSheets || [],
-    formations: formations || []
+    formations: formations || [],
+    events: []
   };
 }
 

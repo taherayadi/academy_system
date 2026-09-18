@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -18,6 +18,7 @@ import EtudeModule from './components/EtudeModule';
 import ExternalCoursesModule from './components/ExternalCoursesModule';
 import SeanceRevisionModule from './components/SeanceRevisionModule';
 import FormationModule from './components/FormationModule';
+import EventsModule from './components/EventsModule';
 import LibraryModule from './components/LibraryModule';
 import MealsModule from './components/MealsModule';
 import FinanceModule from './components/FinanceModule';
@@ -45,6 +46,7 @@ const TAB_MODULE: Record<string, string> = {
   module4: 'coursParticuliers',   // الدروس الخصوصية
   module4b: 'revision',           // حصة مراجعة
   formations: 'formations',       // التكوينات والدورات
+  events: 'events',               // الفعاليات والخرجات
   module5: 'bibliotheque',        // المكتبة
   module6: 'cantine',             // إدارة الوجبات
   moduleBus: 'transport',         // خطة الحافلة
@@ -216,6 +218,7 @@ export default function App() {
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceRecord[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
+  const [events, setEvents] = useState<SchoolEvent[]>([]);
   // Meal "forfait ferme" closures — loaded separately from the main DB snapshot because
   // they live in their own tables and are only read by the finance module.
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
@@ -237,8 +240,8 @@ export default function App() {
     courses: ExternalCourse[]; sessions: ExternalCourseSession[]; mealPlans: MealPlanDay[];
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
-    studentAttendance: StudentAttendanceRecord[]; formations: Formation[];
-  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [] });
+    studentAttendance: StudentAttendanceRecord[]; formations: Formation[]; events: SchoolEvent[];
+  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [] });
 
   // Serializes full-state PUTs so concurrent module updates never overwrite each other.
   const commitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -270,7 +273,8 @@ export default function App() {
           revisionSeances: db.revisionSeances || [],
           studentTimeSheets: db.studentTimeSheets || [],
           studentAttendance: stateRef.current.studentAttendance || [],
-          formations: db.formations || []
+          formations: db.formations || [],
+          events: db.events || []
         };
         setStudents(db.students || []);
         setStaff(db.staff || []);
@@ -502,6 +506,11 @@ export default function App() {
     commitDomain(() => saveFormations(updated));
   };
 
+  const handleUpdateEvents = (updated: SchoolEvent[]) => {
+    setEvents(updated);
+    commitDomain(() => saveEventsApi(updated));
+  };
+
   const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
@@ -558,7 +567,7 @@ export default function App() {
   // Import database backup
   const VALID_COLLECTION_KEYS = [
     'students', 'staff', 'slots', 'courses', 'sessions', 'mealPlans',
-    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations'
+    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations', 'events'
   ];
   const VALID_OBJECT_KEYS = ['settings'];
 
@@ -716,6 +725,14 @@ export default function App() {
       if (!validateArray(next.formations as unknown[], ['id', 'name'], 'التكوينات')) return;
       setFormations(next.formations as Formation[]);
     }
+    if (next.events !== undefined) {
+      if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
+      setEvents(next.events as SchoolEvent[]);
+    }
+    if (next.events !== undefined) {
+      if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
+      setEvents(next.events as SchoolEvent[]);
+    }
 
     // Extract settings/fees from parsed payload
     const rawSettings = parsed.settings || (parsed.fees ? { fees: parsed.fees, feesByYear: parsed.feesByYear } : null) || (parsed.fraisAnnuelSuivi != null || parsed.frais_annuel_suivi != null ? parsed : null);
@@ -740,7 +757,8 @@ export default function App() {
       revisionSeances: next.revisionSeances !== undefined ? (next.revisionSeances as RevisionSeance[]) : revisionSeances,
       studentTimeSheets: next.studentTimeSheets !== undefined ? (next.studentTimeSheets as StudentTimeSheet[]) : studentTimeSheets,
       studentAttendance: next.studentAttendance !== undefined ? (next.studentAttendance as StudentAttendanceRecord[]) : (stateRef.current.studentAttendance || []),
-      formations: next.formations !== undefined ? (next.formations as Formation[]) : formations
+      formations: next.formations !== undefined ? (next.formations as Formation[]) : formations,
+      events: next.events !== undefined ? (next.events as SchoolEvent[]) : events
     };
 
     commitDomain(async () => {
@@ -764,6 +782,7 @@ export default function App() {
       setStudentTimeSheets(freshDb.studentTimeSheets || []);
       setStudentAttendance(freshAttendance);
       setFormations(freshDb.formations || []);
+      setEvents(freshDb.events || []);
       stateRef.current = { ...freshDb, studentAttendance: freshAttendance };
     });
 
@@ -851,6 +870,7 @@ export default function App() {
         !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
         !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        { id: 'events', label: 'الفعاليات والخرجات', icon: Calendar },
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
@@ -1167,6 +1187,15 @@ export default function App() {
                   onUpdateFormations={handleUpdateFormations}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
+                  sidebarCollapsed={sidebarCollapsed}
+                />
+              )}
+              {activeTab === 'events' && (
+                <EventsModule
+                  events={events}
+                  onUpdateEvents={handleUpdateEvents}
+                  students={students}
+                  settings={settings}
                   sidebarCollapsed={sidebarCollapsed}
                 />
               )}

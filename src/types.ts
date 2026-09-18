@@ -423,7 +423,7 @@ export interface PaymentRecord {
   amountPaid: number;
   totalRequired: number;
   remainingBalance: number;
-  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Autres';
+  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Événements' | 'Autres';
   month: string; // e.g. "Octobre"
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
   method: 'Espèces' | 'Chèque' | 'Virement';
@@ -1127,4 +1127,88 @@ export interface PlanHistoryEntry {
   amount: number | null;
   invoiceNumber: string | null;
   createdAt: number;
+}
+
+
+// ─── Événements & Sorties (الفعاليات والخرجات) ──────────────────────────────
+
+export type EventCategory = 'trip' | 'party' | 'workshop' | 'other';
+
+export type EventStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
+
+/** Qui participe à l'événement et à quel tarif. */
+export type EventParticipantType = 'student' | 'parent' | 'sibling' | 'external';
+
+export interface EventParticipant {
+  id: string;                        // 'prt_' + crypto.randomUUID()
+  participantName: string;
+  participantType: EventParticipantType;
+  /** Élève du centre auquel ce participant est rattaché (parent / fratrie). */
+  linkedStudentId?: string;
+  contactPhone: string;
+  amountPaid: number;
+  totalRequired: number;
+  remainingBalance: number;
+  /** Les événements n'acceptent que l'espèce et le chèque (pas de virement). */
+  paymentMethod?: 'Espèces' | 'Chèque';
+  chequeNumber?: string;
+  chequeDate?: string;               // YYYY-MM-DD
+  paid: boolean;
+  paidAt?: string;                   // ISO timestamp
+  attended: boolean;
+  notes?: string;
+  receiptNumber?: string;            // 'REC-EVT-001'
+}
+
+/** Nommé SchoolEvent (et non Event) : `Event` est déjà pris par le DOM. */
+export interface SchoolEvent {
+  id: string;                        // 'evt_' + crypto.randomUUID()
+  name: string;
+  description?: string;
+  category: EventCategory;
+  date: string;                      // YYYY-MM-DD
+  time?: string;                     // HH:MM
+  location: string;
+  priceStudent: number;
+  priceParent: number;
+  priceSibling: number;
+  priceExternal: number;
+  maxCapacity?: number;
+  busIncluded: boolean;
+  status: EventStatus;
+  schoolYear: string;
+  participants: EventParticipant[];
+  createdAt: string;                 // ISO timestamp
+}
+
+/** Tarif applicable à un type de participant. */
+export function eventPriceFor(evt: SchoolEvent, type: EventParticipantType): number {
+  switch (type) {
+    case 'student': return evt.priceStudent || 0;
+    case 'parent': return evt.priceParent || 0;
+    case 'sibling': return evt.priceSibling || 0;
+    default: return evt.priceExternal || 0;
+  }
+}
+
+/**
+ * Prochain numéro de reçu d'événement, en scannant tous les participants de
+ * tous les événements pour trouver le plus grand numéro `REC-EVT-` existant.
+ * Les reçus d'événements ne vivent pas dans student.payments, donc
+ * generateReceiptNumber() ne peut pas les voir.
+ */
+export function generateEventReceiptNumber(events: SchoolEvent[], prefix = 'REC-EVT-'): string {
+  let max = 0;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escaped}(\\d+)$`);
+  for (const evt of events) {
+    for (const p of evt.participants || []) {
+      const match = (p.receiptNumber || '').match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > max) max = num;
+      }
+    }
+  }
+  return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }

@@ -314,6 +314,7 @@ export interface AppState {
   studentTimeSheets: any[];
   formations: any[];
   mealForfaitClosures: any[];
+  events: any[];
 }
 
 // ===========================================================================
@@ -1171,16 +1172,90 @@ export async function writeFormations(db: D1Database, formations: any[], centerI
 }
 
 // ===========================================================================
+// EVENTS (Événements & Sorties)
+// ===========================================================================
+
+/**
+ * Lit les événements du centre. Le schéma `events` appartient au dépôt admin
+ * (aucune migration concurrente n'est créée ici) : tant que la table n'est pas
+ * déployée, on renvoie une liste vide plutôt que de casser /api/state.
+ */
+export async function readEvents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM events WHERE center_id = ? ORDER BY date DESC').bind(centerId).all();
+    return (results || []).map((r: any) => ({
+      id: str(r.id),
+      name: str(r.name),
+      description: r.description == null ? undefined : str(r.description),
+      category: str(r.category) || 'other',
+      date: str(r.date),
+      time: r.time == null ? undefined : str(r.time),
+      location: str(r.location),
+      priceStudent: num(r.price_student),
+      priceParent: num(r.price_parent),
+      priceSibling: num(r.price_sibling),
+      priceExternal: num(r.price_external),
+      maxCapacity: r.max_capacity == null ? undefined : num(r.max_capacity),
+      busIncluded: bool(r.bus_included),
+      status: str(r.status) || 'planned',
+      schoolYear: str(r.school_year),
+      participants: parseJson<any[]>(r.participants, []),
+      createdAt: str(r.created_at)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function buildEventsStmts(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const stmts: D1PreparedStatement[] = [];
+  for (const e of events || []) {
+    if (!e || !e.id) continue;
+    stmts.push(db.prepare(
+      'INSERT INTO events (id, center_id, name, description, category, date, time, location, price_student, price_parent, price_sibling, price_external, max_capacity, bus_included, status, school_year, participants, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      str(e.id), centerId, str(e.name), e.description ?? null, str(e.category) || 'other',
+      str(e.date), e.time ?? null, str(e.location),
+      num(e.priceStudent), num(e.priceParent), num(e.priceSibling), num(e.priceExternal),
+      e.maxCapacity == null || e.maxCapacity === '' ? null : num(e.maxCapacity),
+      e.busIncluded ? 1 : 0,
+      str(e.status) || 'planned', str(e.schoolYear),
+      JSON.stringify(e.participants || []),
+      str(e.createdAt || new Date().toISOString())
+    ));
+  }
+  return stmts;
+}
+
+/**
+ * Synchronisation par snapshot : on remplace tous les événements du centre.
+ * No-op silencieux si la table `events` n'existe pas encore (déploiement admin
+ * en retard) afin de ne jamais faire échouer l'enregistrement de l'état.
+ */
+export async function writeEvents(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    const stmts = [
+      db.prepare('DELETE FROM events WHERE center_id = ?').bind(centerId),
+      ...buildEventsStmts(db, events, centerId)
+    ];
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeEvents skipped (events table unavailable):', err);
+  }
+}
+
+// ===========================================================================
 // FULL STATE
 // ===========================================================================
 
 export async function readState(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<AppState> {
-  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures] = await Promise.all([
+  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures, events] = await Promise.all([
     readSettings(db, centerId), readStudents(db, centerId), readStaff(db, centerId), readSlots(db, centerId), readCourses(db, centerId),
     readSessions(db, centerId), readMealPlans(db, centerId), readExpenses(db, centerId), readTimesheets(db, centerId),
-    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId), readMealForfaitClosures(db, centerId)
+    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId), readMealForfaitClosures(db, centerId),
+    readEvents(db, centerId)
   ]);
-  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures };
+  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures, events };
 }
 
 export async function writeState(db: D1Database, state: AppState, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
@@ -1285,6 +1360,9 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
   for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
   for (let i = 0; i < allDataStmts.length; i += 500) await db.batch(allDataStmts.slice(i, i + 500));
   if (state.settings && typeof state.settings === 'object') await writeSettings(db, state.settings, centerId);
+  // Les événements sont écrits à part : si la table `events` n'est pas encore
+  // déployée, writeEvents() absorbe l'erreur sans faire échouer tout l'état.
+  if (Array.isArray(state.events)) await writeEvents(db, dedupe(state.events), centerId);
 }
 
 
