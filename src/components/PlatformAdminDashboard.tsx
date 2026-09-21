@@ -589,7 +589,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   const active = form.centerType === ct.key;
                   return (
                     <button key={ct.key} type="button" onClick={() => setForm(f => ({ ...f, centerType: ct.key }))}
-                      className={`p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                      className={`p-3.5 rounded-2xl border text-start transition-all duration-200 ${
                         active
                           ? 'border-accent-500 bg-accent-500/[0.06] shadow-md shadow-accent-500/10'
                           : 'border-slate-200 bg-white hover:border-accent-500/40 hover:bg-slate-50/50'
@@ -598,7 +598,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                         <span className={`h-2.5 w-2.5 rounded-full border-2 transition-colors ${active ? 'border-accent-500 bg-accent-500' : 'border-slate-300'}`} />
                         <span className={`text-sm font-black ${active ? 'text-accent-500' : 'text-slate-800'}`}>{ct.label}</span>
                       </div>
-                      <span className="block text-[11px] font-semibold text-slate-500 pr-5">{ct.hint}</span>
+                      <span className="block text-[11px] font-semibold text-slate-500 pe-5">{ct.hint}</span>
                     </button>
                   );
                 })}
@@ -661,7 +661,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-phone">الهاتف *</label>
               <input id="nc-phone" required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-left" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-start" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-plan">الباقة *</label>
@@ -687,7 +687,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 {/* Same presentation as the « Essai gratuit » card — free days
                     are an trial before the billing starts, not a separate note. */}
                 <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
-                  <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                     <label htmlFor="new-center-offer-days" className="text-xs font-black text-slate-600">مدة التجربة قبل الاشتراك</label>
                     <div className="flex items-center gap-2">
                       <input id="new-center-offer-days" type="number" min="0" max="3650" step="1" inputMode="numeric" value={form.offerDays}
@@ -696,11 +696,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                       <span className="text-xs font-bold text-slate-500">يوم</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-3 text-left">
+                  <div className="flex items-center justify-between gap-3 text-start">
                     <span className="text-xs font-black text-slate-600">بداية الاشتراك ({arPlural(offerDays, 'يوم', 'يومان', 'أيام', 'يومًا')})</span>
                     <span className="text-sm font-black text-slate-800">{previewOfferEnd ? fmtDate(previewOfferEnd) : 'اليوم'}</span>
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 text-left">مجاني أثناء التجربة — تبدأ الفوترة بعده وفق التعرفة المختارة.</p>
+                  <p className="text-[11px] font-semibold text-slate-500 text-start">مجاني أثناء التجربة — تبدأ الفوترة بعده وفق التعرفة المختارة.</p>
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -723,11 +723,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                   )}
                 </div>
                 <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="ltr">
-                  <div className="flex items-center justify-between gap-3 text-left">
+                  <div className="flex items-center justify-between gap-3 text-start">
                     <span className="text-xs font-black text-slate-600">نهاية الاشتراك المحسوبة</span>
                     <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 text-left">
+                  <p className="text-[11px] font-semibold text-slate-500 text-start">
                     {offerDays > 0
                       ? `تجربة مجانية لمدة ${arPlural(offerDays, 'يوم', 'يومان', 'أيام', 'يومًا')}, ثم ${form.billingCycle === 'annual' ? '365 يومًا' : '30 يومًا'} محسوبًا وفق تعرفة الباقة.`
                       : `${form.billingCycle === 'annual' ? '365 يومًا' : '30 يومًا'} من تاريخ الإنشاء.`}
@@ -737,7 +737,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             )}
             {form.plan === 'trial' && (
               <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                   <label htmlFor="new-center-trial-days" className="text-xs font-black text-slate-600">مدة التجربة المجانية</label>
                   <div className="flex items-center gap-2">
                     <input id="new-center-trial-days" type="number" min="1" max="3650" step="1" inputMode="numeric" value={form.trialDays}
@@ -746,11 +746,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     <span className="text-xs font-bold text-slate-500">يوم</span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3 text-left">
+                <div className="flex items-center justify-between gap-3 text-start">
                   <span className="text-xs font-black text-slate-600">نهاية التجربة ({trialDays} يوم)</span>
                   <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
                 </div>
-                <p className="text-[11px] font-semibold text-slate-500 text-left">Le centre d’essai reste gratuit.</p>
+                <p className="text-[11px] font-semibold text-slate-500 text-start">Le centre d’essai reste gratuit.</p>
               </div>
             )}
           </div>
@@ -964,7 +964,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
                     onChange={e => setChequeNumber(e.target.value)}
                     placeholder="مثال: 001245"
                     dir="ltr"
-                    className={`${inputCls} text-left`}
+                    className={`${inputCls} text-start`}
                   />
                 </FormField>
                 <FormField label="تاريخ الشيك" id="ei-cheque-date">
@@ -974,7 +974,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
                     dir="ltr"
                     value={chequeDate}
                     onChange={e => setChequeDate(e.target.value)}
-                    className={`${inputCls} cursor-pointer input-date-ltr text-left`}
+                    className={`${inputCls} cursor-pointer input-date-ltr text-start`}
                   />
                 </FormField>
               </div>
@@ -1312,7 +1312,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ec-phone">الهاتف *</label>
               <input id="ec-phone" required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className={`${inputCls} text-left`} />
+                className={`${inputCls} text-start`} />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ec-type">نوع المؤسسة</label>
@@ -1757,12 +1757,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   {isTrial ? 'فترة تجريبية' : 'اشتراك جارٍ'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'فترة مدفوعة' : pendingInvoice ? 'فترة غير مدفوعة' : 'بدون فاتورة'}
                   </span>
                 )}
                 {expiredState && (
-                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
+                  <span className="ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
                 )}
               </div>
               {isTrial ? (
@@ -1826,7 +1826,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   )}
                   {!isTrial && (
                     <button onClick={() => setConfirmRemove(true)} disabled={!hasLiveWindow || saving}
-                      className={`flex items-center gap-1.5 ml-auto px-3.5 py-2 text-xs font-bold rounded-xl border transition ${hasLiveWindow ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'}`}
+                      className={`flex items-center gap-1.5 ms-auto px-3.5 py-2 text-xs font-bold rounded-xl border transition ${hasLiveWindow ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100 cursor-pointer' : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'}`}
                       title={hasLiveWindow ? undefined : 'لا يوجد اشتراك نشط للحذف'}>
                       <Trash2 className="h-4 w-4" aria-hidden="true" /> حذف الباقة
                     </button>
@@ -1901,12 +1901,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       <>
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
-                            className={`text-left rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            className={`text-start rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">تطبيق الآن</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
-                            className={`text-left rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            className={`text-start rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
@@ -1916,13 +1916,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
+                                className={`text-start rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
                                 <div className="text-[10px] font-black text-accent-700">الفترة مدفوعة</div>
                                 <div className="text-sm font-black text-accent-700">+ {formatTnd(decision.paidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
-                                className={`text-left rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
+                                className={`text-start rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
                                 <div className="text-[10px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
@@ -1992,7 +1992,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                         {s.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                         {s.monthlyPrice ? ` · ${Number(s.monthlyPrice).toFixed(2)} TND` : ''}
                       </span>
-                      <span className="ml-auto text-[10px] font-bold text-slate-500">
+                      <span className="ms-auto text-[10px] font-bold text-slate-500">
                         {s.applyAt ? `في ${fmtDate(s.applyAt)}` : 'عند التجديد القادم'}
                       </span>
                       <button onClick={() => runAction({ action: 'remove-schedule', centerId: center.id, scheduleId: s.id }, 'تم حذف الباقة المجدولة')}
@@ -2017,11 +2017,11 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
-                      <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-500">
+                      <tr className="bg-slate-50 text-start text-[9px] font-black uppercase tracking-wider text-slate-500">
                         <th className="px-3 py-2">Date</th>
                         <th className="px-3 py-2">Action</th>
                         <th className="px-3 py-2">التفاصيل</th>
-                        <th className="px-3 py-2 text-right">Montant</th>
+                        <th className="px-3 py-2 text-end">Montant</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2036,7 +2036,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                             <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
                               {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-right">
+                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-end">
                               {h.amount ? formatTnd(h.amount) : '—'}
                             </td>
                           </tr>
@@ -2254,11 +2254,11 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ad-start">البداية *</label>
-              <input id="ad-start" type="date" dir="ltr" value={dateStart} onChange={e => setDateStart(e.target.value)} className={`${fieldCls} text-left`} />
+              <input id="ad-start" type="date" dir="ltr" value={dateStart} onChange={e => setDateStart(e.target.value)} className={`${fieldCls} text-start`} />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ad-end">النهاية *</label>
-              <input id="ad-end" type="date" dir="ltr" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className={`${fieldCls} text-left`} />
+              <input id="ad-end" type="date" dir="ltr" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className={`${fieldCls} text-start`} />
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="ad-link" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Lien cliquable (optionnel)</label>
@@ -2279,9 +2279,9 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 {imageUrls.map((url, i) => (
                   <div key={`${url}-${i}`} className="relative group aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
-                    <span className="absolute top-1 left-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
+                    <span className="absolute top-1 start-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
-                      className="absolute top-1 right-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
+                      className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
                       <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
@@ -2331,13 +2331,13 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             ) : (
               <>
                 <div className="relative mb-2">
-                  <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <Search aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <input
                     id="ad-center-search"
                     value={centerQuery}
                     onChange={e => setCenterQuery(e.target.value)}
                     placeholder="ابحث عن مركز بالاسم…"
-                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
+                    className="w-full ps-9 pe-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto rounded-2xl border border-slate-200 divide-y divide-slate-100">
@@ -2349,7 +2349,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
                       <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-accent-500" />
                       <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
-                      <span className="ml-auto text-[9px] font-black text-slate-500">{RENEWAL_STATUS_LABEL[c.status] || c.status}</span>
+                      <span className="ms-auto text-[9px] font-black text-slate-500">{RENEWAL_STATUS_LABEL[c.status] || c.status}</span>
                     </label>
                   ))}
                 </div>
@@ -2896,7 +2896,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition';
 
   return (
-    <div className="relative space-y-6" dir="ltr">
+    <div className="relative space-y-6" dir="rtl">
 
       {/* soft wash — same spirit as the landing page */}
       <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-[280px] w-[760px] rounded-full bg-accent-500/[0.06] blur-[110px] pointer-events-none" />
@@ -2916,12 +2916,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         <div className="flex items-center gap-2 flex-wrap">
           {(page === 'centers' || page === 'requests') && (
             <div className="relative">
-              <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Search aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={page === 'centers' ? 'ابحث عن مركز…' : 'ابحث عن طلب…'}
-                className="w-48 sm:w-56 pl-9 pr-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
+                className="w-48 sm:w-56 ps-9 pe-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
               />
             </div>
           )}
@@ -3034,7 +3034,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     const days = daysLeft(c.trialEndsAt);
                     return (
                       <button key={c.id} onClick={() => onNavigate?.('centers')}
-                        className="flex items-center gap-3 rounded-2xl border border-slate-200 hover:border-accent-500/50 hover:bg-accent-500/[0.04] p-3.5 text-left transition cursor-pointer">
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 hover:border-accent-500/50 hover:bg-accent-500/[0.04] p-3.5 text-start transition cursor-pointer">
                         {c.logoUrl ? (
                           <div className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-0.5 overflow-hidden flex-shrink-0">
                             <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-xl object-cover" />
@@ -3111,7 +3111,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 ]}
               />
             </div>
-            <span className="ml-auto text-xs font-bold text-slate-500">
+            <span className="ms-auto text-xs font-bold text-slate-500">
               ${arPlural(filteredCenters.length, 'نتيجة', 'نتيجتان', 'نتائج', 'نتيجة')}
             </span>
           </div>
@@ -3205,7 +3205,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                         مجدولة{c.scheduledPlan.applyAt ? ` في ${fmtDate(c.scheduledPlan.applyAt)}` : ' (عند التجديد القادم)'}
                       </span>
                     </span>
-                    <span className="flex items-center gap-1.5 ml-auto">
+                    <span className="flex items-center gap-1.5 ms-auto">
                       <button
                         onClick={() => handleApplyScheduledPlan(c)}
                         disabled={!!c.scheduledPlan.applyAt && c.scheduledPlan.applyAt > Date.now() && c.status === 'active'}
@@ -3264,7 +3264,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <Layers className="h-4 w-4" aria-hidden="true" /> الباقات &amp; الفواتير
                   </button>
                   <button onClick={() => setDeleteCenter(c)}
-                    className="ml-auto text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
+                    className="ms-auto text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
                     <Trash2 className="h-4 w-4" aria-hidden="true" /> Supprimer
                   </button>
                 </div>
@@ -3314,7 +3314,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 ]}
               />
             </div>
-            <span className="ml-auto text-xs font-bold text-slate-500">
+            <span className="ms-auto text-xs font-bold text-slate-500">
               ${arPlural(filteredRequests.length, 'نتيجة', 'نتيجتان', 'نتائج', 'نتيجة')}
             </span>
           </div>
@@ -3447,7 +3447,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   )}
 
                   <button onClick={() => setDeleteRequest(req)}
-                    className="ml-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
+                    className="ms-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
                     <Trash2 aria-hidden="true" className="h-4 w-4" /> حذف
                   </button>
                 </div>
@@ -3510,7 +3510,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     </p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[640px] w-full text-sm text-left">
+                    <table className="min-w-[640px] w-full text-sm text-start">
                       <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
                         <tr>
                           <th className="pb-3 px-3">Centre</th>
@@ -3575,12 +3575,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   {/* Filters — centre + statut */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
-                      <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Search aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                       <input
                         value={invoiceSearch}
                         onChange={e => setInvoiceSearch(e.target.value)}
                         placeholder="تصفية باسم المركز…"
-                        className="pl-9 pr-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition w-48 sm:w-56"
+                        className="ps-9 pe-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition w-48 sm:w-56"
                       />
                     </div>
                     <select
@@ -3634,7 +3634,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                           {/* Centre header — cliquer pour replier / déplier */}
                           <button type="button"
                             onClick={() => setCollapsedGroupIds(prev => ({ ...prev, [group.centerId]: !prev[group.centerId] }))}
-                            className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-left cursor-pointer border-b border-slate-200">
+                            className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-start cursor-pointer border-b border-slate-200">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} aria-hidden="true" />
                               <span className="h-8 w-8 rounded-lg bg-accent-500 text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
@@ -3661,7 +3661,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                             </div>
                           </button>
                           <div className={`overflow-x-auto${collapsedGroupIds[group.centerId] ? ' hidden' : ''}`}>
-                            <table className="min-w-[640px] w-full text-sm text-left">
+                            <table className="min-w-[640px] w-full text-sm text-start">
                               <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-white">
                                 <tr>
                                   <th className="py-2.5 px-3">N° Facture</th>
@@ -3763,7 +3763,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 </select>
               </div>
               <button onClick={addSchoolYear} disabled={addingYear}
-                className="ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-dashed border-accent-500/50 text-accent-500 text-xs sm:text-sm font-black whitespace-nowrap hover:bg-accent-500/5 transition cursor-pointer disabled:opacity-60"
+                className="ms-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-dashed border-accent-500/50 text-accent-500 text-xs sm:text-sm font-black whitespace-nowrap hover:bg-accent-500/5 transition cursor-pointer disabled:opacity-60"
                 title={`أنشئ ${nextSchoolYear} بتعريفات منسوخة من ${priceYears[priceYears.length - 1] || ''}`}
               >
                 {addingYear ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
@@ -3843,7 +3843,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                               type="number" step="0.5" min="0"
                               value={priceList[m.key] ?? 0}
                               onChange={e => setPriceList(p => ({ ...p, [m.key]: Number(e.target.value) }))}
-                              className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-right text-slate-800 focus:border-accent-500 focus:ring-0 outline-none bg-white transition"
+                              className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-end text-slate-800 focus:border-accent-500 focus:ring-0 outline-none bg-white transition"
                             />
                           )}
                           <span className="text-[10px] font-bold text-slate-500">{m.key === BUNDLED_MODULE_KEY ? 'مجاني' : 'دينار/شهر'}</span>
@@ -3953,7 +3953,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                   <div className="flex gap-2">
                     <button onClick={() => setEditAd(ad)}
                       className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition">
-                      <Edit className="h-4 w-4 inline mr-1" aria-hidden="true" />
+                      <Edit className="h-4 w-4 inline me-1" aria-hidden="true" />
                       تعديل
                     </button>
                     <button onClick={() => setDeleteAd(ad)} title="حذف"
@@ -4022,7 +4022,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
               <button onClick={loadRenewals} title="Actualiser" aria-label="Actualiser"
-              className="ml-auto p-2.5 rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer">
+              className="ms-auto p-2.5 rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer">
               <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           </div>
@@ -4063,7 +4063,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     }`}>
                       {r.status === 'pending' ? 'قيد الانتظار' : r.status === 'approved' ? 'مقبولة' : 'مرفوضة'}
                     </span>
-                    <span className="ml-auto text-[10px] font-bold text-slate-500">
+                    <span className="ms-auto text-[10px] font-bold text-slate-500">
                       {new Date(r.createdAt).toLocaleDateString('ar-TN')}
                     </span>
                   </div>

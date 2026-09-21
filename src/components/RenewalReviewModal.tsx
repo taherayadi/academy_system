@@ -488,12 +488,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   {isTrial ? 'فترة تجريبية' : 'اشتراك جارٍ'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'فترة مدفوعة' : pendingInvoice ? 'فترة غير مدفوعة' : 'بدون فاتورة'}
                   </span>
                 )}
                 {expiredState && (
-                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
+                  <span className="ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
                 )}
               </div>
               {isTrial ? (
@@ -557,12 +557,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                       <>
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            className={`text-start rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">تطبيق الآن</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            className={`text-start rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
                             <div className="text-[10px] font-black text-slate-800">جدولة ليوم {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
                             <div className="text-[10px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
@@ -572,13 +572,13 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
+                                className={`text-start rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
                                 <div className="text-[10px] font-black text-accent-700">الفترة مدفوعة</div>
                                 <div className="text-sm font-black text-accent-700">+ {formatTnd(decision.paidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
+                                className={`text-start rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
                                 <div className="text-[10px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
                                 <div className="text-[9px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
@@ -659,7 +659,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                         {s.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                         {s.monthlyPrice ? ` · ${Number(s.monthlyPrice).toFixed(2)} TND` : ''}
                       </span>
-                      <span className="ml-auto text-[10px] font-bold text-slate-500">
+                      <span className="ms-auto text-[10px] font-bold text-slate-500">
                         {s.applyAt ? `في ${fmtDate(s.applyAt)}` : 'عند التجديد القادم'}
                       </span>
                       {!isDecided && (
@@ -686,11 +686,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
-                      <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-500">
+                      <tr className="bg-slate-50 text-start text-[9px] font-black uppercase tracking-wider text-slate-500">
                         <th className="px-3 py-2">التاريخ</th>
                         <th className="px-3 py-2">Action</th>
                         <th className="px-3 py-2">التفاصيل</th>
-                        <th className="px-3 py-2 text-right">المبلغ</th>
+                        <th className="px-3 py-2 text-end">المبلغ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -705,7 +705,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                             <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
                               {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-right">
+                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-end">
                               {h.amount ? formatTnd(h.amount) : '—'}
                             </td>
                           </tr>

@@ -772,7 +772,7 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     // Dates never render RTL.
     const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
     expect(dates.length).toBeGreaterThanOrEqual(2);
-    for (const d of dates) { expect(d.getAttribute('dir')).toBe('ltr'); expect(d.className).toContain('text-left'); }
+    for (const d of dates) { expect(d.getAttribute('dir')).toBe('ltr'); expect(d.className).toMatch(/text-(left|start)/); }
 
     // Les deux formats responsives sont proposés.
     const rect = screen.getByRole('button', { name: /^Rectangle/ });
