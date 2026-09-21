@@ -1,5 +1,7 @@
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { PAGE_SIZE, pageNumbers } from './constants';
 
 function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
@@ -108,6 +110,17 @@ function NoticeDialog({ notice, onDismiss }: {
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+
+/** One-line contextual explainer for domain concepts at the decision point. */
+export function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="flex items-start gap-1.5 text-[11px] font-semibold text-slate-500">
+      <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-accent-500" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   );
 }
 

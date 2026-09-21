@@ -3,7 +3,7 @@ import { Building2, CheckCircle2, PauseCircle, CalendarClock, Layers, Trash2, X,
 import { StatusBadge, SkeletonCard } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
 import { daysLeft, inferredSubscriptionStart, normalizeCenterType, CENTER_TYPE_LABEL, STATUS_BADGE, STATUS_LABEL, PLAN_BADGE, PLAN_LABEL, isBaseModule, MODULE_LABEL } from './constants';
-import { Segmented, Pagination } from './uiParts';
+import {Segmented, Pagination, Hint } from './uiParts';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function CentersSection({ d }: { d: DashboardApi }) {
@@ -75,6 +75,7 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
             </div>
           ) : (
             <>
+              <Hint>الإيقاف يجمّد دخول المركز ويحافظ على بياناته وفواتيره، ويمكن التفعيل في أي وقت.</Hint>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
               {pagedCenters.map(c => {
             const days = daysLeft(c.trialEndsAt);

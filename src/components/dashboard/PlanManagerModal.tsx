@@ -1,3 +1,4 @@
+import { Hint } from './uiParts';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Clock, CalendarClock, Trash2, Check, X, Loader2, Receipt, Edit } from 'lucide-react';
@@ -548,13 +549,14 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
                             className={`text-start rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
-                            <div className="text-[11px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
+                            <div className="text-[11px] font-black text-slate-800">جدولة ليوم {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
                             <div className="text-[11px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
                         </div>
+                        <Hint>الجدولة لا تمس الاشتراك الجاري؛ يبدأ التغيير في الموعد المحدد ويمكن إلغاؤه من بطاقة المركز.</Hint>
                         {effectiveApplyChoice === 'settle' && (
                           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5">
-                            <p className="text-[11px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
+                            <p className="text-[11px] font-black text-slate-600 mb-1.5">الفوترة الحالية: {formatTnd(decision.oldAmount)} ← الجديدة: {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
                                 className={`text-start rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>

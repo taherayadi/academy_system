@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
-import {
-  Receipt, CalendarClock, Trash2, Check, X, Loader2,
-} from 'lucide-react';
+import {Receipt, CalendarClock, Trash2, Check, X, Loader2, Info } from 'lucide-react';
 import {
   fetchCenterPlansApi, centerPlanActionApi, updateCenterApi,
   decideRenewalRequestApi, fetchModulePricesApi, CenterPlansView,
@@ -725,6 +723,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               >
                 {isDecided ? 'إغلاق' : 'إلغاء'}
               </button>
+              {!isDecided && (
+                <p className="flex items-start gap-1.5 text-[11px] font-semibold text-slate-500 mb-3">
+                  <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-accent-500" aria-hidden="true" />
+                  <span>القبول يطبّق القرار فورًا — تجديد الاشتراك أو تغيير الباقة مع تحديث الفوترة؛ والرفض يُغلق الطلب دون تغيير.</span>
+                </p>
+              )}
               {!isDecided && (
                 <>
                   <button
