@@ -6,38 +6,26 @@ import { ThemeProvider } from './theme-provider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MotionConfig } from 'motion/react';
 import { installGlobalHandlers } from './utils/logger';
-import '@fontsource/cairo/300.css';
+// Font weights loaded = weights actually used (audit P1): body default 400,
+// font-semibold 600 ×86, font-bold 700 ×134, font-black 900 ×222.
+// Inter is the Latin fallback for Cairo: same used weights (900 falls back
+// to 700). JetBrains Mono is used at default weight only (invoice numbers).
 import '@fontsource/cairo/400.css';
-import '@fontsource/cairo/500.css';
 import '@fontsource/cairo/600.css';
 import '@fontsource/cairo/700.css';
-import '@fontsource/cairo/800.css';
 import '@fontsource/cairo/900.css';
 import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/500.css';
-import '@fontsource/jetbrains-mono/600.css';
-import '@fontsource/jetbrains-mono/700.css';
 import './index.css';
 
 installGlobalHandlers();
 
-// Block browser zoom shortcuts (Ctrl/Cmd + wheel, Ctrl/Cmd + +/-, Ctrl/Cmd + 0)
-const preventZoom = (e: KeyboardEvent) => {
-  if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) {
-    e.preventDefault();
-  }
-};
-const preventWheelZoom = (e: WheelEvent) => {
-  if (e.ctrlKey || e.metaKey) {
-    e.preventDefault();
-  }
-};
-document.addEventListener('keydown', preventZoom, { passive: false });
-document.addEventListener('wheel', preventWheelZoom, { passive: false });
+// NOTE: browser zoom (pinch, Ctrl/Cmd + wheel, Ctrl/Cmd + +/- / 0) must remain
+// fully functional — WCAG 1.4.4 Resize Text / 1.4.10 Reflow. The fluid root
+// font (clamp() in index.css) absorbs layout changes at larger zoom levels;
+// do not re-add zoom-blocking listeners.
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

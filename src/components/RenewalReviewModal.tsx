@@ -14,18 +14,18 @@ import { useToast } from './Toast';
 // ─── Catalogue & helpers — same values as Plans & factures ──────────────────
 const BUNDLED_MODULE_KEY = 'studentTimeSheets';
 const ALL_MODULES: { key: ModuleKey; label: string }[] = [
-  { key: 'scolaire', label: 'Scolaire' },
-  { key: 'finance', label: 'Finance' },
-  { key: 'etude', label: 'Étude' },
-  { key: 'coursParticuliers', label: 'Cours Particuliers' },
-  { key: 'revision', label: 'Révision' },
-  { key: 'formations', label: 'Formations' },
-  { key: 'cantine', label: 'Cantine / Repas' },
-  { key: 'transport', label: 'Transport' },
-  { key: 'events', label: 'Événements' },
-  { key: 'bibliotheque', label: 'Bibliothèque' },
-  { key: 'studentTimeSheets', label: 'Jd. Horaires' },
-  { key: 'staff', label: 'Personnel' },
+  { key: 'scolaire', label: 'مدرسي' },
+  { key: 'finance', label: 'مالية' },
+  { key: 'etude', label: 'مراجعة مشرفة' },
+  { key: 'coursParticuliers', label: 'دروس خاصة' },
+  { key: 'revision', label: 'مراجعة الامتحانات' },
+  { key: 'formations', label: 'دورات' },
+  { key: 'cantine', label: 'مقصف / وجبات' },
+  { key: 'transport', label: 'نقل' },
+  { key: 'events', label: 'مناسبات' },
+  { key: 'bibliotheque', label: 'مكتبة' },
+  { key: 'studentTimeSheets', label: 'سجل الدوام' },
+  { key: 'staff', label: 'الموظفون' },
 ];
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
 
@@ -35,7 +35,7 @@ function normalizeCenterModules(modules?: string[] | null): string[] {
 }
 
 const RENEWAL_STATUS_LABEL: Record<string, string> = {
-  trial: 'Essai', active: 'Actif', suspended: 'Suspendu', expired: 'Expiré',
+  trial: 'تجربة', active: 'نشط', suspended: 'موقوف', expired: 'منتهٍ',
 };
 
 const PLAN_LABEL: Record<string, string> = {
@@ -46,22 +46,22 @@ const PLAN_BADGE: Record<string, string> = {
   basic: 'bg-slate-100 text-slate-600 border border-slate-200',
   growth: 'bg-slate-100 text-slate-600 border border-slate-200',
   pro: 'bg-slate-100 text-slate-600 border border-slate-200',
-  custom: 'bg-[#257C86]/10 text-[#257C86] border border-[#257C86]/20',
+  custom: 'bg-accent-500/10 text-accent-500 border border-accent-500/20',
 };
 
-const PLAN_HISTORY_LABEL: Record<string, { text: string; cls: string }> = {
-  center_created: { text: 'Création', cls: 'bg-slate-100 text-slate-600' },
-  plan_set: { text: 'Plan appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
-  plan_activated: { text: 'Abonnement activé', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  plan_renewed: { text: 'Reconduction', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  plan_settled: { text: 'Régularisation', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  plan_scheduled: { text: 'Plan programmé', cls: 'bg-amber-100 text-amber-700' },
-  plan_applied: { text: 'Programme appliqué', cls: 'bg-[#257C86]/10 text-[#257C86]' },
-  schedule_cancelled: { text: 'Programme annulé', cls: 'bg-slate-100 text-slate-500' },
-  plan_removed: { text: 'Abonnement annulé', cls: 'bg-red-100 text-red-700' },
-  trial_added: { text: 'Jours offerts', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  renewal_approved: { text: 'Renouvellement accepté', cls: 'bg-[#257C86]/10 text-[#1e626b]' },
-  renewal_upgrade: { text: 'Changement d’offre accepté', cls: 'bg-[#257C86]/10 text-[#257C86]' },
+const PLAN_HISTORY_LABEL: Record<string, { text: string; tone: StatusTone }> = {
+  center_created: { text: 'إنشاء', tone: 'neutral' },
+  plan_set: { text: 'تطبيق الباقة', tone: 'brand' },
+  plan_activated: { text: 'تفعيل الاشتراك', tone: 'brand' },
+  plan_renewed: { text: 'تجديد', tone: 'brand' },
+  plan_settled: { text: 'تسوية', tone: 'brand' },
+  plan_scheduled: { text: 'باقة مجدولة', tone: 'warning' },
+  plan_applied: { text: 'تطبيق البرنامج', tone: 'brand' },
+  schedule_cancelled: { text: 'إلغاء البرنامج', tone: 'neutral' },
+  plan_removed: { text: 'إلغاء الاشتراك', tone: 'error' },
+  trial_added: { text: 'أيام مقدمة', tone: 'brand' },
+  renewal_approved: { text: 'قبول التجديد', tone: 'brand' },
+  renewal_upgrade: { text: 'قبول تغيير الباقة', tone: 'brand' },
 };
 
 const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
@@ -73,10 +73,12 @@ function currentSchoolYear(): string {
   return `${y}/${y + 1}`;
 }
 
-import { fmtDate } from '../utils/format';
+import { fmtDate, arPlural } from '../utils/format';
+import { StatusTone, toneClasses } from './ui/StatusBadge';
+import { FormField } from './ui/FormField';
 
 function formatTnd(value: number): string {
-  return `${value.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
+  return `${value.toLocaleString('ar-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
 }
 
 function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
@@ -174,7 +176,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
       );
       setPaymentState(paid ? 'paid' : 'unpaid');
     } catch (err) {
-      toastRef.current.error(err instanceof Error ? err.message : 'Erreur chargement de l’abonnement');
+      toastRef.current.error(err instanceof Error ? err.message : 'خطأ في تحميل الاشتراك');
     } finally {
       setLoading(false);
     }
@@ -237,7 +239,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
   const extendsSubscription = !hasLiveWindow || billingCycleChanged || decision.kind === 'renewal' || isPureRenewalExtension;
 
-  const planTitle = view ? (PLAN_LABEL[view.center.plan] || view.center.plan || 'Aucun plan') : '—';
+  const planTitle = view ? (PLAN_LABEL[view.center.plan] || view.center.plan || 'لا توجد باقة') : '—';
 
   /** Read-only recap of the requested plan/cycle/modules — the platform applies
    *  the center's request as-is (the offer REPLACES the current plan). */
@@ -245,30 +247,30 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     <div className="space-y-3">
       <div className="grid sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Offre demandée</span>
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">الباقة المطلوبة</span>
           <span data-testid="review-apply-plan" className="text-sm font-black text-slate-900">
             {PLAN_LABEL[draft.plan] || draft.plan}
           </span>
         </div>
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Cycle demandé</span>
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">الدورة المطلوبة</span>
           <span data-testid="review-apply-cycle" className="text-sm font-black text-slate-900">
-            {draft.billingCycle === 'annual' ? 'Annuel — 20 % de remise' : 'Mensuel'}
+            {draft.billingCycle === 'annual' ? 'سنوي — خصم 20%' : 'شهري'}
           </span>
         </div>
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Tarif {draft.billingCycle === 'annual' ? 'annuel' : 'mensuel'} calculé</span>
-          <span data-testid="review-apply-tariff" className="text-sm font-black text-[#257C86]">
-            {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'TND/an' : 'TND/mois'}
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">التعرفة {draft.billingCycle === 'annual' ? 'السنوية' : 'الشهرية'} المحسوبة</span>
+          <span data-testid="review-apply-tariff" className="text-sm font-black text-accent-500">
+            {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'دينار/سنة' : 'دينار/شهر'}
           </span>
         </div>
       </div>
 
       <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Modules demandés</p>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">الوحدات المطلوبة</p>
         <div data-testid="review-apply-modules" className="flex flex-wrap gap-1.5">
           {enabledModules.map(key => (
-            <span key={key} className="text-[10px] font-bold px-2.5 py-1.5 rounded-xl bg-[#257C86] text-white border border-[#257C86] inline-flex items-center gap-1">
+            <span key={key} className="text-[10px] font-bold px-2.5 py-1.5 rounded-xl bg-accent-500 text-white border border-accent-500 inline-flex items-center gap-1">
               {MODULE_LABEL(key)}
             </span>
           ))}
@@ -293,13 +295,13 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
           enabledModules,
           ...(draft.plan === 'custom' ? { monthlyPrice: Number(draft.monthlyPrice) || 0 } : {}),
         });
-        toast.success(res.message || (isTrial ? 'Abonnement activé' : 'Abonnement relancé'));
+        toast.success(res.message || (isTrial ? 'تفعيل الاشتراك' : 'استئناف الاشتراك'));
         // The plan was just applied: record the decision without re-applying.
         await decideRenewalRequestApi(request.id, 'approved', decisionNote, { skipApply: true });
         await onDecided();
         onClose();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Erreur mise à jour du plan');
+        toast.error(err instanceof Error ? err.message : 'خطأ في تحديث الباقة');
       } finally {
         setSaving(false);
       }
@@ -320,8 +322,8 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
         const change = outcome?.planChange;
         const newEnd = change?.newSubscriptionEndsAt || previewNewEnd;
         toast.success(
-          `Renouvellement appliqué${newEnd ? ` — nouvelle échéance : ${fmtDate(newEnd)}` : ''}` +
-          (change?.invoice ? ` — facture ${change.invoice.invoiceNumber} (${formatTnd(change.invoice.amount)})` : '')
+          `تم تطبيق التجديد${newEnd ? ` — تاريخ استحقاق جديد: ${fmtDate(newEnd)}` : ''}` +
+          (change?.invoice ? ` — فاتورة ${change.invoice.invoiceNumber} (${formatTnd(change.invoice.amount)})` : '')
         );
       } else if (scheduleOnly || effectiveApplyChoice === 'schedule') {
         const outcome = await updateCenterApi(request.centerId, {
@@ -334,8 +336,8 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
         });
         const applyAt = outcome?.planChange?.applyAt;
         toast.success(applyAt
-          ? `Changement programmé pour le ${fmtDate(applyAt)} — la période payée reste inchangée.`
-          : 'Changement programmé pour la prochaine reconduction.');
+          ? `تغيير مبرمج ليوم ${fmtDate(applyAt)} — الفترة المدفوعة تبقى كما هي.`
+          : 'تغيير مبرمج عند التجديد القادم.');
       } else {
         const outcome = await updateCenterApi(request.centerId, {
           plan: draft.plan,
@@ -349,11 +351,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
         const settlement = outcome?.planChange?.settlement;
         if (settlement && !settlement.skipped && settlement.amount > 0) {
           toast.success(
-            `Régularisation ${formatTnd(settlement.amount)} — ${settlement.paid ? 'complément (période déjà payée)' : 'nouvelle facture, l’ancienne en attente a été annulée'}`
+            `تسوية ${formatTnd(settlement.amount)} — ${settlement.paid ? 'فرق السعر (الفترة مدفوعة مسبقًا)' : 'فاتورة جديدة، وأُلغيت القديمة المعلقة'}`
             + `${settlement.invoiceNumber ? ` (${settlement.invoiceNumber})` : ''}.`
           );
         } else {
-          toast.success('Plan mis à jour.');
+          toast.success('تم تحديث الباقة.');
         }
       }
       // The plan was just applied: record the decision without re-applying.
@@ -361,7 +363,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
       await onDecided();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur mise à jour du plan');
+      toast.error(err instanceof Error ? err.message : 'خطأ في تحديث الباقة');
     } finally {
       setSaving(false);
     }
@@ -372,11 +374,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     setRejecting(true);
     try {
       await decideRenewalRequestApi(request.id, 'rejected', decisionNote);
-      toast.success('Demande de renouvellement refusée.');
+      toast.success('تم رفض طلب التجديد.');
       await onDecided();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur lors du refus');
+      toast.error(err instanceof Error ? err.message : 'خطأ أثناء الرفض');
     } finally {
       setRejecting(false);
     }
@@ -386,20 +388,20 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     setSaving(true);
     try {
       const res = await centerPlanActionApi({ action: 'remove-schedule', centerId: request.centerId, scheduleId });
-      toast.success(res.message || 'Plan programmé supprimé');
+      toast.success(res.message || 'تم حذف الباقة المجدولة');
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur lors de l’annulation du programme');
+      toast.error(err instanceof Error ? err.message : 'خطأ أثناء إلغاء البرنامج');
     } finally {
       setSaving(false);
     }
   };
 
   const formTitle = isTrial
-    ? 'Activer l’abonnement'
+    ? 'تفعيل الاشتراك'
     : !hasLiveWindow
-      ? 'Nouvel abonnement — la période repart d’aujourd’hui'
-      : 'Remplacer le plan en cours';
+      ? 'اشتراك جديد — تبدأ الفترة من اليوم'
+      : 'استبدال الباقة الحالية';
 
   const requestedModules = useMemo(
     () => normalizeCenterModules(request.requestedModules),
@@ -418,24 +420,24 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div className="min-w-0">
             <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-[#257C86]" /> Examiner et appliquer
+              <Receipt className="h-4 w-4 text-accent-500" /> مراجعة وتطبيق
             </h2>
-            <p className="text-[11px] font-bold text-slate-400 truncate">
+            <p className="text-[11px] font-bold text-slate-500 truncate">
               {request.centerName || request.centerId}
-              {' · '}demande du {fmtDate(request.createdAt)}
+              {' · '}طلب بتاريخ {fmtDate(request.createdAt)}
             </p>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
+          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
             <X className="h-4 w-4 text-slate-500" />
           </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-[#257C86]" />
+            <Loader2 className="h-6 w-6 animate-spin text-accent-500" />
           </div>
         ) : !view ? (
-          <p className="text-center text-sm font-bold text-slate-400 py-16">Données indisponibles</p>
+          <p className="text-center text-sm font-bold text-slate-500 py-16">البيانات غير متاحة</p>
         ) : (
           <div className="p-5 space-y-4">
             {/* ── Demande du centre ── */}
@@ -444,21 +446,21 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
                   request.kind === 'upgrade' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'
                 }`}>
-                  {request.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'}
+                  {request.kind === 'upgrade' ? 'تغيير الباقة' : 'تجديد'}
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
                   request.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : request.status === 'approved' ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20'
+                    : request.status === 'approved' ? 'bg-accent-500/[0.06] text-accent-700 border-accent-500/20'
                     : 'bg-red-50 text-red-700 border-red-200'
                 }`}>
-                  {request.status === 'pending' ? 'En attente' : request.status === 'approved' ? 'Acceptée' : 'Refusée'}
+                  {request.status === 'pending' ? 'قيد الانتظار' : request.status === 'approved' ? 'مقبولة' : 'مرفوضة'}
                 </span>
                 <span className="text-[11px] font-bold text-slate-600">
                   {RENEWAL_STATUS_LABEL[request.currentStatus] || request.currentStatus || '—'}
                   {' · '}{PLAN_LABEL[request.currentPlan] || request.currentPlan || '—'}
-                  {' → '}<span className="font-black text-[#257C86]">{PLAN_LABEL[request.requestedPlan] || request.requestedPlan}</span>
-                  {' · '}{request.billingCycle === 'annual' ? 'Annuel' : 'Mensuel'}
-                  {request.amount != null ? ` · ${formatTnd(request.amount)} simulés` : ''}
+                  {' → '}<span className="font-black text-accent-500">{PLAN_LABEL[request.requestedPlan] || request.requestedPlan}</span>
+                  {' · '}{request.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
+                  {request.amount != null ? ` · ${formatTnd(request.amount)} تقديرية` : ''}
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -473,7 +475,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               )}
               {isDecided && (
                 <p className="mt-2 text-[11px] font-semibold text-slate-500">
-                  Traité{request.decidedBy ? ` par ${request.decidedBy}` : ''}{request.decidedAt ? ` le ${fmtDate(request.decidedAt)}` : ''}
+                  تمت المعالجة{request.decidedBy ? ` بواسطة ${request.decidedBy}` : ''}{request.decidedAt ? ` في ${fmtDate(request.decidedAt)}` : ''}
                   {request.decisionNote ? ` — « ${request.decisionNote} »` : ''}
                 </p>
               )}
@@ -482,16 +484,16 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             {/* ── Abonnement en cours ── */}
             <div className="rounded-2xl border-2 border-slate-200/70 p-4 bg-slate-50/50">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                  {isTrial ? 'Période d’essai' : 'Abonnement en cours'}
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">
+                  {isTrial ? 'فترة تجريبية' : 'اشتراك جارٍ'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-[#257C86]/10 text-[#1e626b]' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
-                    {windowPaidInvoice ? 'Fenêtre payée' : pendingInvoice ? 'Fenêtre non payée' : 'Sans facture'}
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                    {windowPaidInvoice ? 'فترة مدفوعة' : pendingInvoice ? 'فترة غير مدفوعة' : 'بدون فاتورة'}
                   </span>
                 )}
                 {expiredState && (
-                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Expiré</span>
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
                 )}
               </div>
               {isTrial ? (
@@ -505,15 +507,15 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                       {planTitle}
                     </span>
                     <span className="text-[11px] font-bold text-slate-500">
-                      {view.center.billingCycle === 'annual' ? 'Annuel' : 'Mensuel'}
+                      {view.center.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                       {view.center.monthlyPrice > 0 ? ` · ${view.center.monthlyPrice.toFixed(2)} TND` : ''}
                     </span>
                   </div>
                   {expiredState ? (
                     <p className="text-[11px] font-bold text-red-600 mt-1.5">
                       {centerStatus === 'expired' && liveEnd > now
-                        ? `Abonnement supprimé le ${fmtDate(now)} — relancez un plan pour facturer à nouveau.`
-                        : <>Abonnement expiré{liveEnd > 0 ? ` le ${fmtDate(liveEnd)}` : ''} — relancez un plan pour facturer à nouveau.</>}
+                        ? `حُذف الاشتراك في ${fmtDate(now)} — استأنف باقة للفوترة من جديد.`
+                        : <>انتهى الاشتراك{liveEnd > 0 ? ` في ${fmtDate(liveEnd)}` : ''} — استأنف باقة للفوترة من جديد.</>}
                     </p>
                   ) : (
                     <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
@@ -523,12 +525,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   {!expiredState && pendingInvoice && (
                     <p className="text-[11px] font-bold text-amber-700 mt-1.5">
                       Facture {pendingInvoice.invoiceNumber} —{' '}
-                      {pendingInvoice.status === 'overdue' ? 'en retard' : 'en attente'} · {pendingInvoice.amount.toFixed(2)} TND
+                      {pendingInvoice.status === 'overdue' ? 'متأخرة' : 'قيد الانتظار'} · {pendingInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
                   {!expiredState && windowPaidInvoice && (
-                    <p className="text-[11px] font-bold text-[#1e626b] mt-1.5">
-                      Facture {windowPaidInvoice.invoiceNumber} payée · {windowPaidInvoice.amount.toFixed(2)} TND
+                    <p className="text-[11px] font-bold text-accent-700 mt-1.5">
+                      فاتورة {windowPaidInvoice.invoiceNumber} مدفوعة · {windowPaidInvoice.amount.toFixed(2)} دينار
                     </p>
                   )}
                 </>
@@ -537,7 +539,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
             {/* ── Offre à appliquer (demande du centre, affichée seule — non modifiable) ── */}
             {!isDecided && (
-              <div className="rounded-2xl border-2 p-4 space-y-3 border-[#257C86]/20 bg-[#257C86]/[0.04]">
+              <div className="rounded-2xl border-2 p-4 space-y-3 border-accent-500/20 bg-accent-500/[0.04]">
                 <p className="text-xs font-black text-slate-700">{formTitle}</p>
                 {renderRequestedPlan()}
 
@@ -545,24 +547,24 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 {midPeriod && decision.kind !== 'mid_period_same_price' && (
                   <div className="rounded-xl bg-white border border-slate-200 px-3.5 py-3 space-y-2.5">
                     <p className="text-[11px] font-black text-slate-700">
-                      Changement en cours de période —{' '}
-                      {decision.kind === 'mid_period_increase' ? 'à la hausse' : 'à la baisse'}
+                      تغيير خلال الفترة الجارية —{' '}
+                      {decision.kind === 'mid_period_increase' ? 'إلى أعلى' : 'إلى أسفل'}
                       {decision.kind === 'mid_period_increase' && (
-                        <> · {decision.remainingDays} jour{decision.remainingDays > 1 ? 's' : ''} restant{decision.remainingDays > 1 ? 's' : ''} sur la période payée</>
+                        <> · ${arPlural(decision.remainingDays, 'يوم متبقٍ', 'يومان متبقيان', 'أيام متبقية', 'يومًا متبقيًا')} على الفترة المدفوعة</>
                       )}
                     </p>
                     {settlementRelevant ? (
                       <>
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">Appliquer maintenant</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">Fin d’abonnement inchangée · régularisation au prorata des jours déjà utilisés</div>
+                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            <div className="text-[10px] font-black text-slate-800">تطبيق الآن</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
-                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-[#257C86] bg-white shadow-md shadow-[#257C86]/10' : 'border-slate-200 bg-white/60 hover:border-[#257C86]/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'la reconduction'}</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">Le plan actuel reste appliqué jusqu’à la fin de la période</div>
+                            className={`text-left rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
+                            <div className="text-[10px] font-black text-slate-800">جدولة ليوم {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
+                            <div className="text-[10px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
                         </div>
                         {effectiveApplyChoice === 'settle' && (
@@ -570,21 +572,21 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                             <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
-                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-[#257C86] bg-[#257C86]/[0.06]' : 'border-slate-200 bg-white hover:border-[#257C86]/40'}`}>
-                                <div className="text-[10px] font-black text-[#1e626b]">Période déjà payée</div>
-                                <div className="text-sm font-black text-[#1e626b]">+ {formatTnd(decision.paidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">complément = différence × jours restants</div>
+                                className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
+                                <div className="text-[10px] font-black text-accent-700">الفترة مدفوعة</div>
+                                <div className="text-sm font-black text-accent-700">+ {formatTnd(decision.paidAmount)}</div>
+                                <div className="text-[9px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
                                 className={`text-left rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
-                                <div className="text-[10px] font-black text-amber-800">Période pas encore payée</div>
+                                <div className="text-[10px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">l’ancienne facture en attente est annulée et remplacée</div>
+                                <div className="text-[9px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
                               </button>
                             </div>
                             {!windowPaidInvoice && paymentState !== 'unpaid' && (
                               <p className="text-[9px] font-semibold text-slate-500 mt-1.5">
-                                Détecté : aucune facture payée ne couvre la période — l’option « pas encore payée » correspond à votre cas.
+                                مكتشف: لا توجد فاتورة مدفوعة تغطي الفترة — الخيار «غير مدفوعة بعد» يناسب حالتك.
                               </p>
                             )}
                           </div>
@@ -592,7 +594,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                       </>
                     ) : (
                       <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-relaxed">
-                        La période en cours est déjà payée au tarif actuel : le passage à la baisse ne peut pas être remboursé — il sera appliqué à la fin de la période ({hasLiveWindow ? fmtDate(liveEnd) : 'prochaine reconduction'}), sans remboursement ni jour perdu.
+                        الفترة الحالية مدفوعة مسبقًا بالتعرفة الحالية: خفض الباقة لا يمكن تعويضه نقدًا — سيُطبَّق في نهاية الفترة ({hasLiveWindow ? fmtDate(liveEnd) : 'التجديد القادم'})، دون تعويض ودون أيام تضيع.
                       </div>
                     )}
                   </div>
@@ -600,11 +602,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
                 {/* Same-plan renewal: stack one full period from the current end date. */}
                 {isPureRenewalExtension && previewNewEnd && (
-                  <div className="rounded-xl bg-white border border-[#257C86]/25 px-3.5 py-3">
-                    <p className="text-[11px] font-black text-slate-700">Renouvellement à l’identique</p>
+                  <div className="rounded-xl bg-white border border-accent-500/25 px-3.5 py-3">
+                    <p className="text-[11px] font-black text-slate-700">تجديد مطابق</p>
                     <p className="text-[10px] font-semibold text-slate-500 leading-relaxed mt-1">
-                      La période sera prolongée d’un cycle complet depuis l’échéance actuelle — nouvelle fin le {fmtDate(previewNewEnd)}.
-                      Une facture « en attente » sera créée et le centre restera actif en continu.
+                      ستُمَدَّد الفترة بدورة كاملة من تاريخ الاستحقاق الحالي — النهاية الجديدة في {fmtDate(previewNewEnd)}.
+                      ستُنشأ فاتورة «قيد الانتظار» ويبقى المركز نشطًا باستمرار.
                     </p>
                   </div>
                 )}
@@ -612,15 +614,15 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 {!midPeriod && !isPureRenewalExtension && !isTrial && hasLiveWindow && (
                   <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
                     {windowPaidInvoice
-                      ? 'La facture payée de la période en cours ne bougera pas.'
+                      ? 'الفاتورة المدفوعة للفترة الحالية لن تتغير.'
                       : pendingInvoice
-                        ? `La facture en attente ${pendingInvoice.invoiceNumber} sera remplacée par une nouvelle facture au tarif du plan choisi (aucun double prélèvement).`
-                        : 'Une facture « en attente » sera créée pour la période en cours.'}
+                        ? `الفاتورة قيد الانتظار ${pendingInvoice.invoiceNumber} ستُستبدل بفاتورة جديدة وفق تعرفة الباقة المختارة (بدون خصم مزدوج).`
+                        : 'ستُنشأ فاتورة «قيد الانتظار» للفترة الحالية.'}
                   </p>
                 )}
                 {(isTrial || !hasLiveWindow) && (
                   <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
-                    Une nouvelle facture « en attente » sera créée pour la première période — marquez-la payée dans SaaS → Finance quand le client règle.
+                    ستُنشأ فاتورة جديدة «قيد الانتظار» للفترة الأولى — علّمها كمدفوعة في SaaS → المالية عندما يسدّد العميل.
                   </p>
                 )}
               </div>
@@ -628,43 +630,43 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
             {/* ── Note de décision ── */}
             {!isDecided && (
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Note envoyée au centre (optionnel)</label>
-                <input
+              <FormField label="ملاحظة تُرسل إلى المركز (اختياري)" id="rr-note"
+                labelClassName="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                <input id="rr-note"
                   value={decisionNote}
                   onChange={e => setDecisionNote(e.target.value)}
-                  placeholder="Ex. Offre Growth activée, facture envoyée par e-mail…"
+                  placeholder="مثال: تم تفعيل باقة Growth وأُرسلت الفاتورة بالبريد…"
                   maxLength={500}
-                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-[#257C86] outline-none"
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-accent-500 outline-none"
                 />
-              </div>
+              </FormField>
             )}
 
             {/* ── Plans programmés ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2">
-                Plans programmés ({view.schedules.length})
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+                باقات مجدولة ({view.schedules.length})
               </p>
               {view.schedules.length === 0 ? (
-                <p className="text-[11px] font-semibold text-slate-400">Aucun plan programmé.</p>
+                <p className="text-[11px] font-semibold text-slate-500">لا توجد باقات مجدولة.</p>
               ) : (
                 <div className="space-y-2">
                   {view.schedules.map(s => (
                     <div key={s.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
                       <CalendarClock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
                       <span className="text-xs font-black text-slate-800">{PLAN_LABEL[s.plan === 'starter' ? 'basic' : s.plan] || s.plan}</span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {s.billingCycle === 'annual' ? 'Annuel' : 'Mensuel'}
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {s.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                         {s.monthlyPrice ? ` · ${Number(s.monthlyPrice).toFixed(2)} TND` : ''}
                       </span>
-                      <span className="ml-auto text-[10px] font-bold text-slate-400">
-                        {s.applyAt ? `le ${fmtDate(s.applyAt)}` : 'à la prochaine reconduction'}
+                      <span className="ml-auto text-[10px] font-bold text-slate-500">
+                        {s.applyAt ? `في ${fmtDate(s.applyAt)}` : 'عند التجديد القادم'}
                       </span>
                       {!isDecided && (
                         <button onClick={() => removeSchedule(s.id)}
                           disabled={saving}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer disabled:opacity-50" title="Supprimer ce plan programmé">
-                          <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer disabled:opacity-50" title="حذف هذه الباقة المجدولة" aria-label="حذف هذه الباقة المجدولة">
+                          <Trash2 className="h-3.5 w-3.5 text-red-400" aria-hidden="true" />
                         </button>
                       )}
                     </div>
@@ -675,30 +677,30 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
             {/* ── Historique des plans (audit trail, migration 0029) ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
                 Historique des plans ({(view.history || []).length})
               </p>
               {(view.history || []).length === 0 ? (
-                <p className="text-[11px] font-semibold text-slate-400">Aucune activité enregistrée.</p>
+                <p className="text-[11px] font-semibold text-slate-500">لا توجد أنشطة مسجلة.</p>
               ) : (
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
-                      <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-400">
-                        <th className="px-3 py-2">Date</th>
+                      <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-wider text-slate-500">
+                        <th className="px-3 py-2">التاريخ</th>
                         <th className="px-3 py-2">Action</th>
-                        <th className="px-3 py-2">Détails</th>
-                        <th className="px-3 py-2 text-right">Montant</th>
+                        <th className="px-3 py-2">التفاصيل</th>
+                        <th className="px-3 py-2 text-right">المبلغ</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(view.history || []).map(h => {
-                        const meta = PLAN_HISTORY_LABEL[h.action] || { text: h.action, cls: 'bg-slate-100 text-slate-500' };
+                        const meta = PLAN_HISTORY_LABEL[h.action] || { text: h.action, tone: 'neutral' as StatusTone };
                         return (
                           <tr key={h.id} className="border-t border-slate-100 align-top">
                             <td className="px-3 py-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
                             <td className="px-3 py-2">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.text}</span>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${toneClasses(meta.tone)}`}>{meta.text}</span>
                             </td>
                             <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
                               {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
@@ -721,27 +723,27 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 onClick={onClose}
                 className="rounded-xl px-5 py-2.5 text-[13px] font-bold text-slate-500 transition hover:bg-slate-100 cursor-pointer"
               >
-                {isDecided ? 'Fermer' : 'Annuler'}
+                {isDecided ? 'إغلاق' : 'إلغاء'}
               </button>
               {!isDecided && (
                 <>
                   <button
                     onClick={submitReject}
                     disabled={rejecting || saving}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-[#257C86]/10 px-5 py-2.5 text-[13px] font-bold text-[#257C86] transition hover:bg-[#257C86]/20 disabled:opacity-60 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-accent-500/10 px-5 py-2.5 text-[13px] font-bold text-accent-500 transition hover:bg-accent-500/20 disabled:opacity-60 cursor-pointer"
                   >
                     {rejecting ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />}
-                    Refuser
+                    رفض
                   </button>
                   <button
                     onClick={submitApprove}
                     disabled={saving || rejecting}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-[#257C86] px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-[#257C86]/25 transition hover:shadow-xl hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-accent-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-accent-500/25 transition hover:shadow-xl hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                     {effectiveApplyChoice === 'schedule' && !isTrial && hasLiveWindow
-                      ? `Accepter et programmer pour le ${fmtDate(liveEnd)}`
-                      : 'Accepter et appliquer'}
+                      ? `قبول وجدولة ليوم ${fmtDate(liveEnd)}`
+                      : 'قبول وتطبيق'}
                   </button>
                 </>
               )}

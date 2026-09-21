@@ -36,7 +36,7 @@ export default function ConfirmDialog({
             {/* Header */}
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-xl ${danger ? 'bg-red-500' : 'bg-[#257C86]'}`}>
+                <div className={`p-2 rounded-xl ${danger ? 'bg-red-500' : 'bg-accent-500'}`}>
                   <AlertTriangle className="h-5 w-5 text-white" />
                 </div>
                 <h3 className="text-base font-black">{title}</h3>
@@ -44,9 +44,10 @@ export default function ConfirmDialog({
 
               <button
                 onClick={onCancel}
+                aria-label="إغلاق"
                 className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -67,7 +68,7 @@ export default function ConfirmDialog({
                   className={`px-5 py-2.5 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 ${
                     danger
                       ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
-                      : 'bg-[#257C86] hover:bg-[#1E6A73] shadow-[#257C86]/20'
+                      : 'bg-accent-500 hover:bg-accent-600 shadow-accent-500/20'
                   }`}
                 >
                   {confirmLabel}

@@ -35,17 +35,17 @@ export function useToast() {
 }
 
 const iconMap: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle2 className="h-5 w-5 text-[#3A93A0] shrink-0" />,
+  success: <CheckCircle2 className="h-5 w-5 text-accent-400 shrink-0" />,
   error: <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />,
-  warning: <AlertTriangle className="h-5 w-5 text-[#3A93A0] shrink-0" />,
-  info: <Info className="h-5 w-5 text-[#3A93A0] shrink-0" />
+  warning: <AlertTriangle className="h-5 w-5 text-accent-400 shrink-0" />,
+  info: <Info className="h-5 w-5 text-accent-400 shrink-0" />
 };
 
 const borderMap: Record<ToastType, string> = {
-  success: 'border-[#257C86]/40',
+  success: 'border-accent-500/40',
   error: 'border-red-500/40',
-  warning: 'border-[#257C86]/40',
-  info: 'border-[#257C86]/40'
+  warning: 'border-accent-500/40',
+  info: 'border-accent-500/40'
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -90,11 +90,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed top-4 left-4 z-[100] flex flex-col gap-2 no-print" dir="rtl">
+      {/* Toasts are transient status messages: the container is a polite
+          live region (present from mount so it is always announced), and
+          errors escalate to role="alert" (WCAG 4.1.3 Status Messages). */}
+      <div className="fixed top-4 left-4 z-[100] flex flex-col gap-2 no-print" dir="rtl" aria-live="polite" aria-atomic="false">
         <AnimatePresence>
           {toasts.map(t => (
             <motion.div
               key={t.id}
+              role={t.type === 'error' ? 'alert' : 'status'}
               initial={{ opacity: 0, x: 60 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 60 }}
@@ -104,9 +108,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <p className="text-xs font-bold leading-snug flex-1">{t.message}</p>
               <button
                 onClick={() => removeToast(t.id)}
+                aria-label="إغلاق"
                 className="text-slate-500 hover:text-white transition cursor-pointer"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </motion.div>
           ))}

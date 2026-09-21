@@ -51,7 +51,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Future: Apply theme switching logic here
     // Example: document.documentElement.dataset.theme = theme;
-    // This would work with CSS like: [data-theme="dark"] { --color-brand-500: #...; }
+    // This would work with CSS like: [data-theme="dark"] { --color-accent-500: #...; }
 
     console.log(`Theme set to: ${theme}`);
   }, [theme]);

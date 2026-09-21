@@ -14,7 +14,7 @@ interface SecondaryButtonProps {
 const base =
   'inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold text-slate-600 ' +
   'bg-neutral-100 rounded-xl transition hover:bg-neutral-200 cursor-pointer ' +
-  'focus-visible:outline-2 focus-visible:outline-brand-500 ' +
+  'focus-visible:outline-2 focus-visible:outline-accent-500 ' +
   'disabled:opacity-50 disabled:cursor-not-allowed';
 
 /** Secondary / cancel button — neutral-100 fill, used for dismissive actions in forms/modals. */

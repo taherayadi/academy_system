@@ -5,3 +5,4 @@ export { SecondaryButton } from './SecondaryButton';
 export { StatusBadge } from './StatusBadge';
 export { Skeleton, SkeletonCard, SkeletonTableRow, SkeletonStat } from './Skeleton';
 export type { StatusTone } from './StatusBadge';
+export { toneClasses } from './StatusBadge';

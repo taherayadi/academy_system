@@ -13,7 +13,7 @@
  * unauthorized response (UnauthorizedError), because the BACKEND — not this
  * file — is what enforces access.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
@@ -35,7 +35,9 @@ import { UnauthorizedError, changePasswordRequest } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession, resolveSessionUser } from './auth';
 
 import LoginScreen from './components/LoginScreen';
-import PlatformAdminDashboard from './components/PlatformAdminDashboard';
+// Code-split: the console monolith (+ modals, charts) loads only after a
+// platform session exists — the login screen ships in the initial chunk.
+const PlatformAdminDashboard = lazy(() => import('./components/PlatformAdminDashboard'));
 import { useToast } from './components/Toast';
 import brandIcon from './assets/icon.png';
 
@@ -68,6 +70,15 @@ const TAB_TO_PAGE: Record<PlatformTab, 'overview' | 'centers' | 'requests' | 'fi
   platformAdvertisements: 'advertisements',
   platformRenewals: 'renewals',
 };
+
+// Suspense fallback while the lazy console chunk streams in (post-login).
+function DashboardFallback() {
+  return (
+    <div className="flex items-center justify-center py-24" dir="rtl" aria-busy="true" aria-label="جارٍ تحميل لوحة التحكم">
+      <Loader2 className="animate-spin text-slate-500" size={26} />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Password change modal (self-service; the endpoint revokes other sessions)
@@ -104,31 +115,31 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 border border-slate-200"
       >
-        <button type="button" onClick={onClose} className="absolute top-3 left-3 text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="إغلاق">
+        <button type="button" onClick={onClose} className="absolute top-3 left-3 text-slate-500 hover:text-slate-600 cursor-pointer" aria-label="إغلاق">
           <X size={18} />
         </button>
         <h3 className="font-black text-slate-900 mb-1 flex items-center gap-2">
-          <KeyRound size={18} className="text-[#257C86]" /> تغيير كلمة السر
+          <KeyRound size={18} className="text-accent-500" /> تغيير كلمة السر
         </h3>
         <p className="text-[11px] text-slate-500 mb-4">سيتم إنهاء كل الجلسات الأخرى لهذا الحساب تلقائياً.</p>
-        <label className="block text-xs font-bold text-slate-600 mb-1">كلمة السر الحالية</label>
+        <label className="block text-xs font-bold text-slate-600 mb-1" htmlFor="pwd-current">كلمة السر الحالية</label>
         <input
-          type="password" dir="ltr" autoComplete="current-password"
+          id="pwd-current" type="password" dir="ltr" autoComplete="current-password"
           value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full mb-3 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#257C86]/30"
+          className="w-full mb-3 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/30"
           required
         />
-        <label className="block text-xs font-bold text-slate-600 mb-1">كلمة السر الجديدة (8 أحرف على الأقل)</label>
+        <label className="block text-xs font-bold text-slate-600 mb-1" htmlFor="pwd-new">كلمة السر الجديدة (8 أحرف على الأقل)</label>
         <input
-          type="password" dir="ltr" autoComplete="new-password"
+          id="pwd-new" type="password" dir="ltr" autoComplete="new-password"
           value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full mb-3 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#257C86]/30"
+          className="w-full mb-3 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/30"
           required minLength={8}
         />
         {error && <div className="text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">{error}</div>}
         <button
           type="submit" disabled={busy}
-          className="w-full py-2.5 rounded-xl bg-[#257C86] hover:bg-[#1f6871] text-white font-black text-sm disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-2.5 rounded-xl bg-accent-500 hover:bg-[#1f6871] text-white font-black text-sm disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
         >
           {busy && <Loader2 size={15} className="animate-spin" />} حفظ كلمة السر
         </button>
@@ -191,7 +202,7 @@ export default function App() {
   if (isBootLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50" dir="rtl">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
           <img src={brandIcon} alt="" className="w-14 h-14 rounded-2xl shadow-lg" />
           <Loader2 className="animate-spin" size={22} />
         </div>
@@ -228,10 +239,10 @@ export default function App() {
         {/* ── Sidebar ── */}
         <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-lg:hidden">
           <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
-            <img src={brandIcon} alt="System Academy SaaS" className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-[#257C86]/20 ring-1 ring-white/40" />
+            <img src={brandIcon} alt="System Academy SaaS" className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-accent-500/20 ring-1 ring-white/40" />
             <div>
               <h1 className="font-black text-sm text-slate-900">إدارة المنصة (SaaS)</h1>
-              <span className="text-[11px] text-[#257C86] font-bold block">لوحة تحكم المنصة فقط</span>
+              <span className="text-[11px] text-accent-500 font-bold block">لوحة تحكم المنصة فقط</span>
             </div>
           </div>
 
@@ -245,7 +256,7 @@ export default function App() {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition cursor-pointer ${
                     active
-                      ? 'bg-[#257C86] text-white shadow-lg shadow-[#257C86]/25'
+                      ? 'bg-accent-500 text-white shadow-lg shadow-accent-500/25'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
@@ -258,12 +269,12 @@ export default function App() {
 
           <div className="px-4 py-4 border-t border-slate-100 space-y-2">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#257C86]/10 text-[#257C86] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-accent-500/10 text-accent-500 flex items-center justify-center">
                 <ShieldCheck size={18} />
               </div>
               <div className="min-w-0">
                 <p className="text-[12px] font-black text-slate-800 truncate">{currentUser.name || 'مدير المنصة'}</p>
-                <p className="text-[10px] text-slate-400 truncate" dir="ltr">{currentUser.email}</p>
+                <p className="text-[10px] text-slate-500 truncate" dir="ltr">{currentUser.email}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -280,7 +291,7 @@ export default function App() {
                 <LogOut size={13} /> خروج
               </button>
             </div>
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">System Academy SaaS © 2026</p>
+            <p className="text-[10px] text-slate-500 text-center font-bold pt-1">System Academy SaaS © 2026</p>
           </div>
         </aside>
 
@@ -292,7 +303,7 @@ export default function App() {
               <img src={brandIcon} alt="" className="w-9 h-9 rounded-xl object-cover" />
               <div>
                 <h1 className="font-black text-sm text-slate-950 leading-tight">إدارة المنصة</h1>
-                <span className="text-[10px] text-[#257C86] font-bold block">لوحة تحكم SaaS</span>
+                <span className="text-[10px] text-accent-500 font-bold block">لوحة تحكم SaaS</span>
               </div>
             </div>
             <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 p-2 cursor-pointer" aria-label="خروج">
@@ -307,7 +318,7 @@ export default function App() {
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border cursor-pointer ${
-                  activeTab === item.id ? 'bg-[#257C86] text-white border-[#257C86]' : 'bg-white text-slate-600 border-slate-200'
+                  activeTab === item.id ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-600 border-slate-200'
                 }`}
               >
                 {item.label}
@@ -324,15 +335,17 @@ export default function App() {
               transition={{ duration: 0.18 }}
               className="flex-1 p-4 lg:p-6"
             >
-              <PlatformAdminDashboard
-                page={TAB_TO_PAGE[activeTab]}
-                onNavigate={(p) => {
-                  const target = (Object.keys(TAB_TO_PAGE) as PlatformTab[]).find(
-                    (tab) => TAB_TO_PAGE[tab] === p
-                  );
-                  setActiveTab(target || 'platformAdmin');
-                }}
-              />
+              <Suspense fallback={<DashboardFallback />}>
+                <PlatformAdminDashboard
+                  page={TAB_TO_PAGE[activeTab]}
+                  onNavigate={(p) => {
+                    const target = (Object.keys(TAB_TO_PAGE) as PlatformTab[]).find(
+                      (tab) => TAB_TO_PAGE[tab] === p
+                    );
+                    setActiveTab(target || 'platformAdmin');
+                  }}
+                />
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

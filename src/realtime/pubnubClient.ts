@@ -16,7 +16,10 @@
  *      `fallback` so consumers resume their `useLiveSync` polling. Without
  *      keys the module stays completely silent (no fetch, no console errors).
  */
-import PubNub from 'pubnub';
+// Type-only import: the PubNub SDK (~200 kB) is a runtime DYNAMIC import
+// below (separate chunk), loaded only when keys are configured AND a grant
+// succeeds — so deployments without PubNub never download it.
+import type PubNub from 'pubnub';
 import { getSessionToken } from '../api';
 
 /** Default TTL (seconds) used when the grant response omits one. */
@@ -171,6 +174,14 @@ function clearRefreshTimer(): void {
   }
 }
 
+let PubNubCtor: typeof PubNub | null = null;
+async function loadPubNub(): Promise<typeof PubNub> {
+  if (!PubNubCtor) {
+    PubNubCtor = (await import('pubnub')).default;
+  }
+  return PubNubCtor;
+}
+
 function scheduleTokenRefresh(gen: number, ttlSeconds: number): void {
   clearRefreshTimer();
   const delayMs = Math.max(30, Math.floor(ttlSeconds / 2)) * 1000;
@@ -235,6 +246,8 @@ async function startClient(): Promise<void> {
   }
 
   try {
+    const PubNub = await loadPubNub();
+    if (gen !== generation) return; // superseded while the SDK chunk loaded
     client = new PubNub({
       subscribeKey,
       authKey: grant.token,

@@ -30,17 +30,17 @@ export interface PricedModule {
 export const BASE_KEYS = ['scolaire', 'studentTimeSheets', 'finance'] as const;
 
 export const ALL_MODULES: readonly PricedModule[] = [
-  { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
-  { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
-  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
-  { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, description: 'Planning hebdomadaire, présences, horaires.' },
-  { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, description: 'Cours 1-à-1, tarification, enseignants.' },
-  { key: 'revision', label: 'Révision Examens', icon: Award, description: 'Séances de révision, groupes, présences.' },
-  { key: 'formations', label: 'Formations', icon: Sparkles, description: 'Ateliers, stages vacances, plannings.' },
-  { key: 'cantine', label: 'Cantine & Repas', icon: Utensils, description: 'Menus hebdomadaires, abonnements, pointage.' },
-  { key: 'transport', label: 'Transport Scolaire', icon: Bus, description: 'Circuits, feuilles de route, chauffeurs.' },
-  { key: 'events', label: 'Événements & Sorties', icon: Calendar, description: 'Inscriptions, sorties scolaires.' },
-  { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, description: 'Équipe, paie, pointages, congés.' },
+  { key: 'scolaire', label: 'التعليم والدرجات', icon: GraduationCap, description: 'بطاقات التلاميذ، الدرجات، المتوسطات وبيانات الفصل.' },
+  { key: 'finance', label: 'المالية والمدفوعات', icon: DollarSign, description: 'إيصالات، تحصيلات، شيكات وإحصائيات الإيرادات.' },
+  { key: 'studentTimeSheets', label: 'سجل الدوام', icon: Clock, description: 'تسجيل يومي لدخول/خروج التلاميذ — مضمون في الباقة الأساسية.', bundled: true },
+  { key: 'etude', label: 'مراجعة مشرفة', icon: BookOpen, description: 'جداول أسبوعية، حضور، مواعيد.' },
+  { key: 'coursParticuliers', label: 'دروس خاصة', icon: Users, description: 'دروس فردية، تسعير، معلمون.' },
+  { key: 'revision', label: 'مراجعة الامتحانات', icon: Award, description: 'جلسات مراجعة، مجموعات، حضور.' },
+  { key: 'formations', label: 'دورات', icon: Sparkles, description: 'ورش، معاهد صيفية، جداول.' },
+  { key: 'cantine', label: 'مقصف & وجبات', icon: Utensils, description: 'قوائم أسبوعية، اشتراكات، حضور.' },
+  { key: 'transport', label: 'نقل مدرسي', icon: Bus, description: 'مسارات، مسارات رحلة، سائقون.' },
+  { key: 'events', label: 'مناسبات ونشاطات', icon: Calendar, description: 'تسجيل، رحلات مدرسية.' },
+  { key: 'staff', label: 'الموظفون والرواتب', icon: ShieldCheck, description: 'الطاقم، رواتب، دوام، إجازات.' },
 ];
 
 export const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));
@@ -61,9 +61,9 @@ export interface PlanTier {
 }
 
 export const PLAN_TIERS: PlanTier[] = [
-  { key: 'starter', label: 'Basic', labelAr: 'الأساسية', order: 1, hint: 'L’essentiel pour démarrer : scolarité, horaires et finance.' },
-  { key: 'growth', label: 'Growth', labelAr: 'النمو', order: 2, hint: 'Pour les centres qui grandissent : étude, cours et révision.' },
-  { key: 'pro', label: 'Pro', labelAr: 'الاحترافية', order: 3, hint: 'Tous les modules, cantine, transport et personnel inclus.' },
+  { key: 'starter', label: 'Basic', labelAr: 'الأساسية', order: 1, hint: 'الأساسيات للانطلاق: تعليم، دوام ومالية.' },
+  { key: 'growth', label: 'Growth', labelAr: 'النمو', order: 2, hint: 'للمراكز التي تنمو: مراجعة مشرفة، دروس خاصة ومراجعة امتحانات.' },
+  { key: 'pro', label: 'Pro', labelAr: 'الاحترافية', order: 3, hint: 'كل الوحدات، المقصف والنقل والطاقم مضمونة.' },
 ];
 
 /** Rang d'une offre (0 pour un essai) — sert à détecter un passage supérieur. */

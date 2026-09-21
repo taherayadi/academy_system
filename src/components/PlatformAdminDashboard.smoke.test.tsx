@@ -115,20 +115,20 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
   it('groups invoices under their center, shows the pending-cheque table, and no manual invoice creation', async () => {
     render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
 
-    await waitFor(() => expect(screen.getByText('Chèques en attente')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('شيكات قيد الانتظار')).toBeTruthy());
     expect(screen.getByText('CHQ-001')).toBeTruthy();
-    expect(screen.getAllByText(/Encaisser/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/تحصيل/).length).toBeGreaterThan(0);
 
     // Center group headers + their invoices are rendered
     await waitFor(() => expect(screen.getAllByText('Jardin Alya').length).toBeGreaterThanOrEqual(1));
     expect(screen.getAllByText('Centre Horizon').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('INV-2026-0001').length).toBeGreaterThanOrEqual(1); // cheque table + center group
     expect(screen.getAllByText('INV-2026-0002').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Chèque en attente').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('شيك قيد الانتظار').length).toBeGreaterThanOrEqual(1);
 
     // Manual invoice creation and the Tarifs Modules shortcut are gone
-    expect(screen.queryByText('Nouvelle Facture')).toBeNull();
-    expect(screen.queryByText('Tarifs Modules')).toBeNull();
+    expect(screen.queryByText('فاتورة جديدة')).toBeNull();
+    expect(screen.queryByText('التعريفات والوحدات')).toBeNull();
   });
 
   it('groups start expanded, collapse on header click, and print opens a printable window', async () => {
@@ -154,7 +154,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
       print: () => {},
     };
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
-    const printBtn = row.querySelector('button[title="Imprimer la facture"]') as HTMLElement;
+    const printBtn = row.querySelector('button[title="طباعة الفاتورة"]') as HTMLElement;
     fireEvent.click(printBtn);
     expect(openSpy).toHaveBeenCalled();
     const html = written.join('');
@@ -163,7 +163,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     // Browser header/footer (date, title, « blank », page number) suppressed + signature block.
     expect(html).toContain('@page');
     expect(html).toContain('margin: 0');
-    expect(html).toContain('Signature de la plateforme SaaS');
+    expect(html).toContain('توقيع منصة SaaS');
     openSpy.mockRestore();
   });
 
@@ -183,11 +183,11 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     };
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
     const row = screen.getAllByText('INV-2026-0002')[0].closest('tr')!;
-    fireEvent.click(row.querySelector('button[title="Imprimer la facture"]') as HTMLElement);
+    fireEvent.click(row.querySelector('button[title="طباعة الفاتورة"]') as HTMLElement);
     openSpy.mockRestore();
 
     const html = written.join('');
-    expect(html).toContain('Facture');
+    expect(html).toContain('فاتورة');
     expect(html).not.toMatch(/<script\b/i);
     expect(html).not.toMatch(/\son[a-z]+\s*=\s*["']/i);
     // The button is identified so the bundle can attach its own listener.
@@ -200,8 +200,8 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
 
     // Open the invoice dialog (« Modifier » in the grouped invoice table).
     const row = screen.getAllByText('INV-2026-0002')[0].closest('tr')!;
-    fireEvent.click(row.querySelector('button[title="Modifier"]') as HTMLElement);
-    await waitFor(() => expect(screen.getByText('Facture INV-2026-0002')).toBeTruthy());
+    fireEvent.click(row.querySelector('button[title="تعديل"]') as HTMLElement);
+    await waitFor(() => expect(screen.getByText('فاتورة INV-2026-0002')).toBeTruthy());
 
     const written: string[] = [];
     const fakeWin = {
@@ -210,7 +210,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
       print: () => {},
     };
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWin as any);
-    fireEvent.click(screen.getByRole('button', { name: 'Imprimer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'طباعة' }));
     expect(openSpy).toHaveBeenCalled();
     expect(written.join('')).toContain('INV-2026-0002');
     openSpy.mockRestore();
@@ -235,7 +235,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     await waitFor(() => expect(screen.getAllByText('Centre Été').length).toBeGreaterThanOrEqual(1));
     expect(screen.getAllByText('Centre Rentré').length).toBeGreaterThanOrEqual(1);
 
-    const monthSelect = screen.getByTitle('Filtrer par mois de période facturée') as unknown as HTMLSelectElement;
+    const monthSelect = screen.getByTitle('تصفية حسب شهر الفترة المفوترة') as unknown as HTMLSelectElement;
     expect(Array.from(monthSelect.options).map(o => o.value)).toEqual(expect.arrayContaining(['all', '2026-07', '2026-09']));
 
     fireEvent.change(monthSelect, { target: { value: '2026-09' } });
@@ -255,13 +255,13 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     render(<PlatformAdminDashboard page="finance" onNavigate={() => {}} />);
 
     // Page 1 → 10 of the 12 centres, with the pagination range.
-    await waitFor(() => expect(screen.getByText('1–10 sur 12')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1–10 من 12')).toBeTruthy());
     expect(screen.getAllByText('Centre 01').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Centre 11')).toBeNull();
     expect(screen.queryByText('Centre 12')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '2' }));
-    await waitFor(() => expect(screen.getByText('11–12 sur 12')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('11–12 من 12')).toBeTruthy());
     expect(screen.getAllByText('Centre 11').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Centre 12').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Centre 01')).toBeNull();
@@ -307,7 +307,7 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
     );
 
     // Add-the-next-year button (the year right after the latest stored one).
-    const addBtn = screen.getByRole('button', { name: new RegExp(`Ajouter l'année scolaire ${YEAR_ADDED.replace('/', '\\/')}`) });
+    const addBtn = screen.getByRole('button', { name: new RegExp(`إضافة السنة الدراسية ${YEAR_ADDED.replace('/', '\\/')}`) });
     fireEvent.click(addBtn);
 
     // Persists the copied prices (50 for scolaire from the latest year) for the new year…
@@ -325,21 +325,21 @@ describe('PlatformAdminDashboard — New center free-days card', () => {
   it('paid plans get a trial-styled free-days card (no yellow « Jours offerts » block)', async () => {
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouveau Centre/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /مركز جديد/ }));
 
     // Default plan is the trial — its card shows the trial input.
-    expect(screen.getByText('Durée de l’essai offert')).toBeTruthy();
+    expect(screen.getByText('مدة التجربة المجانية')).toBeTruthy();
 
     // Switching to Basic must show the SAME component shape for free days.
     const planSelect = Array.from(document.querySelectorAll('select'))
       .find(s => Array.from(s.options).some(o => o.value === 'trial') && Array.from(s.options).some(o => o.value === 'growth'))!;
     fireEvent.change(planSelect, { target: { value: 'basic' } });
 
-    expect(screen.getByText('Durée de l’essai avant l’abonnement')).toBeTruthy();
-    expect(screen.queryByText('Jours offerts')).toBeNull();
-    expect(screen.queryByText(/sans changer le plan/)).toBeNull();
+    expect(screen.getByText('مدة التجربة قبل الاشتراك')).toBeTruthy();
+    expect(screen.queryByText('أيام مقدمة')).toBeNull();
+    expect(screen.queryByText(/بدون تغيير الباقة/)).toBeNull();
     // The date row mirrors « Fin de l'essai » from the trial card.
-    expect(screen.getByText(/Début de l’abonnement \(0 jour\)/)).toBeTruthy();
+    expect(screen.getByText(/بداية الاشتراك \(0 يومًا\)/)).toBeTruthy();
     expect(planSelect.parentElement!.parentElement!.querySelector('#new-center-offer-days')).toBeTruthy();
   });
 });
@@ -374,16 +374,16 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /^Modifier/ }));
-    await waitFor(() => expect(screen.getByText('Nom du centre *')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^تعديل/ }));
+    await waitFor(() => expect(screen.getByText('اسم المركز *')).toBeTruthy());
     expect(screen.queryByLabelText('Plan')).toBeNull();
-    expect(screen.queryByText('Cycle de facturation')).toBeNull();
-    expect(screen.queryByText('Modules activés')).toBeNull();
+    expect(screen.queryByText('دورة الفوترة')).toBeNull();
+    expect(screen.queryByText('وحدات مفعّلة')).toBeNull();
     // The modal points to the plan manager instead.
-    expect(screen.getByText(/« Plans & factures »/)).toBeTruthy();
+    expect(screen.getByText(/«الباقات & الفواتير»/)).toBeTruthy();
 
     // Saving identity fields never sends plan fields.
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
     await waitFor(() => expect(api.updateCenterApi).toHaveBeenCalled());
     const payload = (api.updateCenterApi as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
     expect(payload.plan).toBeUndefined();
@@ -400,21 +400,21 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
     await waitFor(() => expect(screen.getByText(/INV-PEND/)).toBeTruthy());
-    expect(screen.getByText('Fenêtre non payée')).toBeTruthy();
+    expect(screen.getByText('فترة غير مدفوعة')).toBeTruthy();
 
     // Growth with priced modules (80/mois) beats the stored 75 → hausse.
-    fireEvent.click(screen.getByRole('button', { name: /Modifier le plan/ }));
+    fireEvent.click(screen.getByRole('button', { name: /تعديل الباقة/ }));
     // Growth = modules selectable, tariff computed live.
-    fireEvent.change(screen.getByTitle('Plan du centre'), { target: { value: 'growth' } });
-    expect(screen.getByText('Modules à activer')).toBeTruthy();
+    fireEvent.change(screen.getByTitle('باقة المركز'), { target: { value: 'growth' } });
+    expect(screen.getByText('وحدات للتفعيل')).toBeTruthy();
 
     // Price increase while the (unpaid) window runs → settlement panel.
-    await waitFor(() => expect(screen.getByText(/Changement en cours de période/)).toBeTruthy());
-    expect(screen.getByText(/Période pas encore payée/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/تغيير خلال الفترة الجارية/)).toBeTruthy());
+    expect(screen.getByText(/الفترة غير مدفوعة بعد/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+    fireEvent.click(screen.getByRole('button', { name: /حفظ الباقة/ }));
     await waitFor(() => expect(api.updateCenterApi).toHaveBeenCalledWith('c1', expect.objectContaining({
       plan: 'growth',
       autoCalculatePrice: true,
@@ -445,44 +445,44 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     });
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
 
-    await waitFor(() => expect(screen.getByText('Fenêtre payée')).toBeTruthy());
-    expect(screen.queryByText('Sans facture')).toBeNull();
-    expect(screen.getByText(/INV-FUT.* payée · 30\.00 TND/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('فترة مدفوعة')).toBeTruthy());
+    expect(screen.queryByText('بدون فاتورة')).toBeNull();
+    expect(screen.getByText(/INV-FUT.* مدفوعة · 30\.00 دينار/)).toBeTruthy();
   });
 
   it('plan manager: add trial period submits the days and lands back on the view', async () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /حذف الباقة/ })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /Ajouter une période d.essai/ }));
-    fireEvent.change(screen.getByLabelText('Nombre de jours'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: /إضافة فترة تجريبية/ }));
+    fireEvent.change(screen.getByLabelText('عدد الأيام'), { target: { value: '7' } });
     // Window started 10 days ago → the offer is appended at the END.
-    expect(screen.getByText(/ajoutés à la FIN/)).toBeTruthy();
-    expect(screen.getByText(/nouvelle échéance le/)).toBeTruthy();
+    expect(screen.getByText(/تُضاف الأيام المقدمة/)).toBeTruthy();
+    expect(screen.getByText(/تاريخ الاستحقاق الجديد/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Ajouter l.essai \(7 j\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /إضافة التجربة \(7 يوم\)/ }));
     await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith({
       action: 'add-trial', centerId: 'c1', days: 7,
     }));
     // After saving, the form closes and the manager reloads.
     await waitFor(() => expect(screen.queryByLabelText('Nombre de jours')).toBeNull());
-    expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /حذف الباقة/ })).toBeTruthy();
   });
 
   it('plan manager: remove-plan asks for confirmation, expires the center and closes the dialog', async () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Supprimer le plan/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /حذف الباقة/ })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /Supprimer le plan/ }));
+    fireEvent.click(screen.getByRole('button', { name: /حذف الباقة/ }));
     // Custom confirmation dialog first.
-    expect(screen.getByText('Supprimer ce plan ?')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Oui, supprimer le plan' }));
+    expect(screen.getByText('حذف هذه الباقة؟')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'نعم، احذف الباقة' }));
 
     await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith({ action: 'remove-plan', centerId: 'c1' }));
     // After confirming, the whole Plans & factures dialog dismisses itself.
@@ -501,13 +501,13 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     });
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
 
-    await waitFor(() => expect(screen.getByText(/Abonnement expiré le/)).toBeTruthy());
-    expect(screen.queryByText('Sans facture')).toBeNull();
+    await waitFor(() => expect(screen.getByText(/انتهى الاشتراك/)).toBeTruthy());
+    expect(screen.queryByText('بدون فاتورة')).toBeNull();
     // No trial offer without a live subscription; relaunch first.
-    expect(screen.queryByRole('button', { name: /Ajouter une période d.essai/ })).toBeNull();
-    const del = screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement;
+    expect(screen.queryByRole('button', { name: /إضافة فترة تجريبية/ })).toBeNull();
+    const del = screen.getByRole('button', { name: /حذف الباقة/ }) as unknown as HTMLButtonElement;
     expect(del.disabled).toBe(true);
   });
 
@@ -517,7 +517,7 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
     // The Modules shortcut is gone — and there is exactly ONE plan button.
     expect(screen.queryByRole('button', { name: 'Modules' })).toBeNull();
-    const planBtns = screen.getAllByRole('button', { name: /Plans & factures/ });
+    const planBtns = screen.getAllByRole('button', { name: /الباقات & الفواتير/ });
     expect(planBtns).toHaveLength(1);
 
     // It opens the plan manager (same functionality as before, new look).
@@ -541,20 +541,20 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     });
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
 
     // The removal keeps the old future end date — 'expired' must win.
-    await waitFor(() => expect(screen.getByText(/Abonnement supprimé le/)).toBeTruthy());
-    expect(screen.queryByText('Fenêtre non payée')).toBeNull();
-    expect(screen.queryByText('Fenêtre payée')).toBeNull();
-    expect(screen.queryByRole('button', { name: /Ajouter une période d.essai/ })).toBeNull();
-    expect((screen.getByRole('button', { name: /Supprimer le plan/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: /Programmer un plan/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(screen.getByText(/حُذف الاشتراك/)).toBeTruthy());
+    expect(screen.queryByText('فترة غير مدفوعة')).toBeNull();
+    expect(screen.queryByText('فترة مدفوعة')).toBeNull();
+    expect(screen.queryByRole('button', { name: /إضافة فترة تجريبية/ })).toBeNull();
+    expect((screen.getByRole('button', { name: /حذف الباقة/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /جدولة باقة/ }) as unknown as HTMLButtonElement).disabled).toBe(true);
 
     // Relaunching must go through set-plan (which re-activates), never the
     // mid-period engine (which would leave the center expired).
-    fireEvent.click(screen.getByRole('button', { name: /Relancer un abonnement/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Enregistrer le plan/ }));
+    fireEvent.click(screen.getByRole('button', { name: /استئناف اشتراك/ }));
+    fireEvent.click(screen.getByRole('button', { name: /حفظ الباقة/ }));
     await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'set-plan', centerId: 'c1' })
     ));
@@ -572,11 +572,11 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     });
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Plans & factures/ }));
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
 
-    await waitFor(() => expect(screen.getByText(/Historique des plans \(2\)/)).toBeTruthy());
-    expect(screen.getByText('Abonnement annulé')).toBeTruthy();
-    expect(screen.getByText('Plan appliqué')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/سجل الباقات \(2\)/)).toBeTruthy());
+    expect(screen.getByText('إلغاء الاشتراك')).toBeTruthy();
+    expect(screen.getByText('تطبيق الباقة')).toBeTruthy();
     expect(screen.getByText(/INV-2026-AB12/)).toBeTruthy();
   });
 });
@@ -598,7 +598,7 @@ describe('PlatformAdminDashboard — Center cards', () => {
     render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
     await waitFor(() => expect(screen.getByText('Centre Beta')).toBeTruthy());
 
-    expect(screen.queryByRole('button', { name: /jours d.essai/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /أيام التجربة/ })).toBeNull();
     expect(screen.queryByText('+14')).toBeNull();
   });
 });
@@ -625,7 +625,7 @@ describe('PlatformAdminDashboard — Demo requests tab', () => {
     (api.fetchDemoRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue([reqNew, reqConverted, reqContacted]);
   });
 
-  it('starts on the New filter, has no "Tous" and no "Contacté" tab (legacy contacted stays visible under New)', async () => {
+  it('starts on the New filter, has no "Tous" and no "تم الاتصال" tab (legacy contacted stays visible under New)', async () => {
     render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('alpha@test.tn')).toBeTruthy());
@@ -633,21 +633,21 @@ describe('PlatformAdminDashboard — Demo requests tab', () => {
     // Converted request is hidden until its status tab is selected.
     expect(screen.queryByText('zeta@test.tn')).toBeNull();
     // The only « Tous » left on the page is the establishment-type filter.
-    expect(screen.getAllByRole('button', { name: 'Tous' })).toHaveLength(1);
-    // The « Contacté » filter no longer exists at all.
-    expect(screen.queryByRole('button', { name: 'Contacté' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'الكل' })).toHaveLength(1);
+    // The « تم الاتصال » filter no longer exists at all.
+    expect(screen.queryByRole('button', { name: 'تم الاتصال' })).toBeNull();
   });
 
   it('converted requests can only be archived — never converted again', async () => {
     render(<PlatformAdminDashboard page="requests" onNavigate={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Converti' }));
+    fireEvent.click(screen.getByRole('button', { name: 'محوَّل' }));
 
     await waitFor(() => expect(screen.getByText('zeta@test.tn')).toBeTruthy());
     expect(screen.queryByText('Convertir en Centre')).toBeNull();
-    expect(screen.getByText('Déjà converti')).toBeTruthy();
+    expect(screen.getByText('تم تحويله')).toBeTruthy();
 
     // The locked select offers exactly two values: the current status and Archivé.
-    const sel = screen.getByTitle('Demande convertie : seule l’archivation est possible.') as unknown as HTMLSelectElement;
+    const sel = screen.getByTitle('تم تحويل الطلب: الأرشيف فقط ممكن.') as unknown as HTMLSelectElement;
     expect(Array.from(sel.options).map(o => o.value)).toEqual(['converted', 'archived']);
 
     fireEvent.change(sel, { target: { value: 'archived' } });
@@ -674,25 +674,25 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
   it('opens without crashing — PAGE_META has the advertisements entry (was: undefined.title)', async () => {
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
     await waitFor(() => expect(api.fetchAdvertisementsApi).toHaveBeenCalled());
-    expect(screen.getByText('Publicité')).toBeTruthy();
-    expect(screen.getByText('Aucune publicité')).toBeTruthy();
-    expect(screen.getByText('Gestion des publicités')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Nouvelle publicité/ })).toBeTruthy();
+    expect(screen.getByText('الإعلانات')).toBeTruthy();
+    expect(screen.getByText('لا توجد إعلانات')).toBeTruthy();
+    expect(screen.getByText('إدارة الإعلانات')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /إعلان جديد/ })).toBeTruthy();
   });
 
   it('« إعلان جديد » opens the form; submitting creates the advertisement', async () => {
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
-    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    await waitFor(() => expect(screen.getByText('إنشاء إعلان')).toBeTruthy());
 
     // Landing page: the center picker is not even shown.
-    expect(screen.queryByText(/Centres ciblés/)).toBeNull();
+    expect(screen.queryByText(/المراكز المستهدفة/)).toBeNull();
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Promo rentrée' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/a.jpg' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'إضافة' }));
+    fireEvent.click(screen.getByRole('button', { name: /إنشاء الإعلان/ }));
 
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Promo rentrée',
@@ -717,26 +717,26 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Rentrée')).toBeTruthy());
-    expect(screen.getAllByText('En ligne')).toHaveLength(2); // pastille du filtre + badge de la carte
-    expect(screen.getByText('Expirée')).toBeTruthy();        // statut du second
-    expect(screen.getByText('Page d’accueil')).toBeTruthy(); // jamais la clé brute
+    expect(screen.getAllByText('متصل')).toHaveLength(2); // pastille du filtre + badge de la carte
+    expect(screen.getAllByText('منتهية').length).toBeGreaterThanOrEqual(1);        // statut du second
+    expect(screen.getByText('الصفحة الرئيسية')).toBeTruthy(); // jamais la clé brute
     expect(screen.queryByText('landing_page')).toBeNull();
-    expect(screen.getByText('Tableau de bord des centres')).toBeTruthy();
+    expect(screen.getByText('لوحة تحكم المراكز')).toBeTruthy();
 
     // Filtre : une seule carte restante.
-    fireEvent.click(screen.getByRole('button', { name: /Expirées/ }));
+    fireEvent.click(screen.getByRole('button', { name: /منتهية/ }));
     await waitFor(() => expect(screen.queryByText('Rentrée')).toBeNull());
     expect(screen.getByText('Noël')).toBeTruthy();
     // Et le compteur « Toutes » reflète la liste complète.
-    expect(screen.getByRole('button', { name: /Toutes \(2\)/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /الكل \(2\)/ })).toBeTruthy();
   });
 
   it('modal: centers required for « Tableau de bord », optional for « both »+custom, never for landing', async () => {
     (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
-    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    await waitFor(() => expect(screen.getByText('إنشاء إعلان')).toBeTruthy());
 
     const loc = () => document.getElementById('ad-location') as unknown as HTMLSelectElement;
     expect(Array.from(loc().options).map(o => o.value)).toEqual(
@@ -745,17 +745,17 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
 
     // → tableau de bord : le sélecteur apparaît et la validation exige un centre.
     fireEvent.change(loc(), { target: { value: 'center_admin' } });
-    expect(screen.getByText(/Centres ciblés \* \(0\)/)).toBeTruthy();
+    expect(screen.getByText(/المراكز المستهدفة \* \(0\)/)).toBeTruthy();
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'X' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/x.jpg' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'إضافة' }));
+    fireEvent.click(screen.getByRole('button', { name: /إنشاء الإعلان/ }));
     expect(api.createAdvertisementApi).not.toHaveBeenCalled();
 
     // un centre coché → OK, et « both » garde le sélecteur
     fireEvent.click(screen.getByRole('checkbox', { name: /Centre Alpha/ }));
     fireEvent.change(loc(), { target: { value: 'both' } });
-    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    fireEvent.click(screen.getByRole('button', { name: /إنشاء الإعلان/ }));
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
       location: 'both',
       centerIds: ['c1'],
@@ -766,8 +766,8 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
-    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    await waitFor(() => expect(screen.getByText('إنشاء إعلان')).toBeTruthy());
 
     // Dates never render RTL.
     const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
@@ -784,8 +784,8 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Soldes' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/s.jpg' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'إضافة' }));
+    fireEvent.click(screen.getByRole('button', { name: /إنشاء الإعلان/ }));
 
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
       positions: ['rectangle', 'interstitial'],
@@ -798,8 +798,8 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter, betaCenter, gammaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouvelle publicité/ }));
-    await waitFor(() => expect(screen.getByText('Nouvelle annonce')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /إعلان جديد/ }));
+    await waitFor(() => expect(screen.getByText('إنشاء إعلان')).toBeTruthy());
 
     const loc = () => document.getElementById('ad-location') as unknown as HTMLSelectElement;
     const search = () => document.getElementById('ad-center-search') as HTMLInputElement;
@@ -815,11 +815,11 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Centre Alpha/ })).toBeNull());
     expect(screen.queryByRole('checkbox', { name: /Institut Gamma/ })).toBeNull();
     expect(screen.getByRole('checkbox', { name: /École Beta/ })).toBeTruthy();
-    expect(screen.getByText(/1 centre sur 3/)).toBeTruthy();
+    expect(screen.getByText(/1 مركز من 3/)).toBeTruthy();
 
     // Aucun résultat → message explicite plutôt qu'une liste vide.
     fireEvent.change(search(), { target: { value: 'zzz' } });
-    await waitFor(() => expect(screen.getByText(/Aucun centre ne correspond/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/لا يوجد مركز يطابق/)).toBeTruthy());
 
     // Le filtre se remet à vide et la sélection filtrée part bien à l'API.
     fireEvent.change(search(), { target: { value: 'ecole' } });
@@ -828,8 +828,8 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
 
     fireEvent.change(document.getElementById('ad-title') as HTMLInputElement, { target: { value: 'Campagne Beta' } });
     fireEvent.change(document.getElementById('ad-image-url') as HTMLInputElement, { target: { value: 'https://cdn.test/b.jpg' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    fireEvent.click(screen.getByRole('button', { name: /Créer l.annonce/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'إضافة' }));
+    fireEvent.click(screen.getByRole('button', { name: /إنشاء الإعلان/ }));
     await waitFor(() => expect(api.createAdvertisementApi).toHaveBeenCalledWith(expect.objectContaining({
       centerIds: ['c2'],
     })));
@@ -844,10 +844,10 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     (api.fetchAdvertisementsApi as ReturnType<typeof vi.fn>).mockResolvedValue([ad]);
     (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValue([alphaCenter]);
     render(<PlatformAdminDashboard page="advertisements" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
-    await waitFor(() => expect(screen.getByText('Modifier l’annonce')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: 'تعديل' }));
+    await waitFor(() => expect(screen.getByText('تعديل الإعلان')).toBeTruthy());
     expect((document.getElementById('ad-title') as HTMLInputElement).value).toBe('Cantine');
-    fireEvent.click(screen.getByRole('button', { name: /Enregistrer les modifications/ }));
+    fireEvent.click(screen.getByRole('button', { name: /حفظ التعديلات/ }));
     await waitFor(() => expect(api.updateAdvertisementApi).toHaveBeenCalledWith('ADV_9', expect.objectContaining({
       title: 'Cantine', location: 'center_admin', isPublished: true,
     })));
@@ -883,24 +883,24 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    expect(screen.getAllByText('En attente').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('قيد الانتظار').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/On passe à Growth/)).toBeTruthy();
     // « Essai · Basic → Growth »
-    expect(screen.getByText(/Essai/)).toBeTruthy();
+    expect(screen.getByText(/تجربة/)).toBeTruthy();
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Growth')).toBeTruthy();
 
     // Bouton habillé aux couleurs de l'application (#257C86), pas vert/rouge.
-    const review = screen.getByRole('button', { name: /Examiner et appliquer/ });
-    expect(review.className).toContain('#257C86');
+    const review = screen.getByRole('button', { name: /مراجعة وتطبيق/ });
+    expect(review.className).toContain('accent-500');
     expect(review.className).not.toMatch(/emerald/);
 
     fireEvent.click(review);
 
     // La modale affiche la demande en lecture seule : plan Growth / mensuel, non modifiables.
-    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
     await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
-    expect(screen.getByTestId('review-apply-cycle').textContent).toBe('Mensuel');
+    expect(screen.getByTestId('review-apply-cycle').textContent).toBe('شهري');
     expect(screen.queryByTitle('Plan du centre')).toBeNull();
   });
 
@@ -921,20 +921,20 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     expect(screen.getByText('Centre Beta')).toBeTruthy();
 
     // Filtre par type : seul le changement d'offre reste visible.
-    fireEvent.click(screen.getByRole('button', { name: 'Changement d’offre' }));
+    fireEvent.click(screen.getByRole('button', { name: 'تغيير الباقة' }));
     await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
     expect(screen.getByText('Centre Beta')).toBeTruthy();
 
     // Retour à Tous (type), puis filtre par statut : seule la demande acceptée reste.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tous' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'الكل' })[0]);
     await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Acceptée' }));
+    fireEvent.click(screen.getByRole('button', { name: 'مقبولة' }));
     await waitFor(() => expect(screen.queryByText('Centre Alpha')).toBeNull());
     expect(screen.getByText('Centre Beta')).toBeTruthy();
 
     // Combinaison sans résultat : message dédié, pas de carte.
-    fireEvent.click(screen.getByRole('button', { name: 'Renouvellement' }));
-    await waitFor(() => expect(screen.getByText('Aucun résultat pour ces filtres')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'تجديد' }));
+    await waitFor(() => expect(screen.getByText('لا توجد نتائج لهذه الفلاتر')).toBeTruthy());
     expect(screen.queryByText('Centre Beta')).toBeNull();
   });
 
@@ -943,11 +943,11 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
       requests: [pendingRequest], history: [],
     });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
-    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /مراجعة وتطبيق/ }));
+    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
 
     // Centre en essai → activation immédiate via set-plan (moteur Plans & factures).
-    fireEvent.click(await screen.findByRole('button', { name: /Accepter et appliquer/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /قبول وتطبيق/ }));
 
     await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith(expect.objectContaining({
       action: 'set-plan', centerId: 'c1', plan: 'growth', billingCycle: 'monthly',
@@ -961,10 +961,10 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
       requests: [pendingRequest], history: [],
     });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Examiner et appliquer/ }));
-    await waitFor(() => expect(screen.getByText('Examiner et appliquer')).toBeTruthy());
+    fireEvent.click(await screen.findByRole('button', { name: /مراجعة وتطبيق/ }));
+    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
 
-    fireEvent.click(await screen.findByRole('button', { name: /^Refuser$/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^رفض$/ }));
 
     await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'rejected', ''));
     expect(api.centerPlanActionApi).not.toHaveBeenCalled();
@@ -974,6 +974,6 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
   it('shows an empty state when no center has asked yet', async () => {
     (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({ requests: [], history: [] });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
-    await waitFor(() => expect(screen.getByText('Aucune demande')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('لا توجد طلبات')).toBeTruthy());
   });
 });
