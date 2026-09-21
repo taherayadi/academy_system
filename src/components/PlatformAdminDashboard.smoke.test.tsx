@@ -1007,3 +1007,41 @@ describe('overview work queue', () => {
     expect(nav).toHaveBeenCalledWith('requests');
   });
 });
+
+describe('operator accelerators', () => {
+  const mkPending = (id: string, name: string) => ({
+    id, centerId: id, centerName: name, kind: 'renewal',
+    currentPlan: 'basic', currentStatus: 'active', currentModules: ['scolaire'], requestedPlan: 'basic',
+    requestedModules: ['scolaire'], billingCycle: 'monthly',
+    amount: 100, status: 'pending', effectiveAt: Date.now(), note: '',
+    decisionNote: '', decidedBy: '', decidedAt: null,
+    createdAt: Date.now(), updatedAt: Date.now(),
+  });
+
+  it('bulk approve: select pending renewals, confirm once, decide each', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [mkPending('r1', 'Alpha'), mkPending('r2', 'Beta')], history: [],
+    });
+    (api.decideRenewalRequestApi as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true });
+    render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Alpha')).toBeTruthy());
+    fireEvent.click(await screen.findByLabelText('اختيار طلب Alpha'));
+    fireEvent.click(await screen.findByLabelText('اختيار طلب Beta'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'قبول المحدد' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'قبول وتطبيق' }));
+
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledTimes(2));
+    expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved');
+    expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r2', 'approved');
+  });
+
+  it('the / key focuses the console search outside of inputs', async () => {
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText('البحث عن مركز')).toBeTruthy());
+
+    fireEvent.keyDown(window, { key: '/' });
+    expect(document.activeElement).toBe(screen.getByLabelText('البحث عن مركز'));
+  });
+});

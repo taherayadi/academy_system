@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, fetchRenewalRequestsApi } from '../../api';
+import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, fetchRenewalRequestsApi, decideRenewalRequestApi } from '../../api';
 import { CenterTenant, DemoRequest, PlatformAdvertisement, RenewalRequest } from '../../types';
 import { openInvoicePrintWindow } from '../../utils/invoicePrint';
 import { useToast } from '../Toast';
@@ -128,6 +128,24 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     await loadRenewals();
     load();
   }, [loadRenewals, load]);
+  /** Bulk approve/reject of renewal requests — one confirmation, one toast. */
+  const bulkDecideRenewals = useCallback(async (ids: string[], decision: 'approved' | 'rejected') => {
+    let done = 0;
+    for (const id of ids) {
+      try {
+        await decideRenewalRequestApi(id, decision);
+        done++;
+      } catch { /* counted as failure; reported in the summary toast */ }
+    }
+    if (done === ids.length) {
+      toast.success(decision === 'approved'
+        ? `تم قبول ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')} وتطبيقه.`
+        : `تم رفض ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')}.`);
+    } else {
+      toast.error(`عولج ${done} من ${ids.length} — أعد المحاولة للبقية.`);
+    }
+    await onRenewalDecided();
+  }, [onRenewalDecided, toast]);
   useEffect(() => { load(); }, [load]);
   // ── Temps réel (PubNub) ──────────────────────────────────────────────────
   // Comble le manque de synchro live du tableau de bord plateforme : un
@@ -485,6 +503,7 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     onNavigate,
     lastSync,
     syncFailed,
+    bulkDecideRenewals,
     toast,
     centers,
     setCenters,

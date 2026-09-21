@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Plus, RefreshCw, Search } from 'lucide-react';
 import { deleteAdvertisementApi } from '../api';
@@ -23,6 +24,18 @@ import type { DashboardApi } from './dashboard/usePlatformDashboard';
 
 export default function PlatformAdminDashboard({ page = 'overview', onNavigate }: PlatformAdminDashboardProps) {
   const d: DashboardApi = usePlatformDashboard({ page, onNavigate });
+  const searchRef = useRef<HTMLInputElement>(null);
+  // '/' focuses the console search (accelerator for the all-day operator)
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (searchRef.current) { e.preventDefault(); searchRef.current.focus(); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
   const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd } = d;
   return (
     <div className="relative space-y-6" dir="rtl">
@@ -47,6 +60,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             <div className="relative">
               <Search aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <input
+                ref={searchRef}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 aria-label={page === 'centers' ? 'البحث عن مركز' : 'البحث عن طلب'}
