@@ -66,12 +66,12 @@ export function RevenueChart({ monthlyData, loading, collectedThisYear }: Revenu
             <div aria-hidden="true" className="flex items-end justify-between gap-3 h-44">
               {monthlyData.map((m, i) => (
                 <div key={m.key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                  <span className="text-[10px] font-black text-slate-500">{m.total > 0 ? m.total.toFixed(0) : ''}</span>
+                  <span className="text-[11px] font-black text-slate-500">{m.total > 0 ? m.total.toFixed(0) : ''}</span>
                   <motion.div
                     animate={{ height: `${Math.max(4, (m.total / maxRevenue) * 100)}%` }}
                     className={`w-full rounded-xl ${i === monthlyData.length - 1 ? 'bg-accent-500 shadow-sm shadow-accent-500/20' : 'bg-accent-500/15'}`}
                   />
-                  <span className="text-[10px] font-bold text-slate-500 capitalize">{m.label}</span>
+                  <span className="text-[11px] font-bold text-slate-500 capitalize">{m.label}</span>
                 </div>
               ))}
             </div>

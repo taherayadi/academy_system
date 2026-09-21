@@ -274,7 +274,7 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <p className="text-[12px] font-black text-slate-800 truncate">{currentUser.name || 'مدير المنصة'}</p>
-                <p className="text-[10px] text-slate-500 truncate" dir="ltr">{currentUser.email}</p>
+                <p className="text-[11px] text-slate-500 truncate" dir="ltr">{currentUser.email}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -291,7 +291,7 @@ export default function App() {
                 <LogOut size={13} /> خروج
               </button>
             </div>
-            <p className="text-[10px] text-slate-500 text-center font-bold pt-1">System Academy SaaS © 2026</p>
+            <p className="text-[11px] text-slate-500 text-center font-bold pt-1">System Academy SaaS © 2026</p>
           </div>
         </aside>
 
@@ -303,7 +303,7 @@ export default function App() {
               <img src={brandIcon} alt="" className="w-9 h-9 rounded-xl object-cover" />
               <div>
                 <h1 className="font-black text-sm text-slate-950 leading-tight">إدارة المنصة</h1>
-                <span className="text-[10px] text-accent-500 font-bold block">لوحة تحكم SaaS</span>
+                <span className="text-[11px] text-accent-500 font-bold block">لوحة تحكم SaaS</span>
               </div>
             </div>
             <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 p-2 min-h-11 min-w-11 inline-flex items-center justify-center cursor-pointer" aria-label="خروج">

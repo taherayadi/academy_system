@@ -786,13 +786,13 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 <span key={key} className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-accent-500 text-white shadow-sm shadow-accent-500/25 cursor-default">
                   <Lock aria-hidden="true" className="h-4 w-4" />
                   {MODULE_LABEL(key)}
-                  <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
+                  <span className="text-[11px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Base</span>
                 </span>
               ))}
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-accent-500 text-white shadow-sm shadow-accent-500/25 cursor-default">
                 <Lock aria-hidden="true" className="h-4 w-4" />
                 {MODULE_LABEL(BUNDLED_MODULE_KEY)}
-                <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
+                <span className="text-[11px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
               </span>
             </div>
 
@@ -950,7 +950,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
 
           {chequeMode && (
             <div className="rounded-2xl border border-accent-500/20 bg-accent-500/5 p-3.5 space-y-3">
-              <p className="text-[10px] font-bold text-accent-700 leading-relaxed">
+              <p className="text-[11px] font-bold text-accent-700 leading-relaxed">
                 شيك مستلم: اترك الحالة «قيد الانتظار» — تظهر الفاتورة في «شيكات قيد الانتظار» و
                 لا <span className="underline">تُحتسب ضمن الإيرادات</span> حتى تتحصيلها
                 (زر «تحصيل»، الذي يجعل الفاتورة «مدفوعة»).
@@ -1651,7 +1651,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
     <div className="space-y-3">
       <div className="grid sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-plan">الباقة</label>
+          <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-plan">الباقة</label>
           <select id="pm-plan"
             value={draft.plan}
             onChange={e => handleDraftPlanChange(e.target.value)}
@@ -1664,7 +1664,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
           </select>
         </div>
         <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-cycle">الدورة</label>
+          <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-cycle">الدورة</label>
           <select id="pm-cycle"
             value={draft.billingCycle}
             onChange={e => setDraft(d => ({ ...d, billingCycle: e.target.value as 'monthly' | 'annual' }))}
@@ -1676,13 +1676,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         </div>
         {draft.plan === 'custom' ? (
           <div>
-            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-price">التعرفة الشهرية (دينار)</label>
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-price">التعرفة الشهرية (دينار)</label>
             <input id="pm-price" type="number" min="0" step="0.01" value={draft.monthlyPrice}
               onChange={e => setDraft(d => ({ ...d, monthlyPrice: e.target.value }))} className={fieldCls} />
           </div>
         ) : (
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-            <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">التعرفة {draft.billingCycle === 'annual' ? 'السنوية' : 'الشهرية'} المحسوبة</span>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">التعرفة {draft.billingCycle === 'annual' ? 'السنوية' : 'الشهرية'} المحسوبة</span>
             <span className="text-sm font-black text-accent-500">
               {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'دينار/سنة' : 'دينار/شهر'}
             </span>
@@ -1693,13 +1693,13 @@ function PlanManagerModal({ center, onClose, onSaved }: {
       {/* Modules — sélectionnables pour Growth (Pro = tout, Basic = base) */}
       {draft.plan === 'growth' && (
         <div>
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">وحدات للتفعيل</p>
+          <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">وحدات للتفعيل</p>
           <div className="flex flex-wrap gap-1.5">
             {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(module => {
               const selected = enabledModules.includes(module.key);
               return (
                 <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}
-                  className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40'}`}>
+                  className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40'}`}>
                   {selected && <Check className="h-4 w-4" aria-hidden="true" />} {module.label}
                 </button>
               );
@@ -1708,12 +1708,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         </div>
       )}
       {draft.plan === 'pro' && (
-        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+        <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
           Pro: تُفعَّل كل الوحدات تلقائيًا.
         </p>
       )}
       {draft.plan === 'basic' && (
-        <p className="text-[10px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+        <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
           Basic : Scolaire + Finance (+ Jd. Horaires offert).
         </p>
       )}
@@ -1752,16 +1752,16 @@ function PlanManagerModal({ center, onClose, onSaved }: {
             {/* ── Abonnement en cours ── */}
             <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">
+                <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em]">
                   {isTrial ? 'فترة تجريبية' : 'اشتراك جارٍ'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ms-auto text-[11px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'فترة مدفوعة' : pendingInvoice ? 'فترة غير مدفوعة' : 'بدون فاتورة'}
                   </span>
                 )}
                 {expiredState && (
-                  <span className="ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
+                  <span className="ms-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
                 )}
               </div>
               {isTrial ? (
@@ -1832,7 +1832,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   )}
                 </div>
                 {hasLiveWindow && windowPaidInvoice && (
-                  <p className="text-[10px] font-semibold text-slate-500 -mt-2">
+                  <p className="text-[11px] font-semibold text-slate-500 -mt-2">
                     الفترة مدفوعة مسبقًا: لن تتغير أي فاتورة مدفوعة — الأيام المسددة تبقى محفوظة والفرق إن وُجد يُسوَّأ بالتناسب أو يُبرمج.
                   </p>
                 )}
@@ -1901,34 +1901,34 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
                             className={`text-start rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">تطبيق الآن</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
+                            <div className="text-[11px] font-black text-slate-800">تطبيق الآن</div>
+                            <div className="text-[11px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
                             className={`text-start rounded-xl border px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
+                            <div className="text-[11px] font-black text-slate-800">Programmer pour {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
+                            <div className="text-[11px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
                         </div>
                         {effectiveApplyChoice === 'settle' && (
                           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5">
-                            <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
+                            <p className="text-[11px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
                                 className={`text-start rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
-                                <div className="text-[10px] font-black text-accent-700">الفترة مدفوعة</div>
+                                <div className="text-[11px] font-black text-accent-700">الفترة مدفوعة</div>
                                 <div className="text-sm font-black text-accent-700">+ {formatTnd(decision.paidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
+                                <div className="text-[11px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
                                 className={`text-start rounded-xl border px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
-                                <div className="text-[10px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
+                                <div className="text-[11px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
+                                <div className="text-[11px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
                               </button>
                             </div>
                             {!windowPaidInvoice && paymentState !== 'unpaid' && (
-                              <p className="text-[9px] font-semibold text-slate-500 mt-1.5">
+                              <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
                                 مكتشف: لا توجد فاتورة مدفوعة تغطي الفترة — الخيار «غير مدفوعة بعد» يناسب حالتك.
                               </p>
                             )}
@@ -1936,7 +1936,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                         )}
                       </>
                     ) : (
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-relaxed">
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[11px] font-semibold text-amber-800 leading-relaxed">
                         الفترة الحالية مدفوعة مسبقًا بالتعرفة الحالية: خفض الباقة لا يمكن تعويضه نقدًا — سيُطبَّق في نهاية الفترة ({hasLiveWindow ? fmtDate(liveEnd) : 'التجديد القادم'})، دون تعويض ودون أيام تضيع.
                       </div>
                     )}
@@ -1944,7 +1944,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 )}
 
                 {mode === 'edit' && !midPeriod && !isTrial && hasLiveWindow && (
-                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-slate-500 leading-relaxed">
                     {windowPaidInvoice
                       ? 'الفاتورة المدفوعة للفترة الحالية لن تتغير.'
                       : pendingInvoice
@@ -1953,12 +1953,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   </p>
                 )}
                 {mode === 'edit' && (isTrial || !hasLiveWindow) && (
-                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-slate-500 leading-relaxed">
                     ستُنشأ فاتورة جديدة «قيد الانتظار» للفترة الأولى — علّمها كمدفوعة في SaaS → المالية عندما يسدّد العميل.
                   </p>
                 )}
                 {mode === 'schedule' && (
-                  <p className="text-[10px] font-semibold text-amber-800 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-amber-800 leading-relaxed">
                     تبقى الباقة الحالية سارية حتى {hasLiveWindow ? fmtDate(liveEnd) : 'التجديد القادم'}، ثم التحويل تلقائي (فاتورة «قيد الانتظار» للفترة الجديدة).
                   </p>
                 )}
@@ -1976,7 +1976,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Plans programmés ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+              <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
                 باقات مجدولة ({view.schedules.length})
               </p>
               {view.schedules.length === 0 ? (
@@ -1987,11 +1987,11 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                     <div key={s.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
                       <CalendarClock className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden="true" />
                       <span className="text-xs font-black text-slate-800">{PLAN_LABEL[s.plan === 'starter' ? 'basic' : s.plan] || s.plan}</span>
-                      <span className="text-[10px] font-bold text-slate-500">
+                      <span className="text-[11px] font-bold text-slate-500">
                         {s.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                         {s.monthlyPrice ? ` · ${Number(s.monthlyPrice).toFixed(2)} TND` : ''}
                       </span>
-                      <span className="ms-auto text-[10px] font-bold text-slate-500">
+                      <span className="ms-auto text-[11px] font-bold text-slate-500">
                         {s.applyAt ? `في ${fmtDate(s.applyAt)}` : 'عند التجديد القادم'}
                       </span>
                       <button onClick={() => runAction({ action: 'remove-schedule', centerId: center.id, scheduleId: s.id }, 'تم حذف الباقة المجدولة')}
@@ -2007,7 +2007,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Historique des plans (audit trail, migration 0029) ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+              <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
                 سجل الباقات ({(view.history || []).length})
               </p>
               {(view.history || []).length === 0 ? (
@@ -2016,7 +2016,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
-                      <tr className="bg-slate-50 text-start text-[9px] font-black uppercase tracking-wider text-slate-500">
+                      <tr className="bg-slate-50 text-start text-[11px] font-black uppercase tracking-wider text-slate-500">
                         <th className="px-3 py-2">Date</th>
                         <th className="px-3 py-2">Action</th>
                         <th className="px-3 py-2">التفاصيل</th>
@@ -2028,14 +2028,14 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                         const meta = PLAN_HISTORY_LABEL[h.action] || { text: h.action, tone: 'neutral' as StatusTone };
                         return (
                           <tr key={h.id} className="border-t border-slate-100 align-top">
-                            <td className="px-3 py-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
+                            <td className="px-3 py-2 text-[11px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
                             <td className="px-3 py-2">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${toneClasses(meta.tone)}`}>{meta.text}</span>
+                              <span className={`text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${toneClasses(meta.tone)}`}>{meta.text}</span>
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
+                            <td className="px-3 py-2 text-[11px] font-semibold text-slate-600">
                               {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-end">
+                            <td className="px-3 py-2 text-[11px] font-black text-slate-700 whitespace-nowrap text-end">
                               {h.amount ? formatTnd(h.amount) : '—'}
                             </td>
                           </tr>
@@ -2268,7 +2268,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
           <div className="flex flex-wrap items-center gap-2">
             {togglePill(isActive, setIsActive, 'Active', 'Inactive')}
             {togglePill(isPublished, setIsPublished, 'منشورة', 'مسودة')}
-            <span className="text-[10px] font-semibold text-slate-500">الإعلان غير النشط أو المسودة لا يظهر في أي شريط عرض.</span>
+            <span className="text-[11px] font-semibold text-slate-500">الإعلان غير النشط أو المسودة لا يظهر في أي شريط عرض.</span>
           </div>
 
           <div>
@@ -2278,7 +2278,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 {imageUrls.map((url, i) => (
                   <div key={`${url}-${i}`} className="relative group aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
-                    <span className="absolute top-1 start-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
+                    <span className="absolute top-1 start-1 text-[11px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
                       className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
                       <X className="h-4 w-4" aria-hidden="true" />
@@ -2318,7 +2318,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 );
               })}
             </div>
-            <p className="text-[10px] font-semibold text-slate-500 mt-1.5">كل موضع محدد يعرض الإعلان بتنسيقه: <span className="font-black text-slate-500">المستطيل</span> يشغل كامل العرض المتاح (<span className="font-black text-slate-500">حتى 1100 بكسل</span>، ارتفاع مرن من 220 إلى 420 بكسل — أكبر بكثير من 300×250 السابق) ضمن صفحات المحتوى، و<span className="font-black text-slate-500">الوشاح</span> كطبقة كاملة الشاشة قابلة للإغلاق — على الجوال والحاسوب، في الواجهة ولوحات التحكم. بدون موضع، يُستخدم شريط العرض المعتاد للموقع.</p>
+            <p className="text-[11px] font-semibold text-slate-500 mt-1.5">كل موضع محدد يعرض الإعلان بتنسيقه: <span className="font-black text-slate-500">المستطيل</span> يشغل كامل العرض المتاح (<span className="font-black text-slate-500">حتى 1100 بكسل</span>، ارتفاع مرن من 220 إلى 420 بكسل — أكبر بكثير من 300×250 السابق) ضمن صفحات المحتوى، و<span className="font-black text-slate-500">الوشاح</span> كطبقة كاملة الشاشة قابلة للإغلاق — على الجوال والحاسوب، في الواجهة ولوحات التحكم. بدون موضع، يُستخدم شريط العرض المعتاد للموقع.</p>
           </div>
 
           {showCenterPicker && <div>
@@ -2348,12 +2348,12 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
                       <input type="checkbox" checked={centerIds.includes(c.id)} onChange={() => toggleCenter(c.id)} className="accent-accent-500" />
                       <span className="truncate">{titleCaseName((c as any).name) || c.name}</span>
-                      <span className="ms-auto text-[9px] font-black text-slate-500">{RENEWAL_STATUS_LABEL[c.status] || c.status}</span>
+                      <span className="ms-auto text-[11px] font-black text-slate-500">{RENEWAL_STATUS_LABEL[c.status] || c.status}</span>
                     </label>
                   ))}
                 </div>
                 {centerQuery.trim() !== '' && filteredCenters.length > 0 && (
-                  <p className="mt-1 text-[10px] font-semibold text-slate-500">
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
                     ${arPlural(filteredCenters.length, 'مركز', 'مركزان', 'مراكز', 'مركزًا')} من {centers.length}
                     {centerIds.length > 0 ? ` · ${arPlural(centerIds.length, 'مركز محدد', 'مركزان محددان', 'مراكز محددة', 'مركزًا محددًا')}` : ''}
                   </p>
@@ -2362,7 +2362,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
             )}
           </div>}
           {!showCenterPicker && (
-            <p className="text-[10px] font-semibold text-slate-500">إعلان الواجهة لا يستهدف أي مركز — يظهر في الصفحة الرئيسية.</p>
+            <p className="text-[11px] font-semibold text-slate-500">إعلان الواجهة لا يستهدف أي مركز — يظهر في الصفحة الرئيسية.</p>
           )}
 
           <div className="flex justify-end gap-2 pt-1">
@@ -2988,16 +2988,16 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="space-y-3">
                   {requests.slice(0, 4).map(r => (
                     <div key={r.id} className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0">
+                      <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center text-[11px] font-black text-slate-500 flex-shrink-0">
                         {titleCaseName(r.fullName).split(' ').map(w => w[0]).join('').slice(0, 2)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-black text-slate-900 truncate">{titleCaseName(r.academyName)}</div>
-                        <div className="text-[10px] font-semibold text-slate-500 truncate">
+                        <div className="text-[11px] font-semibold text-slate-500 truncate">
                           {titleCaseName(r.fullName)} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
                         </div>
                       </div>
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${toneClasses(REQ_STATUS_BADGE[r.status] || REQ_STATUS_BADGE.new)}`}>
+                      <span className={`text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${toneClasses(REQ_STATUS_BADGE[r.status] || REQ_STATUS_BADGE.new)}`}>
                         {REQ_STATUS_LABEL[r.status] || r.status}
                       </span>
                     </div>
@@ -3039,15 +3039,15 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                             <img src={c.logoUrl} alt={c.name} className="w-full h-full rounded-xl object-cover" />
                           </div>
                         ) : (
-                          <div className="h-11 w-11 rounded-2xl bg-accent-500/10 flex items-center justify-center text-[10px] font-black text-accent-500 flex-shrink-0">
+                          <div className="h-11 w-11 rounded-2xl bg-accent-500/10 flex items-center justify-center text-[11px] font-black text-accent-500 flex-shrink-0">
                             {c.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-black text-slate-900 truncate">{c.name}</div>
-                          <div className="text-[10px] font-semibold text-slate-500">{c.adminEmail || '—'}</div>
+                          <div className="text-[11px] font-semibold text-slate-500">{c.adminEmail || '—'}</div>
                         </div>
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0 ${
+                        <span className={`text-[11px] font-black px-2.5 py-1 rounded-full flex-shrink-0 ${
                           days === null ? 'bg-slate-50 text-slate-500 border border-slate-100'
                             : days <= 3 ? 'bg-accent-500/15 text-accent-500 border border-accent-500/30'
                             : days <= 7 ? 'bg-accent-500/10 text-accent-500 border border-accent-500/30'
@@ -3071,7 +3071,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           {/* Filters — type / statut / plan */}
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
               <Segmented<'all' | 'jardin' | 'formation'>
                 value={centerTypeFilter}
                 onChange={setCenterTypeFilter}
@@ -3083,7 +3083,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
               <Segmented<'all' | 'trial' | 'active' | 'suspended' | 'expired'>
                 value={statusFilter}
                 onChange={setStatusFilter}
@@ -3097,7 +3097,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الباقة</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الباقة</div>
               <Segmented<'all' | 'basic' | 'growth' | 'pro' | 'custom'>
                 value={planFilter}
                 onChange={setPlanFilter}
@@ -3208,7 +3208,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <button
                         onClick={() => handleApplyScheduledPlan(c)}
                         disabled={!!c.scheduledPlan.applyAt && c.scheduledPlan.applyAt > Date.now() && c.status === 'active'}
-                          className="text-[10px] font-black px-2.5 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="text-[11px] font-black px-2.5 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         تطبيق
                       </button>
@@ -3228,12 +3228,12 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {mods.length > 0 && (
                   <div className="mt-3.5 flex flex-wrap gap-1.5">
                     {mods.filter(mk => isBaseModule(mk)).map(mk => (
-                      <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-accent-500 text-white inline-flex items-center gap-1">
+                      <span key={mk} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-accent-500 text-white inline-flex items-center gap-1">
                         <Lock className="h-2.5 w-2.5" aria-hidden="true" /> {MODULE_LABEL(mk)}
                       </span>
                     ))}
                     {mods.filter(mk => !isBaseModule(mk)).map(mk => (
-                      <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-accent-500/10 text-accent-500">
+                      <span key={mk} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-accent-500/10 text-accent-500">
                         {MODULE_LABEL(mk)}
                       </span>
                     ))}
@@ -3289,7 +3289,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           {/* Filters — type / statut */}
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">نوع المؤسسة</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">نوع المؤسسة</div>
               <Segmented<'all' | 'jardin' | 'formation'>
                 value={reqTypeFilter}
                 onChange={setReqTypeFilter}
@@ -3301,7 +3301,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
               <Segmented<'new' | 'converted' | 'archived'>
                 value={reqStatusFilter}
                 onChange={setReqStatusFilter}
@@ -3388,17 +3388,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 {/* Requested modules — envoyées avec la demande */}
                 {mods.length > 0 && (
                   <div className="mt-3.5">
-                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
+                    <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
                       <GraduationCap aria-hidden="true" className="h-4 w-4" />
                       الوحدات المطلوبة ({mods.length})
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {mods.map(mk => isBaseModule(mk) ? (
-                        <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-accent-500 text-white inline-flex items-center gap-1">
+                        <span key={mk} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-accent-500 text-white inline-flex items-center gap-1">
                           <Lock aria-hidden="true" className="h-2.5 w-2.5" /> {MODULE_LABEL(mk)}
                         </span>
                       ) : (
-                        <span key={mk} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-accent-500/10 text-accent-500">
+                        <span key={mk} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-accent-500/10 text-accent-500">
                           {MODULE_LABEL(mk)}
                         </span>
                       ))}
@@ -3503,7 +3503,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       شيكات قيد الانتظار
                       <span className="text-[11px] font-bold text-slate-500 font-sans">{pendingCheques.length}</span>
                     </h3>
-                    <p className="text-[10px] font-bold text-slate-500">
+                    <p className="text-[11px] font-bold text-slate-500">
                       الشيكات المعلقة <span className="text-accent-500">لا تُحتسب ضمن الإيرادات</span> — تحصّلها لتُحتسب.
                     </p>
                   </div>
@@ -3634,24 +3634,24 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                             className="w-full flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 transition text-start cursor-pointer border-b border-slate-200">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform flex-shrink-0 ${collapsedGroupIds[group.centerId] ? '-rotate-90' : ''}`} aria-hidden="true" />
-                              <span className="h-8 w-8 rounded-lg bg-accent-500 text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
+                              <span className="h-8 w-8 rounded-lg bg-accent-500 text-white flex items-center justify-center text-[11px] font-black flex-shrink-0">
                                 {group.centerName.split(' ').map((word: string) => word[0]).join('').slice(0, 2).toUpperCase()}
                               </span>
                               <div className="min-w-0">
                                 <p className="text-xs font-black text-slate-900 truncate">{group.centerName}</p>
-                                <p className="text-[10px] font-semibold text-slate-500">
+                                <p className="text-[11px] font-semibold text-slate-500">
                                   {group.invoices.length} facture{group.invoices.length > 1 ? 's' : ''}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
                               {outstandingTotal > 0 && (
-                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                                   متبقي للتحصيل: {outstandingTotal.toFixed(2)} دينار
                                 </span>
                               )}
                               {paidTotal > 0 && (
-                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-accent-500/[0.06] text-accent-700 border border-accent-500/20">
+                                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-accent-500/[0.06] text-accent-700 border border-accent-500/20">
                                   مدفوع: {paidTotal.toFixed(2)} دينار
                                 </span>
                               )}
@@ -3681,7 +3681,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                       <td className="py-3 px-3 font-black text-slate-900 whitespace-nowrap">{inv.amount.toFixed(2)} TND</td>
                                       <td className="py-3 px-3 text-slate-600 text-xs font-semibold whitespace-nowrap">{paymentMethodLabel(inv.paymentMethod)}</td>
                                       <td className="py-3 px-3 whitespace-nowrap">
-                                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${toneClasses(meta.tone)}`}>{meta.label}</span>
+                                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${toneClasses(meta.tone)}`}>{meta.label}</span>
                                       </td>
                                       <td className="py-3 px-3 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
@@ -3782,7 +3782,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1.5">
                     <Lock className="h-4 w-4 text-white/80" aria-hidden="true" />
-                    <span className="text-[10px] font-black text-white/80 uppercase tracking-[0.15em]">Le plan de base</span>
+                    <span className="text-[11px] font-black text-white/80 uppercase tracking-[0.15em]">Le plan de base</span>
                   </div>
                   <h3 className="text-lg font-black mb-1">مدرسي + مالية</h3>
                   <p className="text-xs text-white/70 font-semibold mb-5">مضمون دائمًا في كل اشتراك — مع سجل الدوام المجاني وغير القابل للإزالة.</p>
@@ -3830,7 +3830,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                               <span className="text-[8px] font-black text-accent-500 bg-accent-500/10 border border-accent-500/30 rounded-full px-1.5 py-px uppercase">Base</span>
                             ) : null}
                           </div>
-                          <div className="text-[10px] font-semibold text-slate-500">{m.key}</div>
+                          <div className="text-[11px] font-semibold text-slate-500">{m.key}</div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {m.key === BUNDLED_MODULE_KEY ? (
@@ -3843,7 +3843,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                               className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-end text-slate-800 focus:border-accent-500 focus:ring-0 outline-none bg-white transition"
                             />
                           )}
-                          <span className="text-[10px] font-bold text-slate-500">{m.key === BUNDLED_MODULE_KEY ? 'مجاني' : 'دينار/شهر'}</span>
+                          <span className="text-[11px] font-bold text-slate-500">{m.key === BUNDLED_MODULE_KEY ? 'مجاني' : 'دينار/شهر'}</span>
                         </div>
                       </div>
                     );
@@ -3938,7 +3938,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       </span>
                     )}
                     {(ad.positions?.length ?? 0) > 0 && (
-                      <span className="px-2 py-1 bg-accent-500/10 text-accent-500 text-[10px] font-bold rounded-full"
+                      <span className="px-2 py-1 bg-accent-500/10 text-accent-500 text-[11px] font-bold rounded-full"
                         title={ad.positions!.map(adPositionLabel).join(', ')}>
                         {ad.positions!.map(pid => AD_POSITION_SPECS.find(sp => sp.id === pid)?.size || pid).join(' · ')}
                       </span>
@@ -3994,7 +3994,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
           {/* Filters — type / statut */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4">
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
               <Segmented<'all' | 'renewal' | 'upgrade'>
                 value={renewalKindFilter}
                 onChange={setRenewalKindFilter}
@@ -4006,7 +4006,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">الحالة</div>
               <Segmented<'all' | 'pending' | 'approved' | 'rejected'>
                 value={renewalStatusFilter}
                 onChange={setRenewalStatusFilter}
@@ -4048,19 +4048,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 <div key={r.id} className={`rounded-2xl border bg-white p-4 ${r.status === 'pending' ? 'border-amber-200' : 'border-slate-200'}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-black text-slate-900">{r.centerName || r.centerId}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black border ${
                       r.kind === 'upgrade' ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}>
                       {r.kind === 'upgrade' ? 'Changement d’offre' : 'Renouvellement'}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black border ${
                       r.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : r.status === 'approved' ? 'bg-accent-500/[0.06] text-accent-700 border-accent-500/20'
                         : 'bg-red-50 text-red-700 border-red-200'
                     }`}>
                       {r.status === 'pending' ? 'قيد الانتظار' : r.status === 'approved' ? 'مقبولة' : 'مرفوضة'}
                     </span>
-                    <span className="ms-auto text-[10px] font-bold text-slate-500">
+                    <span className="ms-auto text-[11px] font-bold text-slate-500">
                       {new Date(r.createdAt).toLocaleDateString('ar-TN')}
                     </span>
                   </div>

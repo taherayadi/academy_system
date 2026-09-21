@@ -247,19 +247,19 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     <div className="space-y-3">
       <div className="grid sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">الباقة المطلوبة</span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">الباقة المطلوبة</span>
           <span data-testid="review-apply-plan" className="text-sm font-black text-slate-900">
             {PLAN_LABEL[draft.plan] || draft.plan}
           </span>
         </div>
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">الدورة المطلوبة</span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">الدورة المطلوبة</span>
           <span data-testid="review-apply-cycle" className="text-sm font-black text-slate-900">
             {draft.billingCycle === 'annual' ? 'سنوي — خصم 20%' : 'شهري'}
           </span>
         </div>
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col justify-center">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">التعرفة {draft.billingCycle === 'annual' ? 'السنوية' : 'الشهرية'} المحسوبة</span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">التعرفة {draft.billingCycle === 'annual' ? 'السنوية' : 'الشهرية'} المحسوبة</span>
           <span data-testid="review-apply-tariff" className="text-sm font-black text-accent-500">
             {formatTnd(automaticPlan ? calculatedTariff : (Number(draft.monthlyPrice) || 0))} · {draft.billingCycle === 'annual' ? 'دينار/سنة' : 'دينار/شهر'}
           </span>
@@ -267,10 +267,10 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
       </div>
 
       <div>
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">الوحدات المطلوبة</p>
+        <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">الوحدات المطلوبة</p>
         <div data-testid="review-apply-modules" className="flex flex-wrap gap-1.5">
           {enabledModules.map(key => (
-            <span key={key} className="text-[10px] font-bold px-2.5 py-1.5 rounded-xl bg-accent-500 text-white border border-accent-500 inline-flex items-center gap-1">
+            <span key={key} className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-accent-500 text-white border border-accent-500 inline-flex items-center gap-1">
               {MODULE_LABEL(key)}
             </span>
           ))}
@@ -443,12 +443,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             {/* ── Demande du centre ── */}
             <div className="rounded-2xl border-2 border-amber-200/70 bg-amber-50/60 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black border ${
                   request.kind === 'upgrade' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'
                 }`}>
                   {request.kind === 'upgrade' ? 'تغيير الباقة' : 'تجديد'}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black border ${
                   request.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
                     : request.status === 'approved' ? 'bg-accent-500/[0.06] text-accent-700 border-accent-500/20'
                     : 'bg-red-50 text-red-700 border-red-200'
@@ -465,7 +465,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {requestedModules.map(m => (
-                  <span key={m} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm">
+                  <span key={m} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm">
                     {MODULE_LABEL(m)}
                   </span>
                 ))}
@@ -484,16 +484,16 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             {/* ── Abonnement en cours ── */}
             <div className="rounded-2xl border-2 border-slate-200/70 p-4 bg-slate-50/50">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">
+                <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em]">
                   {isTrial ? 'فترة تجريبية' : 'اشتراك جارٍ'}
                 </p>
                 {hasLiveWindow && (
-                  <span className={`ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span className={`ms-auto text-[11px] font-bold px-2 py-0.5 rounded-full ${windowPaidInvoice ? 'bg-accent-500/10 text-accent-700' : pendingInvoice ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
                     {windowPaidInvoice ? 'فترة مدفوعة' : pendingInvoice ? 'فترة غير مدفوعة' : 'بدون فاتورة'}
                   </span>
                 )}
                 {expiredState && (
-                  <span className="ms-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
+                  <span className="ms-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">منتهٍ</span>
                 )}
               </div>
               {isTrial ? (
@@ -558,34 +558,34 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                         <div className="grid sm:grid-cols-2 gap-2">
                           <button type="button" onClick={() => setApplyChoice('settle')}
                             className={`text-start rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'settle' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">تطبيق الآن</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
+                            <div className="text-[11px] font-black text-slate-800">تطبيق الآن</div>
+                            <div className="text-[11px] font-semibold text-slate-500 mt-1">نهاية الاشتراك دون تغيير · تسوية بالتناسب مع الأيام المستهلكة</div>
                           </button>
                           <button type="button" onClick={() => setApplyChoice('schedule')}
                             className={`text-start rounded-xl border-2 px-3 py-2.5 transition cursor-pointer ${applyChoice === 'schedule' ? 'border-accent-500 bg-white shadow-md shadow-accent-500/10' : 'border-slate-200 bg-white/60 hover:border-accent-500/40'}`}>
-                            <div className="text-[10px] font-black text-slate-800">جدولة ليوم {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
-                            <div className="text-[10px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
+                            <div className="text-[11px] font-black text-slate-800">جدولة ليوم {hasLiveWindow ? fmtDate(liveEnd) : 'عند التجديد'}</div>
+                            <div className="text-[11px] font-semibold text-slate-500 mt-1">تبقى الباقة الحالية سارية حتى نهاية الفترة</div>
                           </button>
                         </div>
                         {effectiveApplyChoice === 'settle' && (
                           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5">
-                            <p className="text-[10px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
+                            <p className="text-[11px] font-black text-slate-600 mb-1.5">Facturation actuelle : {formatTnd(decision.oldAmount)} → nouveau : {formatTnd(decision.newAmount)}</p>
                             <div className="grid sm:grid-cols-2 gap-2">
                               <button type="button" onClick={() => setPaymentState('paid')}
                                 className={`text-start rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'paid' ? 'border-accent-500 bg-accent-500/[0.06]' : 'border-slate-200 bg-white hover:border-accent-500/40'}`}>
-                                <div className="text-[10px] font-black text-accent-700">الفترة مدفوعة</div>
+                                <div className="text-[11px] font-black text-accent-700">الفترة مدفوعة</div>
                                 <div className="text-sm font-black text-accent-700">+ {formatTnd(decision.paidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
+                                <div className="text-[11px] font-semibold text-slate-500">الفرق = فرق السعر × الأيام المتبقية</div>
                               </button>
                               <button type="button" onClick={() => setPaymentState('unpaid')}
                                 className={`text-start rounded-xl border-2 px-3 py-2 transition cursor-pointer ${paymentState === 'unpaid' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}>
-                                <div className="text-[10px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
+                                <div className="text-[11px] font-black text-amber-800">الفترة غير مدفوعة بعد</div>
                                 <div className="text-sm font-black text-amber-700">{formatTnd(decision.unpaidAmount)}</div>
-                                <div className="text-[9px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
+                                <div className="text-[11px] font-semibold text-slate-500">تُلغى الفاتورة القديمة المعلقة وتُستبدل</div>
                               </button>
                             </div>
                             {!windowPaidInvoice && paymentState !== 'unpaid' && (
-                              <p className="text-[9px] font-semibold text-slate-500 mt-1.5">
+                              <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
                                 مكتشف: لا توجد فاتورة مدفوعة تغطي الفترة — الخيار «غير مدفوعة بعد» يناسب حالتك.
                               </p>
                             )}
@@ -593,7 +593,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                         )}
                       </>
                     ) : (
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[10px] font-semibold text-amber-800 leading-relaxed">
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-[11px] font-semibold text-amber-800 leading-relaxed">
                         الفترة الحالية مدفوعة مسبقًا بالتعرفة الحالية: خفض الباقة لا يمكن تعويضه نقدًا — سيُطبَّق في نهاية الفترة ({hasLiveWindow ? fmtDate(liveEnd) : 'التجديد القادم'})، دون تعويض ودون أيام تضيع.
                       </div>
                     )}
@@ -604,7 +604,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 {isPureRenewalExtension && previewNewEnd && (
                   <div className="rounded-xl bg-white border border-accent-500/25 px-3.5 py-3">
                     <p className="text-[11px] font-black text-slate-700">تجديد مطابق</p>
-                    <p className="text-[10px] font-semibold text-slate-500 leading-relaxed mt-1">
+                    <p className="text-[11px] font-semibold text-slate-500 leading-relaxed mt-1">
                       ستُمَدَّد الفترة بدورة كاملة من تاريخ الاستحقاق الحالي — النهاية الجديدة في {fmtDate(previewNewEnd)}.
                       ستُنشأ فاتورة «قيد الانتظار» ويبقى المركز نشطًا باستمرار.
                     </p>
@@ -612,7 +612,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 )}
 
                 {!midPeriod && !isPureRenewalExtension && !isTrial && hasLiveWindow && (
-                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-slate-500 leading-relaxed">
                     {windowPaidInvoice
                       ? 'الفاتورة المدفوعة للفترة الحالية لن تتغير.'
                       : pendingInvoice
@@ -621,7 +621,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   </p>
                 )}
                 {(isTrial || !hasLiveWindow) && (
-                  <p className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-slate-500 leading-relaxed">
                     ستُنشأ فاتورة جديدة «قيد الانتظار» للفترة الأولى — علّمها كمدفوعة في SaaS → المالية عندما يسدّد العميل.
                   </p>
                 )}
@@ -631,7 +631,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
             {/* ── Note de décision ── */}
             {!isDecided && (
               <FormField label="ملاحظة تُرسل إلى المركز (اختياري)" id="rr-note"
-                labelClassName="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                labelClassName="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">
                 <input id="rr-note"
                   value={decisionNote}
                   onChange={e => setDecisionNote(e.target.value)}
@@ -644,7 +644,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
             {/* ── Plans programmés ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+              <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
                 باقات مجدولة ({view.schedules.length})
               </p>
               {view.schedules.length === 0 ? (
@@ -655,11 +655,11 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                     <div key={s.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
                       <CalendarClock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
                       <span className="text-xs font-black text-slate-800">{PLAN_LABEL[s.plan === 'starter' ? 'basic' : s.plan] || s.plan}</span>
-                      <span className="text-[10px] font-bold text-slate-500">
+                      <span className="text-[11px] font-bold text-slate-500">
                         {s.billingCycle === 'annual' ? 'سنوي' : 'شهري'}
                         {s.monthlyPrice ? ` · ${Number(s.monthlyPrice).toFixed(2)} TND` : ''}
                       </span>
-                      <span className="ms-auto text-[10px] font-bold text-slate-500">
+                      <span className="ms-auto text-[11px] font-bold text-slate-500">
                         {s.applyAt ? `في ${fmtDate(s.applyAt)}` : 'عند التجديد القادم'}
                       </span>
                       {!isDecided && (
@@ -677,7 +677,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
 
             {/* ── Historique des plans (audit trail, migration 0029) ── */}
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+              <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
                 Historique des plans ({(view.history || []).length})
               </p>
               {(view.history || []).length === 0 ? (
@@ -686,7 +686,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
-                      <tr className="bg-slate-50 text-start text-[9px] font-black uppercase tracking-wider text-slate-500">
+                      <tr className="bg-slate-50 text-start text-[11px] font-black uppercase tracking-wider text-slate-500">
                         <th className="px-3 py-2">التاريخ</th>
                         <th className="px-3 py-2">Action</th>
                         <th className="px-3 py-2">التفاصيل</th>
@@ -698,14 +698,14 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                         const meta = PLAN_HISTORY_LABEL[h.action] || { text: h.action, tone: 'neutral' as StatusTone };
                         return (
                           <tr key={h.id} className="border-t border-slate-100 align-top">
-                            <td className="px-3 py-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
+                            <td className="px-3 py-2 text-[11px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(h.createdAt)}</td>
                             <td className="px-3 py-2">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${toneClasses(meta.tone)}`}>{meta.text}</span>
+                              <span className={`text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${toneClasses(meta.tone)}`}>{meta.text}</span>
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-semibold text-slate-600">
+                            <td className="px-3 py-2 text-[11px] font-semibold text-slate-600">
                               {h.details}{h.invoiceNumber ? ` · ${h.invoiceNumber}` : ''}
                             </td>
-                            <td className="px-3 py-2 text-[10px] font-black text-slate-700 whitespace-nowrap text-end">
+                            <td className="px-3 py-2 text-[11px] font-black text-slate-700 whitespace-nowrap text-end">
                               {h.amount ? formatTnd(h.amount) : '—'}
                             </td>
                           </tr>
