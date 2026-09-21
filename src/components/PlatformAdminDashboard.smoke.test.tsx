@@ -235,7 +235,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     await waitFor(() => expect(screen.getAllByText('Centre Été').length).toBeGreaterThanOrEqual(1));
     expect(screen.getAllByText('Centre Rentré').length).toBeGreaterThanOrEqual(1);
 
-    const monthSelect = screen.getByTitle('تصفية حسب شهر الفترة المفوترة') as unknown as HTMLSelectElement;
+    const monthSelect = screen.getByRole('combobox', { name: /تصفية حسب شهر/ }) as unknown as HTMLSelectElement;
     expect(Array.from(monthSelect.options).map(o => o.value)).toEqual(expect.arrayContaining(['all', '2026-07', '2026-09']));
 
     fireEvent.change(monthSelect, { target: { value: '2026-09' } });
@@ -410,7 +410,7 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     // Growth with priced modules (80/mois) beats the stored 75 → hausse.
     fireEvent.click(screen.getByRole('button', { name: /تعديل الباقة/ }));
     // Growth = modules selectable, tariff computed live.
-    fireEvent.change(screen.getByTitle('باقة المركز'), { target: { value: 'growth' } });
+    fireEvent.change(screen.getByLabelText('الباقة'), { target: { value: 'growth' } });
     expect(screen.getByText('وحدات للتفعيل')).toBeTruthy();
 
     // Price increase while the (unpaid) window runs → settlement panel.
@@ -651,7 +651,7 @@ describe('PlatformAdminDashboard — Demo requests tab', () => {
     expect(screen.getByText('تم تحويله')).toBeTruthy();
 
     // The locked select offers exactly two values: the current status and Archivé.
-    const sel = screen.getByTitle('تم تحويل الطلب: الأرشيف فقط ممكن.') as unknown as HTMLSelectElement;
+    const sel = screen.getByLabelText('حالة الطلب') as unknown as HTMLSelectElement;
     expect(Array.from(sel.options).map(o => o.value)).toEqual(['converted', 'archived']);
 
     fireEvent.change(sel, { target: { value: 'archived' } });

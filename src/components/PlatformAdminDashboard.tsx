@@ -989,7 +989,7 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
             {onPrint ? (
               <button type="button" onClick={() => onPrint(invoice)}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer"
-                title="تفتح الفاتورة في نافذة جاهزة للطباعة">
+>
                 <Printer aria-hidden="true" className="h-4 w-4 text-slate-500" /> طباعة
               </button>
             ) : <span />}
@@ -1653,7 +1653,6 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         <div>
           <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1" htmlFor="pm-plan">الباقة</label>
           <select id="pm-plan"
-            title="باقة المركز"
             value={draft.plan}
             onChange={e => handleDraftPlanChange(e.target.value)}
             className={`${fieldCls} cursor-pointer`}
@@ -1820,7 +1819,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                   {(hasLiveWindow || isTrial) && (
                     <button onClick={() => setMode('trial')} disabled={saving}
                       className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-accent-500 bg-accent-500/[0.06] border border-accent-500/30 rounded-xl hover:bg-accent-500/[0.12] transition cursor-pointer disabled:opacity-40"
-                      title="أيام مجانية: في البداية إذا لم يبدأ الاشتراك بعد، وإلا تُضاف في نهاية الفترة">
+>
                       <Clock className="h-4 w-4" aria-hidden="true" /> إضافة فترة تجريبية
                     </button>
                   )}
@@ -3209,8 +3208,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       <button
                         onClick={() => handleApplyScheduledPlan(c)}
                         disabled={!!c.scheduledPlan.applyAt && c.scheduledPlan.applyAt > Date.now() && c.status === 'active'}
-                        title="تطبيق الآن (متاح بعد انتهاء الفترة الحالية)"
-                        className="text-[10px] font-black px-2.5 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="text-[10px] font-black px-2.5 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         تطبيق
                       </button>
@@ -3416,7 +3414,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                     <select
                       value="converted"
                       onChange={e => { if (e.target.value === 'archived') handleReqStatus(req, 'archived'); }}
-                      title="تم تحويل الطلب: الأرشيف فقط ممكن."
+                      aria-label="حالة الطلب"
                       className="text-[11px] font-bold px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-600 focus:border-accent-500 focus:ring-0 outline-none cursor-pointer">
                       <option value="converted">محوَّل</option>
                       <option value="archived">مؤرشف</option>
@@ -3542,10 +3540,9 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                                     }
                                   }}
                                   className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 bg-accent-500 text-white rounded-lg hover:bg-accent-700 transition cursor-pointer"
-                                  title="تحصيل الشيك يجعل الفاتورة مدفوعة ويُحتسب في الإيرادات"
                                   aria-label="تحصيل الشيك"
                                 >
-                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Encaisser
+                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> تحصيل
                                 </button>
                                 <button onClick={() => handlePrintInvoice(inv)} className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer" title="طباعة الفاتورة" aria-label="طباعة الفاتورة">
                                   <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
@@ -3598,7 +3595,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                       value={invoiceMonthFilter}
                       onChange={e => setInvoiceMonthFilter(e.target.value)}
                       className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl bg-white focus:border-accent-500 focus:ring-0 outline-none cursor-pointer capitalize"
-                      title="تصفية حسب شهر الفترة المفوترة"
+                      aria-label="تصفية حسب شهر الفترة المفوترة"
                     >
                       <option value="all">كل الأشهر</option>
                       {invoiceMonths.map(key => (
