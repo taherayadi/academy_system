@@ -376,6 +376,9 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^تعديل/ }));
     await waitFor(() => expect(screen.getByText('اسم المركز *')).toBeTruthy());
+    const ecDialog = screen.getByRole('dialog');
+    expect(ecDialog.getAttribute('aria-modal')).toBe('true');
+    expect(ecDialog.getAttribute('aria-labelledby')).toBe('ec-modal-title');
     expect(screen.queryByLabelText('Plan')).toBeNull();
     expect(screen.queryByText('دورة الفوترة')).toBeNull();
     expect(screen.queryByText('وحدات مفعّلة')).toBeNull();
@@ -482,6 +485,7 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     fireEvent.click(screen.getByRole('button', { name: /حذف الباقة/ }));
     // Custom confirmation dialog first.
     expect(screen.getByText('حذف هذه الباقة؟')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /حذف هذه الباقة/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'نعم، احذف الباقة' }));
 
     await waitFor(() => expect(api.centerPlanActionApi).toHaveBeenCalledWith({ action: 'remove-plan', centerId: 'c1' }));

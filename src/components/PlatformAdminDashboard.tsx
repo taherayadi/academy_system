@@ -556,14 +556,14 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 
   return (
     <>
-    <BaseModal onClose={onClose}>
+    <BaseModal onClose={onClose} labelledBy="nc-modal-title">
       <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-2xl overflow-hidden bg-accent-500 shadow-sm shadow-accent-500/20 flex items-center justify-center">
             <img src={icon} alt="" className="w-full h-full object-cover" />
           </span>
           <div>
-            <h2 className="text-base font-black text-slate-900">{convertRequestId ? 'تحويل إلى مركز' : 'مركز جديد'}</h2>
+            <h2 id="nc-modal-title" className="text-base font-black text-slate-900">{convertRequestId ? 'تحويل إلى مركز' : 'مركز جديد'}</h2>
             {convertRequestId && <p className="text-[11px] font-bold text-accent-500">تم تحديد النوع والوحدات المطلوبة مسبقًا</p>}
           </div>
         </div>
@@ -1258,12 +1258,12 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
   return (
     <>
-    <BaseModal onClose={onClose}>
+    <BaseModal onClose={onClose} labelledBy="ec-modal-title">
       <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
         <div className="flex items-center gap-3">
           <span className="p-2.5 rounded-xl bg-accent-500/10"><Edit aria-hidden="true" className="h-4 w-4 text-accent-500" /></span>
           <div>
-            <h2 className="text-base font-black text-slate-900">تعديل المركز</h2>
+            <h2 id="ec-modal-title" className="text-base font-black text-slate-900">تعديل المركز</h2>
             <p className="text-[11px] font-semibold text-slate-500 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
           </div>
         </div>
