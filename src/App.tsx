@@ -235,6 +235,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900" dir="rtl">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-accent-700 focus:rounded-xl focus:border focus:border-accent-500 focus:text-sm focus:font-black">تخطي إلى المحتوى</a>
       <div className="flex min-h-screen">
         {/* ── Sidebar ── */}
         <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-lg:hidden">
@@ -330,6 +331,8 @@ export default function App() {
 
           <AnimatePresence mode="wait">
             <motion.div
+              id="main-content"
+              tabIndex={-1}
               key={activeTab}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}

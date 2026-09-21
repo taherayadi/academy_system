@@ -14,7 +14,7 @@
  *     inline event handler…"
  *
  * Both are silently refused, which is why the invoice rendered (inline CSS is
- * allowed: `style-src 'self' 'unsafe-inline'`) while its 🖨 Imprimer button did
+ * allowed: `style-src 'self' 'unsafe-inline'`) while its print button did
  * nothing. Fix: the popup markup carries NO JavaScript at all — every
  * behaviour is attached from this module (an external, CSP-allowed script) via
  * `addEventListener`, exactly like the `index.html` polyfill that had to be
@@ -107,7 +107,7 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
   </div></div>
   <footer>وثيقة مولّدة من مساحة الإدارة في SaaS.</footer>
   <div class="noprint" style="text-align:center;margin-top:18px">
-    <button id="${PRINT_BUTTON_ID}" type="button" style="background:${BRAND_HEX};color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 طباعة</button>
+    <button id="${PRINT_BUTTON_ID}" type="button" style="background:${BRAND_HEX};color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">طباعة</button>
     <p style="font-size:11px;color:#94a3b8;margin-top:10px">Ctrl+P (⌘+P) أو القائمة ⋮ → «طباعة» · «حفظ بتنسيق PDF»</p>
   </div>
 </div>
@@ -161,7 +161,7 @@ export interface OpenInvoicePrintOptions {
 }
 
 /**
- * Opens the printable invoice in a dedicated window and wires its 🖨 Imprimer
+ * Opens the printable invoice in a dedicated window and wires its print
  * button from here (never from inline JS — see the module comment).
  *
  * @returns `false` when the popup was blocked or its document was unreachable,

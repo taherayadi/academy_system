@@ -50,7 +50,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             <img src={icon} alt="SaaS" className="w-full h-full object-cover" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">{PAGE_META[page].title}</h1>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">{PAGE_META[page].title}</h2>
             <p className="text-xs text-slate-500 font-bold">{PAGE_META[page].sub}</p>
           </div>
         </div>
