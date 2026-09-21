@@ -94,7 +94,7 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     }
   }, [toast]);
   useEffect(() => {
-    if (page === 'renewals') {
+    if (page === 'renewals' || page === 'overview') {
       loadRenewals();
     }
   }, [page, loadRenewals]);

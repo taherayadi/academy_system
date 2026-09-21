@@ -981,3 +981,26 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     await waitFor(() => expect(screen.getByText('لا توجد طلبات')).toBeTruthy());
   });
 });
+
+describe('overview work queue', () => {
+  it('leads with the actionable queue and routes each tile to its console', async () => {
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [{ id: 'rq1', status: 'pending' }], history: [],
+    });
+    const nav = vi.fn();
+    render(<PlatformAdminDashboard page="overview" onNavigate={nav} />);
+
+    const queueRegion = await screen.findByLabelText('طابور العمل');
+    expect(queueRegion).toBeTruthy();
+
+    const renewalsTile = await screen.findByRole('button', { name: /تجديدات معلّقة/ });
+    expect(renewalsTile.textContent).toContain('1');
+
+    fireEvent.click(renewalsTile);
+    expect(nav).toHaveBeenCalledWith('renewals');
+
+    const requestsTile = screen.getByRole('button', { name: /طلبات جديدة/ });
+    fireEvent.click(requestsTile);
+    expect(nav).toHaveBeenCalledWith('requests');
+  });
+});
