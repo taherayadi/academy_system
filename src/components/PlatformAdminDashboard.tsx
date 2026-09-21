@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Plus, RefreshCw, Search } from 'lucide-react';
-import { deleteAdvertisementApi } from '../api';
 import RenewalReviewModal from './RenewalReviewModal';
 import ConfirmDialog from './ConfirmDialog';
 import icon from '../assets/icon.png';
@@ -36,7 +35,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, []);
-  const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd } = d;
+  const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd, handleDeleteAd } = d;
   return (
     <div className="relative space-y-6 overflow-x-clip" dir="rtl">
 
@@ -181,7 +180,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       <ConfirmDialog
         open={!!deleteCenter}
         title="حذف المركز؟"
-        message={`هل أنت متأكد من حذف «${deleteCenter?.name}»؟ لا يمكن التراجع عن هذا الإجراء.`}
+        message={`هل أنت متأكد من حذف «${deleteCenter?.name}»؟ ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`}
         onConfirm={handleDeleteCenter}
         onCancel={() => setDeleteCenter(null)}
       />
@@ -195,18 +194,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
       <ConfirmDialog
         open={!!deleteAd}
         title="حذف هذا الإعلان؟"
-        message={`حذف «${deleteAd?.title}»؟ لا يمكن التراجع عن هذا الإجراء.`}
-        onConfirm={async () => {
-          if (!deleteAd) return;
-          try {
-            await deleteAdvertisementApi(deleteAd.id);
-            toast.success('تم حذف الإعلان');
-            setDeleteAd(null);
-            loadAdvertisements();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'خطأ أثناء الحذف');
-          }
-        }}
+        message={`حذف «${deleteAd?.title}»؟ ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`}
+        onConfirm={handleDeleteAd}
         onCancel={() => setDeleteAd(null)}
       />
     </div>

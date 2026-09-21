@@ -4,18 +4,25 @@ import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: string | number;
   message: string;
   type: ToastType;
+  action?: ToastAction;
+  duration?: number;
 }
 
 interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info: (message: string) => void;
-  warning: (message: string) => void;
+  showToast: (message: string, type?: ToastType, opts?: { action?: ToastAction; duration?: number }) => void;
+  success: (message: string, opts?: { action?: ToastAction; duration?: number }) => void;
+  error: (message: string, opts?: { action?: ToastAction; duration?: number }) => void;
+  info: (message: string, opts?: { action?: ToastAction; duration?: number }) => void;
+  warning: (message: string, opts?: { action?: ToastAction; duration?: number }) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -56,7 +63,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const showToast = useCallback((message: string, type: ToastType = 'info', opts?: { action?: ToastAction; duration?: number }) => {
     if (!message || typeof message !== 'string') return;
     const cleanMsg = message.trim();
     const key = `${type}:${cleanMsg}`;
@@ -75,16 +82,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
 
     const id = `${now}_${Math.random().toString(36).slice(2, 9)}`;
-    setToasts(prev => [...prev.filter(t => t.message !== cleanMsg || t.type !== type), { id: id as any, message: cleanMsg, type }]);
-    setTimeout(() => removeToast(id), 4000);
+    setToasts(prev => [...prev.filter(t => t.message !== cleanMsg || t.type !== type), { id: id as any, message: cleanMsg, type, action: opts?.action, duration: opts?.duration }]);
+    setTimeout(() => removeToast(id), opts?.duration ?? 4000);
   }, [removeToast]);
 
   const value: ToastContextValue = useMemo(() => ({
     showToast,
-    success: (m) => showToast(m, 'success'),
-    error: (m) => showToast(m, 'error'),
-    info: (m) => showToast(m, 'info'),
-    warning: (m) => showToast(m, 'warning')
+    success: (m, o) => showToast(m, 'success', o),
+    error: (m, o) => showToast(m, 'error', o),
+    info: (m, o) => showToast(m, 'info', o),
+    warning: (m, o) => showToast(m, 'warning', o)
   }), [showToast]);
 
   return (
@@ -106,6 +113,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             >
               {iconMap[t.type]}
               <p className="text-xs font-bold leading-snug flex-1">{t.message}</p>
+              {t.action && (
+                <button
+                  onClick={() => { t.action?.onClick(); removeToast(t.id); }}
+                  className="text-[11px] font-black text-accent-400 hover:text-accent-300 transition cursor-pointer whitespace-nowrap"
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 onClick={() => removeToast(t.id)}
                 aria-label="إغلاق"

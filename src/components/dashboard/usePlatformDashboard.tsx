@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, fetchRenewalRequestsApi, decideRenewalRequestApi } from '../../api';
+import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, deleteAdvertisementApi, fetchRenewalRequestsApi, decideRenewalRequestApi } from '../../api';
 import { CenterTenant, DemoRequest, PlatformAdvertisement, RenewalRequest } from '../../types';
 import { openInvoicePrintWindow } from '../../utils/invoicePrint';
 import { useToast } from '../Toast';
@@ -9,8 +9,32 @@ import { arPlural } from '../../utils/format';
 import { currentSchoolYear, adStatusOf, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterType, PAGE_SIZE, PLAN_LABEL, formatTnd } from './constants';
 import type { AdStatus, PlatformAdminPage, PlatformAdminDashboardProps } from './constants';
 
+/** Undo window for deferred destructive commits (ms). Tests may shrink it. */
+export let UNDO_WINDOW_MS = 6000;
+export const setUndoWindowMs = (ms: number) => { UNDO_WINDOW_MS = ms; };
+
 export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboardProps) {
   const toast = useToast();
+  /** Defer a destructive commit behind an undo toast; run it when the window lapses. */
+  const scheduleWithUndo = useCallback((message: string, run: () => Promise<void> | void) => {
+    let cancelled = false;
+    const seconds = Math.max(1, Math.round(UNDO_WINDOW_MS / 1000));
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        await run();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'خطأ');
+      }
+    }, UNDO_WINDOW_MS);
+    toast.warning(`${message} — التنفيذ خلال ${seconds} ثوانٍ.`, {
+      duration: UNDO_WINDOW_MS + 500,
+      action: {
+        label: 'تراجع',
+        onClick: () => { cancelled = true; clearTimeout(timer); toast.info('تم التراجع — لم يتغير شيء.'); },
+      },
+    });
+  }, [toast]);
   const [centers, setCenters] = useState<CenterTenant[]>([]);
   const [requests, setRequests] = useState<DemoRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,24 +152,30 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     await loadRenewals();
     load();
   }, [loadRenewals, load]);
-  /** Bulk approve/reject of renewal requests — one confirmation, one toast. */
-  const bulkDecideRenewals = useCallback(async (ids: string[], decision: 'approved' | 'rejected') => {
-    let done = 0;
-    for (const id of ids) {
-      try {
-        await decideRenewalRequestApi(id, decision);
-        done++;
-      } catch { /* counted as failure; reported in the summary toast */ }
-    }
-    if (done === ids.length) {
-      toast.success(decision === 'approved'
-        ? `تم قبول ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')} وتطبيقه.`
-        : `تم رفض ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')}.`);
-    } else {
-      toast.error(`عولج ${done} من ${ids.length} — أعد المحاولة للبقية.`);
-    }
-    await onRenewalDecided();
-  }, [onRenewalDecided, toast]);
+  /** Bulk approve/reject of renewal requests — one confirmation, then an undo
+   *  window before anything is applied. */
+  const bulkDecideRenewals = useCallback((ids: string[], decision: 'approved' | 'rejected') => {
+    scheduleWithUndo(
+      decision === 'approved' ? `سيُقبل ${ids.length} طلبًا ويُطبَّق` : `سيُرفض ${ids.length} طلبًا`,
+      async () => {
+        let done = 0;
+        for (const id of ids) {
+          try {
+            await decideRenewalRequestApi(id, decision);
+            done++;
+          } catch { /* counted as failure; reported in the summary toast */ }
+        }
+        if (done === ids.length) {
+          toast.success(decision === 'approved'
+            ? `تم قبول ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')} وتطبيقه.`
+            : `تم رفض ${arPlural(done, 'طلب', 'طلبان', 'طلبات', 'طلب')}.`);
+        } else {
+          toast.error(`عولج ${done} من ${ids.length} — أعد المحاولة للبقية.`);
+        }
+        await onRenewalDecided();
+      },
+    );
+  }, [onRenewalDecided, toast, scheduleWithUndo]);
   useEffect(() => { load(); }, [load]);
   // ── Temps réel (PubNub) ──────────────────────────────────────────────────
   // Comble le manque de synchro live du tableau de bord plateforme : un
@@ -467,30 +497,38 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
   };
   const handleDeleteCenter = async () => {
     if (!deleteCenter) return;
-    try {
-      await deleteCenterApi(deleteCenter.id);
+    const target = deleteCenter;
+    setDeleteCenter(null);
+    scheduleWithUndo(`سيُحذف «${target.name}» نهائيًا`, async () => {
+      await deleteCenterApi(target.id);
       toast.success('تم حذف المركز');
-      setDeleteCenter(null);
       load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطأ');
-    }
+    });
   };
   const handleDeleteRequest = async () => {
     if (!deleteRequest) return;
-    try {
-      await deleteDemoRequestApi(deleteRequest.id);
+    const target = deleteRequest;
+    setDeleteRequest(null);
+    scheduleWithUndo('سيُحذف هذا الطلب نهائيًا', async () => {
+      await deleteDemoRequestApi(target.id);
       toast.success('تم حذف الطلب');
-      setDeleteRequest(null);
-      setRequests(prev => prev.filter(r => r.id !== deleteRequest.id));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطأ');
-    }
+      setRequests(prev => prev.filter(r => r.id !== target.id));
+    });
+  };
+  const handleDeleteAd = async () => {
+    if (!deleteAd) return;
+    const target = deleteAd;
+    setDeleteAd(null);
+    scheduleWithUndo(`سيُحذف إعلان «${target.title}»`, async () => {
+      await deleteAdvertisementApi(target.id);
+      toast.success('تم حذف الإعلان');
+      loadAdvertisements();
+    });
   };
   const PAGE_META: Record<PlatformAdminPage, { title: string; sub: string }> = {
-    overview: { title: 'Vue d’ensemble', sub: 'نشاط المنصة في الوقت الفعلي' },
-    centers: { title: 'Centres & Abonnements', sub: `${arPlural(centers.length, 'مركز', 'مركزان', 'مراكز', 'مركزًا')} · ${arPlural(activeCenters, 'نشط', 'نشطان', 'أنشطة', 'نشطًا')}` },
-    requests: { title: 'Demandes d’essai', sub: `${arPlural(newRequests, 'طلب جديد', 'طلبان جديدان', 'طلبات جديدة', 'طلبًا جديدًا')} قيد المعالجة` },
+    overview: { title: 'نظرة عامة', sub: 'نشاط المنصة في الوقت الفعلي' },
+    centers: { title: 'المراكز والاشتراكات', sub: `${arPlural(centers.length, 'مركز', 'مركزان', 'مراكز', 'مركزًا')} · ${arPlural(activeCenters, 'نشط', 'نشطان', 'أنشطة', 'نشطًا')}` },
+    requests: { title: 'طلبات التجربة', sub: `${arPlural(newRequests, 'طلب جديد', 'طلبان جديدان', 'طلبات جديدة', 'طلبًا جديدًا')} قيد المعالجة` },
     finance: { title: 'المالية (SaaS)', sub: 'الفوترة وإيرادات المنصة' },
     pricing: { title: 'التعريفات والوحدات', sub: `السنة الدراسية ${priceYear}` },
     advertisements: { title: 'الإعلانات', sub: 'البانرات وشرائط العرض للمراكز والواجهة' },
@@ -641,6 +679,8 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     handleCancelScheduledPlan,
     handleReqStatus,
     handleDeleteCenter,
+    handleDeleteAd,
+    scheduleWithUndo,
     handleDeleteRequest,
     PAGE_META,
     inputCls,

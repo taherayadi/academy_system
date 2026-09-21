@@ -45,6 +45,8 @@ vi.mock('../api', () => ({
 }));
 
 import * as api from '../api';
+import { setUndoWindowMs } from './dashboard/usePlatformDashboard';
+import { ToastProvider } from './Toast';
 
 beforeAll(() => {
   class IO { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } root = null; rootMargin = ''; thresholds = []; }
@@ -1018,7 +1020,8 @@ describe('operator accelerators', () => {
     createdAt: Date.now(), updatedAt: Date.now(),
   });
 
-  it('bulk approve: select pending renewals, confirm once, decide each', async () => {
+  it('bulk approve: select pending renewals, confirm once, decide each after the undo window', async () => {
+    setUndoWindowMs(200);
     (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
       requests: [mkPending('r1', 'Alpha'), mkPending('r2', 'Beta')], history: [],
     });
@@ -1032,9 +1035,29 @@ describe('operator accelerators', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'قبول المحدد' }));
     fireEvent.click(await screen.findByRole('button', { name: 'قبول وتطبيق' }));
 
-    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledTimes(2), { timeout: 3000 });
     expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved');
     expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r2', 'approved');
+    setUndoWindowMs(6000);
+  });
+
+  it('bulk undo: تراجع within the window cancels the commit entirely', async () => {
+    setUndoWindowMs(700);
+    (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({
+      requests: [mkPending('r1', 'Alpha')], history: [],
+    });
+    (api.decideRenewalRequestApi as ReturnType<typeof vi.fn>).mockClear();
+    render(<ToastProvider><PlatformAdminDashboard page="renewals" onNavigate={() => {}} /></ToastProvider>);
+
+    fireEvent.click(await screen.findByLabelText('اختيار طلب Alpha'));
+    fireEvent.click(await screen.findByRole('button', { name: 'رفض المحدد' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'رفض الطلبات' }));
+
+    // The undo toast is up; use it before the window lapses.
+    fireEvent.click(await screen.findByRole('button', { name: 'تراجع' }));
+    await new Promise(r => setTimeout(r, 800));
+    expect(api.decideRenewalRequestApi).not.toHaveBeenCalled();
+    setUndoWindowMs(6000);
   });
 
   it('the / key focuses the console search outside of inputs', async () => {
