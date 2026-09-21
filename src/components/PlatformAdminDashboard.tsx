@@ -187,13 +187,17 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         open={!!deleteCenter}
         title="حذف المركز؟"
         message={`هل أنت متأكد من حذف «${deleteCenter?.name}»؟ ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`}
+        confirmLabel="تأكيد الحذف"
+        danger
         onConfirm={handleDeleteCenter}
         onCancel={() => setDeleteCenter(null)}
       />
       <ConfirmDialog
         open={!!deleteRequest}
         title="حذف الطلب؟"
-        message={`حذف طلب «${titleCaseName(deleteRequest?.fullName)}»؟`}
+        message={`حذف طلب «${titleCaseName(deleteRequest?.fullName)}»؟ ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`}
+        confirmLabel="تأكيد الحذف"
+        danger
         onConfirm={handleDeleteRequest}
         onCancel={() => setDeleteRequest(null)}
       />
@@ -201,6 +205,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         open={!!deleteAd}
         title="حذف هذا الإعلان؟"
         message={`حذف «${deleteAd?.title}»؟ ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`}
+        confirmLabel="تأكيد الحذف"
+        danger
         onConfirm={handleDeleteAd}
         onCancel={() => setDeleteAd(null)}
       />

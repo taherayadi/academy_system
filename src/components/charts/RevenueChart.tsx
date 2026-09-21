@@ -30,7 +30,7 @@ export function RevenueChart({ monthlyData, loading, collectedThisYear }: Revenu
   // spoken summary; a screen-reader-only table carries the exact values
   // (WCAG 1.1.1 Non-text Content).
   const revenueAriaLabel =
-    'Revenus encaissés — 6 derniers mois : ' +
+    'الإيرادات المحصّلة — 6 derniers mois : ' +
     monthlyData.map((m) => `${m.label} ${m.total.toFixed(0)} TND`).join(', ') +
     (collectedThisYear !== undefined ? `. Total annuel : ${collectedThisYear.toFixed(0)} TND.` : '.');
 
@@ -42,7 +42,7 @@ export function RevenueChart({ monthlyData, loading, collectedThisYear }: Revenu
             <BarChart3 aria-hidden="true" className="h-4 w-4 text-accent-500" />
           </span>
           <div>
-            <h3 className="text-sm font-black text-slate-900">Revenus encaissés</h3>
+            <h3 className="text-sm font-black text-slate-900">الإيرادات المحصّلة</h3>
             <p className="text-[11px] font-bold text-slate-500">6 derniers mois</p>
           </div>
         </div>
@@ -77,7 +77,7 @@ export function RevenueChart({ monthlyData, loading, collectedThisYear }: Revenu
             </div>
           </div>
           <table className="sr-only">
-            <caption>Revenus encaissés par mois (TND)</caption>
+            <caption>الإيرادات المحصّلة شهريًا (TND)</caption>
             <thead>
               <tr>
                 <th scope="col">الشهر</th>

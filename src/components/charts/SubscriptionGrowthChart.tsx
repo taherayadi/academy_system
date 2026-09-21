@@ -20,8 +20,8 @@ export function SubscriptionGrowthChart() {
             <TrendingUp aria-hidden="true" className="h-4 w-4 text-[#d97706]" />
           </span>
           <div>
-            <h3 className="text-sm font-black text-slate-900">Croissance des abonnements</h3>
-            <p className="text-[11px] font-bold text-slate-500">À venir</p>
+            <h3 className="text-sm font-black text-slate-900">نمو الاشتراكات</h3>
+            <p className="text-[11px] font-bold text-slate-500">قريبًا</p>
           </div>
         </div>
       </div>

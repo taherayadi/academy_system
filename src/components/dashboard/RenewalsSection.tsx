@@ -180,7 +180,7 @@ export default function RenewalsSection({ d }: { d: DashboardApi }) {
             open={bulkDecision !== null}
             title={bulkDecision === 'approved' ? 'قبول الطلبات المحددة' : 'رفض الطلبات المحددة'}
             message={bulkDecision === 'approved'
-              ? `سيُقبل ${selected.size} طلبًا ويُطبَّق على مراكزه فورًا (تجديدًا أو تغيير باقة). لا يمكن التراجع.`
+              ? `سيُقبل ${selected.size} طلبًا ويُطبَّق على مراكزه فورًا (تجديدًا أو تغيير باقة). ستبقى فرصة ثوانٍ للتراجع بعد التأكيد.`
               : `سيُرفض ${selected.size} طلبًا دون تطبيق أي تغيير على المراكز.`}
             confirmLabel={bulkDecision === 'approved' ? 'قبول وتطبيق' : 'رفض الطلبات'}
             danger={bulkDecision === 'rejected'}

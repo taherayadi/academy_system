@@ -17,9 +17,9 @@ export default function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = 'تأكيد الحذف',
+  confirmLabel = 'تأكيد',
   cancelLabel = 'إلغاء',
-  danger = true,
+  danger = false,
   onConfirm,
   onCancel
 }: ConfirmDialogProps) {
