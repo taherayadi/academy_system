@@ -49,11 +49,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, theme);
 
-    // Future: Apply theme switching logic here
-    // Example: document.documentElement.dataset.theme = theme;
-    // This would work with CSS like: [data-theme="dark"] { --color-accent-500: #...; }
-
-    console.log(`Theme set to: ${theme}`);
+    // Theme switching is intentionally a stub — see DESIGN.md
+    // ("Theme policy — light-only, deliberately") for the work plan.
+    void theme;
   }, [theme]);
 
   return (
