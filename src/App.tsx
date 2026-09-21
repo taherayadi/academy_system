@@ -287,7 +287,7 @@ export default function App() {
               </button>
               <button
                 onClick={handleLogout}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-11 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-[11px] font-bold cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-11 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold cursor-pointer"
               >
                 <LogOut size={13} /> خروج
               </button>
@@ -307,7 +307,7 @@ export default function App() {
                 <span className="text-[11px] text-accent-500 font-bold block">لوحة تحكم SaaS</span>
               </div>
             </div>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 p-2 min-h-11 min-w-11 inline-flex items-center justify-center cursor-pointer" aria-label="خروج">
+            <button onClick={handleLogout} className="text-slate-500 hover:text-red-600 p-2 min-h-11 min-w-11 inline-flex items-center justify-center cursor-pointer" aria-label="خروج">
               <LogOut size={18} />
             </button>
           </div>

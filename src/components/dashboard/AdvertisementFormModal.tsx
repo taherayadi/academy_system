@@ -172,7 +172,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
                     <span className="absolute top-1 start-1 text-[11px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
-                      className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
+                      className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-600 hover:bg-red-50 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
                       <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>

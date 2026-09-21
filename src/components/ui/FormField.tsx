@@ -55,7 +55,7 @@ export function FormField({
       </label>
       {control}
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-[11px] font-bold text-error-500">
+        <p id={errorId} role="alert" className="mt-1 text-[11px] font-bold text-error-600">
           {error}
         </p>
       ) : hint ? (
