@@ -89,7 +89,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           {/* Login Form */}
           <form onSubmit={handleFormSubmit} className="space-y-5">
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
+              <div role="alert" className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
                 ⚠️ {error}
               </div>
             )}
