@@ -1,13 +1,14 @@
 import { motion } from 'motion/react';
-import { Building2, CheckCircle2, PauseCircle, CalendarClock, Layers, Trash2, X, Edit, Lock } from 'lucide-react';
+import {Building2, CheckCircle2, PauseCircle, CalendarClock, Layers, Trash2, X, Edit, Lock, Plus } from 'lucide-react';
 import { StatusBadge, SkeletonCard } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
 import { daysLeft, inferredSubscriptionStart, normalizeCenterType, CENTER_TYPE_LABEL, STATUS_BADGE, STATUS_LABEL, PLAN_BADGE, PLAN_LABEL, isBaseModule, MODULE_LABEL } from './constants';
-import {Segmented, Pagination, Hint } from './uiParts';
+import {Segmented, Pagination, Hint, EmptyState } from './uiParts';
+import { PrimaryButton } from '../ui';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function CentersSection({ d }: { d: DashboardApi }) {
-  const { listTopRef, centerTypeFilter, setCenterTypeFilter, statusFilter, setStatusFilter, planFilter, setPlanFilter, filteredCenters, loading, q, pagedCenters, handleApplyScheduledPlan, handleCancelScheduledPlan, setEditCenter, handleToggleStatus, setPlanCenter, setDeleteCenter, safeCentersPage, centersTotalPages, setCentersPage } = d;
+  const { listTopRef, centerTypeFilter, setCenterTypeFilter, statusFilter, setStatusFilter, planFilter, setPlanFilter, filteredCenters, loading, q, pagedCenters, handleApplyScheduledPlan, handleCancelScheduledPlan, setEditCenter, handleToggleStatus, setPlanCenter, setDeleteCenter, safeCentersPage, centersTotalPages, setCentersPage, setShowNewCenter } = d;
   return (
 (
         <motion.div key="centers" className="relative space-y-4">
@@ -69,10 +70,13 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
               <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
             </div>
           ) : filteredCenters.length === 0 ? (
-            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-500">
-              <Building2 aria-hidden="true" className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-bold">{q ? 'لا توجد نتائج لهذا البحث' : 'لا توجد مراكز'}</p>
-            </div>
+            q ? (
+              <EmptyState icon={Building2} title="لا توجد نتائج لهذا البحث" hint="عدّل البحث أو الفلاتر لعرض مراكز أخرى." />
+            ) : (
+              <EmptyState icon={Building2} title="لا توجد مراكز بعد" hint="أنشئ أول مركز وابدأ دورة حياته التجارية: تجربة، اشتراك، فوترة.">
+                <PrimaryButton icon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={() => setShowNewCenter(true)}>مركز جديد</PrimaryButton>
+              </EmptyState>
+            )
           ) : (
             <>
               <Hint>الإيقاف يجمّد دخول المركز ويحافظ على بياناته وفواتيره، ويمكن التفعيل في أي وقت.</Hint>

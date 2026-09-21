@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Loader2, FileText, Check, X } from 'lucide-react';
+import {RefreshCw, Loader2, FileText, Check, X, CalendarClock } from 'lucide-react';
 import { PrimaryButton } from '../ui';
 import ConfirmDialog from '../ConfirmDialog';
 import { planLabel } from '../../utils/pricing';
 import { arPlural } from '../../utils/format';
 import { RENEWAL_STATUS_LABEL } from './constants';
-import { Segmented } from './uiParts';
+import {Segmented, EmptyState } from './uiParts';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function RenewalsSection({ d }: { d: DashboardApi }) {
@@ -68,12 +68,7 @@ export default function RenewalsSection({ d }: { d: DashboardApi }) {
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-accent-500" /> جارٍ التحميل…
             </p>
           ) : renewalRequests.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
-              <p className="text-sm font-black text-slate-500">لا توجد طلبات</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                تقدم المراكز هنا بطلبات التجديد وتغيير الباقة.
-              </p>
-            </div>
+            <EmptyState icon={CalendarClock} title="لا توجد طلبات تجديد" hint="تقدم المراكز هنا بطلبات التجديد وتغيير الباقة؛ وستصلك فور إرسالها." />
           ) : filteredRenewals.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
               <p className="text-sm font-black text-slate-500">لا توجد نتائج لهذه الفلاتر</p>

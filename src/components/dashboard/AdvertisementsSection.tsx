@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Plus, RefreshCw, Trash2, Loader2, Edit, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
 import { PrimaryButton } from '../ui';
+import { EmptyState } from './uiParts';
 import { AD_POSITION_SPECS, adPositionLabel } from '../../types';
 import { toneClasses } from '../ui/StatusBadge';
 import { fmtDate, arPlural } from '../../utils/format';
@@ -50,11 +51,13 @@ export default function AdvertisementsSection({ d }: { d: DashboardApi }) {
               <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-accent-500" />
             </div>
           ) : advertisements.length === 0 ? (
-            <div className="text-center py-20 text-slate-500">
-              <ImagePlus className="h-12 w-12 mx-auto mb-3 text-slate-400" aria-hidden="true" />
-              <p className="font-bold">{advertisements.length === 0 ? 'لا توجد إعلانات' : 'لا توجد إعلانات لهذا الفلتر'}</p>
-              <p className="text-sm">{advertisements.length === 0 ? 'أنشئ أول بانر للواجهة أو لوحات التحكم.' : 'غيّر الفلتر لعرض حالات أخرى.'}</p>
-            </div>
+            advertisements.length === 0 ? (
+              <EmptyState icon={ImagePlus} title="لا توجد إعلانات" hint="أنشئ أول بانر للواجهة أو لوحات التحكم.">
+                <PrimaryButton icon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={() => setShowNewAd(true)}>إعلان جديد</PrimaryButton>
+              </EmptyState>
+            ) : (
+              <EmptyState icon={ImagePlus} title="لا توجد إعلانات لهذا الفلتر" hint="غيّر الفلتر لعرض حالات أخرى." />
+            )
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {visibleAds.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (

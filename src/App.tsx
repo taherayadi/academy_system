@@ -154,8 +154,17 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 export default function App() {
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [activeTab, setActiveTab] = useState<PlatformTab>('platformAdmin');
+  const [activeTab, setActiveTab] = useState<PlatformTab>(() => {
+    try {
+      const saved = sessionStorage.getItem('platform-console-tab');
+      if (saved && MENU_ITEMS.some(i => i.id === saved)) return saved as PlatformTab;
+    } catch { /* private mode etc. */ }
+    return 'platformAdmin';
+  });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  useEffect(() => {
+    try { sessionStorage.setItem('platform-console-tab', activeTab); } catch { /* ignore */ }
+  }, [activeTab]);
   const toast = useToast();
 
   // Boot: only the SERVER decides who is logged in (platform_sessions). The

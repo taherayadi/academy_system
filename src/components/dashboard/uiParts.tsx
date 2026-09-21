@@ -114,6 +114,18 @@ function NoticeDialog({ notice, onDismiss }: {
 }
 
 
+/** Designed quiet moment: icon + guidance + optional primary action. */
+export function EmptyState({ icon: Icon, title, hint, children }: { icon: any; title: string; hint?: string; children?: React.ReactNode }) {
+  return (
+    <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-slate-200 bg-white/60 text-slate-500">
+      <span className="inline-flex p-3.5 rounded-2xl bg-accent-500/10 text-accent-500 mb-4"><Icon className="h-6 w-6" aria-hidden="true" /></span>
+      <p className="text-sm font-black text-slate-700">{title}</p>
+      {hint && <p className="text-xs font-semibold text-slate-500 mt-1.5 max-w-sm mx-auto leading-relaxed">{hint}</p>}
+      {children && <div className="mt-5 flex justify-center">{children}</div>}
+    </div>
+  );
+}
+
 /** One-line contextual explainer for domain concepts at the decision point. */
 export function Hint({ children }: { children: React.ReactNode }) {
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import {Plus, RefreshCw, Search, X } from 'lucide-react';
 import RenewalReviewModal from './RenewalReviewModal';
 import ConfirmDialog from './ConfirmDialog';
 import icon from '../assets/icon.png';
@@ -64,8 +64,14 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 onChange={e => setSearch(e.target.value)}
                 aria-label={page === 'centers' ? 'البحث عن مركز' : 'البحث عن طلب'}
                 placeholder={page === 'centers' ? 'ابحث عن مركز…' : 'ابحث عن طلب…'}
-                className="w-48 sm:w-56 ps-9 pe-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
+                className={`w-48 sm:w-56 ps-9 ${search ? 'pe-9' : 'pe-3'} py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition`}
               />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} aria-label="مسح البحث"
+                  className="absolute end-1 top-1/2 -translate-y-1/2 min-h-11 min-w-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 transition cursor-pointer">
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
           )}
           {lastSync !== null && (

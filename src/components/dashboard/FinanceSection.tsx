@@ -4,7 +4,7 @@ import { updateInvoiceApi, deleteInvoiceApi, CenterInvoice } from '../../api';
 import { toneClasses } from '../ui/StatusBadge';
 import { arPlural } from '../../utils/format';
 import { invoiceStatusMeta, paymentMethodLabel } from './constants';
-import { Pagination } from './uiParts';
+import {Pagination, EmptyState } from './uiParts';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function FinanceSection({ d }: { d: DashboardApi }) {
@@ -122,8 +122,14 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
                         onChange={e => setInvoiceSearch(e.target.value)}
                         aria-label="تصفية الفواتير باسم المركز"
                         placeholder="تصفية باسم المركز…"
-                        className="ps-9 pe-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition w-48 sm:w-56"
+                        className={`ps-9 ${invoiceSearch ? 'pe-8' : 'pe-3'} py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition w-48 sm:w-56`}
                       />
+                      {invoiceSearch && (
+                        <button type="button" onClick={() => setInvoiceSearch('')} aria-label="مسح التصفية"
+                          className="absolute end-1 top-1/2 -translate-y-1/2 min-h-11 min-w-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 transition cursor-pointer">
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                     <select
                       value={invoiceStatusFilter}
@@ -159,7 +165,7 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
                 </div>
 
                 {invoices.length === 0 ? (
-                  <p className="text-center py-12 text-slate-500 text-sm font-bold">لا توجد فواتير</p>
+                  <EmptyState icon={Receipt} title="لا توجد فواتير بعد" hint="تُولَّد الفواتير تلقائيًا مع دورات الفوترة واشتراكات المراكز." />
                 ) : filteredInvoices.length === 0 ? (
                   <p className="text-center py-12 text-slate-500 text-sm font-bold">لا توجد فاتورة تطابق الفلاتر</p>
                 ) : (

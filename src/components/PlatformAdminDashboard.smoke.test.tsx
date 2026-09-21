@@ -683,7 +683,7 @@ describe('PlatformAdminDashboard — Advertisements page', () => {
     expect(screen.getByText('الإعلانات')).toBeTruthy();
     expect(screen.getByText('لا توجد إعلانات')).toBeTruthy();
     expect(screen.getByText('إدارة الإعلانات')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /إعلان جديد/ })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /إعلان جديد/ }).length).toBeGreaterThanOrEqual(1);
   });
 
   it('« إعلان جديد » opens the form; submitting creates the advertisement', async () => {
@@ -980,7 +980,7 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
   it('shows an empty state when no center has asked yet', async () => {
     (api.fetchRenewalRequestsApi as ReturnType<typeof vi.fn>).mockResolvedValue({ requests: [], history: [] });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
-    await waitFor(() => expect(screen.getByText('لا توجد طلبات')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/لا توجد طلبات/)).toBeTruthy());
   });
 });
 

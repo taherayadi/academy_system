@@ -4,7 +4,7 @@ import { SkeletonCard } from '../ui';
 import { toneClasses } from '../ui/StatusBadge';
 import { fmtDate, arPlural } from '../../utils/format';
 import { parseModules, titleCaseName, normalizeCenterType, CENTER_TYPE_LABEL, REQ_STATUS_BADGE, REQ_STATUS_LABEL, REQ_TYPE_LABEL, isBaseModule, MODULE_LABEL } from './constants';
-import { Segmented, Pagination } from './uiParts';
+import {Segmented, Pagination, EmptyState } from './uiParts';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function RequestsSection({ d }: { d: DashboardApi }) {
@@ -54,10 +54,11 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
               <SkeletonCard lines={3} avatar={true} className="col-span-1 sm:col-span-2 lg:col-span-1" />
             </div>
           ) : filteredRequests.length === 0 ? (
-            <div className="text-center py-20 rounded-3xl bg-white border border-slate-200 text-slate-500">
-              <FileText aria-hidden="true" className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-bold">{q ? 'لا توجد نتائج لهذا البحث' : 'لا توجد طلبات مستلمة'}</p>
-            </div>
+            q ? (
+              <EmptyState icon={FileText} title="لا توجد نتائج لهذا البحث" hint="عدّل البحث أو الفلتر لعرض طلبات أخرى." />
+            ) : (
+              <EmptyState icon={FileText} title="لا توجد طلبات مستلمة" hint="تظهر هنا طلبات المراكز الجديدة فور وصولها من واجهة المنصة." />
+            )
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
