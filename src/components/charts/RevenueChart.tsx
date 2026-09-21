@@ -80,8 +80,8 @@ export function RevenueChart({ monthlyData, loading, collectedThisYear }: Revenu
             <caption>Revenus encaissés par mois (TND)</caption>
             <thead>
               <tr>
-                <th scope="col">Mois</th>
-                <th scope="col">Encaissé</th>
+                <th scope="col">الشهر</th>
+                <th scope="col">المحصَّل</th>
               </tr>
             </thead>
             <tbody>

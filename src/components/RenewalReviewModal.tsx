@@ -687,10 +687,10 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                   <table className="min-w-[560px] w-full" dir="ltr">
                     <thead>
                       <tr className="bg-slate-50 text-start text-[11px] font-black uppercase tracking-wider text-slate-500">
-                        <th className="px-3 py-2">التاريخ</th>
-                        <th className="px-3 py-2">Action</th>
-                        <th className="px-3 py-2">التفاصيل</th>
-                        <th className="px-3 py-2 text-end">المبلغ</th>
+                        <th scope="col" className="px-3 py-2">التاريخ</th>
+                        <th scope="col" className="px-3 py-2">الإجراء</th>
+                        <th scope="col" className="px-3 py-2">التفاصيل</th>
+                        <th scope="col" className="px-3 py-2 text-end">المبلغ</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -55,12 +55,12 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
                     <table className="min-w-[640px] w-full text-sm text-start">
                       <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
                         <tr>
-                          <th className="pb-3 px-3">Centre</th>
-                          <th className="pb-3 px-3">N° Facture</th>
-                          <th className="pb-3 px-3">المبلغ</th>
-                          <th className="pb-3 px-3">رقم الشيك</th>
-                          <th className="pb-3 px-3">تاريخ الشيك</th>
-                          <th className="pb-3 px-3">Actions</th>
+                          <th scope="col" className="pb-3 px-3">المركز</th>
+                          <th scope="col" className="pb-3 px-3">رقم الفاتورة</th>
+                          <th scope="col" className="pb-3 px-3">المبلغ</th>
+                          <th scope="col" className="pb-3 px-3">رقم الشيك</th>
+                          <th scope="col" className="pb-3 px-3">تاريخ الشيك</th>
+                          <th scope="col" className="pb-3 px-3">الإجراءات</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -205,12 +205,12 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
                             <table className="min-w-[640px] w-full text-sm text-start">
                               <thead className="text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-white">
                                 <tr>
-                                  <th className="py-2.5 px-3">N° Facture</th>
-                                  <th className="py-2.5 px-3">الفترة</th>
-                                  <th className="py-2.5 px-3">المبلغ</th>
-                                  <th className="py-2.5 px-3">Paiement</th>
-                                  <th className="py-2.5 px-3">الحالة</th>
-                                  <th className="py-2.5 px-3">Actions</th>
+                                  <th scope="col" className="py-2.5 px-3">رقم الفاتورة</th>
+                                  <th scope="col" className="py-2.5 px-3">الفترة</th>
+                                  <th scope="col" className="py-2.5 px-3">المبلغ</th>
+                                  <th scope="col" className="py-2.5 px-3">الدفع</th>
+                                  <th scope="col" className="py-2.5 px-3">الحالة</th>
+                                  <th scope="col" className="py-2.5 px-3">الإجراءات</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
