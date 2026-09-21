@@ -115,7 +115,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 border border-slate-200"
       >
-        <button type="button" onClick={onClose} className="absolute top-3 left-3 text-slate-500 hover:text-slate-600 cursor-pointer" aria-label="إغلاق">
+        <button type="button" onClick={onClose} className="absolute top-3 end-3 p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-600 cursor-pointer" aria-label="إغلاق">
           <X size={18} />
         </button>
         <h3 className="font-black text-slate-900 mb-1 flex items-center gap-2">
@@ -280,13 +280,13 @@ export default function App() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPasswordModal(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-[11px] font-bold cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-11 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-[11px] font-bold cursor-pointer"
               >
                 <KeyRound size={13} /> كلمة السر
               </button>
               <button
                 onClick={handleLogout}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-[11px] font-bold cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-11 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-[11px] font-bold cursor-pointer"
               >
                 <LogOut size={13} /> خروج
               </button>
@@ -306,7 +306,7 @@ export default function App() {
                 <span className="text-[10px] text-accent-500 font-bold block">لوحة تحكم SaaS</span>
               </div>
             </div>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 p-2 cursor-pointer" aria-label="خروج">
+            <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 p-2 min-h-11 min-w-11 inline-flex items-center justify-center cursor-pointer" aria-label="خروج">
               <LogOut size={18} />
             </button>
           </div>
@@ -317,7 +317,7 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border cursor-pointer ${
+                className={`shrink-0 px-3 min-h-11 inline-flex items-center rounded-full text-[11px] font-bold border cursor-pointer ${
                   activeTab === item.id ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-600 border-slate-200'
                 }`}
               >

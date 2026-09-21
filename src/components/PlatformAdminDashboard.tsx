@@ -344,7 +344,7 @@ function NoticeDialog({ notice, onDismiss }: {
                 </div>
                 <h3 className="font-black text-sm">{notice.title}</h3>
               </div>
-              <button onClick={onDismiss} aria-label="Fermer" className="p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer">
+              <button onClick={onDismiss} aria-label="إغلاق" className="p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
                 <X className="h-5 w-5 text-white/70" aria-hidden="true" />
               </button>
             </div>
@@ -567,7 +567,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             {convertRequestId && <p className="text-[11px] font-bold text-accent-500">تم تحديد النوع والوحدات المطلوبة مسبقًا</p>}
           </div>
         </div>
-        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer" aria-label="Fermer">
+        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" aria-label="إغلاق">
           <X className="h-5 w-5 text-slate-500" aria-hidden="true" />
         </button>
       </div>
@@ -916,11 +916,11 @@ function EditInvoiceModal({ invoice, onClose, onSaved, onPrint }: {
           <div className="flex items-center gap-1">
             {onPrint && (
               <button type="button" onClick={() => onPrint(invoice)} title="طباعة الفاتورة" aria-label="طباعة الفاتورة"
-                className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+                className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
                 <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
               </button>
             )}
-<button type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق" className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+<button type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق" className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
                 <X className="h-5 w-5 text-slate-500" aria-hidden="true" />
             </button>
           </div>
@@ -1267,7 +1267,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
             <p className="text-[11px] font-semibold text-slate-500 truncate max-w-[16rem] sm:max-w-none">{center.name}</p>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer" aria-label="Fermer">
+        <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" aria-label="إغلاق">
           <X className="h-5 w-5 text-slate-500" aria-hidden="true" />
         </button>
       </div>
@@ -1737,7 +1737,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
             </h2>
             <p className="text-[11px] font-bold text-slate-500 truncate">{center.name}</p>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
+          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center flex-shrink-0">
             <X className="h-4 w-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
@@ -2227,7 +2227,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
           <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
             <ImagePlus className="h-4 w-4 text-accent-500" aria-hidden="true" /> {isEdit ? 'تعديل الإعلان' : 'إنشاء إعلان'}
           </h2>
-          <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
             <X className="h-4 w-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
@@ -2281,7 +2281,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                     <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
                     <span className="absolute top-1 start-1 text-[9px] font-black bg-white/90 text-slate-600 rounded px-1.5 py-0.5">#{i + 1}</span>
                     <button type="button" onClick={() => setImageUrls(cur => cur.filter((_, j) => j !== i))}
-                      className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
+                      className="absolute top-1 end-1 p-1 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center" title="إزالة هذه الصورة" aria-label='حذف الصورة'>
                       <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
@@ -2925,7 +2925,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               />
             </div>
           )}
-          <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer" title="Actualiser" aria-label="Actualiser">
+          <button onClick={load} className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer" title="تحديث" aria-label="تحديث">
             <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button onClick={() => setShowNewCenter(true)}
@@ -3896,8 +3896,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={loadAdvertisements} disabled={adsLoading} title="Actualiser" aria-label="Actualiser"
-                className="p-2 hover:bg-slate-100 rounded-xl transition cursor-pointer">
+              <button onClick={loadAdvertisements} disabled={adsLoading} title="تحديث" aria-label="تحديث"
+                className="p-2 hover:bg-slate-100 rounded-xl transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
                 <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               </button>
               <button onClick={() => setShowNewAd(true)}
@@ -4021,8 +4021,8 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 ]}
               />
             </div>
-              <button onClick={loadRenewals} title="Actualiser" aria-label="Actualiser"
-              className="ms-auto p-2.5 rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer">
+              <button onClick={loadRenewals} title="تحديث" aria-label="تحديث"
+              className="ms-auto p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer">
               <RefreshCw className={`h-4 w-4 ${renewalsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           </div>

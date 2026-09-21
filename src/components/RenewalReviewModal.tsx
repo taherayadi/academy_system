@@ -427,7 +427,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               {' · '}طلب بتاريخ {fmtDate(request.createdAt)}
             </p>
           </div>
-          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer flex-shrink-0">
+          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center">
             <X className="h-4 w-4 text-slate-500" />
           </button>
         </div>
