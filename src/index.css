@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+:root {
+  /* Light-only theme policy (see DESIGN.md) — form controls, scrollbars and
+     canvas must render light even under a dark-mode user agent. */
+  color-scheme: light;
+}
+
 @theme {
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cairo", ui-monospace, SFMono-Regular, monospace;
