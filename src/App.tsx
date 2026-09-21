@@ -254,6 +254,7 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
+                  aria-current={active ? 'page' : undefined}
                   className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition cursor-pointer ${
                     active
                       ? 'bg-accent-500 text-white shadow-lg shadow-accent-500/25'
@@ -317,6 +318,7 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
+                aria-current={activeTab === item.id ? 'page' : undefined}
                 className={`shrink-0 px-3 min-h-11 inline-flex items-center rounded-full text-[11px] font-bold border cursor-pointer ${
                   activeTab === item.id ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-600 border-slate-200'
                 }`}
