@@ -60,7 +60,7 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
               {pagedRequests.map(req => {
             const mods = parseModules(req.requestedModules);
             return (

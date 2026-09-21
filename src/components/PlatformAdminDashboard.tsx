@@ -38,7 +38,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   }, []);
   const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd } = d;
   return (
-    <div className="relative space-y-6" dir="rtl">
+    <div className="relative space-y-6 overflow-x-clip" dir="rtl">
 
       {/* soft background wash */}
       <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-[280px] w-[760px] rounded-full bg-accent-500/[0.06] blur-[110px] pointer-events-none" />
@@ -89,7 +89,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
             className="flex items-center gap-2 px-4 py-2.5 bg-accent-500 hover:shadow-md text-white text-sm font-black rounded-xl shadow-sm shadow-accent-500/20 transition cursor-pointer">
             <Plus aria-hidden="true" className="h-4 w-4" />
             <span className="hidden sm:inline">مركز جديد</span>
-            <span className="sm:hidden">Centre</span>
+            <span className="sm:hidden">مركز</span>
           </button>
         </div>
       </div>

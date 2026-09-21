@@ -11,7 +11,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
       <span className="text-xs font-bold text-slate-500">
         {(page - 1) * size + 1}–{Math.min(page * size, total)} من {total}
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap justify-end">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
           className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           aria-label="الصفحة السابقة">

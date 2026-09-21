@@ -73,7 +73,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       >
 
         {/* Header — light, landing-style */}
-        <div className="px-8 pt-8 pb-6 text-center relative bg-gradient-to-b from-accent-500/[0.06] to-transparent border-b border-slate-100">
+        <div className="px-6 sm:px-8 pt-8 pb-6 text-center relative bg-gradient-to-b from-accent-500/[0.06] to-transparent border-b border-slate-100">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-accent-500 shadow-lg shadow-accent-500/25 flex items-center justify-center ring-1 ring-white/40">
             <img src={icon} alt="System Academy SaaS" className="center-logo-img w-full h-full object-cover" />
           </div>
@@ -84,7 +84,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </div>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-6 sm:p-8 space-y-6">
 
           {/* Login Form */}
           <form onSubmit={handleFormSubmit} className="space-y-5">

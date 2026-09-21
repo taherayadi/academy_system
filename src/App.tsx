@@ -238,7 +238,7 @@ export default function App() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-accent-700 focus:rounded-xl focus:border focus:border-accent-500 focus:text-sm focus:font-black">تخطي إلى المحتوى</a>
       <div className="flex min-h-screen">
         {/* ── Sidebar ── */}
-        <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-lg:hidden">
+        <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-md:hidden">
           <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
             <img src={brandIcon} alt="System Academy SaaS" className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-accent-500/20 ring-1 ring-white/40" />
             <div>
@@ -300,7 +300,7 @@ export default function App() {
         {/* ── Main area ── */}
         <main className="flex-1 min-w-0 flex flex-col">
           {/* Mobile top bar */}
-          <div className="lg:hidden bg-white border-b border-slate-200/70 px-4 py-3 flex items-center justify-between">
+          <div className="md:hidden bg-white border-b border-slate-200/70 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <img src={brandIcon} alt="" className="w-9 h-9 rounded-xl object-cover" />
               <div>
@@ -314,7 +314,7 @@ export default function App() {
           </div>
 
           {/* Mobile tab strip */}
-          <div className="lg:hidden flex gap-2 px-3 py-2 bg-white border-b border-slate-100 overflow-x-auto">
+          <div className="md:hidden flex gap-2 px-3 py-2 bg-white border-b border-slate-100 overflow-x-auto">
             {MENU_ITEMS.map((item) => (
               <button
                 key={item.id}
@@ -338,7 +338,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="flex-1 p-4 lg:p-6"
+              className="flex-1 p-4 md:p-6"
             >
               <Suspense fallback={<DashboardFallback />}>
                 <PlatformAdminDashboard

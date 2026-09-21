@@ -56,7 +56,7 @@ export default function AdvertisementsSection({ d }: { d: DashboardApi }) {
               <p className="text-sm">{advertisements.length === 0 ? 'أنشئ أول بانر للواجهة أو لوحات التحكم.' : 'غيّر الفلتر لعرض حالات أخرى.'}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {visibleAds.slice((adsPage - 1) * PAGE_SIZE, adsPage * PAGE_SIZE).map(ad => (
                 <div key={ad.id} className="border border-slate-200 rounded-xl p-4 bg-white hover:border-accent-500/30 transition">
                   <div className="aspect-video bg-slate-100 rounded-lg mb-3 overflow-hidden">

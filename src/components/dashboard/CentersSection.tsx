@@ -75,7 +75,7 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
               {pagedCenters.map(c => {
             const days = daysLeft(c.trialEndsAt);
             const subscriptionStart = inferredSubscriptionStart(c);
