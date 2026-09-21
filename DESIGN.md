@@ -63,3 +63,10 @@ controls and scrollbars render the light way in dark-mode UAs.
 - Icon-only controls: accessible name (`aria-label`), ≥ 44px targets on
   mobile-close nav, ≥ 24px elsewhere.
 - Tables: headers have `scope`, numeric columns are LTR-isolated.
+- **Two control scales, deliberately**: form-scale primitives
+  (`PrimaryButton`, `SecondaryButton` incl. the dashed create-variant,
+  `FormField`) for modals and page-level CTAs; compact pills/row actions
+  (11px, rounded-full/`rounded-xl`) inside dense tables. The scales differ
+  on purpose — a 44px form button inside a table row would break scan-ability —
+  but each scale is internally uniform. New controls must pick one of the two;
+  a third style is a bug.

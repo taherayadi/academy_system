@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Clock, Plus, Check, Loader2, DollarSign, Lock, GraduationCap } from 'lucide-react';
+import { PrimaryButton, SecondaryButton } from '../ui';
 import { ALL_MODULES, isBaseModule, BUNDLED_MODULE_KEY, MODULE_LABEL } from './constants';
 import type { DashboardApi } from './usePlatformDashboard';
 
@@ -27,13 +28,13 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
                   ))}
                 </select>
               </div>
-              <button onClick={addSchoolYear} disabled={addingYear}
-                className="ms-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-dashed border-accent-500/50 text-accent-500 text-xs sm:text-sm font-black whitespace-nowrap hover:bg-accent-500/5 transition cursor-pointer disabled:opacity-60"
+              <SecondaryButton variant="dashed" onClick={addSchoolYear} disabled={addingYear}
+                className="ms-auto text-xs sm:text-sm font-black whitespace-nowrap"
                 title={`أنشئ ${nextSchoolYear} بتعريفات منسوخة من ${priceYears[priceYears.length - 1] || ''}`}
+                icon={addingYear ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
               >
-                {addingYear ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
                 إضافة السنة الدراسية {nextSchoolYear}
-              </button>
+              </SecondaryButton>
             </div>
           </div>
 
@@ -127,11 +128,10 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
             <p className="text-[11px] font-bold text-slate-500">
               تعريفات مطبقة على السنة الدراسية {priceYear}.
             </p>
-            <button onClick={savePrices} disabled={savingPrices || pricesLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-accent-500 hover:shadow-md text-white text-sm font-black rounded-2xl shadow-sm shadow-accent-500/20 transition cursor-pointer disabled:opacity-60">
-              {savingPrices ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-              Sauvegarder les tarifs
-            </button>
+            <PrimaryButton onClick={savePrices} disabled={pricesLoading} loading={savingPrices}
+              icon={<Check aria-hidden="true" className="h-4 w-4" />}>
+              حفظ التعريفات
+            </PrimaryButton>
           </div>
         </motion.div>
       )

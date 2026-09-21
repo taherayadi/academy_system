@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Plus, RefreshCw, Trash2, Loader2, Edit, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
+import { PrimaryButton } from '../ui';
 import { AD_POSITION_SPECS, adPositionLabel } from '../../types';
 import { toneClasses } from '../ui/StatusBadge';
 import { fmtDate, arPlural } from '../../utils/format';
@@ -38,11 +39,9 @@ export default function AdvertisementsSection({ d }: { d: DashboardApi }) {
                 className="p-2 hover:bg-slate-100 rounded-xl transition cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center">
                 <RefreshCw className={`h-5 w-5 text-slate-600 ${adsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               </button>
-              <button onClick={() => setShowNewAd(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-accent-500 text-white text-sm font-black rounded-xl shadow-md hover:shadow-md transition cursor-pointer">
-                <Plus className="h-4 w-4" aria-hidden="true" />
+              <PrimaryButton onClick={() => setShowNewAd(true)} icon={<Plus className="h-4 w-4" aria-hidden="true" />}>
                 إعلان جديد
-              </button>
+              </PrimaryButton>
             </div>
           </div>
 
