@@ -193,12 +193,12 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
                 <div className="mt-auto pt-4">
                 <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-3.5">
                   <button onClick={() => setEditCenter(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5"
+                    className="text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1.5"
                     title="معلومات أساسية عن المركز">
                     <Edit className="h-4 w-4" aria-hidden="true" /> تعديل
                   </button>
                   <button onClick={() => handleToggleStatus(c)}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
+                    className={`text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       c.status === 'suspended'
                         ? 'bg-accent-500/[0.06] text-accent-700 border-accent-500/20 hover:bg-accent-500/10'
                         : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
@@ -206,12 +206,12 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
                     {c.status === 'suspended' ? <><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> تفعيل</> : <><PauseCircle className="h-4 w-4" aria-hidden="true" /> إيقاف</>}
                   </button>
                   <button onClick={() => setPlanCenter(c)}
-                    className="text-[11px] font-bold px-3 py-1.5 bg-accent-500/10 text-accent-500 border border-accent-500/30 rounded-xl hover:bg-accent-500/20 transition cursor-pointer flex items-center gap-1.5"
+                    className="text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 bg-accent-500/10 text-accent-500 border border-accent-500/30 rounded-xl hover:bg-accent-500/20 transition cursor-pointer flex items-center gap-1.5"
                     title="إدارة الباقة والوحدات والفواتير والتغييرات المبرمجة">
                     <Layers className="h-4 w-4" aria-hidden="true" /> الباقات &amp; الفواتير
                   </button>
                   <button onClick={() => setDeleteCenter(c)}
-                    className="ms-auto text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
+                    className="ms-auto text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5">
                     <Trash2 className="h-4 w-4" aria-hidden="true" /> Supprimer
                   </button>
                 </div>

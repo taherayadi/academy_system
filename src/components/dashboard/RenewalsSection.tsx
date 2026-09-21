@@ -165,7 +165,7 @@ export default function RenewalsSection({ d }: { d: DashboardApi }) {
                       <button
                         type="button"
                         onClick={() => setReviewRenewal(r)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-accent-500 bg-accent-500/10 hover:bg-accent-500/20 border border-accent-500/30 rounded-xl transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 pointer-coarse:min-h-11 text-[11px] font-black text-accent-500 bg-accent-500/10 hover:bg-accent-500/20 border border-accent-500/30 rounded-xl transition cursor-pointer"
                       >
                         <FileText className="h-4 w-4" aria-hidden="true" />
                         عرض التفاصيل

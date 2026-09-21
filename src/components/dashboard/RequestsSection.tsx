@@ -143,7 +143,7 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
                       value="converted"
                       onChange={e => { if (e.target.value === 'archived') handleReqStatus(req, 'archived'); }}
                       aria-label="حالة الطلب"
-                      className="text-[11px] font-bold px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-600 focus:border-accent-500 focus:ring-0 outline-none cursor-pointer">
+                      className="text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 border border-slate-200 rounded-xl bg-white text-slate-600 focus:border-accent-500 focus:ring-0 outline-none cursor-pointer">
                       <option value="converted">محوَّل</option>
                       <option value="archived">مؤرشف</option>
                     </select>
@@ -151,7 +151,7 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
                     <select
                       value={req.status === 'contacted' ? 'new' : req.status}
                       onChange={e => handleReqStatus(req, e.target.value)}
-                      className="text-[11px] font-bold px-3 py-1.5 border border-slate-200 rounded-xl bg-white focus:border-accent-500 focus:ring-0 outline-none cursor-pointer">
+                      className="text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 border border-slate-200 rounded-xl bg-white focus:border-accent-500 focus:ring-0 outline-none cursor-pointer">
                       <option value="new">جديد</option>
                       <option value="archived">مؤرشف</option>
                     </select>
@@ -160,12 +160,12 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
                   {req.status !== 'converted' ? (
                     <button
                       onClick={() => { setConvertRequest(req); setShowNewCenter(true); }}
-                      className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-accent-500 text-white rounded-xl shadow-sm shadow-accent-500/20 hover:shadow-md transition cursor-pointer">
+                      className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 pointer-coarse:min-h-11 bg-accent-500 text-white rounded-xl shadow-sm shadow-accent-500/20 hover:shadow-md transition cursor-pointer">
                       <Building2 aria-hidden="true" className="h-4 w-4" /> Convertir en Centre
                     </button>
                   ) : (
                     <span
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 bg-accent-500/[0.06] text-accent-700 border border-accent-500/20 rounded-xl"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 pointer-coarse:min-h-11 bg-accent-500/[0.06] text-accent-700 border border-accent-500/20 rounded-xl"
                       title='تم تحويل هذا الطلب إلى مركز مسبقًا — التحويل ممكن مرة واحدة فقط.'
                     >
                       <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> تم تحويله
@@ -173,7 +173,7 @@ export default function RequestsSection({ d }: { d: DashboardApi }) {
                   )}
 
                   <button onClick={() => setDeleteRequest(req)}
-                    className="ms-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
+                    className="ms-auto flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 pointer-coarse:min-h-11 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition cursor-pointer">
                     <Trash2 aria-hidden="true" className="h-4 w-4" /> حذف
                   </button>
                 </div>

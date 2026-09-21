@@ -15,7 +15,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
       </span>
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
-          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           aria-label="الصفحة السابقة">
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -23,7 +23,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
           <span key={`gap-${i}`} className="h-9 min-w-6 flex items-center justify-center text-xs font-black text-slate-400">…</span>
         ) : (
           <button key={p} onClick={() => onChange(p)} aria-current={p === page ? 'page' : undefined}
-            className={`h-9 min-w-9 px-2 rounded-xl text-xs font-black transition cursor-pointer ${
+            className={`h-9 min-w-9 pointer-coarse:h-11 pointer-coarse:min-w-11 px-2 rounded-xl text-xs font-black transition cursor-pointer ${
               p === page
                 ? 'bg-accent-500 text-white shadow-sm shadow-accent-500/20'
                 : 'border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500'
@@ -32,7 +32,7 @@ function Pagination({ page, totalPages, total, onChange, size = PAGE_SIZE }: {
           </button>
         ))}
         <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
-          className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-accent-500/40 hover:text-accent-500 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           aria-label="الصفحة التالية">
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
