@@ -109,11 +109,6 @@
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 
-  /* Landing page marquee (infinite module ticker) */
-  --animate-marquee: marquee 42s linear infinite;
-  @keyframes marquee {
-    to { transform: translateX(-50%); }
-  }
 }
 
 @layer utilities {
@@ -368,54 +363,5 @@ input[type="date"].input-date-ltr {
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
-  }
-}
-
-/* A4 landscape printing for timetables / planning tables */
-@media print {
-  @page landscape {
-    size: A4 landscape;
-    margin: 0mm !important;
-  }
-  .print-landscape {
-    page: landscape;
-    padding: 8mm 10mm !important;
-  }
-}
-
-/* Bus Route Sheet — ensure trip blocks allow page breaks between them,
-   and show the mini-header (bus-trip-page-header) only at top of a new printed page */
-@media print {
-  /* Allow page breaks between trip blocks */
-  .bus-trip-block {
-    break-before: auto;
-  }
-
-  /* The print-area for the bus sheet must NOT avoid breaks (it's multi-page) */
-  .print-area:has(.bus-trip-block) {
-    break-inside: auto !important;
-    page-break-inside: auto !important;
-  }
-
-  /* Trip tables: allow rows to break across pages */
-  .print-area:has(.bus-trip-block) table,
-  .print-area:has(.bus-trip-block) tr {
-    break-inside: auto !important;
-    page-break-inside: auto !important;
-  }
-
-  /* The per-trip mini-header: hidden by default, shown only in print on non-first trips */
-  .bus-trip-page-header {
-    display: flex !important;
-    visibility: visible !important;
-    padding-top: 4mm;
-    padding-bottom: 2mm;
-    margin-bottom: 2mm;
-  }
-
-  /* Main bus header: only show once, at the very top */
-  .bus-print-header {
-    break-after: avoid;
-    page-break-after: avoid;
   }
 }

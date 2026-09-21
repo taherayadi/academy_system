@@ -27,7 +27,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   return (
     <div className="relative space-y-6" dir="rtl">
 
-      {/* soft wash — same spirit as the landing page */}
+      {/* soft background wash */}
       <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-[280px] w-[760px] rounded-full bg-accent-500/[0.06] blur-[110px] pointer-events-none" />
 
       {/* ─── Header (landing style card) ──────────────────────────── */}
