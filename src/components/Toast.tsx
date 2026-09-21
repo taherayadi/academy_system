@@ -27,18 +27,19 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+// Stable singleton: a fresh object per call would give the fallback a new
+// identity every render, spinning any useCallback/useEffect keyed on toast
+// (e.g. data-loading effects) into a fetch loop.
+const NOOP_TOAST: ToastContextValue = {
+  showToast: () => {},
+  success: () => {},
+  error: () => {},
+  info: () => {},
+  warning: () => {}
+};
+
 export function useToast() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    return {
-      showToast: () => {},
-      success: () => {},
-      error: () => {},
-      info: () => {},
-      warning: () => {}
-    } as ToastContextValue;
-  }
-  return ctx;
+  return useContext(ToastContext) ?? NOOP_TOAST;
 }
 
 const iconMap: Record<ToastType, React.ReactNode> = {

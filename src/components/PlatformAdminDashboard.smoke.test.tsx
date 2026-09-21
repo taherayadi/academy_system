@@ -904,7 +904,7 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     fireEvent.click(review);
 
     // La modale affiche la demande en lecture seule : plan Growth / mensuel, non modifiables.
-    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('مراجعة وتطبيق').length).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
     expect(screen.getByTestId('review-apply-cycle').textContent).toBe('شهري');
     expect(screen.queryByTitle('Plan du centre')).toBeNull();
@@ -950,7 +950,7 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
     fireEvent.click(await screen.findByRole('button', { name: /مراجعة وتطبيق/ }));
-    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('مراجعة وتطبيق').length).toBeGreaterThanOrEqual(2));
 
     // Centre en essai → activation immédiate via set-plan (moteur Plans & factures).
     fireEvent.click(await screen.findByRole('button', { name: /قبول وتطبيق/ }));
@@ -968,7 +968,7 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     });
     render(<PlatformAdminDashboard page="renewals" onNavigate={() => {}} />);
     fireEvent.click(await screen.findByRole('button', { name: /مراجعة وتطبيق/ }));
-    await waitFor(() => expect(screen.getByText('مراجعة وتطبيق')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('مراجعة وتطبيق').length).toBeGreaterThanOrEqual(2));
 
     fireEvent.click(await screen.findByRole('button', { name: /^رفض$/ }));
 
@@ -1032,8 +1032,17 @@ describe('operator accelerators', () => {
     fireEvent.click(await screen.findByLabelText('اختيار طلب Alpha'));
     fireEvent.click(await screen.findByLabelText('اختيار طلب Beta'));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'قبول المحدد' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'قبول وتطبيق' }));
+    // Re-renders can detach a freshly-found node before the click registers
+    // (React root event delegation), so find+click with a bounded retry.
+    let dialogConfirm: HTMLElement | null = null;
+    for (let attempt = 0; attempt < 3 && !dialogConfirm; attempt++) {
+      fireEvent.click(screen.getByRole('button', { name: 'قبول المحدد' }));
+      try {
+        dialogConfirm = await screen.findByRole('button', { name: 'قبول وتطبيق' }, { timeout: 1500 });
+      } catch { /* retry */ }
+    }
+    if (!dialogConfirm) throw new Error('bulk confirm dialog never opened');
+    fireEvent.click(dialogConfirm);
 
     await waitFor(() => expect(api.decideRenewalRequestApi).toHaveBeenCalledTimes(2), { timeout: 3000 });
     expect(api.decideRenewalRequestApi).toHaveBeenCalledWith('r1', 'approved');
