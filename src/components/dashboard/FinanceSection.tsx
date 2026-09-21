@@ -22,7 +22,7 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
               {billingSummary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'MRR (الفواتير المدفوعة)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-accent-500/10 text-accent-500' },
+                    { label: 'الإيراد الشهري (الفواتير المدفوعة)', value: `${billingSummary.mrr.toFixed(2)} TND`, icon: TrendingUp, tint: 'bg-accent-500/10 text-accent-500' },
                     { label: 'تحصيل هذا الشهر', value: `${billingSummary.collectedThisMonth.toFixed(2)} TND`, icon: DollarSign, tint: 'bg-accent-500/10 text-accent-500' },
                     { label: 'تحصيل هذه السنة', value: `${billingSummary.collectedThisYear.toFixed(2)} TND`, icon: BarChart3, tint: 'bg-accent-500/10 text-accent-500' },
                     { label: 'فواتير قيد الانتظار', value: `${billingSummary.pendingInvoices.toFixed(2)} TND`, icon: AlertCircle, tint: 'bg-amber-100 text-amber-600' }

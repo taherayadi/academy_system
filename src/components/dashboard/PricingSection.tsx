@@ -71,7 +71,7 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-white/10 border border-white/20 px-3.5 py-2.5">
                       <span className="flex items-center gap-2"><Clock className="h-4 w-4" aria-hidden="true" /> Jd. Horaires</span>
-                      <span className="font-black text-white/90">Inclus — offert</span>
+                      <span className="font-black text-white/90">مشمول في الباقة</span>
                     </div>
                   </div>
                 </div>
@@ -93,20 +93,20 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
                           <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                             {m.label}
                             {m.key === BUNDLED_MODULE_KEY ? (
-                              <span className="text-[8px] font-black text-accent-700 bg-accent-500/[0.06] border border-accent-500/20 rounded-full px-1.5 py-px uppercase">Offert</span>
+                              <span className="text-[11px] font-black text-accent-700 bg-accent-500/[0.06] border border-accent-500/20 rounded-full px-1.5 py-px">مشمول</span>
                             ) : base ? (
-                              <span className="text-[8px] font-black text-accent-500 bg-accent-500/10 border border-accent-500/30 rounded-full px-1.5 py-px uppercase">Base</span>
+                              <span className="text-[11px] font-black text-accent-500 bg-accent-500/10 border border-accent-500/30 rounded-full px-1.5 py-px">أساسي</span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] font-semibold text-slate-500">{m.key}</div>
+                          <div className="text-[11px] font-semibold text-slate-500">{MODULE_LABEL(m.key)}</div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {m.key === BUNDLED_MODULE_KEY ? (
-                            <span className="text-sm font-black text-accent-500 w-20 text-center">Inclus</span>
+                            <span className="text-sm font-black text-accent-500 w-20 text-center">مشمول</span>
                           ) : (
                             <input
                               type="number" step="0.5" min="0"
-                              aria-label={`سعر وحدة ${MODULE_LABEL[m.key] ?? m.key} (دينار)`}
+                              aria-label={`سعر وحدة ${MODULE_LABEL(m.key)} (دينار)`}
                               value={priceList[m.key] ?? 0}
                               onChange={e => setPriceList(p => ({ ...p, [m.key]: Number(e.target.value) }))}
                               className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-end text-slate-800 focus:border-accent-500 focus:ring-0 outline-none bg-white transition"

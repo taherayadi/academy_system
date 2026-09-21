@@ -17,9 +17,9 @@ export default function OverviewSection({ d }: { d: DashboardApi }) {
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             {[
-              { label: 'MRR — شهري', value: billingSummary ? `${billingSummary.mrr.toFixed(0)} TND` : '—', icon: TrendingUp, tint: 'bg-accent-500/10 text-accent-500' },
+              { label: 'الإيراد الشهري (MRR)', value: billingSummary ? `${billingSummary.mrr.toFixed(0)} TND` : '—', icon: TrendingUp, tint: 'bg-accent-500/10 text-accent-500' },
               { label: 'إجمالي المراكز', value: centers.length, icon: Building2, tint: 'bg-accent-500/10 text-accent-500' },
-              { label: 'Actifs', value: activeCenters, icon: CheckCircle2, tint: 'bg-accent-500/10 text-accent-500' },
+              { label: 'مراكز نشطة', value: activeCenters, icon: CheckCircle2, tint: 'bg-accent-500/10 text-accent-500' },
               { label: 'في التجربة', value: trialCenters, icon: Clock, tint: 'bg-amber-100 text-amber-600' },
               { label: 'طلبات جديدة', value: newRequests, icon: FileText, tint: 'bg-accent-500/10 text-accent-500' },
               { label: 'مستحقات التحصيل', value: billingSummary ? `${billingSummary.pendingInvoices.toFixed(0)} TND` : '—', icon: Receipt, tint: 'bg-red-100 text-red-600' }
@@ -51,7 +51,7 @@ export default function OverviewSection({ d }: { d: DashboardApi }) {
                   <h3 className="text-sm font-black text-slate-900">أحدث الطلبات</h3>
                 </div>
                 <button onClick={() => onNavigate?.('requests')} className="text-[11px] font-black text-accent-500 hover:text-accent-700 transition inline-flex items-center gap-1 cursor-pointer">
-                  Tout voir <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                  عرض الكل <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </button>
               </div>
               {loading ? (

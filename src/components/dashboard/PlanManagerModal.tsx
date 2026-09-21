@@ -356,7 +356,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
       )}
       {draft.plan === 'basic' && (
         <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Basic : Scolaire + Finance (+ Jd. Horaires offert).
+          الباقة الأساسية: مدرسي + مالية (+ سجل الدوام مشمول).
         </p>
       )}
     </div>
