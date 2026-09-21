@@ -993,6 +993,9 @@ describe('overview work queue', () => {
     const queueRegion = await screen.findByLabelText('طابور العمل');
     expect(queueRegion).toBeTruthy();
 
+    // Freshness chip: the operator can always see how old the data is.
+    expect(await screen.findByText(/آخر تحديث/)).toBeTruthy();
+
     const renewalsTile = await screen.findByRole('button', { name: /تجديدات معلّقة/ });
     expect(renewalsTile.textContent).toContain('1');
 

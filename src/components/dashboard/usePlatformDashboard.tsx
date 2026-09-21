@@ -105,13 +105,18 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
   const visibleAds = adsStatusFilter === 'all'
     ? advertisements
     : advertisements.filter(a => adStatusOf(a) === adsStatusFilter);
+  const [lastSync, setLastSync] = useState<number | null>(null);
+  const [syncFailed, setSyncFailed] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [c, r] = await Promise.all([fetchCentersApi(), fetchDemoRequestsApi()]);
       setCenters(c);
       setRequests(r);
+      setSyncFailed(false);
+      setLastSync(Date.now());
     } catch (err) {
+      setSyncFailed(true);
       toast.error(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
     } finally {
       setLoading(false);
@@ -478,6 +483,8 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
   return {
     page,
     onNavigate,
+    lastSync,
+    syncFailed,
     toast,
     centers,
     setCenters,

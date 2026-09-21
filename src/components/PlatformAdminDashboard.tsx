@@ -23,7 +23,7 @@ import type { DashboardApi } from './dashboard/usePlatformDashboard';
 
 export default function PlatformAdminDashboard({ page = 'overview', onNavigate }: PlatformAdminDashboardProps) {
   const d: DashboardApi = usePlatformDashboard({ page, onNavigate });
-  const { PAGE_META, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd } = d;
+  const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd } = d;
   return (
     <div className="relative space-y-6" dir="rtl">
 
@@ -54,6 +54,19 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
                 className="w-48 sm:w-56 ps-9 pe-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
               />
             </div>
+          )}
+          {lastSync !== null && (
+            <span
+              className={`text-[11px] font-bold inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${
+                syncFailed
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-slate-50 text-slate-500 border-slate-200'
+              }`}
+            >
+              {syncFailed
+                ? 'تعذّر التحديث — البيانات المعروضة قد تكون قديمة'
+                : `آخر تحديث ${new Date(lastSync).toLocaleTimeString('ar-TN', { hour: '2-digit', minute: '2-digit' })}`}
+            </span>
           )}
           <button onClick={load} className="p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 hover:border-accent-500/40 hover:text-accent-500 text-slate-600 transition cursor-pointer" title="تحديث" aria-label="تحديث">
             <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
