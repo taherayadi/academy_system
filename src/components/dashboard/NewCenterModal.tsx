@@ -362,6 +362,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                     </p>
                   ) : (
                     <input type="number" min="0" step="0.01" value={form.monthlyPrice}
+                      aria-label="التعرفة الشهرية المتفق عليها بالدينار"
                       onChange={e => setForm(f => ({ ...f, monthlyPrice: e.target.value }))}
                       placeholder="أدخل التعرفة المتفق عليها (دينار)"
                       className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 outline-none" />

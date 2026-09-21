@@ -120,6 +120,7 @@ export default function FinanceSection({ d }: { d: DashboardApi }) {
                       <input
                         value={invoiceSearch}
                         onChange={e => setInvoiceSearch(e.target.value)}
+                        aria-label="تصفية الفواتير باسم المركز"
                         placeholder="تصفية باسم المركز…"
                         className="ps-9 pe-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition w-48 sm:w-56"
                       />

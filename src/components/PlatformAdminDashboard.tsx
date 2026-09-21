@@ -49,6 +49,7 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                aria-label={page === 'centers' ? 'البحث عن مركز' : 'البحث عن طلب'}
                 placeholder={page === 'centers' ? 'ابحث عن مركز…' : 'ابحث عن طلب…'}
                 className="w-48 sm:w-56 ps-9 pe-3 py-2.5 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:border-accent-500 focus:ring-0 outline-none transition"
               />

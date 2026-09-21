@@ -28,6 +28,11 @@ import type { CenterInvoice } from '../api';
 import { escapeHtml } from './html';
 
 /** id of the in-page print button of the generated document. */
+
+/** Brand teal — keep in sync with --color-accent-500 in src/index.css
+ *  (this HTML runs in a standalone print window without the app CSS). */
+const BRAND_HEX = '#257C86';
+
 export const PRINT_BUTTON_ID = 'print-btn';
 
 const tnDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('ar-TN') : '—');
@@ -54,7 +59,7 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
   html, body { margin: 0; padding: 0; height: auto; }
   body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; padding: 40px 24px; background: #fff; }
   .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #257C86; padding-bottom: 18px; margin-bottom: 24px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid ${BRAND_HEX}; padding-bottom: 18px; margin-bottom: 24px; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.02em; }
   .muted { color: #64748b; font-size: 12px; }
   .badge { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid ${inv.status === 'paid' ? '#059669' : '#d97706'}; color: ${inv.status === 'paid' ? '#059669' : '#d97706'}; }
@@ -102,7 +107,7 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
   </div></div>
   <footer>وثيقة مولّدة من مساحة الإدارة في SaaS.</footer>
   <div class="noprint" style="text-align:center;margin-top:18px">
-    <button id="${PRINT_BUTTON_ID}" type="button" style="background:#257C86;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 طباعة</button>
+    <button id="${PRINT_BUTTON_ID}" type="button" style="background:${BRAND_HEX};color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 طباعة</button>
     <p style="font-size:11px;color:#94a3b8;margin-top:10px">Ctrl+P (⌘+P) أو القائمة ⋮ → «طباعة» · «حفظ بتنسيق PDF»</p>
   </div>
 </div>

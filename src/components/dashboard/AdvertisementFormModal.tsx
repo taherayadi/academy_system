@@ -135,7 +135,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 {AD_LOCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               {locationSel === '__custom__' && (
-                <input value={customLocation} onChange={e => setCustomLocation(e.target.value)} placeholder="مثال: فواتير، مقصف…"
+                <input value={customLocation} onChange={e => setCustomLocation(e.target.value)} aria-label="وصف الموضع المخصص" placeholder="مثال: فواتير، مقصف…"
                   className={`${fieldCls} mt-2`} />
               )}
             </div>

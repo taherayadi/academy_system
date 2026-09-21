@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Clock, Plus, Check, Loader2, DollarSign, Lock, GraduationCap } from 'lucide-react';
-import { ALL_MODULES, isBaseModule, BUNDLED_MODULE_KEY } from './constants';
+import { ALL_MODULES, isBaseModule, BUNDLED_MODULE_KEY, MODULE_LABEL } from './constants';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function PricingSection({ d }: { d: DashboardApi }) {
@@ -106,6 +106,7 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
                           ) : (
                             <input
                               type="number" step="0.5" min="0"
+                              aria-label={`سعر وحدة ${MODULE_LABEL[m.key] ?? m.key} (دينار)`}
                               value={priceList[m.key] ?? 0}
                               onChange={e => setPriceList(p => ({ ...p, [m.key]: Number(e.target.value) }))}
                               className="w-20 border border-slate-200 rounded-xl px-2.5 py-1.5 text-sm font-black text-end text-slate-800 focus:border-accent-500 focus:ring-0 outline-none bg-white transition"
