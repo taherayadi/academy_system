@@ -313,7 +313,7 @@ export default function App() {
           </div>
 
           {/* Mobile tab strip */}
-          <div className="lg:hidden flex gap-2 px-3 py-2 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar">
+          <div className="lg:hidden flex gap-2 px-3 py-2 bg-white border-b border-slate-100 overflow-x-auto">
             {MENU_ITEMS.map((item) => (
               <button
                 key={item.id}

@@ -123,16 +123,6 @@
   }
 }
 
-/* Hide all scrollbars globally — scroll still works, just invisible */
-::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-* {
-  scrollbar-width: none;  /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
 
 /* Responsive root font-size: scales smoothly with viewport width so every
    rem-based Tailwind text size adapts across screens (24", 15", smaller,
