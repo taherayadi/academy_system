@@ -20,14 +20,14 @@ export function SubscriptionGrowthChart() {
             <TrendingUp aria-hidden="true" className="h-4 w-4 text-[#d97706]" />
           </span>
           <div>
-            <h3 className="text-sm font-black text-slate-900">Croissance des abonnements</h3>
-            <p className="text-[11px] font-bold text-slate-400">À venir</p>
+            <h3 className="text-sm font-black text-slate-900">نمو الاشتراكات</h3>
+            <p className="text-[11px] font-bold text-slate-500">قريبًا</p>
           </div>
         </div>
       </div>
 
       {/* Visual motif: three varying-width skeleton bars hinting at chart bars/line points */}
-      <div className="grid gap-4 py-8">
+      <div className="grid gap-4 py-8" aria-hidden="true">
         <Skeleton className="h-3 w-full rounded-lg" />
         <Skeleton className="h-3 w-3/4 rounded-lg" />
         <Skeleton className="h-3 w-1/2 rounded-lg" />

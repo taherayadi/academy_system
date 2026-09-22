@@ -14,7 +14,7 @@
  *     inline event handler…"
  *
  * Both are silently refused, which is why the invoice rendered (inline CSS is
- * allowed: `style-src 'self' 'unsafe-inline'`) while its 🖨 Imprimer button did
+ * allowed: `style-src 'self' 'unsafe-inline'`) while its print button did
  * nothing. Fix: the popup markup carries NO JavaScript at all — every
  * behaviour is attached from this module (an external, CSP-allowed script) via
  * `addEventListener`, exactly like the `index.html` polyfill that had to be
@@ -28,9 +28,14 @@ import type { CenterInvoice } from '../api';
 import { escapeHtml } from './html';
 
 /** id of the in-page print button of the generated document. */
+
+/** Brand teal — keep in sync with --color-accent-500 in src/index.css
+ *  (this HTML runs in a standalone print window without the app CSS). */
+const BRAND_HEX = '#257C86';
+
 export const PRINT_BUTTON_ID = 'print-btn';
 
-const frDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('fr-FR') : '—');
+const tnDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('ar-TN') : '—');
 
 /**
  * Markup of the printable invoice — self-contained, print-ready and, above all,
@@ -38,34 +43,34 @@ const frDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('fr
  */
 export function buildInvoicePrintDocument(inv: CenterInvoice): string {
   const esc = escapeHtml;
-  const statusText = inv.status === 'paid' ? 'PAYÉE'
-    : inv.status === 'overdue' ? 'EN RETARD'
-    : inv.status === 'cancelled' ? 'ANNULÉE' : 'EN ATTENTE';
+  const statusText = inv.status === 'paid' ? 'مدفوعة'
+    : inv.status === 'overdue' ? 'متأخرة'
+    : inv.status === 'cancelled' ? 'ملغاة' : 'قيد الانتظار';
   const payLine = inv.paymentMethod === 'cheque'
-    ? `Chèque${inv.chequeNumber ? ` N° ${esc(inv.chequeNumber)}` : ''}${inv.chequeDate ? ` daté du ${frDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — en attente d’encaissement' : ''}`
-    : inv.paymentMethod === 'cash' ? 'Espèces'
+    ? `شيك${inv.chequeNumber ? ` رقم ${esc(inv.chequeNumber)}` : ''}${inv.chequeDate ? ` بتاريخ ${tnDate(inv.chequeDate)}` : ''}${inv.status !== 'paid' ? ' — قيد التحصيل' : ''}`
+    : inv.paymentMethod === 'cash' ? 'نقدًا'
     : '—';
-  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" />
-<title>Facture ${esc(inv.invoiceNumber)}</title>
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8" />
+<title>فاتورة ${esc(inv.invoiceNumber)}</title>
 <style>
   /* Margin 0 supprime l'en-tête/pied de page du navigateur (date, titre, URL « blank », n° de page). */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: auto; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; padding: 40px 24px; background: #fff; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; padding: 40px 24px; background: #fff; }
   .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #257C86; padding-bottom: 18px; margin-bottom: 24px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid ${BRAND_HEX}; padding-bottom: 18px; margin-bottom: 24px; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: 0.02em; }
   .muted { color: #64748b; font-size: 12px; }
   .badge { display: inline-block; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid ${inv.status === 'paid' ? '#059669' : '#d97706'}; color: ${inv.status === 'paid' ? '#059669' : '#d97706'}; }
   .row { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; }
   .row b { font-weight: 700; }
   table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 13px; }
-  th { text-align: left; background: #f1f5f9; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
+  th { text-align: right; background: #f1f5f9; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
   td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-  .total { text-align: right; font-size: 16px; font-weight: 800; margin-top: 10px; }
+  .total { text-align: left; font-size: 16px; font-weight: 800; margin-top: 10px; }
   .notes { margin-top: 16px; font-size: 12px; color: #475569; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
-  .sign { display: flex; justify-content: flex-end; margin-top: 46px; }
+  .sign { display: flex; justify-content: flex-start; margin-top: 46px; }
   .signbox { text-align: center; }
   .signspace { height: 46px; }
   .signline { width: 230px; border-bottom: 1px solid #334155; }
@@ -81,29 +86,29 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
 </style></head><body>
 <div class="sheet">
   <div class="head">
-    <div><h1>Facture d'abonnement</h1><div class="muted">Plateforme SaaS — gestion de centres</div></div>
-    <div style="text-align:right"><div style="font-weight:800;font-size:14px">${esc(inv.invoiceNumber) || '—'}</div>
-      <div class="muted">Émise le ${frDate(inv.createdAt)}</div>
+    <div><h1>فاتورة اشتراك</h1><div class="muted">منصة SaaS — إدارة المراكز</div></div>
+    <div style="text-align:left"><div style="font-weight:800;font-size:14px">${esc(inv.invoiceNumber) || '—'}</div>
+      <div class="muted">صدرت في ${tnDate(inv.createdAt)}</div>
       <div style="margin-top:8px"><span class="badge">${statusText}</span></div></div>
   </div>
-  <div class="row"><span>Centre</span><b>${esc(inv.centerName) || '—'}</b></div>
-  <div class="row"><span>Période facturée</span><b>${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</b></div>
-  <div class="row"><span>Mode de paiement</span><b>${payLine}</b></div>
-  ${inv.paymentDate ? `<div class="row"><span>Payée le</span><b>${frDate(inv.paymentDate)}</b></div>` : ''}
-  <table><thead><tr><th>Désignation</th><th style="text-align:right">Montant</th></tr></thead>
-  <tbody><tr><td>Abonnement plateforme SaaS — ${frDate(inv.periodStart)} → ${frDate(inv.periodEnd)}</td>
-  <td style="text-align:right;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
-  <div class="total">Total : ${inv.amount.toFixed(2)} TND</div>
-  ${inv.notes ? `<div class="notes"><b>Notes :</b> ${esc(inv.notes)}</div>` : ''}
+  <div class="row"><span>المركز</span><b>${esc(inv.centerName) || '—'}</b></div>
+  <div class="row"><span>الفترة المفوترة</span><b>${tnDate(inv.periodStart)} ← ${tnDate(inv.periodEnd)}</b></div>
+  <div class="row"><span>طريقة الدفع</span><b>${payLine}</b></div>
+  ${inv.paymentDate ? `<div class="row"><span>دُفعت في</span><b>${tnDate(inv.paymentDate)}</b></div>` : ''}
+  <table><thead><tr><th>البيان</th><th style="text-align:left">المبلغ</th></tr></thead>
+  <tbody><tr><td>اشتراك منصة SaaS — ${tnDate(inv.periodStart)} ← ${tnDate(inv.periodEnd)}</td>
+  <td style="text-align:left;font-weight:700">${inv.amount.toFixed(2)} TND</td></tr></tbody></table>
+  <div class="total">الإجمالي: ${inv.amount.toFixed(2)} دينار</div>
+  ${inv.notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(inv.notes)}</div>` : ''}
   <div class="sign"><div class="signbox">
     <div class="signspace"></div>
     <div class="signline"></div>
-    <div class="signcap">Signature de la plateforme SaaS</div>
+    <div class="signcap">توقيع منصة SaaS</div>
   </div></div>
-  <footer>Document généré depuis l'espace administrateur SaaS.</footer>
+  <footer>وثيقة مولّدة من مساحة الإدارة في SaaS.</footer>
   <div class="noprint" style="text-align:center;margin-top:18px">
-    <button id="${PRINT_BUTTON_ID}" type="button" style="background:#257C86;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">🖨 Imprimer</button>
-    <p style="font-size:11px;color:#94a3b8;margin-top:10px">Ctrl+P (⌘+P) ou menu ⋮ → « Imprimer » · « Enregistrer au format PDF »</p>
+    <button id="${PRINT_BUTTON_ID}" type="button" style="background:${BRAND_HEX};color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">طباعة</button>
+    <p style="font-size:11px;color:#94a3b8;margin-top:10px">Ctrl+P (⌘+P) أو القائمة ⋮ → «طباعة» · «حفظ بتنسيق PDF»</p>
   </div>
 </div>
 </body></html>`;
@@ -156,7 +161,7 @@ export interface OpenInvoicePrintOptions {
 }
 
 /**
- * Opens the printable invoice in a dedicated window and wires its 🖨 Imprimer
+ * Opens the printable invoice in a dedicated window and wires its print
  * button from here (never from inline JS — see the module comment).
  *
  * @returns `false` when the popup was blocked or its document was unreachable,

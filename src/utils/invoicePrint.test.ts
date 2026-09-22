@@ -38,10 +38,10 @@ describe('buildInvoicePrintDocument — CSP-safe markup', () => {
     const html = buildInvoicePrintDocument(invoice);
     expect(html).toContain('INV-2026-0002');
     expect(html).toContain('Centre Horizon');
-    expect(html).toContain('PAYÉE');
+    expect(html).toContain('مدفوعة');
     expect(html).toContain('@page');
     expect(html).toContain('margin: 0');
-    expect(html).toContain('Signature de la plateforme SaaS');
+    expect(html).toContain('توقيع منصة SaaS');
     expect(html).toContain(`id="${PRINT_BUTTON_ID}"`);
   });
 

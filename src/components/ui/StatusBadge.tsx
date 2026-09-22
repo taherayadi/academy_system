@@ -3,7 +3,7 @@ import React from 'react';
 export type StatusTone = 'brand' | 'success' | 'warning' | 'error' | 'neutral' | 'info';
 
 const TONE_CLASSES: Record<StatusTone, string> = {
-  brand: 'bg-brand-50 text-brand-700 border border-brand-200',
+  brand: 'bg-accent-50 text-accent-700 border border-accent-200',
   success: 'bg-success-50 text-success-700 border border-success-200',
   warning: 'bg-warning-50 text-warning-700 border border-warning-200',
   error: 'bg-error-50 text-error-700 border border-error-200',
@@ -26,6 +26,9 @@ interface StatusBadgeProps {
  * component mapping a semantic tone to token-based classes (brand/success/
  * warning/error/neutral/info from the `@theme` in index.css).
  */
+/** Token classes for a tone — for badges that need custom sizing. */
+export const toneClasses = (tone: StatusTone): string => TONE_CLASSES[tone];
+
 export function StatusBadge({ tone = 'neutral', label, className = '' }: StatusBadgeProps) {
   return (
     <span

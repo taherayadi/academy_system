@@ -51,15 +51,15 @@ export function FormField({
     <div>
       <label htmlFor={id} className={labelClassName}>
         {label}
-        {required && <span className="text-brand-500"> *</span>}
+        {required && <span className="text-accent-500"> *</span>}
       </label>
       {control}
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-[11px] font-bold text-error-500">
+        <p id={errorId} role="alert" className="mt-1 text-[11px] font-bold text-error-600">
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1 text-[11px] font-semibold text-slate-400">{hint}</p>
+        <p className="mt-1 text-[11px] font-semibold text-slate-500">{hint}</p>
       ) : null}
     </div>
   );

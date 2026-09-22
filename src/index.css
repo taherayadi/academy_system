@@ -1,21 +1,28 @@
 @import "tailwindcss";
 
+:root {
+  /* Light-only theme policy (see DESIGN.md) — form controls, scrollbars and
+     canvas must render light even under a dark-mode user agent. */
+  color-scheme: light;
+}
+
 @theme {
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cairo", ui-monospace, SFMono-Regular, monospace;
 
-  /* Brand colors — Refined Warm Modern Palette */
-  --color-brand-50: #fefce8;
-  --color-brand-100: #fef9c3;
-  --color-brand-200: #fef08a;
-  --color-brand-300: #fde047;
-  --color-brand-400: #facc15;
-  --color-brand-500: #d97706; /* primary */
-  --color-brand-600: #b45309; /* secondary */
-  --color-brand-700: #92400e;
-  --color-brand-800: #78350f;
-  --color-brand-900: #582307;
-  --color-brand-950: #451a03;
+  /* Accent — the product teal (audit P1-10: the token now describes the app;
+     400 = light variant, 500 = primary, 600 = hover, 700 = deep text on tints) */
+  --color-accent-50: #f1f7f8;
+  --color-accent-100: #dfeef0;
+  --color-accent-200: #c3dee2;
+  --color-accent-300: #93c2ca;
+  --color-accent-400: #3a93a0;
+  --color-accent-500: #257c86; /* primary */
+  --color-accent-600: #1e6a73; /* hover */
+  --color-accent-700: #1e626b; /* deep */
+  --color-accent-800: #174f57;
+  --color-accent-900: #123f46;
+  --color-accent-950: #0b2a2f;
 
   /* Semantic colors */
   --color-success-50: #f0fdf4;
@@ -102,11 +109,6 @@
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 
-  /* Landing page marquee (infinite module ticker) */
-  --animate-marquee: marquee 42s linear infinite;
-  @keyframes marquee {
-    to { transform: translateX(-50%); }
-  }
 }
 
 @layer utilities {
@@ -121,16 +123,6 @@
   }
 }
 
-/* Hide all scrollbars globally — scroll still works, just invisible */
-::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-* {
-  scrollbar-width: none;  /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
 
 /* Responsive root font-size: scales smoothly with viewport width so every
    rem-based Tailwind text size adapts across screens (24", 15", smaller,
@@ -142,7 +134,7 @@ html {
 
 /* Visible keyboard focus for every interactive element (a11y floor) */
 :focus-visible {
-  outline: 2px solid #257C86;
+  outline: 2px solid var(--color-accent-500);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -153,20 +145,6 @@ body {
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Disable text selection / copying everywhere in the app */
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* Inputs and textareas must remain selectable/editable normally */
-input,
-textarea {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
 }
 
 /* Consistent themed dropdowns (combobox) all across the app */
@@ -185,7 +163,7 @@ select:focus {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #257C86;
+  outline: 2px solid var(--color-accent-500);
   outline-offset: 0;
 }
 
@@ -375,54 +353,5 @@ input[type="date"].input-date-ltr {
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
-  }
-}
-
-/* A4 landscape printing for timetables / planning tables */
-@media print {
-  @page landscape {
-    size: A4 landscape;
-    margin: 0mm !important;
-  }
-  .print-landscape {
-    page: landscape;
-    padding: 8mm 10mm !important;
-  }
-}
-
-/* Bus Route Sheet — ensure trip blocks allow page breaks between them,
-   and show the mini-header (bus-trip-page-header) only at top of a new printed page */
-@media print {
-  /* Allow page breaks between trip blocks */
-  .bus-trip-block {
-    break-before: auto;
-  }
-
-  /* The print-area for the bus sheet must NOT avoid breaks (it's multi-page) */
-  .print-area:has(.bus-trip-block) {
-    break-inside: auto !important;
-    page-break-inside: auto !important;
-  }
-
-  /* Trip tables: allow rows to break across pages */
-  .print-area:has(.bus-trip-block) table,
-  .print-area:has(.bus-trip-block) tr {
-    break-inside: auto !important;
-    page-break-inside: auto !important;
-  }
-
-  /* The per-trip mini-header: hidden by default, shown only in print on non-first trips */
-  .bus-trip-page-header {
-    display: flex !important;
-    visibility: visible !important;
-    padding-top: 4mm;
-    padding-bottom: 2mm;
-    margin-bottom: 2mm;
-  }
-
-  /* Main bus header: only show once, at the very top */
-  .bus-print-header {
-    break-after: avoid;
-    page-break-after: avoid;
   }
 }
