@@ -199,7 +199,7 @@ export default function TimeSheetModal({
       >
         <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-[#3A93A0]" />
+            <Clock className="h-5 w-5 text-brand-500" />
             <h3 className="text-lg font-black">إدارة جداول التوقيت</h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400">
@@ -216,7 +216,7 @@ export default function TimeSheetModal({
                   <select
                     value={tsSchoolYear}
                     onChange={e => setTsSchoolYear(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                   >
                     {DEFAULT_ACADEMIC_YEARS.map(yr => (
                       <option key={yr} value={yr}>{yr}</option>
@@ -229,7 +229,7 @@ export default function TimeSheetModal({
                     <select
                       value={tsEstablishment}
                       onChange={e => setTsEstablishment(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">-- اختر المؤسسة التعليمية --</option>
                       {availableEtablissements.map(etab => (
@@ -239,7 +239,7 @@ export default function TimeSheetModal({
                     <button
                       type="button"
                       onClick={() => setIsAddingEtablissement(!isAddingEtablissement)}
-                      className="px-2.5 py-1 bg-[#E0EFF1] hover:bg-[#C3E0E4] text-[#14464E] font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
+                      className="px-2.5 py-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
                     >
                       {isAddingEtablissement ? 'إلغاء' : '+ إضافة مؤسسة'}
                     </button>
@@ -258,13 +258,13 @@ export default function TimeSheetModal({
                           }
                         }}
                         placeholder="اسم المؤسسة الجديدة..."
-                        className="flex-1 px-3 py-1 bg-white border border-[#A0CBCF] rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="flex-1 px-3 py-1 bg-white border border-brand-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
                         autoFocus
                       />
                       <button
                         type="button"
                         onClick={handleAddEtablissement}
-                        className="px-3 py-1 bg-[#257C86] hover:bg-[#1E6A73] text-white font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
+                        className="px-3 py-1 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl cursor-pointer transition shrink-0"
                       >
                         إضافة
                       </button>
@@ -279,7 +279,7 @@ export default function TimeSheetModal({
                   <select
                     value={tsGradeLevel}
                     onChange={e => { setTsGradeLevel(e.target.value); setTsBranch(''); }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                   >
                     {GRADE_LEVELS.map(g => (
                       <option key={g} value={g}>{g}</option>
@@ -292,7 +292,7 @@ export default function TimeSheetModal({
                     <select
                       value={tsBranch}
                       onChange={e => setTsBranch(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">-- اختر الشعبة --</option>
                       {tsBranches.map(b => (
@@ -310,7 +310,7 @@ export default function TimeSheetModal({
                   value={tsClassName}
                   onChange={e => setTsClassName(e.target.value)}
                   placeholder="مثال: 1، 2، 3 أو أ، ب، ج"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
                 />
               </div>
 
@@ -326,7 +326,7 @@ export default function TimeSheetModal({
                           <button
                             type="button"
                             onClick={() => handleAddSlot(day)}
-                            className="text-[10px] font-bold text-[#257C86] hover:text-[#1E6A73] flex items-center gap-1 cursor-pointer"
+                            className="text-[10px] font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1 cursor-pointer"
                           >
                             <Plus className="h-3 w-3" />
                             إضافة حصّة
@@ -341,7 +341,7 @@ export default function TimeSheetModal({
                                 <select
                                   value={slot.startTime}
                                   onChange={e => handleUpdateSlot(slot.id, 'startTime', e.target.value)}
-                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                                 >
                                   {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
@@ -349,14 +349,14 @@ export default function TimeSheetModal({
                                 <select
                                   value={slot.endTime}
                                   onChange={e => handleUpdateSlot(slot.id, 'endTime', e.target.value)}
-                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                                 >
                                   {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteSlot(slot.id)}
-                                  className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                                  className="p-1 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded transition cursor-pointer"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -383,7 +383,7 @@ export default function TimeSheetModal({
           <button
             onClick={handleSaveCreate}
             disabled={!tsEstablishment.trim()}
-            className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Save className="h-4 w-4" />
             {editingId ? 'حفظ التعديلات' : 'إنشاء الجدول'}

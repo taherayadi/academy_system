@@ -16,7 +16,7 @@ import { useToast } from './Toast';
 
 const STATUS_META: Record<string, { label: string; labelAr: string; cls: string; icon: any }> = {
   pending: { label: 'En attente', labelAr: 'قيد المعالجة', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
-  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20', icon: CheckCircle2 },
+  approved: { label: 'Acceptée', labelAr: 'مقبولة', cls: 'bg-brand-600/[0.06] text-brand-700 border-brand-600/20', icon: CheckCircle2 },
   rejected: { label: 'Refusée', labelAr: 'مرفوضة', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
 };
 
@@ -179,7 +179,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
   return (
     <div className="space-y-6" dir="rtl">
       {/* ─── En-tête ─────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-[#257C86] p-6 text-white shadow-lg shadow-[#257C86]/25">
+      <div className="relative overflow-hidden rounded-3xl bg-brand-600 p-6 text-white shadow-lg shadow-brand-600/25">
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-black">
@@ -249,13 +249,13 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                 type="button"
                 onClick={() => chooseTier(t.key)}
                 className={`cursor-pointer rounded-2xl border-2 p-4 text-right transition ${
-                  active ? 'border-[#257C86] bg-[#257C86]/5' : 'border-slate-200 bg-white hover:border-slate-300'
+                  active ? 'border-brand-600 bg-brand-600/5' : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-black text-slate-900">{t.label}</span>
                   {isPlanUpgrade(currentPlan, t.key) && (
-                    <ArrowUpCircle className="h-4 w-4 text-[#257C86]" aria-label="Offre supérieure" />
+                    <ArrowUpCircle className="h-4 w-4 text-brand-600" aria-label="Offre supérieure" />
                   )}
                 </div>
                 <p className="mt-0.5 text-[11px] font-bold text-slate-400" dir="rtl">{t.labelAr}</p>
@@ -286,7 +286,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           {BASE_MODULES.map(m => (
             <div key={m.key} className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <input type="checkbox" checked disabled className="accent-[#257C86]" />
+              <input type="checkbox" checked disabled className="accent-brand-600" />
               <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{m.label}</span>
               <span className="shrink-0 text-[10px] font-black text-slate-400">Inclus</span>
             </div>
@@ -297,17 +297,17 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               <label
                 key={m.key}
                 className={`flex cursor-pointer items-center gap-2.5 rounded-2xl border-2 px-3 py-2 transition ${
-                  on ? 'border-[#257C86] bg-[#257C86]/5' : 'border-slate-200 bg-white hover:border-slate-300'
+                  on ? 'border-brand-600 bg-brand-600/5' : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={on}
                   onChange={() => toggleModule(m.key)}
-                  className="accent-[#257C86]"
+                  className="accent-brand-600"
                 />
                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{m.label}</span>
-                <span className="shrink-0 text-[10px] font-black text-[#257C86]">
+                <span className="shrink-0 text-[10px] font-black text-brand-600">
                   {pricesReady ? `+${prices[m.key] ?? 0} TND` : pricingLoading ? '…' : '—'}
                 </span>
               </label>
@@ -319,7 +319,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         <div className="mt-5 flex flex-wrap items-end justify-between gap-4 rounded-2xl bg-slate-50 p-4">
           <div>
             <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total simulé</p>
-            <p className="text-2xl font-black text-[#257C86]">
+            <p className="text-2xl font-black text-brand-600">
               {pricesReady ? `${total} TND` : pricingLoading ? '…' : '—'}
               <span className="mr-1 text-xs font-bold text-slate-400">
                 {cycle === 'annual' ? '/ an' : '/ mois'}
@@ -328,7 +328,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
             {cycle === 'annual' && pricesReady && monthly > 0 && (
               <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-slate-500">
                 <span className="line-through">{monthly * 12} TND</span>
-                <span className="rounded-full bg-[#257C86]/10 px-1.5 py-0.5 text-[10px] font-black text-[#257C86]">
+                <span className="rounded-full bg-brand-600/10 px-1.5 py-0.5 text-[10px] font-black text-brand-600">
                   −{Math.round(ANNUAL_DISCOUNT * 100)} %
                 </span>
                 soit {Math.round(total / 12)} TND/mois
@@ -345,13 +345,13 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder="Remarque pour la plateforme (optionnel)"
-              className="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#257C86]"
+              className="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-brand-600"
             />
             <button
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#257C86] px-4 py-2.5 text-xs font-black text-white shadow-md shadow-[#257C86]/25 transition hover:shadow-lg disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-black text-white shadow-md shadow-brand-600/25 transition hover:shadow-lg disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {isUpgrade ? 'Demander le changement d’offre' : 'Demander le renouvellement'}
@@ -363,7 +363,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       {/* ─── Moyens de paiement ─────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-          <Landmark className="h-4 w-4 text-[#257C86]" />
+          <Landmark className="h-4 w-4 text-brand-600" />
           Moyens de paiement
           <span className="text-xs font-bold text-slate-400">طرق الدفع</span>
         </h3>
@@ -371,7 +371,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         <div className="mt-4 rounded-2xl border border-slate-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm font-black text-slate-900">Virement bancaire</p>
-            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Landmark className="h-4 w-4" /></span>
+            <span className="rounded-xl bg-brand-600/10 p-2 text-brand-600"><Landmark className="h-4 w-4" /></span>
           </div>
           <dl className="mt-3 space-y-1.5 text-xs">
             <div className="flex items-center justify-between gap-3">
@@ -389,9 +389,9 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
           <button
             type="button"
             onClick={copyRib}
-            className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-[#257C86]/40 hover:text-[#257C86]"
+            className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-brand-600/40 hover:text-brand-600"
           >
-            {ribCopied ? <Check className="h-3.5 w-3.5 text-[#257C86]" /> : <Copy className="h-3.5 w-3.5" />}
+            {ribCopied ? <Check className="h-3.5 w-3.5 text-brand-600" /> : <Copy className="h-3.5 w-3.5" />}
             {ribCopied ? 'RIB copié' : 'Copier le RIB'}
           </button>
           <p className="mt-3 text-[11px] font-semibold text-slate-400">
@@ -402,7 +402,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
         <div className="mt-3 rounded-2xl border border-slate-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm font-black text-slate-900">Espèces</p>
-            <span className="rounded-xl bg-[#257C86]/10 p-2 text-[#257C86]"><Banknote className="h-4 w-4" /></span>
+            <span className="rounded-xl bg-brand-600/10 p-2 text-brand-600"><Banknote className="h-4 w-4" /></span>
           </div>
           <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
             Paiement en main propre, modalités à définir avec la plateforme.
@@ -424,7 +424,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-            <History className="h-4 w-4 text-[#257C86]" />
+            <History className="h-4 w-4 text-brand-600" />
             Mes demandes de renouvellement
             <span className="text-xs font-bold text-slate-400">طلباتي</span>
           </h3>
@@ -433,7 +433,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
             onClick={refreshRequests}
             disabled={refreshing}
             title="Actualiser"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 transition hover:border-[#257C86]/40 hover:text-[#257C86] disabled:opacity-60"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 transition hover:border-brand-600/40 hover:text-brand-600 disabled:opacity-60"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Actualiser
@@ -442,7 +442,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
 
         {loading ? (
           <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin text-[#257C86]" /> Chargement…
+            <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> Chargement…
           </p>
         ) : requests.length === 0 ? (
           <p className="mt-4 text-xs font-semibold text-slate-400">Aucune demande pour le moment.</p>
@@ -487,7 +487,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
       {/* ─── Historique des plans ────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-          <Info className="h-4 w-4 text-[#257C86]" />
+          <Info className="h-4 w-4 text-brand-600" />
           Historique de mes plans
           <span className="text-xs font-bold text-slate-400">سجل الاشتراكات</span>
         </h3>
@@ -500,7 +500,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                 <span className="text-xs font-black text-slate-700">{historyLabel(h.action)}</span>
                 <span className="order-last w-full sm:order-none sm:w-auto sm:min-w-0 sm:flex-1 sm:truncate text-[11px] font-semibold text-slate-500">{h.details}</span>
                 {h.amount !== null && (
-                  <span className="shrink-0 text-[10px] font-black text-[#257C86]">{h.amount} TND</span>
+                  <span className="shrink-0 text-[10px] font-black text-brand-600">{h.amount} TND</span>
                 )}
                 <span className="ms-auto sm:ms-0 shrink-0 text-[10px] font-bold text-slate-400">{relativeDays(h.createdAt)}</span>
               </li>

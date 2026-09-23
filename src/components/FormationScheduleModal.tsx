@@ -182,7 +182,7 @@ export default function FormationScheduleModal({
         {/* Header */}
         <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
           <div className="flex items-center gap-2.5">
-            <CalendarRange className="h-5 w-5 text-[#3A93A0]" />
+            <CalendarRange className="h-5 w-5 text-brand-500" />
             <div>
               <h3 className="text-sm font-black">جدول حصص التكوين</h3>
               <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-md">
@@ -212,7 +212,7 @@ export default function FormationScheduleModal({
           <div className="space-y-2">
             {draft.length === 0 ? (
               <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                <Sparkles className="h-5 w-5 text-[#257C86] mx-auto mb-2" />
+                <Sparkles className="h-5 w-5 text-brand-600 mx-auto mb-2" />
                 <p className="text-xs font-bold text-slate-400">
                   لا توجد حصص بعد. أضف حصصاً يدوياً باستخدام الزر أدناه.
                 </p>
@@ -227,7 +227,7 @@ export default function FormationScheduleModal({
                     <select
                       value={row.day}
                       onChange={e => updateRow(row.id, { day: e.target.value })}
-                      className="col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {FORMATION_WORK_DAYS.map(d => (
                         <option key={d} value={d}>{d}</option>
@@ -239,14 +239,14 @@ export default function FormationScheduleModal({
                         const start = e.target.value;
                         updateRow(row.id, { startTime: start, endTime: row.endTime <= start ? (TIME_OPTIONS.find(t => t > start) || '17:00') : row.endTime });
                       }}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <select
                       value={row.endTime}
                       onChange={e => updateRow(row.id, { endTime: e.target.value })}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {TIME_OPTIONS.filter(t => t > row.startTime).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -259,7 +259,7 @@ export default function FormationScheduleModal({
                           students: matiereName ? enrolledStudentIdsForMatiere(matiereName) : (row.students || [])
                         });
                       }}
-                      className="col-span-4 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="col-span-4 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">المادة...</option>
                       {matieres.map(m => (
@@ -268,7 +268,7 @@ export default function FormationScheduleModal({
                     </select>
                     <button
                       onClick={() => removeRow(row.id)}
-                      className="col-span-1 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      className="col-span-1 p-1.5 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                       title="حذف"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -281,12 +281,12 @@ export default function FormationScheduleModal({
                     {(row.students || []).map(sid => (
                       <span
                         key={sid}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F2F8F9] border border-[#C3E0E4] text-[#14464E] rounded-full text-[10px] font-bold"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 border border-brand-200 text-brand-800 rounded-full text-[10px] font-bold"
                       >
                         {studentNameById[sid] || 'تلميذ'}
                         <button
                           onClick={() => removeStudentFromRow(row.id, sid)}
-                          className="text-[#257C86] hover:text-red-500 cursor-pointer"
+                          className="text-brand-600 hover:text-red-500 cursor-pointer"
                           title="إزالة"
                         >
                           <X className="h-2.5 w-2.5" />
@@ -296,7 +296,7 @@ export default function FormationScheduleModal({
                     <select
                       value=""
                       onChange={e => { if (e.target.value) addStudentToRow(row.id, e.target.value); }}
-                      className="text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="text-[10px] font-bold bg-white border border-slate-200 rounded-full px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">+ إضافة تلميذ</option>
                       {(formation?.students || [])
@@ -311,7 +311,7 @@ export default function FormationScheduleModal({
 
           <button
             onClick={addRow}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#F2F8F9] text-[#14464E] border border-[#C3E0E4] rounded-xl text-[11px] font-bold hover:bg-[#E0EFF1] transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-brand-50 text-brand-800 border border-brand-200 rounded-xl text-[11px] font-bold hover:bg-brand-100 transition cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" />
             إضافة حصة
@@ -329,7 +329,7 @@ export default function FormationScheduleModal({
           <button
             onClick={handleSave}
             disabled={draft.length === 0}
-            className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Save className="h-4 w-4" />
             حفظ الجدول

@@ -54,7 +54,7 @@ export default function MealsModule({
   onUpdateMealPlans,
   settings
 }: MealsModuleProps) {
-  const centerName = settings?.centerName || 'المركز';
+  const centerName = settings?.centerName || 'EduSphère';
   const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDay, setSelectedDay] = useState<MealPlanDay['day']>(() => DAY_BY_INDEX[new Date().getDay()] || 'Lundi');
@@ -995,22 +995,22 @@ export default function MealsModule({
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+            <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               المطعم المدرسي (الوجبات واللمجة)
             </span>
             {settings?.mealOperatingMode === 'in_house_kitchen' ? (
-              <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-black rounded-lg border border-[#257C86]/20 flex items-center gap-1">
+              <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-black rounded-lg border border-brand-600/20 flex items-center gap-1">
                 👨‍🍳 نظام المطبخ الداخلي (طباخ قار)
               </span>
             ) : (
-              <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-black rounded-lg border border-[#257C86]/20 flex items-center gap-1">
+              <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-black rounded-lg border border-brand-600/20 flex items-center gap-1">
                 🤝 متعاقد مع Traiteur خارجي
               </span>
             )}
             <span className="text-xs text-slate-400 font-bold">تسجيل الحضور والوجبات السريع</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-            <Utensils className="h-6 w-6 text-[#257C86]" />
+            <Utensils className="h-6 w-6 text-brand-600" />
             اشتراكات ومدفوعات المطعم
           </h2>
           <p className="text-slate-500 text-xs mt-1">
@@ -1021,7 +1021,7 @@ export default function MealsModule({
         {nonEnrolledStudents.length > 0 && (
           <button
             onClick={() => { setIsEnrollModalOpen(true); setEnrollSearch(''); }}
-            className="px-4 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-2xl shadow-md cursor-pointer flex items-center gap-2 shrink-0"
+            className="px-4 py-3 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-2xl shadow-md cursor-pointer flex items-center gap-2 shrink-0"
           >
             <UserPlus className="h-4 w-4" />
             إلحاق تلميذ بالمطعم
@@ -1037,7 +1037,7 @@ export default function MealsModule({
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             placeholder="بحث باسم التلميذ أو المستوى..."
-            className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -1045,7 +1045,7 @@ export default function MealsModule({
           <select
             value={schoolYear}
             onChange={(e) => setSchoolYear(e.target.value)}
-            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
           >
             {customYears.map(y => (
               <option key={y} value={y}>السنة الدراسية {y}</option>
@@ -1060,7 +1060,7 @@ export default function MealsModule({
           <button
             type="button"
             onClick={() => setPayGridCollapsed(c => !c)}
-            className="flex items-center gap-2 flex-row-reverse text-right hover:text-[#257C86] cursor-pointer"
+            className="flex items-center gap-2 flex-row-reverse text-right hover:text-brand-600 cursor-pointer"
           >
             <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${payGridCollapsed ? '' : 'rotate-180'}`} />
             <div>
@@ -1074,8 +1074,8 @@ export default function MealsModule({
               <div className="w-3 h-3 rounded-full bg-amber-500"></div>
               <span>Payé</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[#1e626b]">
-              <div className="w-3 h-3 rounded-full bg-[#257C86]"></div>
+            <div className="flex items-center gap-1.5 text-brand-700">
+              <div className="w-3 h-3 rounded-full bg-brand-600"></div>
               <span>Avance</span>
             </div>
             <div className="flex items-center gap-1.5 text-red-600">
@@ -1144,7 +1144,7 @@ export default function MealsModule({
                                   if (payment) setPrintingReceipt({ student: st, payment });
                                   else handlePayMonthlySubscription(st, m);
                                 }}
-                                className="w-full py-1.5 px-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-[#257C86]/20 transition cursor-pointer"
+                                className="w-full py-1.5 px-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
                                 title="طباعة الوصل"
                               >
                                 <CheckCircle2 className="h-3 w-3" />
@@ -1155,7 +1155,7 @@ export default function MealsModule({
                             {!hasRefund && mStatus.status === 'advance' && (
                               <button
                                 onClick={() => handleOpenMonthlyPayment(st, m)}
-                                className="w-full py-1.5 px-2 bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/20 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-[#257C86]/20 transition cursor-pointer"
+                                className="w-full py-1.5 px-2 bg-brand-600/10 text-brand-700 border border-brand-600/20 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
                               >
                                 <Clock className="h-3 w-3" />
                                 Avance ({mStatus.paidAmount} د.ت)
@@ -1166,7 +1166,7 @@ export default function MealsModule({
                             {!hasRefund && mStatus.status === 'unpaid' && (
                               <button
                                 onClick={() => handlePayMonthlySubscription(st, m)}
-                                className="w-full py-1.5 px-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-700 border border-slate-200 hover:border-red-200 rounded-xl font-bold text-[10px] transition cursor-pointer"
+                                className="w-full py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-red-700 border border-slate-200 hover:border-red-200 rounded-xl font-bold text-[10px] transition cursor-pointer"
                               >
                                 Non payé
                               </button>
@@ -1193,17 +1193,17 @@ export default function MealsModule({
       </div>
 
       {/* GOUTER SUBSCRIBERS & PAYMENT GRID */}
-      <div className="bg-white rounded-3xl border border-[#257C86]/20 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
-        <div className="p-5 border-b border-[#257C86]/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-[#257C86]/5 via-red-50 to-white">
+      <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
+        <div className="p-5 border-b border-brand-600/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-brand-600/5 via-red-50 to-white">
           <button
             type="button"
             onClick={() => setGouterGridCollapsed(c => !c)}
-            className="flex items-center gap-2 flex-row-reverse text-right hover:text-[#1e626b] cursor-pointer"
+            className="flex items-center gap-2 flex-row-reverse text-right hover:text-brand-700 cursor-pointer"
           >
-            <ChevronDown className={`h-5 w-5 text-[#257C86] transition-transform ${gouterGridCollapsed ? '' : 'rotate-180'}`} />
+            <ChevronDown className={`h-5 w-5 text-brand-600 transition-transform ${gouterGridCollapsed ? '' : 'rotate-180'}`} />
             <div>
               <div className="flex items-center gap-2">
-                <Cookie className="h-5 w-5 text-[#257C86]" />
+                <Cookie className="h-5 w-5 text-brand-600" />
                 <h3 className="font-extrabold text-slate-900 text-base">جدول المشتركين في خدمة اللمجة - Goûter ({schoolYear})</h3>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">متابعة اشتراكات التلاميذ في لمجة الصباح أو المساء أو اللمجتين معاً وخلاصاتهم الشهرية.</p>
@@ -1213,7 +1213,7 @@ export default function MealsModule({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => { setIsEnrollGouterModalOpen(true); setEnrollGouterSearch(''); }}
-              className="px-3.5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1.5"
             >
               <UserPlus className="h-3.5 w-3.5" />
               إلحاق تلميذ باللمجة
@@ -1223,17 +1223,17 @@ export default function MealsModule({
 
         {/* Goûter KPI mini-cards */}
         {!gouterGridCollapsed && (
-          <div className="p-4 bg-[#257C86]/5 border-b border-[#257C86]/10 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-3 bg-white rounded-2xl border border-[#257C86]/10">
-              <span className="text-[10px] font-bold text-[#1e626b] block">🥐 لمجة الصباح فقط</span>
-              <span className="text-base font-black text-[#14464e] font-mono">{gouterMatinCount}</span>
+          <div className="p-4 bg-brand-600/5 border-b border-brand-600/10 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div className="p-3 bg-white rounded-2xl border border-brand-600/10">
+              <span className="text-[10px] font-bold text-brand-700 block">🥐 لمجة الصباح فقط</span>
+              <span className="text-base font-black text-brand-800 font-mono">{gouterMatinCount}</span>
               <span className="text-[10px] text-slate-400 block font-semibold">
                 {settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel : 0} د.ت/شهر
               </span>
             </div>
-            <div className="p-3 bg-white rounded-2xl border border-[#257C86]/10">
-              <span className="text-[10px] font-bold text-[#1e626b] block">🍪 لمجة المساء فقط</span>
-              <span className="text-base font-black text-[#14464e] font-mono">{gouterSoirCount}</span>
+            <div className="p-3 bg-white rounded-2xl border border-brand-600/10">
+              <span className="text-[10px] font-bold text-brand-700 block">🍪 لمجة المساء فقط</span>
+              <span className="text-base font-black text-brand-800 font-mono">{gouterSoirCount}</span>
               <span className="text-[10px] text-slate-400 block font-semibold">
                 {settings ? getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel : 0} د.ت/شهر
               </span>
@@ -1245,9 +1245,9 @@ export default function MealsModule({
                 {settings ? (getFeesForYear(settings, schoolYear).fraisDeuxGoutersMensuel || ((getFeesForYear(settings, schoolYear).fraisGouterMatinMensuel || 0) + (getFeesForYear(settings, schoolYear).fraisGouterSoirMensuel || 0))) : 0} د.ت/شهر
               </span>
             </div>
-            <div className="p-3 bg-white rounded-2xl border border-[#257C86]/20">
-              <span className="text-[10px] font-bold text-[#1e626b] block">👥 مجموع المشتركين</span>
-              <span className="text-base font-black text-[#14464e] font-mono">{gouterStudents.length}</span>
+            <div className="p-3 bg-white rounded-2xl border border-brand-600/20">
+              <span className="text-[10px] font-bold text-brand-700 block">👥 مجموع المشتركين</span>
+              <span className="text-base font-black text-brand-800 font-mono">{gouterStudents.length}</span>
               <span className="text-[10px] text-slate-400 block font-semibold">تلميذ مسجل</span>
             </div>
           </div>
@@ -1256,7 +1256,7 @@ export default function MealsModule({
         {!gouterGridCollapsed && (<>
           <div className="overflow-x-auto overscroll-x-contain">
             <table className="w-full min-w-[1100px] text-right text-xs">
-              <thead className="bg-[#257C86]/5 text-slate-700 font-bold border-b border-[#257C86]/10">
+              <thead className="bg-brand-600/5 text-slate-700 font-bold border-b border-brand-600/10">
                 <tr>
                   <th className="p-4">التلميذ</th>
                   <th className="p-3 text-center">نوع اللمجة</th>
@@ -1289,7 +1289,7 @@ export default function MealsModule({
                         : (fees?.fraisGouterSoirMensuel || 0);
 
                     return (
-                      <tr key={st.id} className="hover:bg-[#257C86]/5 transition">
+                      <tr key={st.id} className="hover:bg-brand-600/5 transition">
                         <td className="p-4 font-extrabold text-slate-900">
                           <div>
                             <span className="block font-black text-slate-900">{st.firstName} {st.lastName}</span>
@@ -1303,11 +1303,11 @@ export default function MealsModule({
                               🥐🍪 اللمجتان معاً
                             </span>
                           ) : isMatin ? (
-                            <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/20 rounded-lg text-[10px] font-black">
+                            <span className="px-2.5 py-1 bg-brand-600/10 text-brand-700 border border-brand-600/20 rounded-lg text-[10px] font-black">
                               🥐 لمجة الصباح
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/20 rounded-lg text-[10px] font-black">
+                            <span className="px-2.5 py-1 bg-brand-600/10 text-brand-700 border border-brand-600/20 rounded-lg text-[10px] font-black">
                               🍪 لمجة المساء
                             </span>
                           )}
@@ -1329,7 +1329,7 @@ export default function MealsModule({
                                     if (payment) setPrintingReceipt({ student: st, payment });
                                     else handleOpenMonthlyGouterPayment(st, m);
                                   }}
-                                  className="w-full py-1.5 px-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-[#257C86]/20 transition cursor-pointer"
+                                  className="w-full py-1.5 px-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
                                   title="طباعة وصل اللمجة"
                                 >
                                   <CheckCircle2 className="h-3 w-3" />
@@ -1340,7 +1340,7 @@ export default function MealsModule({
                               {gStatus.status === 'advance' && (
                                 <button
                                   onClick={() => handleOpenMonthlyGouterPayment(st, m)}
-                                  className="w-full py-1.5 px-2 bg-[#257C86]/10 text-[#14464e] border border-[#257C86]/30 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-[#257C86]/20 transition cursor-pointer"
+                                  className="w-full py-1.5 px-2 bg-brand-600/10 text-brand-800 border border-brand-600/30 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
                                 >
                                   <Clock className="h-3 w-3" />
                                   Avance ({gStatus.paidAmount} د.ت)
@@ -1351,7 +1351,7 @@ export default function MealsModule({
                               {gStatus.status === 'unpaid' && (
                                 <button
                                   onClick={() => handleOpenMonthlyGouterPayment(st, m)}
-                                  className="w-full py-1.5 px-2 bg-slate-50 hover:bg-[#257C86]/5 text-slate-400 hover:text-[#1e626b] border border-slate-200 hover:border-[#257C86]/20 rounded-xl font-bold text-[10px] transition cursor-pointer"
+                                  className="w-full py-1.5 px-2 bg-slate-50 hover:bg-brand-600/5 text-slate-400 hover:text-brand-700 border border-slate-200 hover:border-brand-600/20 rounded-xl font-bold text-[10px] transition cursor-pointer"
                                 >
                                   Non payé
                                 </button>
@@ -1367,7 +1367,7 @@ export default function MealsModule({
                                 setSelectedStudentForGouterEnroll(st);
                                 setEnrollGouterType(isBoth ? 'both' : isMatin ? 'matin' : 'soir');
                               }}
-                              className="p-1.5 hover:bg-[#257C86]/10 text-[#1e626b] rounded-lg text-xs font-bold cursor-pointer"
+                              className="p-1.5 hover:bg-brand-600/10 text-brand-700 rounded-lg text-xs font-bold cursor-pointer"
                               title="تعديل نوع الاشتراك"
                             >
                               <Edit3 className="h-3.5 w-3.5" />
@@ -1390,10 +1390,10 @@ export default function MealsModule({
           </div>
 
           {gouterStudents.length > pageSize && (
-            <div className="flex items-center justify-center gap-2 p-3 border-t border-[#257C86]/10 bg-[#257C86]/5">
-              <button onClick={() => setGouterPage(p => Math.max(1, p - 1))} disabled={gouterCurrentPage <= 1} className="px-3 py-1.5 bg-white border border-[#257C86]/20 text-[#1e626b] rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">◀ السابق</button>
+            <div className="flex items-center justify-center gap-2 p-3 border-t border-brand-600/10 bg-brand-600/5">
+              <button onClick={() => setGouterPage(p => Math.max(1, p - 1))} disabled={gouterCurrentPage <= 1} className="px-3 py-1.5 bg-white border border-brand-600/20 text-brand-700 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">◀ السابق</button>
               <span className="text-[10px] font-bold text-slate-500 mx-2">صفحة {gouterCurrentPage} من {gouterTotalPages}</span>
-              <button onClick={() => setGouterPage(p => Math.min(gouterTotalPages, p + 1))} disabled={gouterCurrentPage >= gouterTotalPages} className="px-3 py-1.5 bg-white border border-[#257C86]/20 text-[#1e626b] rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">التالي ▶</button>
+              <button onClick={() => setGouterPage(p => Math.min(gouterTotalPages, p + 1))} disabled={gouterCurrentPage >= gouterTotalPages} className="px-3 py-1.5 bg-white border border-brand-600/20 text-brand-700 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer disabled:cursor-default">التالي ▶</button>
             </div>
           )}
         </>)}
@@ -1409,9 +1409,9 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <UserPlus className="h-5 w-5 text-[#257C86]" />
+                  <UserPlus className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">إلحاق تلميذ بمطعم السنتر</h3>
                 </div>
 
@@ -1459,7 +1459,7 @@ export default function MealsModule({
                         </div>
                         <button
                           onClick={() => handleEnrollStudent(st)}
-                          className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1"
+                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           إلحاق بالمطعم
@@ -1493,7 +1493,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#14464e] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-800 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Cookie className="h-5 w-5 text-red-400" />
                   <h3 className="text-lg font-black">
@@ -1511,11 +1511,11 @@ export default function MealsModule({
 
               <div className="p-6 space-y-4">
                 {selectedStudentForGouterEnroll ? (
-                  <div className="p-3 bg-[#257C86]/5 rounded-2xl border border-[#257C86]/20">
-                    <p className="font-extrabold text-sm text-[#14464e]">
+                  <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20">
+                    <p className="font-extrabold text-sm text-brand-800">
                       {selectedStudentForGouterEnroll.firstName} {selectedStudentForGouterEnroll.lastName}
                     </p>
-                    <p className="text-xs text-[#257C86] font-bold">{selectedStudentForGouterEnroll.grade}</p>
+                    <p className="text-xs text-brand-600 font-bold">{selectedStudentForGouterEnroll.grade}</p>
                   </div>
                 ) : (
                   <>
@@ -1545,7 +1545,7 @@ export default function MealsModule({
                       onClick={() => setEnrollGouterType('matin')}
                       className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
                         enrollGouterType === 'matin'
-                          ? 'bg-[#257C86]/[0.06] border-[#257C86]/40 ring-2 ring-[#257C86]/30 text-[#14464e]'
+                          ? 'bg-brand-600/[0.06] border-brand-600/40 ring-2 ring-brand-600/30 text-brand-800'
                           : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                     >
@@ -1561,7 +1561,7 @@ export default function MealsModule({
                       onClick={() => setEnrollGouterType('soir')}
                       className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
                         enrollGouterType === 'soir'
-                          ? 'bg-[#257C86]/5 border-[#257C86]/60 ring-2 ring-[#257C86]/30 text-[#14464e]'
+                          ? 'bg-brand-600/5 border-brand-600/60 ring-2 ring-brand-600/30 text-brand-800'
                           : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                     >
@@ -1577,7 +1577,7 @@ export default function MealsModule({
                       onClick={() => setEnrollGouterType('both')}
                       className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
                         enrollGouterType === 'both'
-                          ? 'bg-[#257C86]/5 border-[#257C86]/60 ring-2 ring-[#257C86]/30 text-[#14464e]'
+                          ? 'bg-brand-600/5 border-brand-600/60 ring-2 ring-brand-600/30 text-brand-800'
                           : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                     >
@@ -1605,7 +1605,7 @@ export default function MealsModule({
                         handleEnrollStudentInGouter(selectedStudentForGouterEnroll, enrollGouterType);
                         setSelectedStudentForGouterEnroll(null);
                       }}
-                      className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer"
+                      className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer"
                     >
                       حفظ التعديل
                     </button>
@@ -1625,7 +1625,7 @@ export default function MealsModule({
                         <button
                           type="button"
                           onClick={() => handleEnrollStudentInGouter(st, enrollGouterType)}
-                          className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1"
+                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           إلحاق باللمجة
@@ -1655,12 +1655,12 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
-              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">{printingReceipt.payment.service === 'Goûter' ? 'وصل خلاص رسمي لخدمة اللمجة (Goûter)' : 'وصل خلاص رسمي للمطعم'}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Utensils className="h-4 w-4" />
                     طباعة الوصل 🖨️
@@ -1694,9 +1694,9 @@ export default function MealsModule({
                         <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {printingReceipt.payment.receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {printingReceipt.payment.date}</p>
                       </div>
-                      <div className="text-left font-mono font-bold text-xs bg-[#257C86]/[0.06] p-2 rounded border border-[#257C86]/20">
+                      <div className="text-left font-mono font-bold text-xs bg-brand-600/[0.06] p-2 rounded border border-brand-600/20">
                         <p>الخدمة: <strong>{isGouterReceipt ? 'اللمجة (Goûter)' : 'المطعم'}</strong></p>
-                        <p className="text-[11px] text-[#1e626b] mt-0.5">الشهر: {printingReceipt.payment.month}</p>
+                        <p className="text-[11px] text-brand-700 mt-0.5">الشهر: {printingReceipt.payment.month}</p>
                       </div>
                     </div>
 
@@ -1738,9 +1738,9 @@ export default function MealsModule({
                                   <td className="p-2 text-slate-800 font-medium">
                                     <span className="font-bold">{p.method}</span>
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
-                                    {p.discount ? <span className="text-[#1e626b] text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
+                                    {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>
-                                  <td className="p-2 text-left font-black font-mono text-[#1e626b]">{p.amountPaid} د.ت</td>
+                                  <td className="p-2 text-left font-black font-mono text-brand-700">{p.amountPaid} د.ت</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1754,32 +1754,32 @@ export default function MealsModule({
                           <span className="text-base font-black text-slate-900 font-mono">{fullFeeRequired} د.ت</span>
                         </div>
 
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
-                          <span className="text-[10px] text-[#1e626b] block font-bold">المجموع المسدد حتى الآن:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">{totalPaidForMonth} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/30">
+                          <span className="text-[10px] text-brand-700 block font-bold">المجموع المسدد حتى الآن:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">{totalPaidForMonth} د.ت</span>
                         </div>
 
-                        <div className={`p-2.5 rounded-xl border ${finalRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-[#257C86]/[0.06] border-[#257C86]/20'}`}>
-                          <span className="text-[10px] text-[#1e626b] block font-bold">الرصيد المتبقي:</span>
+                        <div className={`p-2.5 rounded-xl border ${finalRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-brand-600/[0.06] border-brand-600/20'}`}>
+                          <span className="text-[10px] text-brand-700 block font-bold">الرصيد المتبقي:</span>
                           <span className={`text-base font-black font-mono ${finalRemaining === 0 ? 'text-slate-400' : 'text-red-700'}`}>{finalRemaining} د.ت</span>
                         </div>
                       </div>
 
                       {totalMonthDiscount > 0 && (
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20 flex justify-between items-center">
-                          <span className="text-[10px] text-[#1e626b] font-bold">إجمالي التخفيض:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">-{totalMonthDiscount} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/20 flex justify-between items-center">
+                          <span className="text-[10px] text-brand-700 font-bold">إجمالي التخفيض:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">-{totalMonthDiscount} د.ت</span>
                         </div>
                       )}
 
                       <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center font-bold">
                         {finalRemaining === 0 ? (
-                          <span className="text-[#1e626b] text-xs flex items-center justify-center gap-1">
+                          <span className="text-brand-700 text-xs flex items-center justify-center gap-1">
                             <CheckCircle2 className="h-4 w-4" />
                             حالة الشهر: تم التسديد بالكامل
                           </span>
                         ) : (
-                          <span className="text-[#1e626b] text-xs">
+                          <span className="text-brand-700 text-xs">
                             حالة الاشتراك: خلاص جزئي — باقي: {finalRemaining} د.ت
                           </span>
                         )}
@@ -1814,7 +1814,7 @@ export default function MealsModule({
             onClick={() => setSelectedDay(day)}
             className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition shrink-0 cursor-pointer ${
               selectedDay === day
-                ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/20'
+                ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
             }`}
           >
@@ -1826,16 +1826,16 @@ export default function MealsModule({
       {/* ACTIVE DAY DISH CARD */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div className="space-y-1">
-          <span className="text-xs font-bold text-[#1e626b]">طبق يوم {ARABIC_WEEKDAYS[selectedDay]}</span>
+          <span className="text-xs font-bold text-brand-700">طبق يوم {ARABIC_WEEKDAYS[selectedDay]}</span>
           <h3 className="text-2xl font-black text-slate-900">{activePlan.dishName}</h3>
           <p className="text-xs text-slate-500">{activePlan.description || 'بدون وصف إضافي'}</p>
         </div>
 
         <button
           onClick={handleOpenEditMenu}
-          className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
-          <Edit3 className="h-4 w-4 text-[#257C86]" />
+          <Edit3 className="h-4 w-4 text-brand-600" />
           تعديل طبق يوم {ARABIC_WEEKDAYS[selectedDay]}
         </button>
       </div>
@@ -1924,7 +1924,7 @@ export default function MealsModule({
                     <td className="p-4 font-black text-slate-900">{st.firstName} {st.lastName} </td>
                     <td className="p-4">
                       {consumptionMonth === 'all' ? (
-                        <span className="inline-block px-2.5 py-1 font-bold text-[10px] rounded-md border bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20">
+                        <span className="inline-block px-2.5 py-1 font-bold text-[10px] rounded-md border bg-brand-600/[0.06] text-brand-700 border-brand-600/20">
                           مشترك
                         </span>
                       ) : (
@@ -1932,7 +1932,7 @@ export default function MealsModule({
                           monthStatus?.status === 'paid'
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : monthStatus?.status === 'advance'
-                              ? 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20'
+                              ? 'bg-brand-600/[0.06] text-brand-700 border-brand-600/20'
                               : hasRefundThisMonth
                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : 'bg-red-50 text-red-600 border-red-200'
@@ -1948,7 +1948,7 @@ export default function MealsModule({
                       )}
                     </td>
                     <td className="p-4">
-                      <span className="font-mono font-black text-[#1e626b] text-sm">
+                      <span className="font-mono font-black text-brand-700 text-sm">
                         {consumedThisMonth} وجبة
                       </span>
                       {monthRefund && afterRefundCount > 0 && (
@@ -1957,7 +1957,7 @@ export default function MealsModule({
                             {beforeRefundCount} قبل الاسترجاع
                           </span>
                           <span className="text-slate-400">+</span>
-                          <span className="text-[#1e626b] bg-[#257C86]/[0.06] px-2 py-0.5 rounded-md border border-[#257C86]/20">
+                          <span className="text-brand-700 bg-brand-600/[0.06] px-2 py-0.5 rounded-md border border-brand-600/20">
                             {afterRefundCount} بعد إعادة الخلاص
                           </span>
                         </div>
@@ -1976,7 +1976,7 @@ export default function MealsModule({
                         className={`px-3 py-1.5 rounded-xl font-bold text-[11px] shadow-lg shadow-slate-900/5 cursor-pointer flex items-center justify-center gap-1 mx-auto ${
                           hasRefundThisMonth
                             ? 'bg-slate-700 hover:bg-slate-800 text-white'
-                            : 'bg-[#257C86] hover:bg-[#1e626b] text-white'
+                            : 'bg-brand-600 hover:bg-brand-700 text-white'
                         }`}
                         title={hasRefundThisMonth ? 'عند الاسترجاع يُسجَّل كوجبة منفردة يُدفع عند الاستلام' : 'تسجيل وجبة ضمن الاشتراك'}
                       >
@@ -2049,7 +2049,7 @@ export default function MealsModule({
 
                 <button
                   onClick={() => { setIsAddUnitMealModalOpen(true); setUnitMealSearch(''); }}
-                  className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-lg shadow-slate-900/5"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-lg shadow-slate-900/5"
                 >
                   <UserPlus className="h-4 w-4" />
                   إضافة تلميذ بالوحدة...
@@ -2059,36 +2059,36 @@ export default function MealsModule({
 
             {/* Daily KPI Badges */}
             <div className="px-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl flex items-center justify-between">
+              <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-[#1e626b] block">🍽️ وجبات الغداء</span>
-                  <span className="text-lg font-black text-[#14464e] font-mono">{dailyLunchCount}</span>
+                  <span className="text-[10px] font-bold text-brand-700 block">🍽️ وجبات الغداء</span>
+                  <span className="text-lg font-black text-brand-800 font-mono">{dailyLunchCount}</span>
                 </div>
-                <span className="text-xs text-[#257C86] font-bold">وجبة</span>
+                <span className="text-xs text-brand-600 font-bold">وجبة</span>
               </div>
 
-              <div className="p-3 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl flex items-center justify-between">
+              <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-[#1e626b] block">🥐 لمجة الصباح</span>
-                  <span className="text-lg font-black text-[#14464e] font-mono">{dailyGouterMatinCount}</span>
+                  <span className="text-[10px] font-bold text-brand-700 block">🥐 لمجة الصباح</span>
+                  <span className="text-lg font-black text-brand-800 font-mono">{dailyGouterMatinCount}</span>
                 </div>
-                <span className="text-xs text-[#257C86] font-bold">حصة</span>
+                <span className="text-xs text-brand-600 font-bold">حصة</span>
               </div>
 
-              <div className="p-3 bg-[#257C86]/5 border border-[#257C86]/20 rounded-2xl flex items-center justify-between">
+              <div className="p-3 bg-brand-600/5 border border-brand-600/20 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-[#1e626b] block">🍪 لمجة المساء</span>
-                  <span className="text-lg font-black text-[#14464e] font-mono">{dailyGouterSoirCount}</span>
+                  <span className="text-[10px] font-bold text-brand-700 block">🍪 لمجة المساء</span>
+                  <span className="text-lg font-black text-brand-800 font-mono">{dailyGouterSoirCount}</span>
                 </div>
-                <span className="text-xs text-[#257C86] font-bold">حصة</span>
+                <span className="text-xs text-brand-600 font-bold">حصة</span>
               </div>
 
-              <div className="p-3 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl flex items-center justify-between">
+              <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-[#1e626b] block">👥 التلاميذ الحاضرين</span>
-                  <span className="text-lg font-black text-[#14464e] font-mono">{dailyAttendingStudents.length}</span>
+                  <span className="text-[10px] font-bold text-brand-700 block">👥 التلاميذ الحاضرين</span>
+                  <span className="text-lg font-black text-brand-800 font-mono">{dailyAttendingStudents.length}</span>
                 </div>
-                <span className="text-xs text-[#257C86] font-bold">تلميذ</span>
+                <span className="text-xs text-brand-600 font-bold">تلميذ</span>
               </div>
             </div>
 
@@ -2123,8 +2123,8 @@ export default function MealsModule({
                             onClick={() => handleToggleMealService(st, 'lunch')}
                             className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
                               lunchAtt
-                                ? 'bg-[#257C86] text-white border-[#1e626b] shadow-lg shadow-slate-900/5'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-[#257C86]/30 hover:text-slate-600'
+                                ? 'bg-brand-600 text-white border-brand-700 shadow-lg shadow-slate-900/5'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-brand-600/30 hover:text-slate-600'
                             }`}
                           >
                             {lunchAtt ? '✓ غداء مسجل' : '+ غداء'}
@@ -2138,8 +2138,8 @@ export default function MealsModule({
                             onClick={() => handleToggleMealService(st, 'gouter_matin')}
                             className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
                               gouterMatinAtt
-                                ? 'bg-[#257C86] text-white border-[#1e626b] shadow-lg shadow-slate-900/5'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-[#257C86]/30 hover:text-slate-600'
+                                ? 'bg-brand-600 text-white border-brand-700 shadow-lg shadow-slate-900/5'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-brand-600/30 hover:text-slate-600'
                             }`}
                           >
                             {gouterMatinAtt ? '✓ لمجة صباح' : '+ لمجة صباح'}
@@ -2153,8 +2153,8 @@ export default function MealsModule({
                             onClick={() => handleToggleMealService(st, 'gouter_apres_midi')}
                             className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition cursor-pointer border flex items-center justify-center gap-1 mx-auto ${
                               gouterSoirAtt
-                                ? 'bg-[#257C86] text-white border-[#257C86] shadow-lg shadow-slate-900/5'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-[#257C86]/30 hover:text-slate-600'
+                                ? 'bg-brand-600 text-white border-brand-600 shadow-lg shadow-slate-900/5'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-brand-600/30 hover:text-slate-600'
                             }`}
                           >
                             {gouterSoirAtt ? '✓ لمجة مساء' : '+ لمجة مساء'}
@@ -2168,7 +2168,7 @@ export default function MealsModule({
                             {lunchAtt && lunchAtt.type === 'unit' && !lunchAtt.paid && (
                               <button
                                 onClick={() => handlePayUnitService(st, 'lunch')}
-                                className="px-2.5 py-1 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
+                                className="px-2.5 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
                                 title="خلاص الغداء المنفرد"
                               >
                                 خلاص الغداء ({settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 8} د.ت)
@@ -2178,7 +2178,7 @@ export default function MealsModule({
                             {gouterMatinAtt && gouterMatinAtt.type === 'unit' && !gouterMatinAtt.paid && (
                               <button
                                 onClick={() => handlePayUnitService(st, 'gouter_matin')}
-                                className="px-2.5 py-1 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
+                                className="px-2.5 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
                                 title="خلاص لمجة الصباح"
                               >
                                 خلاص الصباح ({settings ? getFeesForYear(settings, schoolYear).fraisGouterMatinUnitaire : 0} د.ت)
@@ -2188,7 +2188,7 @@ export default function MealsModule({
                             {gouterSoirAtt && gouterSoirAtt.type === 'unit' && !gouterSoirAtt.paid && (
                               <button
                                 onClick={() => handlePayUnitService(st, 'gouter_apres_midi')}
-                                className="px-2.5 py-1 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
+                                className="px-2.5 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold text-[10px] cursor-pointer shadow-lg shadow-slate-900/5"
                                 title="خلاص لمجة المساء"
                               >
                                 خلاص المساء ({settings ? getFeesForYear(settings, schoolYear).fraisGouterSoirUnitaire : 0} د.ت)
@@ -2233,13 +2233,13 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     {paymentService === 'Goûter' ? (
                       <Cookie className="h-5 w-5 text-red-400" />
                     ) : (
-                      <CreditCard className="h-5 w-5 text-[#257C86]" />
+                      <CreditCard className="h-5 w-5 text-brand-600" />
                     )}
                     {paymentService === 'Goûter'
                       ? `خلاص اشتراك اللمجة — ${paymentMonth} (${schoolYear})`
@@ -2273,12 +2273,12 @@ export default function MealsModule({
                   return (
                     <>
                       {isAdvanceStatus && !hasRefund && activeMonthStatus && (
-                        <div className="p-3.5 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 text-xs space-y-1.5 font-bold text-[#1e626b]">
+                        <div className="p-3.5 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs space-y-1.5 font-bold text-brand-700">
                           <div className="flex justify-between items-center">
                             <span>تسبقة مسددة لشهر {paymentMonth}:</span>
-                            <span className="font-mono text-[#1e626b] font-extrabold text-sm">{activeMonthStatus.paidAmount} د.ت</span>
+                            <span className="font-mono text-brand-700 font-extrabold text-sm">{activeMonthStatus.paidAmount} د.ت</span>
                           </div>
-                          <div className="flex justify-between items-center border-t border-[#257C86]/25 pt-1.5">
+                          <div className="flex justify-between items-center border-t border-brand-600/25 pt-1.5">
                             <span>المتبقي لاستكمال الشهر:</span>
                             <span className="font-mono text-red-700 font-black text-sm">{activeMonthStatus.remaining} د.ت</span>
                           </div>
@@ -2298,7 +2298,7 @@ export default function MealsModule({
                             }}
                             className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                               paymentType === 'full' 
-                                ? 'bg-[#257C86] text-white border-[#257C86]' 
+                                ? 'bg-brand-600 text-white border-brand-600' 
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
                           >
@@ -2323,7 +2323,7 @@ export default function MealsModule({
                               hasRefund ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
                             } ${
                               paymentType === 'advance' 
-                                ? 'bg-[#257C86] text-white border-[#257C86]' 
+                                ? 'bg-brand-600 text-white border-brand-600' 
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
                           >
@@ -2339,7 +2339,7 @@ export default function MealsModule({
                             }}
                             className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                               paymentType === 'balance' 
-                                ? 'bg-[#257C86] text-white border-[#257C86]' 
+                                ? 'bg-brand-600 text-white border-brand-600' 
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
                           >
@@ -2365,12 +2365,12 @@ export default function MealsModule({
                                 setAmountPaid(Math.max(0, standardFee - val));
                               }
                             }}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b]"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
                           />
                           <p className="text-[10px] text-slate-400 font-bold mt-1 flex items-center justify-between">
                             <span>المستوجب بعد التخفيض: <strong className="text-slate-700 font-mono">{Math.max(0, standardFee - (Number(discount) || 0))} د.ت</strong></span>
                             {Number(discount) > 0 && (
-                              <span className="text-[#1e626b] font-black">✓ تخفيض بقيمة {discount} د.ت</span>
+                              <span className="text-brand-700 font-black">✓ تخفيض بقيمة {discount} د.ت</span>
                             )}
                           </p>
                         </div>
@@ -2384,7 +2384,7 @@ export default function MealsModule({
                             onClick={() => { setPaymentMethod('Espèces'); setChequeNumber(''); setChequeDate(new Date().toISOString().split('T')[0]); }}
                             className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                               paymentMethod === 'Espèces'
-                                ? 'bg-[#257C86] text-white border-[#257C86]'
+                                ? 'bg-brand-600 text-white border-brand-600'
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
                           >
@@ -2395,7 +2395,7 @@ export default function MealsModule({
                             onClick={() => setPaymentMethod('Chèque')}
                             className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                               paymentMethod === 'Chèque'
-                                ? 'bg-[#257C86] text-white border-[#257C86]'
+                                ? 'bg-brand-600 text-white border-brand-600'
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
                           >
@@ -2405,7 +2405,7 @@ export default function MealsModule({
                       </div>
 
                       {paymentMethod === 'Chèque' && (
-                        <div className="grid grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                        <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
                           <div className="flex flex-col justify-end">
                             <label className="text-[10px] font-bold text-slate-600 block mb-1">رقم الشيك *</label>
                             <input
@@ -2448,7 +2448,7 @@ export default function MealsModule({
                                 setAmountPaid(val);
                               }
                             }}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b]"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
                           />
                         </div>
 
@@ -2464,7 +2464,7 @@ export default function MealsModule({
                       </div>
 
                       {/* Remaining calculation banner */}
-                      <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 text-xs flex justify-between font-bold text-[#1e626b]">
+                      <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs flex justify-between font-bold text-brand-700">
                         <span>المتبقي بذمة التلميذ بعد هذه الدفعة:</span>
                         <span className="font-mono text-sm font-black text-red-700">
                           {isAdvanceStatus && activeMonthStatus 
@@ -2486,7 +2486,7 @@ export default function MealsModule({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     تأكيد الدفع واستخرج الوصل
@@ -2508,9 +2508,9 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Utensils className="h-5 w-5 text-[#257C86]" />
+                  <Utensils className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">تحديد طبق يوم {ARABIC_WEEKDAYS[selectedDay]}</h3>
                 </div>
 
@@ -2550,7 +2550,7 @@ export default function MealsModule({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
                   >
                     حفظ طبق اليوم
                   </button>
@@ -2571,7 +2571,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-white/80" />
                   <div>
@@ -2651,7 +2651,7 @@ export default function MealsModule({
                               </div>
                               <button
                                 onClick={() => handleAddOneTimeMealStudent(s.id)}
-                                className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1 shrink-0"
+                                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1 shrink-0"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 أضف وجبة اليوم
@@ -2688,7 +2688,7 @@ export default function MealsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Undo2 className="h-5 w-5 text-red-400" />
                   <div>
@@ -2708,7 +2708,7 @@ export default function MealsModule({
               </div>
 
               <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-600 font-bold leading-relaxed bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl p-3">
+                <p className="text-xs text-slate-600 font-bold leading-relaxed bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl p-3">
                   يتم استرجاع قيمة الوجبات المتبقية (غير المستهلكة) للأشهر المدفوعة المختارة.
                   يُحتسب الاسترجاع على أساس: عدد الوجبات المتبقية × سعر الوجبة. يمكنك تعديل المبلغ يدوياً إذا لزم الأمر.
                   إذا استرجعت الشهر الحالي (الجاري) تُنهى خدمة المطعم للتلميذ ويمكنه أخذ وجبات منفردة حتى يعيد الخلاص.
@@ -2778,7 +2778,7 @@ export default function MealsModule({
                                 <p className="text-xs font-black text-slate-900">{monthToArabic(m)} ({m})</p>
                                 <p className="text-[10px] text-slate-500">المبلغ المسدد: <span className="font-mono font-bold">{ms.paidAmount} د.ت</span></p>
                                 <p className="text-[10px] text-slate-500">
-                                  الوجبات المستهلكة (الاشتراك الحالي): <span className="font-mono font-bold text-[#1e626b]">{consumedThisMonth}</span>
+                                  الوجبات المستهلكة (الاشتراك الحالي): <span className="font-mono font-bold text-brand-700">{consumedThisMonth}</span>
                                   {settledDates.length > 0 && (
                                     <span className="text-slate-600 mr-1.5 font-bold">
                                       ({settledDates.length} وجبة تمت تسويتها بالاسترجاع السابق)
@@ -2824,7 +2824,7 @@ export default function MealsModule({
                               </p>
                               <div className="flex flex-wrap gap-1">
                                 {consumedDates.map(d => (
-                                  <span key={d} className="inline-block px-2 py-0.5 bg-[#257C86]/[0.06] text-[#257C86] border border-[#257C86]/20 rounded-md text-[9px] font-mono font-bold">
+                                  <span key={d} className="inline-block px-2 py-0.5 bg-brand-600/[0.06] text-brand-600 border border-brand-600/20 rounded-md text-[9px] font-mono font-bold">
                                     {d}
                                   </span>
                                 ))}

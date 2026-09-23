@@ -169,7 +169,7 @@ export const APP_SUBJECTS = [
 
 
 export const initialCenterSettings: CenterSettings = {
-  centerName: 'المركز',
+  centerName: 'EduSphère',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
   mealOperatingMode: 'external_traiteur',
@@ -279,7 +279,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-    centerName: src.centerName || src.center_name || 'المركز',
+    centerName: src.centerName || src.center_name || 'EduSphère',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     mealOperatingMode: src.mealOperatingMode || src.meal_operating_mode || 'external_traiteur',

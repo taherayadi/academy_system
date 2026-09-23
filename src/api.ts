@@ -501,17 +501,50 @@ export async function fetchPublicModulePricesApi(year?: string): Promise<Record<
 }
 
 
+// ─── Annonces actives : déduplication + cache TTL court ────────────────────
+// Trois surfaces (2 carrousels + interstitiel) demandent la même liste pour un
+// même couple (location, centerId), et le StrictMode de React double chaque
+// effet en dev. Un cache module réduit tout ça à UNE requête réseau par
+// fenêtre. Les annonces sont rédigées dans la console plateforme et changent
+// rarement : un TTL court est sûr. Les échecs ne sont jamais mis en cache —
+// le montage suivant retente.
+const ADS_CACHE_TTL_MS = 60_000;
+let adsCache: { key: string; data: any[]; expiresAt: number } | null = null;
+const adsInFlight = new Map<string, Promise<any[]>>();
+
+/** Test-only : vide le cache/dedup des annonces entre les tests. */
+export function __resetActiveAdsCacheForTests(): void {
+  adsCache = null;
+  adsInFlight.clear();
+}
+
 /** Fetch active advertisements by location and optional centerId (public endpoint). */
 export async function fetchActiveAdvertisementsApi(location: string, centerId?: string): Promise<any[]> {
+  const key = `${location}|${centerId || ''}`;
+  if (adsCache && adsCache.key === key && Date.now() < adsCache.expiresAt) {
+    return adsCache.data;
+  }
+  const pending = adsInFlight.get(key);
+  if (pending) return pending;
+
   const params = new URLSearchParams({ location });
   if (centerId) params.set('centerId', centerId);
 
-  const res = await fetch(`${API_BASE}/advertisements/active?${params.toString()}`, {
-    credentials: 'same-origin'
+  const request = (async () => {
+    const res = await fetch(`${API_BASE}/advertisements/active?${params.toString()}`, {
+      credentials: 'same-origin'
+    });
+    const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
+    const ads = data.advertisements || [];
+    adsCache = { key, data: ads, expiresAt: Date.now() + ADS_CACHE_TTL_MS };
+    return ads;
+  })().finally(() => {
+    adsInFlight.delete(key);
   });
-  const data: { advertisements?: any[]; error?: string } = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'خطأ في جلب الإعلانات.');
-  return data.advertisements || [];
+
+  adsInFlight.set(key, request);
+  return request;
 }
 
 

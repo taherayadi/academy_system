@@ -71,13 +71,13 @@ export default function StudentTimeSheetModule({
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+            <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               {centerType === 'jardin' ? 'Pointage Élèves' : 'جداول التوقيت'}
             </span>
             <span className="text-xs text-slate-400 font-bold">{centerType === 'jardin' ? 'تسجيل الدخول والخروج اليومي للتلاميذ' : 'الجداول الزمنية الأسبوعية للتلاميذ'}</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-            <Clock className="h-6 w-6 text-[#257C86]" />
+            <Clock className="h-6 w-6 text-brand-600" />
             {centerType === 'jardin' ? 'نظام تسجيل حضور التلاميذ' : 'إدارة جداول التوقيت الأسبوعية'}
           </h2>
           <p className="text-slate-500 text-xs mt-1">
@@ -95,7 +95,7 @@ export default function StudentTimeSheetModule({
           </span>
           <button
             onClick={() => { setEditingTimeSheet(null); setIsTimeSheetModalOpen(true); }}
-            className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-xl font-bold text-sm flex items-center gap-2 cursor-pointer shadow-md"
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 cursor-pointer shadow-md"
           >
             <Plus className="h-4 w-4" />
             إضافة جدول توقيت
@@ -111,7 +111,7 @@ export default function StudentTimeSheetModule({
                 <select
                   value={timeSheetYear}
                   onChange={(e) => { setTimeSheetYear(e.target.value); setTimeSheetPage(1); }}
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]/30 cursor-pointer"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600/30 cursor-pointer"
                 >
                   <option value="">كل السنوات</option>
                   {Array.from(new Set(studentTimeSheets.map(ts => ts.schoolYear).filter(Boolean))).sort().map(y => (
@@ -124,7 +124,7 @@ export default function StudentTimeSheetModule({
                 <select
                   value={timeSheetEtab}
                   onChange={(e) => { setTimeSheetEtab(e.target.value); setTimeSheetPage(1); }}
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]/30 cursor-pointer"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600/30 cursor-pointer"
                 >
                   <option value="">كل المؤسسات</option>
                   {Array.from(new Set(studentTimeSheets.map(ts => ts.establishmentName).filter(Boolean))).sort().map(e => (
@@ -137,7 +137,7 @@ export default function StudentTimeSheetModule({
                 <select
                   value={timeSheetGrade}
                   onChange={(e) => { setTimeSheetGrade(e.target.value); setTimeSheetPage(1); }}
-                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]/30 cursor-pointer"
+                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600/30 cursor-pointer"
                 >
                   <option value="">كل المستويات</option>
                   {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -169,17 +169,17 @@ export default function StudentTimeSheetModule({
                           return (
                             <div
                               key={ts.id}
-                              className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#257C86]/20 hover:shadow-md transition-all duration-200"
+                              className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-brand-600/20 hover:shadow-md transition-all duration-200"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-black text-[#1e626b] truncate">
+                                  <p className="text-sm font-black text-brand-700 truncate">
                                     {ts.establishmentName} - {ts.schoolYear}
                                   </p>
                                   <p className="text-xs text-slate-500 font-bold mt-1">
                                     {ts.gradeLevel}{ts.branch ? ` / ${ts.branch}` : ''}{ts.className ? ` / ${ts.className}` : ''}
                                   </p>
-                                  <p className="text-xs text-[#257C86] font-bold mt-1 flex items-center gap-1">
+                                  <p className="text-xs text-brand-600 font-bold mt-1 flex items-center gap-1">
                                     <Users className="h-3 w-3" />
                                     {assignedCount} تلميذ مُسنَد
                                   </p>
@@ -187,21 +187,21 @@ export default function StudentTimeSheetModule({
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     onClick={() => { setAssignTimeSheet(ts); setIsAssignModalOpen(true); }}
-                                    className="p-2 text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-xl transition cursor-pointer"
+                                    className="p-2 text-brand-600 hover:bg-brand-600/[0.06] rounded-xl transition cursor-pointer"
                                     title="إسناد للتلاميذ"
                                   >
                                     <Users className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => { setEditingTimeSheet(ts); setIsTimeSheetModalOpen(true); }}
-                                    className="p-2 text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-xl transition cursor-pointer"
+                                    className="p-2 text-brand-600 hover:bg-brand-600/[0.06] rounded-xl transition cursor-pointer"
                                     title="تعديل"
                                   >
                                     <Edit3 className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => setDeleteTimeSheet(ts)}
-                                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                    className="p-2 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                                     title="حذف"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -223,7 +223,7 @@ export default function StudentTimeSheetModule({
                             <button
                               onClick={() => setTimeSheetPage(Math.max(1, safePage - 1))}
                               disabled={safePage <= 1}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#257C86]/[0.06] transition cursor-pointer"
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-brand-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600/[0.06] transition cursor-pointer"
                             >
                               السابق
                             </button>
@@ -233,8 +233,8 @@ export default function StudentTimeSheetModule({
                                 onClick={() => setTimeSheetPage(p)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                                   p === safePage
-                                    ? 'bg-[#257C86] text-white'
-                                    : 'bg-white border border-slate-200 text-slate-500 hover:bg-[#257C86]/[0.06]'
+                                    ? 'bg-brand-600 text-white'
+                                    : 'bg-white border border-slate-200 text-slate-500 hover:bg-brand-600/[0.06]'
                                 }`}
                               >
                                 {p}
@@ -243,7 +243,7 @@ export default function StudentTimeSheetModule({
                             <button
                               onClick={() => setTimeSheetPage(Math.min(totalPages, safePage + 1))}
                               disabled={safePage >= totalPages}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#257C86] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#257C86]/[0.06] transition cursor-pointer"
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-brand-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600/[0.06] transition cursor-pointer"
                             >
                               التالي
                             </button>
@@ -317,7 +317,7 @@ export default function StudentTimeSheetModule({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
           >
-            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+            <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <h3 className="text-lg font-black">تأكيد الحذف</h3>
@@ -325,7 +325,7 @@ export default function StudentTimeSheetModule({
             </div>
             <div className="p-6 text-center">
               <p className="text-slate-700 font-bold mb-4">
-                هل أنت متأكد من حذف جدول التوقيت "<span className="text-[#257C86]">{deleteTimeSheet.establishmentName} - {deleteTimeSheet.schoolYear}</span>"؟
+                هل أنت متأكد من حذف جدول التوقيت "<span className="text-brand-600">{deleteTimeSheet.establishmentName} - {deleteTimeSheet.schoolYear}</span>"؟
               </p>
               <p className="text-slate-500 text-sm mb-6">سيتم إلغاء إسناد هذا الجدول من جميع التلاميذ المسندين إليه.</p>
               <div className="flex justify-center gap-3">

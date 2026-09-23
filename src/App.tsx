@@ -223,9 +223,11 @@ export default function App() {
   // they live in their own tables and are only read by the finance module.
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
 
+  // Titre de l'espace de travail uniquement — la landing revendique le titre
+  // tant qu'elle est montée (française) et restaure « المركز » au démontage.
   useEffect(() => {
-    document.title = settings?.centerName || 'المركز';
-  }, [settings?.centerName]);
+    if (currentUser) document.title = settings?.centerName || 'EduSphère';
+  }, [settings?.centerName, currentUser]);
 
   // Import confirmation state
   const [importPendingData, setImportPendingData] = useState<Record<string, unknown> | null>(null);
@@ -796,7 +798,7 @@ export default function App() {
         <>
           <LandingPage
             onOpenLogin={() => setAuthView('login')}
-            centerName={settings?.centerName || 'Small Genious'}
+            centerName={settings?.centerName || 'EduSphère'}
           />
           <CloseConfirmDialog />
         </>
@@ -820,10 +822,10 @@ export default function App() {
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
-            <span className="w-16 h-16 rounded-2xl bg-[#257C86] shadow-md shadow-slate-900/10 overflow-hidden">
-              <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
+            <span className="w-16 h-16 rounded-2xl bg-white shadow-md shadow-slate-900/10 overflow-hidden">
+              <img src={menuLogoSrc} alt={settings?.centerName || 'EduSphère'} className="center-logo-img w-full h-full object-cover" />
             </span>
-            <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
+            <Loader2 className="h-6 w-6 text-brand-600 animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
           </div>
         </div>
@@ -846,7 +848,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setReloadKey(k => k + 1)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-extrabold rounded-2xl transition cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-extrabold rounded-2xl transition cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />
               إعادة المحاولة
@@ -888,12 +890,12 @@ export default function App() {
       {/* MOBILE HEADER */}
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
-          <span className="w-10 h-10 rounded-xl bg-[#257C86] shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={menuLogoSrc} alt={(settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+          <span className="w-10 h-10 rounded-xl bg-white shadow-sm shadow-slate-900/10 shrink-0 overflow-hidden">
+            <img src={menuLogoSrc} alt={(settings?.centerName || 'EduSphère')} className="center-logo-img w-full h-full object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">{(settings?.centerName || 'المركز')}</h1>
-            <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
+            <h1 className="font-black text-sm text-slate-900">{(settings?.centerName || 'EduSphère')}</h1>
+            <span className="text-[10px] text-brand-600 font-bold block">{currentUser.email}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -905,7 +907,7 @@ export default function App() {
           </button>
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 bg-[#257C86]/10 text-[#257C86] rounded-lg cursor-pointer"
+            className="p-2 bg-brand-600/10 text-brand-600 rounded-lg cursor-pointer"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -932,8 +934,8 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
-                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25' 
+                      : 'text-slate-500 hover:bg-brand-600/10 hover:text-brand-600'
                   }`}
                 >
                   <IconComp className="h-4 w-4 shrink-0" />
@@ -952,13 +954,13 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={menuLogoSrc} alt={(settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+              <span className={`rounded-2xl bg-white shadow-md shadow-slate-900/10 ring-1 ring-slate-900/5 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+                <img src={menuLogoSrc} alt={(settings?.centerName || 'EduSphère')} className="center-logo-img w-full h-full object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
-                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{(settings?.centerName || 'المركز')}</h1>
-                  <span className="text-[11px] text-[#257C86] font-bold block truncate">{'الإدارة والتأطير'}</span>
+                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{(settings?.centerName || 'EduSphère')}</h1>
+                  <span className="text-[11px] text-brand-600 font-bold block truncate">{'الإدارة والتأطير'}</span>
                 </div>
               )}
             </div>
@@ -966,7 +968,7 @@ export default function App() {
               <button
                 onClick={() => setSidebarCollapsed(true)}
                 title="طيّ القائمة"
-                className="p-1.5 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/10 rounded-lg transition cursor-pointer shrink-0"
+                className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition cursor-pointer shrink-0"
               >
                 <PanelLeftClose className="h-4 w-4" />
               </button>
@@ -977,7 +979,7 @@ export default function App() {
             <button
               onClick={() => setSidebarCollapsed(false)}
               title="توسيع القائمة"
-              className="w-full flex items-center justify-center p-1.5 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/10 rounded-lg transition cursor-pointer"
+              className="w-full flex items-center justify-center p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition cursor-pointer"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
@@ -997,8 +999,8 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/30' 
-                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' 
+                      : 'text-slate-500 hover:bg-brand-600/10 hover:text-brand-600'
                   }`}
                 >
                   <IconComp className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
@@ -1018,7 +1020,7 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-[#3A93A0] shadow-sm shadow-[#3A93A0]/50 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-brand-500 shadow-sm shadow-brand-500/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
                 {(currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
@@ -1028,7 +1030,7 @@ export default function App() {
           <button
             onClick={handleLogout}
             title="Déconnexion"
-            className={`w-full flex items-center gap-2 px-3 py-2 bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 hover:border-[#257C86]/40 text-[#257C86] hover:text-[#1d6169] text-[11px] font-extrabold transition cursor-pointer group rounded-xl ${
+            className={`w-full flex items-center gap-2 px-3 py-2 bg-brand-600/10 hover:bg-brand-600/20 border border-brand-600/20 hover:border-brand-600/40 text-brand-600 hover:text-brand-700 text-[11px] font-extrabold transition cursor-pointer group rounded-xl ${
               sidebarCollapsed ? 'justify-center px-0' : ''
             }`}
           >
@@ -1037,7 +1039,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{(settings?.centerName || 'المركز')} © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{(settings?.centerName || 'EduSphère')} © 2026</p>
           )}
         </div>
       </aside>
@@ -1298,7 +1300,7 @@ export default function App() {
               <span>
                 سيتم <strong>استبدال جميع البيانات الحالية</strong> بمحتوى ملف الباك اب.
                 <br /><br />
-                <span className="text-[#257C86] font-black">✓</span> تم إنشاء نسخة احتياطية تلقائية من البيانات الحالية قبل الاسترجاع.
+                <span className="text-brand-600 font-black">✓</span> تم إنشاء نسخة احتياطية تلقائية من البيانات الحالية قبل الاسترجاع.
               </span>
             }
             onConfirm={handleConfirmImport}

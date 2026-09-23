@@ -4,11 +4,21 @@
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cairo", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-50: #fefbeb;
-  --color-brand-100: #fef3c7;
-  --color-brand-500: #f59e0b;
-  --color-brand-600: #d97706;
-  --color-brand-700: #b45309;
+  /* Brand ramp — teal, anchored on the two colors the app has always used:
+     600 = #257C86 (primary actions, links, focus), 700 = #1e626b (gradient
+     deep end, pressed states). Neighbors are computed on the same hue/sat
+     so hover/darken steps stay consistent. NEVER reintroduce amber here. */
+  --color-brand-50: #eff9fb;
+  --color-brand-100: #dbf3f5;
+  --color-brand-200: #b7e6eb;
+  --color-brand-300: #8bd7df;
+  --color-brand-400: #53c3d0;
+  --color-brand-500: #31a7b4;
+  --color-brand-600: #257C86;
+  --color-brand-700: #1e626b;
+  --color-brand-800: #174e54;
+  --color-brand-900: #133f44;
+  --color-brand-950: #0b2528;
 
   /* Landing page marquee (infinite module ticker) */
   --animate-marquee: marquee 42s linear infinite;
@@ -43,14 +53,22 @@
 /* Responsive root font-size: scales smoothly with viewport width so every
    rem-based Tailwind text size adapts across screens (24", 15", smaller,
    different resolutions). clamp() keeps it readable on tiny windows and
-   capped on very wide screens. */
+   capped on very wide screens.
+   Touch viewports (phones, tablet portrait) get the nominal 16px root:
+   below 13px-root every rem-based control shrinks under the 40px touch
+   minimum and body text drops under 16px. Desktop keeps the tuned clamp. */
 html {
   font-size: clamp(13px, calc(0.6vw + 7px), 17px);
+}
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
 }
 
 /* Visible keyboard focus for every interactive element (a11y floor) */
 :focus-visible {
-  outline: 2px solid #257C86;
+  outline: 2px solid var(--color-brand-600);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -60,6 +78,24 @@ html {
   .animate-marquee {
     animation: none;
   }
+}
+
+/* Prix en cours de chargement : shimmer compact (System Status) */
+@keyframes price-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.price-skeleton {
+  display: inline-block;
+  height: 0.8em;
+  vertical-align: baseline;
+  border-radius: 0.25em;
+  background: linear-gradient(90deg, var(--color-slate-200) 25%, var(--color-slate-100) 50%, var(--color-slate-200) 75%);
+  background-size: 200% 100%;
+  animation: price-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-skeleton { animation: none; }
 }
 
 body {
@@ -100,7 +136,7 @@ select:focus {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #257C86;
+  outline: 2px solid var(--color-brand-600);
   outline-offset: 0;
 }
 

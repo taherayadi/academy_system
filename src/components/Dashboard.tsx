@@ -43,17 +43,17 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   // ── Quick-access catalog: ONLY the modules enabled in the center's plan ──
   const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6'];
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
-    { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
-    { tab: 'studentTimeSheets', title: centerType === 'jardin' ? 'Pointage Élèves' : 'Jd. Horaires', desc: centerType === 'jardin' ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module3', title: `Étude ${settings?.centerName || 'المركز'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module4', title: `Études Hors ${settings?.centerName || 'المركز'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
-    { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
-    { tab: 'formations', title: 'Formations & Cours', desc: 'التكوينات والدورات', icon: Award, tile: 'bg-[#257C86]/10 text-[#257C86]' },
-    { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
-    { tab: 'module6', title: 'Gestion des Repas', desc: 'وجبة اليوم وتعويض الإلغاء', icon: Utensils, tile: 'bg-[#257C86]/10 text-[#257C86]' },
+    { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-brand-600/[0.06] text-brand-600' },
+    { tab: 'studentTimeSheets', title: centerType === 'jardin' ? 'Pointage Élèves' : 'Jd. Horaires', desc: centerType === 'jardin' ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'module3', title: `Étude ${settings?.centerName || 'EduSphère'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'module4', title: `Études Hors ${settings?.centerName || 'EduSphère'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
+    { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-brand-600/[0.06] text-brand-600' },
+    { tab: 'formations', title: 'Formations & Cours', desc: 'التكوينات والدورات', icon: Award, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-brand-600/[0.06] text-brand-600' },
+    { tab: 'module6', title: 'Gestion des Repas', desc: 'وجبة اليوم وتعويض الإلغاء', icon: Utensils, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'moduleBus', title: 'Plan de Bus', desc: 'خطة الحافلة والتوصيل', icon: Bus, tile: 'bg-slate-100 text-slate-500' },
-    { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-[#257C86]/[0.06] text-[#257C86]' },
+    { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-brand-600/[0.06] text-brand-600' },
     { tab: 'module8', title: 'Gestion du Personnel', desc: 'بطاقات المعلمين وكشوفات الرواتب', icon: Users, tile: 'bg-slate-100 text-slate-500' }
   ];
   const quickModules = QUICK_MODULES.filter(m =>
@@ -85,16 +85,16 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   return (
     <div className="space-y-8" dir="rtl">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden bg-[#257C86] text-white rounded-3xl p-8 shadow-lg shadow-[#257C86]/25 border border-white/20">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-[#257C86] rounded-full opacity-5 blur-3xl"></div>
+      <div className="relative overflow-hidden bg-brand-600 text-white rounded-3xl p-8 shadow-lg shadow-brand-600/25 border border-white/20">
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-brand-600 rounded-full opacity-5 blur-3xl"></div>
         <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <span className="text-white/90 font-extrabold text-xs bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'المركز'}</span>
-            <h1 className="text-3xl md:text-4xl font-black mt-3">{settings?.centerName || 'المركز'}</h1>
-            <p className="mt-2 text-slate-300 text-base max-w-xl font-light leading-relaxed">
-              مرحباً بك في لوحة قيادة {settings?.centerName || 'المركز'} الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
+            <span className="text-white/90 font-extrabold text-xs bg-white/10 px-3 py-1 rounded-full border border-white/25">منظومة {settings?.centerName || 'EduSphère'}</span>
+            <h1 className="text-3xl md:text-4xl font-black mt-3">{settings?.centerName || 'EduSphère'}</h1>
+            <p className="mt-2 text-slate-300 text-base max-w-xl font-normal leading-relaxed">
+              مرحباً بك في لوحة قيادة {settings?.centerName || 'EduSphère'} الذكية لإدارة الدراسة والمدفوعات والحصص والمكتبة والمطعم.
             </p>
           </div>
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center min-w-[210px] shadow-lg">
@@ -121,13 +121,13 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
             {allowed('module1') && (
             <button 
               onClick={() => setActiveTab('module1')}
-              className="text-xs font-bold text-[#257C86] hover:text-[#1e626b] transition flex items-center gap-1 cursor-pointer"
+              className="text-xs font-bold text-brand-600 hover:text-brand-700 transition flex items-center gap-1 cursor-pointer"
             >
               عرض التسجيلات <span>←</span>
             </button>
             )}
           </div>
-          <div className="p-4 bg-[#257C86]/10 text-[#257C86] rounded-2xl">
+          <div className="p-4 bg-brand-600/10 text-brand-600 rounded-2xl">
             <GraduationCap className="h-7 w-7" />
           </div>
         </motion.div>
@@ -143,12 +143,12 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
             <span className="text-3xl font-black text-slate-900 block">{totalStaff} <span className="text-xs text-slate-400 font-normal">إطار</span></span>
             <button 
               onClick={() => setActiveTab('module8')}
-              className="text-xs font-bold text-[#257C86] hover:text-[#1e626b] transition flex items-center gap-1 cursor-pointer"
+              className="text-xs font-bold text-brand-600 hover:text-brand-700 transition flex items-center gap-1 cursor-pointer"
             >
               إدارة الموظفين <span>←</span>
             </button>
           </div>
-          <div className="p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl">
+          <div className="p-4 bg-brand-600/[0.06] text-brand-600 rounded-2xl">
             <Users className="h-7 w-7" />
           </div>
         </motion.div>
@@ -161,17 +161,17 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         >
           <div className="space-y-2">
             <span className="text-xs font-bold text-slate-400 block">مجموع المقبوضات</span>
-            <span className="text-xl font-black text-[#1e626b] block whitespace-nowrap font-mono">{finances.toLocaleString()} د.ت</span>
+            <span className="text-xl font-black text-brand-700 block whitespace-nowrap font-mono">{finances.toLocaleString()} د.ت</span>
             {allowed('module7') && (
             <button 
               onClick={() => setActiveTab('module7')}
-              className="text-xs font-bold text-[#257C86] hover:text-[#1e626b] transition flex items-center gap-1 cursor-pointer"
+              className="text-xs font-bold text-brand-600 hover:text-brand-700 transition flex items-center gap-1 cursor-pointer"
             >
               التقرير المالي <span>←</span>
             </button>
             )}
           </div>
-          <div className="p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl">
+          <div className="p-4 bg-brand-600/[0.06] text-brand-600 rounded-2xl">
             <DollarSign className="h-7 w-7" />
           </div>
         </motion.div>
@@ -203,7 +203,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
               <button
                 key={m.tab}
                 onClick={() => setActiveTab(m.tab)}
-                className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-[#257C86]/40 hover:bg-[#257C86]/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
+                className="p-4 rounded-2xl border border-slate-200/70 bg-white hover:border-brand-600/40 hover:bg-brand-600/[0.04] hover:shadow-md hover:shadow-slate-900/5 transition text-right cursor-pointer"
               >
                 <div className={`w-10 h-10 ${m.tile} rounded-xl flex items-center justify-center`}>
                   <Icon className="h-5 w-5" />

@@ -32,7 +32,6 @@ import {
   Receipt,
   Layers,
   X,
-  Quote,
   CreditCard,
   Clock
 } from 'lucide-react';
@@ -65,7 +64,29 @@ function Counter({ to, duration = 1500 }: { to: number; duration?: number }) {
     return () => cancelAnimationFrame(raf);
   }, [inView, to, duration]);
 
-  return <span ref={ref}>{val.toLocaleString('fr-TN')}</span>;
+  // Les lecteurs d'écran ne doivent pas entendre le comptage depuis 0 :
+  // la valeur finale est annoncée, l'animation est masquée.
+  return (
+    <span ref={ref}>
+      <span aria-hidden="true">{val.toLocaleString('fr-TN')}</span>
+      <span className="sr-only">{to.toLocaleString('fr-TN')}</span>
+    </span>
+  );
+}
+
+// Prix en cours de chargement : un shimmer compact annonce l'attente
+// (Visibility of System Status) au lieu d'un « … » muet.
+function PriceSlot({ ready, loading, value, ch = '2.5ch' }: { ready: boolean; loading: boolean; value: string; ch?: string }) {
+  if (ready) return <>{value}</>;
+  if (loading) {
+    return (
+      <>
+        <span className="sr-only">Tarif en cours de chargement</span>
+        <span className="price-skeleton" style={{ width: ch }} aria-hidden="true" />
+      </>
+    );
+  }
+  return <>—</>;
 }
 
 // ─── Hero mock data ────────────────────────────────────────────────
@@ -97,6 +118,21 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     return () => { cancelled = true; };
   }, []);
 
+  // ── Chrome du document : la landing est française/LTR, index.html démarre
+  // sur l'espace de travail arabe/RTL. On revendique le document au montage
+  // et on restaure les valeurs de l'espace de travail au démontage.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.lang = 'fr';
+    root.dir = 'ltr';
+    document.title = 'System Academy — Gestion académique pour centres : étude, suivi scolaire, finance';
+    return () => {
+      root.lang = 'ar';
+      root.dir = 'rtl';
+      document.title = 'EduSphère';
+    };
+  }, []);
+
   const pricesReady = Object.keys(modulePrices).length > 0;
   const pricedModules = useMemo(
     () => ALL_MODULES.map(module => ({ ...module, price: modulePrices[module.key] ?? 0 })),
@@ -122,8 +158,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [formError, setFormError] = useState('');
+  const [submitFailed, setSubmitFailed] = useState(false);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const [savedLeadCount, setSavedLeadCount] = useState(0);
+  const [resendingSaved, setResendingSaved] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const successHeadingRef = useRef<HTMLHeadingElement>(null);
 
   // FAQ
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -155,6 +196,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     );
   };
 
+  // ── Réinitialisation de la sélection (revenir à la base seule) ──
+  const resetSelection = () => setSelectedModules([...BASE_KEYS]);
+
   // ── Sticky bar : visible après le hero, cachée sur la section contact ──
   useEffect(() => {
     const onScroll = () => {
@@ -167,26 +211,16 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Normalise le numéro tunisien : 8 chiffres, préfixe +216 toléré.
+  const cleanPhone = (raw: string): string => {
+    let digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('216') && digits.length === 11) digits = digits.slice(3);
+    return digits;
+  };
+
+  const submitRequest = async () => {
     setFormError('');
-
-    // Type d'établissement requis : jardin d'enfant ou centre de formation
-    if (!centerType) {
-      setFormError('Sélectionnez le type de votre établissement (jardin d’enfant ou centre de formation).');
-      return;
-    }
-
-    // Téléphone tunisien : exactement 8 chiffres (le préfixe +216 est toléré)
-    let phoneDigits = phone.replace(/\D/g, '');
-    if (phoneDigits.startsWith('216') && phoneDigits.length === 11) {
-      phoneDigits = phoneDigits.slice(3);
-    }
-    if (phoneDigits.length !== 8) {
-      setFormError('Le numéro de téléphone doit contenir exactement 8 chiffres (ex : 20 123 456).');
-      return;
-    }
-
+    setSubmitFailed(false);
     setIsSubmitting(true);
     try {
       await submitDemoRequestApi({
@@ -194,7 +228,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         fullName,
         academyName,
         email,
-        phone: phoneDigits,
+        phone: cleanPhone(phone),
         estimatedSize: `${selectedModules.length} modules`,
         requestedModules: selectedModules,
         centerType,
@@ -202,6 +236,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       });
       setFormSubmitted(true);
     } catch {
+      // Échec réel : la demande n'est PAS partie. On garde une copie sur
+      // l'appareil comme secours hors ligne, mais on n'affiche JAMAIS un
+      // succès — le prospect doit voir l'erreur et pouvoir renvoyer.
       try {
         const newRequest = {
           id: `REQ-${Date.now()}`,
@@ -214,10 +251,61 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         const existing = JSON.parse(localStorage.getItem('academy_demo_requests') || '[]');
         existing.unshift(newRequest);
         localStorage.setItem('academy_demo_requests', JSON.stringify(existing));
+        setSavedOffline(true);
       } catch { /* ignore */ }
-      setFormSubmitted(true);
+      setSubmitFailed(true);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    setSubmitFailed(false);
+
+    // Type d'établissement requis : jardin d'enfant ou centre de formation
+    if (!centerType) {
+      setFormError('Sélectionnez le type de votre établissement (jardin d’enfant ou centre de formation).');
+      return;
+    }
+
+    // Téléphone tunisien : exactement 8 chiffres (le préfixe +216 est toléré)
+    if (cleanPhone(phone).length !== 8) {
+      setFormError('Le numéro de téléphone doit contenir exactement 8 chiffres (ex : 20 123 456).');
+      return;
+    }
+
+    await submitRequest();
+  };
+
+  // Annonce l'écran de succès aux lecteurs d'écran en déplaçant le focus.
+  useEffect(() => {
+    if (formSubmitted) successHeadingRef.current?.focus();
+  }, [formSubmitted]);
+
+  // Une demande sauvegardée localement (envoi échoué lors d'une visite
+  // précédente) doit ressusciter, pas pourrir dans localStorage.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('academy_demo_requests') || '[]');
+      if (Array.isArray(saved) && saved.length > 0) setSavedLeadCount(saved.length);
+    } catch { /* ignore */ }
+  }, []);
+
+  const resendSavedLead = async () => {
+    setResendingSaved(true);
+    try {
+      const saved: Record<string, unknown>[] = JSON.parse(localStorage.getItem('academy_demo_requests') || '[]');
+      for (const req of saved) {
+        const { id: _id, submittedAt: _at, ...payload } = req;
+        await submitDemoRequestApi(payload as Parameters<typeof submitDemoRequestApi>[0]);
+      }
+      localStorage.removeItem('academy_demo_requests');
+      setSavedLeadCount(0);
+    } catch { /* échec : la copie locale reste en place, on réessaiera à la prochaine visite */ }
+    finally {
+      setResendingSaved(false);
     }
   };
 
@@ -262,65 +350,45 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
   ];
 
-  const testimonials = [
-    {
-      quote: 'J’ai démarré avec la base Scolaire + Finance. Trois mois plus tard, j’ai activé la cantine puis le transport — en un clic, sans rien réinstaller.',
-      name: 'Rim Ben Salah',
-      role: 'Directrice · Étoile Academy, Sfax',
-      initials: 'RB'
-    },
-    {
-      quote: 'Les reçus et le suivi des chèques nous ont fait gagner un temps fou. Fini les cahiers et les tableurs — tout est centralisé.',
-      name: 'Karim Trabelsi',
-      role: 'Gérant · Al Nour Center, Tunis',
-      initials: 'KT'
-    },
-    {
-      quote: 'Simple pour toute l’équipe, même les moins techniques. Et le support répond en minutes, pas en jours.',
-      name: 'Salma Gharbi',
-      role: 'Directrice pédagogique · Élite Studies, Sousse',
-      initials: 'SG'
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-[#257C86]/5 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
 
       {/* ─── SCROLL PROGRESS ───────────────────────────────────────── */}
       <motion.div
+        aria-hidden="true"
         style={{ scaleX: progress }}
-        className="fixed top-0 left-0 right-0 h-[3px] z-[70] origin-left bg-gradient-to-r from-[#257C86] to-[#257C86]"
+        className="fixed top-0 left-0 right-0 h-[3px] z-[70] origin-left bg-brand-600"
       />
 
       {/* ─── NAVIGATION ────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
 
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-[#257C86]/25 flex items-center justify-center bg-gradient-to-br from-[#257C86] to-[#1e626b]">
-              <img src={icon} alt={centerName} className="w-full h-full object-cover" />
+          <button type="button" aria-label="Revenir en haut de la page" className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-slate-900/10 flex items-center justify-center bg-white">
+              <img src={icon} alt="" className="w-full h-full object-cover" />
             </div>
-            <div>
+            <div className="text-left">
               <div className="text-base font-black tracking-tight text-slate-900">{centerName}</div>
-              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Gestion Académique</div>
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.15em]">Gestion Académique</div>
             </div>
-          </div>
+          </button>
 
           <nav className="hidden md:flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 px-2 py-1 shadow-sm">
-            <button onClick={() => scrollToSection('base')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-[#257C86] transition rounded-full hover:bg-[#257C86]/5">La base</button>
-            <button onClick={() => scrollToSection('modules')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-[#257C86] transition rounded-full hover:bg-[#257C86]/5">Modules</button>
-            <button onClick={() => scrollToSection('pricing')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-[#257C86] transition rounded-full hover:bg-[#257C86]/5">Tarifs</button>
-            <button onClick={() => scrollToSection('faq')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-[#257C86] transition rounded-full hover:bg-[#257C86]/5">FAQ</button>
+            <button onClick={() => scrollToSection('base')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-brand-600 transition rounded-full hover:bg-brand-600/5">La base</button>
+            <button onClick={() => scrollToSection('modules')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-brand-600 transition rounded-full hover:bg-brand-600/5">Modules</button>
+            <button onClick={() => scrollToSection('pricing')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-brand-600 transition rounded-full hover:bg-brand-600/5">Tarifs</button>
+            <button onClick={() => scrollToSection('faq')} className="px-4 py-1.5 text-sm font-bold text-slate-600 hover:text-brand-600 transition rounded-full hover:bg-brand-600/5">FAQ</button>
           </nav>
 
           <div className="flex items-center gap-2">
-            <button onClick={onOpenLogin} className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl transition shadow-sm">
+            <button onClick={onOpenLogin} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl transition shadow-sm">
               <LogIn className="h-4 w-4" />
               <span className="hidden sm:inline">Connexion</span>
             </button>
             <button
               onClick={() => scrollToSection('contact')}
-              className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white text-sm font-extrabold rounded-xl shadow-md shadow-[#257C86]/25 transition"
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-extrabold rounded-xl shadow-md shadow-brand-600/25 transition"
             >
               Essai gratuit
               <ArrowRight className="h-4 w-4" />
@@ -332,8 +400,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       {/* ─── HERO ──────────────────────────────────────────────────── */}
       <section className="relative pt-14 sm:pt-20 pb-14 overflow-hidden">
         {/* soft light washes, same spirit as master */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#257C86]/[0.06] via-transparent to-[#257C86]/[0.05] pointer-events-none" />
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-[#257C86]/[0.07] blur-[120px] pointer-events-none" />
+        <div className="absolute inset-0 bg-brand-600/[0.04] pointer-events-none" />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-brand-600/[0.07] blur-[120px] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-2 gap-14 lg:gap-10 items-center">
@@ -344,11 +412,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55 }}
-                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#257C86]/10 to-[#257C86]/10 border border-[#257C86]/20 mb-7"
+                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-brand-600/10 border border-brand-600/20 mb-7"
               >
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#257C86] opacity-50"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#257C86]"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-600 opacity-50"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-600"></span>
                 </span>
                 <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance + Jd. Horaires offert — {priceLabel(basePrice)} TND/mois</span>
               </motion.div>
@@ -361,7 +429,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               >
                 Votre académie,
                 <br />
-                <span className="bg-gradient-to-r from-[#257C86] to-[#257C86] bg-clip-text text-transparent">
+                <span className="text-brand-600">
                   sous contrôle total.
                 </span>
               </motion.h1>
@@ -372,23 +440,36 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 transition={{ duration: 0.65, delay: 0.16 }}
                 className="text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed font-medium"
               >
-                Chaque abonnement démarre avec la base{' '}
-                <span className="text-slate-900 font-black">Scolaire &amp; Notes</span> +{' '}
-                <span className="text-slate-900 font-black">Finance &amp; Paiements</span>,
-                avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert.
-                Ajoutez des modules à la carte — étude, cantine, transport — uniquement
-                quand vous en avez besoin.
+                La base <span className="text-slate-900 font-black">Scolaire &amp; Notes</span> +{' '}
+                <span className="text-slate-900 font-black">Finance &amp; Paiements</span> démarre à{' '}
+                <span className="text-slate-900 font-black">{priceLabel(basePrice)} TND/mois</span>,
+                avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert{' '}
+                <span className="text-slate-500 font-semibold">(pointage des entrées/sorties des élèves)</span>.
+                Ajoutez étude, cantine ou transport uniquement quand vous en avez besoin —
+                élèves et utilisateurs illimités.
               </motion.p>
 
               <motion.div
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.65, delay: 0.24 }}
-                className="flex flex-col sm:flex-row items-center lg:justify-start justify-center gap-3.5 mb-9"
+                className="mb-9"
               >
+                {/* Price-first : le tarif de la base est le deuxième élément le plus fort de la page */}
+                <div className="inline-flex items-baseline gap-2 px-6 py-4 rounded-2xl bg-white border-2 border-brand-600/20 shadow-lg shadow-brand-600/10 mb-6">
+                  <span className="text-5xl font-black text-brand-600 tracking-tight leading-none">
+                    <PriceSlot ready={pricesReady} loading={pricingLoading} value={priceLabel(basePrice)} />
+                  </span>
+                  <span className="text-sm font-bold text-slate-500">TND/mois</span>
+                  <span className="hidden md:inline text-[11px] font-black uppercase tracking-wider text-slate-500 border-l border-slate-200 pl-3 ml-1">
+                    Base 3 modules · sans engagement
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center lg:justify-start justify-center gap-3.5">
                 <button
                   onClick={() => scrollToSection('contact')}
-                  className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:from-[#1e626b] hover:to-[#257C86] text-white font-black text-base rounded-2xl shadow-xl shadow-[#257C86]/25 transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-600 text-white font-black text-base rounded-2xl shadow-xl shadow-brand-600/25 transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
                 >
                   Démarrer gratuitement
                   <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -397,9 +478,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   onClick={() => scrollToSection('pricing')}
                   className="w-full sm:w-auto px-8 py-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-base rounded-2xl border-2 border-slate-200 transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
                 >
-                  <Layers className="h-5 w-5 text-[#257C86]" />
+                  <Layers className="h-5 w-5 text-brand-600" />
                   Composer mon abonnement
                 </button>
+                </div>
               </motion.div>
 
               <motion.div
@@ -422,9 +504,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.85, delay: 0.3 }}
+              aria-hidden="true"
               className="relative mx-auto w-full max-w-[520px]"
             >
-              <div className="absolute -inset-6 bg-gradient-to-tr from-[#257C86]/15 via-[#257C86]/10 to-transparent blur-3xl rounded-[3rem] pointer-events-none" />
+              <div className="absolute -inset-6 bg-gradient-to-tr from-brand-600/15 via-brand-600/10 to-transparent blur-3xl rounded-[3rem] pointer-events-none" />
 
               <motion.div
                 animate={{ y: [0, -7, 0] }}
@@ -437,13 +520,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <span className="h-3 w-3 rounded-full bg-amber-400/80" />
                   <span className="h-3 w-3 rounded-full bg-emerald-400/80" />
                   <div className="ml-3 hidden sm:flex items-center gap-2 text-[11px] text-slate-400 font-bold">
-                    <ShieldCheck className="h-3.5 w-3.5 text-[#257C86]" />
+                    <ShieldCheck className="h-3.5 w-3.5 text-brand-600" />
                     app.system-academy.tn
                   </div>
                   <div className="ml-auto flex items-center gap-3.5 text-slate-400">
                     <Search className="h-4 w-4" />
                     <Bell className="h-4 w-4" />
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-[#257C86] to-[#257C86]" />
+                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-brand-600 to-brand-600" />
                   </div>
                 </div>
 
@@ -461,7 +544,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       <div
                         key={item.label}
                         className={`flex items-center gap-2 rounded-lg px-2 py-2 text-[10px] sm:text-[11px] font-bold ${
-                          item.active ? 'bg-[#257C86]/10 text-[#257C86]' : 'text-slate-400'
+                          item.active ? 'bg-brand-600/10 text-brand-600' : 'text-slate-400'
                         }`}
                       >
                         <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
@@ -480,7 +563,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     {/* stat cards */}
                     <div className="grid grid-cols-3 gap-2.5 mb-4">
                       {[
-                        { label: 'Élèves inscrits', value: '248', delta: '+12%', icon: Users, tone: 'text-[#257C86]' },
+                        { label: 'Élèves inscrits', value: '248', delta: '+12%', icon: Users, tone: 'text-brand-600' },
                         { label: 'Encaissé · mois', value: '4 320', unit: 'TND', delta: '+8%', icon: CreditCard, tone: 'text-emerald-600' },
                         { label: 'Chèques en attente', value: '3', delta: '2 cashés', icon: Receipt, tone: 'text-amber-600' }
                       ].map(s => (
@@ -501,7 +584,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 mb-3">
                       <div className="flex items-center justify-between mb-3">
                         <div className="text-[11px] font-black text-slate-700">Revenus par mois</div>
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-[#257C86]">
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-brand-600">
                           <TrendingUp className="h-3 w-3" /> +24%
                         </div>
                       </div>
@@ -514,8 +597,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                               transition={{ duration: 0.9, delay: 0.9 + i * 0.12, ease: 'easeOut' }}
                               className={`w-full rounded-md ${
                                 i === MOCK_BARS.length - 1
-                                  ? 'bg-gradient-to-t from-[#257C86] to-[#3aa5b0] shadow-md shadow-[#257C86]/30'
-                                  : 'bg-[#257C86]/15'
+                                  ? 'bg-gradient-to-t from-brand-600 to-brand-500 shadow-md shadow-brand-600/30'
+                                  : 'bg-brand-600/15'
                               }`}
                             />
                             <span className="text-[9px] font-bold text-slate-400">{b.m}</span>
@@ -554,16 +637,16 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               <motion.div
                 animate={{ y: [0, -9, 0] }}
                 transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
-                className="absolute -top-6 -right-2 sm:-right-6 rounded-2xl bg-white border border-[#257C86]/25 shadow-xl shadow-slate-900/10 px-4 py-3"
+                className="absolute -top-6 -right-2 sm:-right-6 rounded-2xl bg-white border border-brand-600/25 shadow-xl shadow-slate-900/10 px-4 py-3"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <Lock className="h-3 w-3 text-[#257C86]" />
-                  <span className="text-[10px] font-black text-[#257C86] uppercase tracking-wider">Base incluse</span>
+                  <Lock className="h-3 w-3 text-brand-600" />
+                  <span className="text-[10px] font-black text-brand-600 uppercase tracking-wider">Base incluse</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {pricedBaseModules.map(m => (
                     <span key={m.key} className="flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 rounded-full px-2.5 py-1">
-                      <m.icon className="h-3 w-3 text-[#257C86]" />
+                      <m.icon className="h-3 w-3 text-brand-600" />
                       {m.label.split(' ')[0]}
                     </span>
                   ))}
@@ -615,15 +698,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       <section className="relative border-y border-slate-200/70 bg-white py-5 overflow-hidden">
         <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-white to-transparent pointer-events-none" />
         <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
-        <div className="flex w-max animate-marquee gap-3">
+        <div className="flex w-max animate-marquee gap-3" aria-hidden="true">
           {[...pricedModules, ...pricedModules].map((m, i) => (
             <div
               key={`${m.key}-${i}`}
               className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-slate-50/70 px-5 py-2.5 whitespace-nowrap"
             >
-              <m.icon className="h-4 w-4 text-[#257C86]" />
+              <m.icon className="h-4 w-4 text-brand-600" />
               <span className="text-sm font-bold text-slate-700">{m.label}</span>
-              <span className="text-xs font-black text-slate-400">{!pricesReady ? (pricingLoading ? 'Chargement…' : 'Tarif indisponible') : m.price === 0 ? 'Inclus' : `${m.price} TND`}</span>
+              <span className="text-xs font-black text-slate-500">{!pricesReady ? (pricingLoading ? <PriceSlot ready={false} loading value="" ch="4ch" /> : 'Tarif indisponible') : m.price === 0 ? 'Inclus' : `${m.price} TND`}</span>
             </div>
           ))}
         </div>
@@ -632,15 +715,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
       {/* ─── STATS ─────────────────────────────────────────────────── */}
       <section className="py-16 sm:py-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-2 lg:grid-cols-4 gap-10 text-center">
-          {[
+          {([
             { value: 10, label: 'Modules disponibles' },
             { value: basePrice, label: 'TND — le plan de base / mois' },
             { value: 14, label: 'Jours d’essai gratuit' },
-            { value: 0, label: 'Limite d’élèves & d’utilisateurs' }
-          ].map(s => (
+            { value: null, raw: '∞', label: 'Élèves & utilisateurs illimités' }
+          ] as { value: number | null; raw?: string; label: string }[]).map(s => (
             <div key={s.label}>
-              <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-[#257C86] to-[#257C86] bg-clip-text text-transparent mb-2 tracking-tight">
-                <Counter to={s.value} />
+              <div className="text-4xl sm:text-5xl font-black text-brand-600 mb-2 tracking-tight">
+                {s.raw ?? <Counter to={s.value ?? 0} />}
               </div>
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider leading-relaxed">{s.label}</div>
             </div>
@@ -653,7 +736,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
               Simple par conception
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-4 tracking-tight">
@@ -663,7 +746,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
           <div className="relative grid md:grid-cols-3 gap-10 md:gap-6">
             {/* connector line */}
-            <div className="hidden md:block absolute top-7 left-[16%] right-[16%] h-px bg-gradient-to-r from-[#257C86]/40 via-slate-200 to-[#257C86]/40" />
+            <div className="hidden md:block absolute top-7 left-[16%] right-[16%] h-px bg-gradient-to-r from-brand-600/40 via-slate-200 to-brand-600/40" />
 
             {[
               {
@@ -694,11 +777,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 className="relative text-center"
               >
                 <div className="relative inline-flex items-center justify-center mb-5">
-                  <div className="absolute inset-0 rounded-2xl bg-[#257C86]/15 blur-lg" />
-                  <div className="relative w-14 h-14 rounded-2xl bg-white border border-[#257C86]/25 shadow-md shadow-[#257C86]/10 flex items-center justify-center">
-                    <step.icon className="h-6 w-6 text-[#257C86]" />
+                  <div className="absolute inset-0 rounded-2xl bg-brand-600/15 blur-lg" />
+                  <div className="relative w-14 h-14 rounded-2xl bg-white border border-brand-600/25 shadow-md shadow-brand-600/10 flex items-center justify-center">
+                    <step.icon className="h-6 w-6 text-brand-600" />
                   </div>
-                  <span className="absolute -top-2 -right-2 text-[10px] font-black text-white bg-[#257C86] border-2 border-white rounded-full px-1.5 py-0.5 shadow">
+                  <span className="absolute -top-2 -right-2 text-[11px] font-black text-white bg-brand-600 border-2 border-white rounded-full px-1.5 py-0.5 shadow">
                     {step.n}
                   </span>
                 </div>
@@ -712,11 +795,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
       {/* ─── BASE PLAN SECTION ─────────────────────────────────────── */}
       <section id="base" className="py-16 sm:py-24 bg-white border-y border-slate-200/70 relative overflow-hidden">
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[300px] w-[700px] rounded-full bg-[#257C86]/[0.06] blur-[110px] pointer-events-none" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[300px] w-[700px] rounded-full bg-brand-600/[0.06] blur-[110px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-12">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
               <Lock className="h-3.5 w-3.5" />
               Le plan de base
             </span>
@@ -737,14 +820,14 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: i * 0.12 }}
                 viewport={{ once: true, margin: '-60px' }}
-                className="group relative rounded-3xl border border-[#257C86]/25 bg-gradient-to-b from-[#257C86]/[0.05] to-white p-7 sm:p-8 overflow-hidden hover:border-[#257C86]/40 hover:shadow-xl hover:shadow-[#257C86]/10 transition-all duration-300"
+                className="group relative rounded-3xl border border-brand-600/25 bg-brand-600/[0.04] p-7 sm:p-8 overflow-hidden hover:border-brand-600/40 hover:shadow-xl hover:shadow-brand-600/10 transition-all duration-300"
               >
                 <div className="relative">
                   <div className="flex items-start justify-between mb-6">
-                    <div className="p-3.5 rounded-2xl bg-[#257C86]/10">
-                      <mod.icon className="h-7 w-7 text-[#257C86]" />
+                    <div className="p-3.5 rounded-2xl bg-brand-600/10">
+                      <mod.icon className="h-7 w-7 text-brand-600" />
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#257C86]/10 border border-[#257C86]/25 text-[10px] font-black text-[#257C86] uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-600/10 border border-brand-600/25 text-[11px] font-black text-brand-600 uppercase tracking-wider">
                       <Lock className="h-3 w-3" />
                       Inclus
                     </span>
@@ -769,7 +852,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         ]
                     ).map(f => (
                       <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
-                        <span className="p-1 rounded-md bg-[#257C86]/10 text-[#257C86] mt-0.5">
+                        <span className="p-1 rounded-md bg-brand-600/10 text-brand-600 mt-0.5">
                           <Check className="h-3 w-3" />
                         </span>
                         <span className="font-semibold">{f}</span>
@@ -781,7 +864,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
                     {mod.key === 'scolaire' ? (
                       <div className="space-y-2">
-                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Bulletin · Trimestre 1</div>
+                        <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Bulletin · Trimestre 1</div>
                         {[
                           { s: 'Mathématiques', v: 15.25, w: '76%' },
                           { s: 'Français', v: 14.5, w: '72%' },
@@ -795,7 +878,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                                 whileInView={{ width: r.w }}
                                 viewport={{ once: true }}
                                 transition={{ duration: 1, ease: 'easeOut' }}
-                                className="h-full rounded-full bg-gradient-to-r from-[#257C86] to-[#3aa5b0]"
+                                className="h-full rounded-full bg-brand-600"
                               />
                             </div>
                             <span className="text-[11px] font-black text-slate-900 w-10 text-right">{r.v.toFixed(2)}</span>
@@ -805,8 +888,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     ) : (
                       <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Revenus · Janvier</span>
-                          <span className="text-[10px] font-black text-emerald-600">+12%</span>
+                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Revenus · Janvier</span>
+                          <span className="text-[11px] font-black text-emerald-600">+12%</span>
                         </div>
                         {[
                           { s: 'Suivi scolaire', v: 1860 },
@@ -820,7 +903,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         ))}
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                           <span className="text-[11px] font-black text-slate-700">Total</span>
-                          <span className="text-sm font-black text-[#257C86]">4 020 TND</span>
+                          <span className="text-sm font-black text-brand-600">4 020 TND</span>
                         </div>
                       </div>
                     )}
@@ -836,15 +919,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.5 }}
-            className="mt-6 rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-[#257C86]/[0.04] p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
+            className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
           >
-            <div className="p-3.5 rounded-2xl bg-emerald-100 border border-emerald-200 flex-shrink-0">
+            <div className="p-3.5 rounded-2xl bg-emerald-100 flex-shrink-0">
               <Clock className="h-7 w-7 text-emerald-600" />
             </div>
             <div className="flex-1 text-center sm:text-left min-w-0">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mb-1.5">
                 <h3 className="text-lg font-black text-slate-900">Jd. Horaires — Pointage Élèves</h3>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[11px] font-black text-emerald-700 uppercase tracking-wider">
                   <Check className="h-3 w-3" />
                   Offert avec la base
                 </span>
@@ -857,7 +940,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             </div>
             <div className="text-center flex-shrink-0">
               <div className="text-2xl font-black text-emerald-600">Inclus</div>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">0 TND supplémentaire</div>
+              <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">0 TND supplémentaire</div>
             </div>
           </motion.div>
 
@@ -867,11 +950,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-5 rounded-3xl border border-[#257C86]/25 bg-gradient-to-r from-[#257C86]/10 via-[#257C86]/5 to-[#257C86]/5 px-7 py-6"
+            className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-5 rounded-3xl border border-brand-600/25 bg-brand-600/[0.07] px-7 py-6"
           >
             <div className="flex items-center gap-4 text-center sm:text-left">
-              <div className="p-3 rounded-2xl bg-white border border-[#257C86]/20 shadow-sm">
-                <ShieldCheck className="h-6 w-6 text-[#257C86]" />
+              <div className="p-3 rounded-2xl bg-white shadow-sm">
+                <ShieldCheck className="h-6 w-6 text-brand-600" />
               </div>
               <div>
                 <div className="text-slate-900 font-black text-lg">Le plan de base</div>
@@ -886,7 +969,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               </div>
               <button
                 onClick={() => scrollToSection('contact')}
-                className="group px-6 py-3.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:from-[#1e626b] hover:to-[#257C86] text-white font-black text-sm rounded-2xl shadow-lg shadow-[#257C86]/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap"
+                className="group px-6 py-3.5 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-600 text-white font-black text-sm rounded-2xl shadow-lg shadow-brand-600/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap"
               >
                 Démarrer
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -902,7 +985,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
               Modules additionnels
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-4 tracking-tight">
@@ -924,10 +1007,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   transition={{ duration: 0.4, delay: (i % 4) * 0.06 }}
                   viewport={{ once: true, margin: '-40px' }}
                   onClick={() => toggleModule(mod.key)}
-                  className={`group relative text-left p-5 rounded-2xl border bg-gradient-to-br transition-all duration-300 hover:-translate-y-1 ${
+                  aria-pressed={selected}
+                  className={`group relative text-left p-5 rounded-2xl border transition-all duration-300 hover:-translate-y-1 ${
                     selected
-                      ? 'border-[#257C86] from-[#257C86]/[0.07] to-white shadow-lg shadow-[#257C86]/10'
-                      : 'border-slate-200/70 from-white to-slate-50/50 hover:border-[#257C86]/30 hover:shadow-lg hover:shadow-slate-900/5'
+                      ? 'border-brand-600 bg-brand-600/[0.05] shadow-lg shadow-brand-600/10'
+                      : 'border-slate-200/70 bg-white hover:border-brand-600/30 hover:bg-slate-50/60 hover:shadow-lg hover:shadow-slate-900/5'
                   }`}
                 >
                   {/* selected check */}
@@ -937,24 +1021,24 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         initial={{ scale: 0, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
-                        className="absolute top-3.5 right-3.5 p-1 rounded-full bg-[#257C86] text-white shadow-md shadow-[#257C86]/30"
+                        className="absolute top-3.5 right-3.5 p-1 rounded-full bg-brand-600 text-white shadow-md shadow-brand-600/30"
                       >
                         <Check className="h-3 w-3" />
                       </motion.span>
                     )}
                   </AnimatePresence>
 
-                  <div className="inline-flex p-2.5 rounded-xl bg-[#257C86]/10 mb-4 group-hover:scale-110 transition-transform">
-                    <mod.icon className="h-5 w-5 text-[#257C86]" />
+                  <div className="inline-flex p-2.5 rounded-xl bg-brand-600/10 mb-4 group-hover:scale-110 transition-transform">
+                    <mod.icon className="h-5 w-5 text-brand-600" />
                   </div>
                   <h3 className="text-sm font-black text-slate-900 mb-1.5">{mod.label}</h3>
                   <p className="text-xs text-slate-500 leading-relaxed font-medium mb-4">{mod.description}</p>
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-slate-900">
-                      {priceLabel(mod.price)}<span className="text-[10px] font-bold text-slate-400 ml-1">TND/mois</span>
+                      {priceLabel(mod.price)}<span className="text-[11px] font-bold text-slate-500 ml-1">TND/mois</span>
                     </span>
-                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
-                      selected ? 'bg-[#257C86]/15 text-[#257C86]' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
+                    <span className={`text-[11px] font-black tracking-wide px-2.5 py-1 rounded-full transition-colors ${
+                      selected ? 'bg-brand-600/15 text-brand-600' : 'bg-slate-100 text-slate-500 group-hover:text-slate-600'
                     }`}>
                       {selected ? 'Ajouté' : '+ Ajouter'}
                     </span>
@@ -969,12 +1053,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
       {/* ─── PRICING CONFIGURATOR ──────────────────────────────────── */}
       <section id="pricing" className="py-16 sm:py-24 bg-white border-y border-slate-200/70 relative overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-[#257C86]/[0.06] blur-[130px] pointer-events-none" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[380px] w-[720px] rounded-full bg-brand-600/[0.06] blur-[130px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-10">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#257C86]/10 to-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
-              <Zap className="h-3.5 w-3.5" />
+            <span className="inline-block px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
               Calculateur d’abonnement
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-4 tracking-tight">
@@ -983,26 +1066,29 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
               La base est toujours incluse. Ajoutez ou retirez des modules — le prix s’adapte instantanément.
             </p>
-            {pricingError && (
-              <p className="mt-3 text-sm font-bold text-amber-700">Les tarifs sont momentanément indisponibles. Réessayez dans quelques instants.</p>
-            )}
           </div>
 
           {/* billing toggle */}
           <div className="flex justify-center mb-12">
-            <div className="inline-flex items-center p-1.5 bg-white border-2 border-slate-200 rounded-2xl shadow-lg">
+            <div role="radiogroup" aria-label="Cycle de facturation" className="inline-flex items-center p-1.5 bg-white border-2 border-slate-200 rounded-2xl shadow-lg">
               <button
+                type="button"
+                role="radio"
+                aria-checked={billingCycle === 'monthly'}
                 onClick={() => setBillingCycle('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${
-                  billingCycle === 'monthly' ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+                className={`px-6 py-3 rounded-xl text-sm font-black transition-all ${
+                  billingCycle === 'monthly' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Mensuel
               </button>
               <button
+                type="button"
+                role="radio"
+                aria-checked={billingCycle === 'annual'}
                 onClick={() => setBillingCycle('annual')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
-                  billingCycle === 'annual' ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+                className={`px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
+                  billingCycle === 'annual' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Annuel
@@ -1013,6 +1099,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             </div>
           </div>
 
+          {pricingError && (
+            <div role="alert" className="max-w-md mx-auto mb-10 text-center px-4 py-3 rounded-2xl border border-amber-200 bg-amber-50">
+              <p className="text-sm font-bold text-amber-800">Les tarifs sont momentanément indisponibles. Réessayez dans quelques instants.</p>
+            </div>
+          )}
+
           <div className="grid lg:grid-cols-[1fr_370px] gap-6 items-start">
 
             {/* ── Left : base + addons ── */}
@@ -1022,32 +1114,32 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               <div className="p-6 sm:p-7 border-b border-slate-100 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-[#257C86]" />
+                    <Lock className="h-3.5 w-3.5 text-brand-600" />
                     Votre base — toujours incluse
                   </h3>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#257C86] bg-[#257C86]/10 border border-[#257C86]/25 rounded-full px-2.5 py-1">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-brand-600 bg-brand-600/10 border border-brand-600/25 rounded-full px-2.5 py-1">
                     Non retirable
                   </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {pricedBaseModules.filter(m => m.key !== 'studentTimeSheets').map(mod => (
-                    <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl border border-[#257C86]/30 bg-white shadow-sm">
-                      <div className="p-2.5 rounded-xl bg-[#257C86]/10 flex-shrink-0">
-                        <mod.icon className="h-5 w-5 text-[#257C86]" />
+                    <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl bg-white shadow-sm">
+                      <div className="p-2.5 rounded-xl bg-brand-600/10 flex-shrink-0">
+                        <mod.icon className="h-5 w-5 text-brand-600" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
                         <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-base font-black text-[#257C86]">{priceLabel(mod.price)}</div>
-                        <div className="text-[9px] font-bold text-slate-400">TND/mois</div>
+                        <div className="text-base font-black text-brand-600">{priceLabel(mod.price)}</div>
+                        <div className="text-[11px] font-bold text-slate-500">TND/mois</div>
                       </div>
                     </div>
                   ))}
                   {/* Jd. Horaires — bundled, no tarif */}
-                  <div className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60">
-                    <div className="p-2.5 rounded-xl bg-emerald-100 border border-emerald-200">
+                  <div className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl bg-emerald-50/60">
+                    <div className="p-2.5 rounded-xl bg-emerald-100">
                       <Clock className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1056,7 +1148,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-base font-black text-emerald-600">Inclus</div>
-                      <div className="text-[9px] font-bold text-slate-400">0 TND</div>
+                      <div className="text-[11px] font-bold text-slate-500">0 TND</div>
                     </div>
                   </div>
                 </div>
@@ -1065,7 +1157,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               {/* addons */}
               <div className="p-6 sm:p-7">
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-4">
-                  <Plus className="h-3.5 w-3.5 text-[#257C86]" />
+                  <Plus className="h-3.5 w-3.5 text-brand-600" />
                   Modules additionnels — ajoutez à volonté
                 </h3>
                 <div className="space-y-2.5">
@@ -1075,25 +1167,26 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                       <button
                         key={mod.key}
                         onClick={() => toggleModule(mod.key)}
-                        className={`w-full flex items-center gap-3.5 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        aria-pressed={on}
+                        className={`w-full flex items-center gap-3.5 p-3.5 rounded-2xl text-left transition-all duration-200 ${
                           on
-                            ? 'border-[#257C86] bg-[#257C86]/[0.05]'
-                            : 'border-slate-200 bg-white hover:border-[#257C86]/30 hover:bg-slate-50/50'
+                            ? 'bg-brand-600/[0.07]'
+                            : 'hover:bg-slate-50'
                         }`}
                       >
-                        <div className="p-2 rounded-lg bg-[#257C86]/10 flex-shrink-0">
-                          <mod.icon className="h-4 w-4 text-[#257C86]" />
+                        <div className="p-2 rounded-lg bg-brand-600/10 flex-shrink-0">
+                          <mod.icon className="h-4 w-4 text-brand-600" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
                           <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
-                          <div className={`text-sm font-black ${on ? 'text-[#257C86]' : 'text-slate-900'}`}>+{priceLabel(mod.price)}</div>
-                          <div className="text-[9px] font-bold text-slate-400">TND/mois</div>
+                          <div className={`text-sm font-black ${on ? 'text-brand-600' : 'text-slate-900'}`}>+{priceLabel(mod.price)}</div>
+                          <div className="text-[11px] font-bold text-slate-500">TND/mois</div>
                         </div>
                         {/* switch */}
-                        <span className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 ${on ? 'bg-[#257C86]' : 'bg-slate-200'}`}>
+                        <span className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 ${on ? 'bg-brand-600' : 'bg-slate-200'}`}>
                           <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${on ? 'left-[22px]' : 'left-0.5'}`} />
                         </span>
                       </button>
@@ -1106,25 +1199,24 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
             {/* ── Right : summary ── */}
             <div className="lg:sticky lg:top-24">
               <div className="rounded-3xl bg-white border border-slate-200/70 shadow-xl shadow-slate-900/5 overflow-hidden">
-                <div className="p-5 sm:p-7 bg-gradient-to-b from-[#257C86]/[0.06] to-white">
-                  <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-5">Récapitulatif</div>
+                <div className="p-5 sm:p-7 bg-brand-600/[0.04]">
+                  <div className="text-xs font-black text-slate-500 uppercase tracking-[0.15em] mb-5">Récapitulatif</div>
 
                   {/* base line */}
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-bold text-slate-600 flex items-center gap-2">
-                      <Lock className="h-3.5 w-3.5 text-[#257C86]" />
+                      <Lock className="h-3.5 w-3.5 text-brand-600" />
                       Base (3 modules)
                     </span>
                     <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND</span>
                   </div>
                   <div className="flex items-center justify-between mb-3 pl-6">
-                    <span className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 flex items-center gap-2">
                       <Clock className="h-3 w-3 text-emerald-500" />
                       dont Jd. Horaires
                     </span>
                     <span className="text-xs font-black text-emerald-600">Inclus — offert</span>
                   </div>
-
                   {/* addon lines */}
                   <AnimatePresence initial={false}>
                     {addonKeys.length === 0 && (
@@ -1132,7 +1224,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="text-xs font-semibold text-slate-400 py-2 pl-6"
+                        className="text-xs font-semibold text-slate-500 py-2 pl-6"
                       >
                         Aucun module additionnel — ajoutez des modules pour composer votre offre.
                       </motion.div>
@@ -1163,9 +1255,20 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   {/* total */}
                   <div className="mt-5 pt-5 border-t border-slate-200/70">
                     <div className="flex items-end justify-between mb-1">
-                      <span className="text-sm font-black text-slate-900">
-                        {selectedModules.length} module{selectedModules.length > 1 ? 's' : ''}
-                      </span>
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-sm font-black text-slate-900">
+                          {selectedModules.length} module{selectedModules.length > 1 ? 's' : ''}
+                        </span>
+                        {addonKeys.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={resetSelection}
+                            className="text-[11px] font-black text-slate-500 hover:text-brand-700 underline underline-offset-2 py-2.5 -my-2.5 transition-colors"
+                          >
+                            Réinitialiser
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-end gap-1.5">
                         <span className="text-5xl font-black text-slate-900 tracking-tight">
                           {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)}
@@ -1179,22 +1282,21 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         {priceLabel(annualTotal)} TND/an · économie de {priceLabel(savings)} TND
                       </div>
                     ) : (
-                      <div className="text-xs font-bold text-slate-400">Sans engagement, résiliable à tout moment</div>
+                      <div className="text-xs font-bold text-slate-500">Sans engagement, résiliable à tout moment</div>
                     )}
                   </div>
 
                   <button
                     onClick={() => scrollToSection('contact')}
-                    className="group w-full mt-6 py-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:from-[#1e626b] hover:to-[#257C86] text-white font-black text-sm rounded-2xl shadow-xl shadow-[#257C86]/25 transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                    className="group w-full mt-6 py-4 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-600 text-white font-black text-sm rounded-2xl shadow-xl shadow-brand-600/25 transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
                   >
                     Démarrer l’essai gratuit
                     <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </button>
 
-                  <p className="text-center text-[11px] font-semibold text-slate-400 mt-3">
+                  <p className="text-center text-[11px] font-semibold text-slate-500 mt-3">
                     Votre sélection sera transmise avec votre demande
-                  </p>
-                </div>
+                  </p>                </div>
 
                 <div className="grid grid-cols-3 border-t border-slate-200/70 divide-x divide-slate-200/70 bg-slate-50/50">
                   {[
@@ -1203,8 +1305,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     { icon: Star, t: 'Support', s: '7j/7' }
                   ].map(f => (
                     <div key={f.t} className="py-4 px-2 text-center">
-                      <f.icon className="h-4 w-4 text-[#257C86] mx-auto mb-1.5" />
-                      <div className="text-[10px] font-bold text-slate-400">{f.t}</div>
+                      <f.icon className="h-4 w-4 text-brand-600 mx-auto mb-1.5" />
+                      <div className="text-[11px] font-bold text-slate-500">{f.t}</div>
                       <div className="text-[11px] font-black text-slate-900">{f.s}</div>
                     </div>
                   ))}
@@ -1216,48 +1318,28 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS ──────────────────────────────────────────── */}
+      {/* ─── TRUST — faits vérifiables, aucune citation inventée ──── */}
       <section className="py-16 sm:py-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
-              Ils nous font confiance
-            </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
-              Des académies comme la vôtre
+              Pensé pour les centres tunisiens
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-5">
-            {testimonials.map((t, i) => (
-              <motion.figure
-                key={t.name}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                viewport={{ once: true, margin: '-60px' }}
-                className="relative p-7 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50/50 hover:border-[#257C86]/30 hover:shadow-xl hover:shadow-slate-900/5 transition-all duration-300 flex flex-col"
-              >
-                <Quote className="h-6 w-6 text-[#257C86]/30 mb-4" />
-                <div className="flex gap-0.5 mb-4">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star key={s} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <blockquote className="text-sm text-slate-700 leading-relaxed flex-1 font-medium">
-                  « {t.quote} »
-                </blockquote>
-                <figcaption className="mt-6 pt-5 border-t border-slate-200/70 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#257C86] to-[#3aa5b0] flex items-center justify-center text-xs font-black text-white">
-                    {t.initials}
-                  </div>
-                  <div>
-                    <div className="text-sm font-black text-slate-900">{t.name}</div>
-                    <div className="text-[11px] font-semibold text-slate-500">{t.role}</div>
-                  </div>
-                </figcaption>
-              </motion.figure>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-10 text-center">
+            {[
+              { icon: Users, t: 'Élèves & utilisateurs', s: 'Illimités' },
+              { icon: Rocket, t: 'Mise en service', s: 'Le jour même' },
+              { icon: ShieldCheck, t: 'Données', s: 'Hébergement Cloudflare, sauvegardes régulières' },
+              { icon: Calendar, t: 'Essai gratuit', s: '14 jours, sans carte bancaire' }
+            ].map(f => (
+              <div key={f.t}>
+                <f.icon className="h-6 w-6 text-brand-600 mx-auto mb-3" />
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider leading-relaxed">{f.t}</div>
+                <div className="text-sm font-black text-slate-900 mt-1 leading-relaxed">{f.s}</div>
+              </div>
             ))}
           </div>
         </div>
@@ -1268,7 +1350,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[1fr_1.4fr] gap-12">
 
           <div className="lg:sticky lg:top-28 self-start">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
               Questions fréquentes
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mb-5 leading-tight">
@@ -1281,7 +1363,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               onClick={() => scrollToSection('contact')}
               className="px-6 py-3.5 bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-800 font-bold text-sm rounded-2xl transition-all hover:-translate-y-0.5 inline-flex items-center gap-2"
             >
-              <Send className="h-4 w-4 text-[#257C86]" />
+              <Send className="h-4 w-4 text-brand-600" />
               Poser une question
             </button>
           </div>
@@ -1293,21 +1375,28 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 <div
                   key={i}
                   className={`rounded-2xl border overflow-hidden transition-colors duration-300 ${
-                    open ? 'border-[#257C86]/30 bg-gradient-to-br from-[#257C86]/[0.04] to-white' : 'border-slate-200/70 bg-gradient-to-br from-white to-slate-50/50 hover:border-slate-300'
+                    open ? 'border-brand-600/30 bg-brand-600/[0.03]' : 'border-slate-200/70 bg-white hover:border-slate-300'
                   }`}
                 >
                   <button
+                    type="button"
+                    id={`faq-question-${i}`}
+                    aria-expanded={open}
+                    aria-controls={`faq-answer-${i}`}
                     onClick={() => setOpenFaq(open ? null : i)}
                     className="w-full p-5 sm:p-6 flex items-center justify-between text-left gap-4"
                   >
                     <span className="text-sm sm:text-base font-black text-slate-900">{faq.q}</span>
-                    <span className={`p-1.5 rounded-lg flex-shrink-0 transition-all duration-300 ${open ? 'bg-[#257C86]/10 text-[#257C86] rotate-180' : 'bg-slate-100 text-slate-400'}`}>
+                    <span className={`p-1.5 rounded-lg flex-shrink-0 transition-all duration-300 ${open ? 'bg-brand-600/10 text-brand-600 rotate-180' : 'bg-slate-100 text-slate-400'}`}>
                       <ChevronDown className="h-4 w-4" />
                     </span>
                   </button>
                   <AnimatePresence initial={false}>
                     {open && (
                       <motion.div
+                        id={`faq-answer-${i}`}
+                        role="region"
+                        aria-labelledby={`faq-question-${i}`}
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -1333,18 +1422,21 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
           {formSubmitted ? (
             <motion.div
+              role="status"
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-20 rounded-3xl border border-[#257C86]/20 bg-white shadow-xl shadow-slate-900/5"
+              className="text-center py-20 rounded-3xl border border-brand-600/20 bg-white shadow-xl shadow-slate-900/5"
             >
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-[#257C86] to-[#1e626b] shadow-xl shadow-[#257C86]/30 mb-7">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-600 shadow-xl shadow-brand-600/30 mb-7">
                 <CheckCircle2 className="h-10 w-10 text-white" />
               </div>
-              <h3 className="text-3xl font-black text-slate-900 mb-4">Demande envoyée avec succès !</h3>
+              <h3 ref={successHeadingRef} tabIndex={-1} className="text-3xl font-black text-slate-900 mb-4 focus:outline-none">
+                Demande envoyée avec succès !
+              </h3>
               <p className="text-lg text-slate-600 mb-2 max-w-md mx-auto font-medium">
                 Notre équipe vous contactera dans les 24h pour configurer votre essai gratuit.
               </p>
-              <p className="text-sm font-black text-[#257C86] mb-8">
+              <p className="text-sm font-black text-brand-600 mb-8">
                 Configuration transmise : Base + {addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''} · {priceLabel(monthlyPrice)} TND/mois
               </p>
               <button
@@ -1359,7 +1451,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
               {/* ── Left : pitch + config récap ── */}
               <div className="lg:sticky lg:top-28">
-                <span className="inline-block px-4 py-1.5 rounded-full bg-[#257C86]/10 text-[#257C86] text-xs font-black uppercase tracking-wider mb-5">
+                <span className="inline-block px-4 py-1.5 rounded-full bg-brand-600/10 text-brand-600 text-xs font-black uppercase tracking-wider mb-5">
                   Démarrez gratuitement
                 </span>
                 <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-4 tracking-tight leading-tight">
@@ -1374,10 +1466,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                 {/* config summary — envoyée avec la demande */}
                 <div className="rounded-3xl bg-white border border-slate-200/70 shadow-lg shadow-slate-900/5 p-6 mb-6">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Votre configuration</div>
+                    <div className="text-xs font-black text-slate-500 uppercase tracking-[0.15em]">Votre configuration</div>
                     <button
                       onClick={() => scrollToSection('pricing')}
-                      className="text-[11px] font-black text-[#257C86] hover:text-[#1e626b] transition inline-flex items-center gap-1"
+                      className="text-[11px] font-black text-brand-600 hover:text-brand-700 transition inline-flex items-center gap-1 py-3.5 px-3 -my-3.5"
                     >
                       Modifier <ArrowRight className="h-3 w-3" />
                     </button>
@@ -1385,10 +1477,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
                   <div className="space-y-2 mb-4">
                     {pricedBaseModules.map(mod => (
-                      <div key={mod.key} className="flex items-center gap-2.5 rounded-xl bg-[#257C86]/[0.06] border border-[#257C86]/25 px-3.5 py-2.5">
-                        <mod.icon className="h-4 w-4 text-[#257C86]" />
+                      <div key={mod.key} className="flex items-center gap-2.5 rounded-xl bg-brand-600/[0.06] px-3.5 py-2.5">
+                        <mod.icon className="h-4 w-4 text-brand-600" />
                         <span className="text-xs font-black text-slate-800 flex-1">{mod.label}</span>
-                        <Lock className="h-3 w-3 text-[#257C86]" />
+                        <Lock className="h-3 w-3 text-brand-600" />
                       </div>
                     ))}
                     <AnimatePresence initial={false}>
@@ -1401,15 +1493,17 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 10 }}
                             transition={{ duration: 0.2 }}
-                            className="flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 px-3.5 py-2.5"
+                            className="flex items-center gap-2.5 rounded-xl bg-slate-50 px-3.5 py-2.5"
                           >
                             <mod.icon className="h-4 w-4 text-slate-400" />
                             <span className="text-xs font-black text-slate-800 flex-1">{mod.label}</span>
-                            <span className="text-[10px] font-black text-slate-400">+{priceLabel(mod.price)}</span>
+                            <span className="text-[11px] font-black text-slate-500">+{priceLabel(mod.price)}</span>
                             <button
+                              type="button"
                               onClick={() => toggleModule(key)}
-                              className="p-0.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                              className="p-0.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-slate-100 transition"
                               title="Retirer ce module"
+                              aria-label={`Retirer ${mod.label}`}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -1437,7 +1531,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                     'Assistance WhatsApp dédiée'
                   ].map(t => (
                     <li key={t} className="flex items-center gap-3 text-sm font-bold text-slate-700">
-                      <span className="p-1.5 rounded-lg bg-[#257C86]/10 text-[#257C86]">
+                      <span className="p-1.5 rounded-lg bg-brand-600/10 text-brand-600">
                         <Check className="h-3.5 w-3.5" />
                       </span>
                       {t}
@@ -1449,15 +1543,17 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               {/* ── Right : form ── */}
               <form onSubmit={handleFormSubmit} className="rounded-3xl bg-white border border-slate-200/70 shadow-2xl shadow-slate-900/10 p-7 sm:p-9">
 
-                <div className="grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 mb-7">
+                <div role="radiogroup" aria-label="Type de demande" className="grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 mb-7">
                   {requestTypes.map(rt => (
                     <button
                       key={rt.key}
                       type="button"
+                      role="radio"
+                      aria-checked={requestType === rt.key}
                       onClick={() => setRequestType(rt.key)}
-                      className={`py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${
+                      className={`py-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
                         requestType === rt.key
-                          ? 'bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white shadow-md'
+                          ? 'bg-brand-600 text-white shadow-md'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
@@ -1468,52 +1564,96 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
                 {/* Type d'établissement */}
                 <div className="mb-5">
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Type d’établissement *</label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <span id="center-type-label" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Type d’établissement *</span>
+                  <div role="radiogroup" aria-labelledby="center-type-label" className="grid grid-cols-2 gap-3">
                     {centerTypes.map(ct => {
                       const active = centerType === ct.key;
                       return (
                         <button
                           key={ct.key}
                           type="button"
+                          role="radio"
+                          aria-checked={active}
                           onClick={() => { setCenterType(ct.key); setFormError(''); }}
                           className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
                             active
-                              ? 'border-[#257C86] bg-[#257C86]/[0.06] shadow-md shadow-[#257C86]/10'
-                              : 'border-slate-200 bg-white hover:border-[#257C86]/40 hover:bg-slate-50/50'
+                              ? 'border-brand-600 bg-brand-600/[0.06] shadow-md shadow-brand-600/10'
+                              : 'border-slate-200 bg-white hover:border-brand-600/40 hover:bg-slate-50/50'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 mb-1">
-                            <span className={`h-2.5 w-2.5 rounded-full border-2 transition-colors ${active ? 'border-[#257C86] bg-[#257C86]' : 'border-slate-300'}`} />
-                            <span className={`text-sm font-black ${active ? 'text-[#257C86]' : 'text-slate-800'}`}>{ct.label}</span>
+                            <span className={`h-2.5 w-2.5 rounded-full border-2 transition-colors ${active ? 'border-brand-600 bg-brand-600' : 'border-slate-300'}`} />
+                            <span className={`text-sm font-black ${active ? 'text-brand-600' : 'text-slate-800'}`}>{ct.label}</span>
                           </div>
-                          <span className="block text-[11px] font-semibold text-slate-400 pr-5">{ct.hint}</span>
+                          <span className="block text-[11px] font-semibold text-slate-500 pr-5">{ct.hint}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
+                {savedLeadCount > 0 && !formSubmitted && (
+                  <div role="status" className="mb-5 p-4 rounded-2xl border border-brand-600/30 bg-brand-600/[0.05]">
+                    <p className="text-xs font-bold text-slate-700 text-center">
+                      Une demande envoyée précédemment n'a pas pu partir (connexion indisponible). Une copie est conservée sur cet appareil.
+                    </p>
+                    <div className="flex justify-center mt-3">
+                      <button
+                        type="button"
+                        onClick={() => { void resendSavedLead(); }}
+                        disabled={resendingSaved}
+                        className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-black rounded-xl transition disabled:opacity-50"
+                      >
+                        {resendingSaved ? 'Renvoi en cours…' : 'Renvoyer maintenant'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {formError && (
-                  <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
+                  <div role="alert" className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl text-center">
                     ⚠️ {formError}
+                  </div>
+                )}
+
+                {submitFailed && (
+                  <div role="alert" className="mb-5 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-xs font-bold text-red-700 text-center">
+                      ⚠️ L’envoi a échoué — vérifiez votre connexion internet puis réessayez. Votre saisie est conservée.
+                    </p>
+                    {savedOffline && (
+                      <p className="text-[11px] font-semibold text-red-600/80 text-center mt-1.5">
+                        Une copie de votre demande a été conservée sur cet appareil en guise de secours.
+                      </p>
+                    )}
+                    <div className="flex justify-center mt-3">
+                      <button
+                        type="button"
+                        onClick={() => { void submitRequest(); }}
+                        disabled={isSubmitting}
+                        className="px-5 py-2.5 bg-white hover:bg-slate-100 border-2 border-red-200 text-red-700 text-xs font-black rounded-xl transition disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Nouvel essai en cours…' : 'Réessayer l’envoi'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Votre nom complet *</label>
+                    <label htmlFor="demo-fullname" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Votre nom complet *</label>
                     <input
-                      type="text" required value={fullName} onChange={e => setFullName(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
+                      id="demo-fullname" name="fullname" autoComplete="name"
+                      type="text" required maxLength={80} value={fullName} onChange={e => setFullName(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-500 font-semibold text-sm outline-none transition focus:border-brand-600 focus:ring-0"
                       placeholder="Ahmed Ben Ali"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Nom de votre académie *</label>
+                    <label htmlFor="demo-academy" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Nom de votre académie *</label>
                     <input
-                      type="text" required value={academyName} onChange={e => setAcademyName(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
+                      id="demo-academy" name="academy" autoComplete="organization"
+                      type="text" required maxLength={120} value={academyName} onChange={e => setAcademyName(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-500 font-semibold text-sm outline-none transition focus:border-brand-600 focus:ring-0"
                       placeholder="Excellence Academy"
                     />
                   </div>
@@ -1521,37 +1661,40 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Email *</label>
+                    <label htmlFor="demo-email" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Email *</label>
                     <input
+                      id="demo-email" name="email" autoComplete="email"
                       type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-500 font-semibold text-sm outline-none transition focus:border-brand-600 focus:ring-0"
                       placeholder="contact@academy.tn"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Téléphone * <span className="text-slate-400 font-bold normal-case tracking-normal">(8 chiffres)</span></label>
+                    <label htmlFor="demo-phone" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Téléphone * <span className="text-slate-500 font-bold normal-case tracking-normal">(8 chiffres)</span></label>
                     <input
+                      id="demo-phone" name="phone"
                       type="tel" required inputMode="numeric" maxLength={8} autoComplete="tel"
                       value={phone}
                       onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 8)); setFormError(''); }}
-                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition focus:border-[#257C86] focus:ring-0"
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-500 font-semibold text-sm outline-none transition focus:border-brand-600 focus:ring-0"
                       placeholder="20 123 456"
                     />
                   </div>
                 </div>
 
                 <div className="mb-7">
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Message (optionnel)</label>
+                  <label htmlFor="demo-message" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Message (optionnel)</label>
                   <textarea
-                    rows={4} value={message} onChange={e => setMessage(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 font-semibold text-sm outline-none transition resize-none focus:border-[#257C86] focus:ring-0"
+                    id="demo-message" name="message"
+                    rows={4} maxLength={600} value={message} onChange={e => setMessage(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-500 font-semibold text-sm outline-none transition resize-none focus:border-brand-600 focus:ring-0"
                     placeholder="Dites-nous en plus sur vos besoins…"
                   />
                 </div>
 
                 <button
                   type="submit" disabled={isSubmitting}
-                  className="w-full py-4 bg-gradient-to-r from-[#257C86] to-[#1e626b] hover:from-[#1e626b] hover:to-[#257C86] text-white font-black text-base rounded-2xl shadow-xl shadow-[#257C86]/25 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-600 text-white font-black text-base rounded-2xl shadow-xl shadow-brand-600/25 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? 'Envoi en cours…' : (
                     <>
@@ -1561,9 +1704,9 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   )}
                 </button>
 
-                <p className="text-center text-[11px] font-semibold text-slate-400 mt-4 leading-relaxed">
+                <p className="text-center text-[11px] font-semibold text-slate-500 mt-4 leading-relaxed">
                   Sera envoyé avec votre demande : <span className="text-slate-600">Base (Scolaire + Finance)</span>
-                  {addonKeys.length > 0 && <> + <span className="text-[#257C86] font-bold">{addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''}</span></>}
+                  {addonKeys.length > 0 && <> + <span className="text-brand-600 font-bold">{addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''}</span></>}
                   {' '}· {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)} TND/mois
                 </p>
               </form>
@@ -1579,7 +1722,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-[#257C86]/20 flex items-center justify-center bg-gradient-to-br from-[#257C86] to-[#1e626b]">
+                <div className="w-9 h-9 rounded-xl overflow-hidden shadow-sm shadow-slate-900/10 flex items-center justify-center bg-white">
                   <img src={icon} alt={centerName} className="w-full h-full object-cover" />
                 </div>
                 <span className="text-base font-black text-slate-900">{centerName}</span>
@@ -1590,28 +1733,28 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
               </p>
               <button
                 onClick={() => scrollToSection('contact')}
-                className="px-5 py-3 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-lg shadow-[#257C86]/25 transition hover:-translate-y-0.5"
+                className="px-5 py-3 bg-gradient-to-r from-brand-600 to-brand-700 text-white text-sm font-black rounded-xl shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5"
               >
                 Démarrer l’essai gratuit
               </button>
             </div>
 
             <div>
-              <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-4">Navigation</div>
+              <div className="text-xs font-black text-slate-500 uppercase tracking-[0.15em] mb-4">Navigation</div>
               <div className="space-y-2.5">
-                <button onClick={() => scrollToSection('base')} className="block text-sm font-bold text-slate-600 hover:text-[#257C86] transition">Le plan de base</button>
-                <button onClick={() => scrollToSection('modules')} className="block text-sm font-bold text-slate-600 hover:text-[#257C86] transition">Modules additionnels</button>
-                <button onClick={() => scrollToSection('pricing')} className="block text-sm font-bold text-slate-600 hover:text-[#257C86] transition">Tarifs</button>
-                <button onClick={() => scrollToSection('faq')} className="block text-sm font-bold text-slate-600 hover:text-[#257C86] transition">FAQ</button>
-                <button onClick={onOpenLogin} className="block text-sm font-bold text-slate-600 hover:text-[#257C86] transition">Connexion</button>
+                <button onClick={() => scrollToSection('base')} className="block px-3 py-2.5 -ml-3 text-sm font-bold text-slate-600 hover:text-brand-600 transition">Le plan de base</button>
+                <button onClick={() => scrollToSection('modules')} className="block px-3 py-2.5 -ml-3 text-sm font-bold text-slate-600 hover:text-brand-600 transition">Modules additionnels</button>
+                <button onClick={() => scrollToSection('pricing')} className="block px-3 py-2.5 -ml-3 text-sm font-bold text-slate-600 hover:text-brand-600 transition">Tarifs</button>
+                <button onClick={() => scrollToSection('faq')} className="block px-3 py-2.5 -ml-3 text-sm font-bold text-slate-600 hover:text-brand-600 transition">FAQ</button>
+                <button onClick={onOpenLogin} className="block px-3 py-2.5 -ml-3 text-sm font-bold text-slate-600 hover:text-brand-600 transition">Connexion</button>
               </div>
             </div>
 
             <div>
-              <div className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-4">La base incluse</div>
-              <div className="rounded-2xl border border-[#257C86]/25 bg-[#257C86]/[0.05] p-4">
+              <div className="text-xs font-black text-slate-500 uppercase tracking-[0.15em] mb-4">La base incluse</div>
+              <div className="rounded-2xl border border-brand-600/25 bg-brand-600/[0.05] p-4">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <GraduationCap className="h-4 w-4 text-[#257C86]" />
+                  <GraduationCap className="h-4 w-4 text-brand-600" />
                   <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND/mois</span>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-medium">
@@ -1622,10 +1765,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
           </div>
 
           <div className="pt-7 border-t border-slate-200/70 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-slate-400 text-xs font-bold">
+            <p className="text-slate-500 text-xs font-bold">
               © {new Date().getFullYear()} System Academy. Tous droits réservés.
             </p>
-            <p className="text-slate-400 text-xs font-bold">Conçu en Tunisie 🇹🇳</p>
+            <p className="text-slate-500 text-xs font-bold">Conçu en Tunisie 🇹🇳</p>
           </div>
         </div>
       </footer>
@@ -1642,22 +1785,22 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
           >
             <div className="flex items-center justify-between gap-4 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl shadow-slate-900/15 px-5 py-3.5">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-[#257C86]/10 flex-shrink-0">
-                  <Layers className="h-4 w-4 text-[#257C86]" />
+                <div className="p-2 rounded-xl bg-brand-600/10 flex-shrink-0">
+                  <Layers className="h-4 w-4 text-brand-600" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-black text-slate-900 truncate">
                     Base + {addonKeys.length} module{addonKeys.length > 1 ? 's' : ''} additionnel{addonKeys.length > 1 ? 's' : ''}
                   </div>
-                  <div className="text-[11px] font-bold text-[#257C86]">
+                  <div className="text-[11px] font-bold text-brand-600">
                     {priceLabel(billingCycle === 'monthly' ? monthlyPrice : annualMonthly)} TND/mois
-                    {billingCycle === 'annual' && <span className="text-slate-400"> · annuel</span>}
+                    {billingCycle === 'annual' && <span className="text-slate-500"> · annuel</span>}
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => scrollToSection('contact')}
-                className="group flex-shrink-0 px-5 py-2.5 bg-gradient-to-r from-[#257C86] to-[#1e626b] text-white text-sm font-black rounded-xl shadow-lg shadow-[#257C86]/25 transition hover:-translate-y-px flex items-center gap-1.5"
+                className="group flex-shrink-0 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white text-sm font-black rounded-xl shadow-lg shadow-brand-600/25 transition hover:-translate-y-px flex items-center gap-1.5"
               >
                 Continuer
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />

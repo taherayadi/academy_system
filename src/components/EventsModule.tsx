@@ -53,7 +53,7 @@ const CATEGORY_ORDER: EventCategory[] = ['trip', 'party', 'workshop', 'other'];
 
 const STATUS_CONFIG: Record<EventStatus, { label: string; badge: string }> = {
   planned: { label: 'مخطط لها', badge: 'bg-slate-100 text-slate-600 border-slate-200' },
-  confirmed: { label: 'مؤكدة', badge: 'bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20' },
+  confirmed: { label: 'مؤكدة', badge: 'bg-brand-600/[0.06] text-brand-700 border-brand-600/20' },
   completed: { label: 'مكتملة', badge: 'bg-slate-50 text-slate-500 border-slate-200' },
   cancelled: { label: 'ملغاة', badge: 'bg-red-50 text-red-700 border-red-200' },
 };
@@ -77,7 +77,7 @@ export default function EventsModule({
   settings
 }: EventsModuleProps) {
   const { success, error, info } = useToast();
-  const centerName = settings?.centerName || 'المركز';
+  const centerName = settings?.centerName || 'EduSphère';
   // --- State ---
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -355,13 +355,13 @@ export default function EventsModule({
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+            <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               الفعاليات والخرجات
             </span>
             <span className="text-xs text-slate-400 font-bold">الرحلات والحفلات والورشات</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-            <Calendar className="h-6 w-6 text-[#257C86]" />
+            <Calendar className="h-6 w-6 text-brand-600" />
             إدارة الفعاليات والخرجات
           </h2>
           <p className="text-slate-500 text-xs mt-1">
@@ -374,7 +374,7 @@ export default function EventsModule({
             setEventForm({ schoolYear: getCurrentAcademicYear() });
             setEventModal({ open: true, id: null });
           }}
-          className="px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+          className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
           <Plus className="h-4 w-4" />
           فعالية جديدة
@@ -387,7 +387,7 @@ export default function EventsModule({
         {/* Left Events List */}
         <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5 space-y-3 no-print">
           <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 px-1">
-            <Calendar className="h-4 w-4 text-[#257C86]" />
+            <Calendar className="h-4 w-4 text-brand-600" />
             قائمة الفعاليات ({filteredEvents.length})
           </span>
 
@@ -397,7 +397,7 @@ export default function EventsModule({
               value={filterYear}
               onChange={e => setFilterYear(e.target.value)}
               title="السنة الدراسية"
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
             >
               <option value="">السنة: الكل</option>
               {[...DEFAULT_ACADEMIC_YEARS].sort().reverse().map(y => (
@@ -408,7 +408,7 @@ export default function EventsModule({
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value as any)}
               title="الفئة"
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
             >
               <option value="all">الفئة: الكل</option>
               {CATEGORY_ORDER.map(cat => (
@@ -425,7 +425,7 @@ export default function EventsModule({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="بحث عن فعالية..."
-              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
             />
           </div>
 
@@ -456,7 +456,7 @@ export default function EventsModule({
                     setEventForm({ schoolYear: getCurrentAcademicYear() });
                     setEventModal({ open: true, id: null });
                   }}
-                  className="mt-3 px-3 py-1.5 bg-[#257C86]/10 text-[#257C86] rounded-xl text-xs font-extrabold hover:bg-[#257C86]/20 transition cursor-pointer inline-flex items-center gap-1"
+                  className="mt-3 px-3 py-1.5 bg-brand-600/10 text-brand-600 rounded-xl text-xs font-extrabold hover:bg-brand-600/20 transition cursor-pointer inline-flex items-center gap-1"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   إنشاء أول فعالية
@@ -475,13 +475,13 @@ export default function EventsModule({
                     onClick={() => setSelectedId(e.id)}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-right relative ${
                       isSelected
-                        ? 'bg-[#257C86]/[0.06] border-[#257C86] shadow-sm ring-1 ring-[#257C86]/30'
+                        ? 'bg-brand-600/[0.06] border-brand-600 shadow-sm ring-1 ring-brand-600/30'
                         : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <h3 className="text-xs font-black text-slate-900 leading-snug line-clamp-1 flex items-center gap-1.5">
-                        <Icon className="h-3.5 w-3.5 text-[#257C86] shrink-0" />
+                        <Icon className="h-3.5 w-3.5 text-brand-600 shrink-0" />
                         {e.name}
                       </h3>
                       <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${STATUS_CONFIG[e.status].badge}`}>
@@ -504,8 +504,8 @@ export default function EventsModule({
                         <span>{CATEGORY_CONFIG[e.category].label}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[#257C86] font-extrabold">{e.participants.length}{e.maxCapacity ? ` / ${e.maxCapacity}` : ''} مشارك</span>
-                        <span className="font-mono font-black text-[#257C86] bg-white px-2 py-0.5 rounded-md border border-[#257C86]/20">
+                        <span className="text-brand-600 font-extrabold">{e.participants.length}{e.maxCapacity ? ` / ${e.maxCapacity}` : ''} مشارك</span>
+                        <span className="font-mono font-black text-brand-600 bg-white px-2 py-0.5 rounded-md border border-brand-600/20">
                           {round2(collected)} د.ت
                         </span>
                       </div>
@@ -514,7 +514,7 @@ export default function EventsModule({
                     {e.maxCapacity && (
                       <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div
-                          className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-[#257C86]'}`}
+                          className={`h-full transition-all ${registrationRate > 90 ? 'bg-amber-500' : 'bg-brand-600'}`}
                           style={{ width: `${Math.min(100, registrationRate)}%` }}
                         />
                       </div>
@@ -530,7 +530,7 @@ export default function EventsModule({
         <div className="lg:col-span-8 space-y-5">
           {!selectedEvent ? (
             <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 p-4 bg-[#257C86]/[0.06] text-[#257C86] rounded-2xl border border-[#257C86]/20 flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto mb-4 p-4 bg-brand-600/[0.06] text-brand-600 rounded-2xl border border-brand-600/20 flex items-center justify-center">
                 <Calendar className="h-7 w-7" />
               </div>
               <h3 className="text-sm font-black text-slate-900">لم يتم اختيار فعالية</h3>
@@ -544,7 +544,7 @@ export default function EventsModule({
               <div className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-4 no-print">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                   <div className="flex items-start gap-3">
-                    <div className="p-2.5 bg-[#257C86]/[0.06] text-[#257C86] rounded-xl border border-[#257C86]/20 shrink-0">
+                    <div className="p-2.5 bg-brand-600/[0.06] text-brand-600 rounded-xl border border-brand-600/20 shrink-0">
                       {(() => {
                         const CategoryIcon = CATEGORY_CONFIG[selectedEvent.category].icon;
                         return <CategoryIcon className="h-5 w-5" />;
@@ -573,7 +573,7 @@ export default function EventsModule({
                           {selectedEvent.location}
                         </span>
                         {selectedEvent.busIncluded && (
-                          <span className="flex items-center gap-1 text-[#257C86] font-black">
+                          <span className="flex items-center gap-1 text-brand-600 font-black">
                             <Bus className="h-3.5 w-3.5" />
                             حافلة متوفرة
                           </span>
@@ -624,9 +624,9 @@ export default function EventsModule({
                       </span>
                     )}
                   </div>
-                  <div className="bg-[#257C86]/[0.06] rounded-2xl p-3 border border-[#257C86]/20">
-                    <span className="text-[11px] font-bold text-[#1e626b] block mb-1">المحصل (د.ت)</span>
-                    <span className="font-mono text-base font-black text-[#257C86]">{round2(stats?.collected || 0)}</span>
+                  <div className="bg-brand-600/[0.06] rounded-2xl p-3 border border-brand-600/20">
+                    <span className="text-[11px] font-bold text-brand-700 block mb-1">المحصل (د.ت)</span>
+                    <span className="font-mono text-base font-black text-brand-600">{round2(stats?.collected || 0)}</span>
                     <span className="text-[10px] font-bold text-slate-400 block mt-0.5">من {round2(stats?.expected || 0)} د.ت</span>
                   </div>
                   <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200/70">
@@ -638,7 +638,7 @@ export default function EventsModule({
                     <span className="font-mono text-base font-black text-slate-900">{round2(stats?.attendanceRate || 0)}%</span>
                     <div className="w-full h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden">
                       <div
-                        className="h-full bg-[#257C86] transition-all"
+                        className="h-full bg-brand-600 transition-all"
                         style={{ width: `${stats?.attendanceRate || 0}%` }}
                       />
                     </div>
@@ -651,7 +651,7 @@ export default function EventsModule({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                      <UserPlus className="h-4 w-4 text-[#257C86]" />
+                      <UserPlus className="h-4 w-4 text-brand-600" />
                       المشاركون ({filteredParticipants.length})
                     </h3>
                     <p className="text-xs font-bold text-slate-400 mt-0.5">
@@ -664,7 +664,7 @@ export default function EventsModule({
                       setParticipantForm({});
                       setParticipantModal({ open: true, id: null });
                     }}
-                    className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     <UserPlus className="h-4 w-4" />
                     إضافة مشارك
@@ -680,7 +680,7 @@ export default function EventsModule({
                       value={participantSearch}
                       onChange={e => setParticipantSearch(e.target.value)}
                       placeholder="بحث عن مشارك..."
-                      className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
                     />
                   </div>
 
@@ -734,7 +734,7 @@ export default function EventsModule({
                                 type="checkbox"
                                 checked={p.attended}
                                 onChange={() => toggleAttendance(selectedEvent.id, p.id)}
-                                className="h-4 w-4 accent-[#257C86] cursor-pointer"
+                                className="h-4 w-4 accent-brand-600 cursor-pointer"
                                 title="تسجيل الحضور"
                               />
                             </td>
@@ -754,7 +754,7 @@ export default function EventsModule({
                             <td className="p-3 text-center font-mono font-bold text-slate-700">
                               {round2(p.totalRequired)} د.ت
                             </td>
-                            <td className="p-3 text-center font-mono font-black text-[#1e626b]">
+                            <td className="p-3 text-center font-mono font-black text-brand-700">
                               {round2(p.amountPaid)} د.ت
                             </td>
                             <td className="p-3 text-center font-mono font-black">
@@ -766,7 +766,7 @@ export default function EventsModule({
                             </td>
                             <td className="p-3 text-center">
                               {p.paid ? (
-                                <span className="px-2.5 py-0.5 bg-[#257C86]/[0.06] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black inline-flex items-center gap-1">
+                                <span className="px-2.5 py-0.5 bg-brand-600/[0.06] text-brand-700 border border-brand-600/20 rounded-full text-[10px] font-black inline-flex items-center gap-1">
                                   <CheckCircle2 className="h-3 w-3" />
                                   مدفوع
                                 </span>
@@ -791,7 +791,7 @@ export default function EventsModule({
                                   className={`p-1 rounded-lg transition ${
                                     p.remainingBalance <= 0
                                       ? 'text-slate-300 cursor-not-allowed'
-                                      : 'text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] cursor-pointer'
+                                      : 'text-slate-400 hover:text-brand-600 hover:bg-brand-600/[0.06] cursor-pointer'
                                   }`}
                                 >
                                   <CreditCard className="h-3.5 w-3.5" />
@@ -800,7 +800,7 @@ export default function EventsModule({
                                   <button
                                     onClick={() => setPrintReceipt({ open: true, participantId: p.id })}
                                     title="طباعة وصل"
-                                    className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg transition cursor-pointer"
+                                    className="p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-600/[0.06] rounded-lg transition cursor-pointer"
                                   >
                                     <Printer className="h-3.5 w-3.5" />
                                   </button>
@@ -811,7 +811,7 @@ export default function EventsModule({
                                     setParticipantModal({ open: true, id: p.id });
                                   }}
                                   title="تعديل"
-                                  className="p-1 text-slate-400 hover:text-[#257C86] hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                  className="p-1 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                 >
                                   <Edit3 className="h-3.5 w-3.5" />
                                 </button>
@@ -825,7 +825,7 @@ export default function EventsModule({
                                     });
                                   }}
                                   title="حذف"
-                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -842,7 +842,7 @@ export default function EventsModule({
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setPrintAttendance({ open: true, eventId: selectedEvent.id })}
-                    className="px-3 py-1.5 bg-[#257C86]/10 hover:bg-[#257C86]/20 text-[#257C86] font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-brand-600/10 hover:bg-brand-600/20 text-brand-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
                   >
                     <FileText className="h-3.5 w-3.5" />
                     طباعة كشف الحضور (A4)
@@ -871,7 +871,7 @@ export default function EventsModule({
                   <input
                     id="event-name"
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.name || ''}
                     onChange={e => setEventForm({ ...eventForm, name: e.target.value })}
                   />
@@ -881,7 +881,7 @@ export default function EventsModule({
                   <textarea
                     id="event-description"
                     rows={3}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.description || ''}
                     onChange={e => setEventForm({ ...eventForm, description: e.target.value })}
                   />
@@ -890,7 +890,7 @@ export default function EventsModule({
                   <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-category">الفئة</label>
                   <select
                     id="event-category"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.category || 'other'}
                     onChange={e => setEventForm({ ...eventForm, category: e.target.value as any })}
                   >
@@ -903,7 +903,7 @@ export default function EventsModule({
                   <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-status">الحالة</label>
                   <select
                     id="event-status"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.status || 'planned'}
                     onChange={e => setEventForm({ ...eventForm, status: e.target.value as any })}
                   >
@@ -926,7 +926,7 @@ export default function EventsModule({
                   <input
                     id="event-time"
                     type="time"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.time || ''}
                     onChange={e => setEventForm({ ...eventForm, time: e.target.value })}
                   />
@@ -936,7 +936,7 @@ export default function EventsModule({
                   <input
                     id="event-location"
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.location || ''}
                     onChange={e => setEventForm({ ...eventForm, location: e.target.value })}
                   />
@@ -946,7 +946,7 @@ export default function EventsModule({
                   <input
                     id="event-capacity"
                     type="number"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.maxCapacity || ''}
                     onChange={e => setEventForm({ ...eventForm, maxCapacity: parseInt(e.target.value) || undefined })}
                   />
@@ -955,7 +955,7 @@ export default function EventsModule({
                   <input
                     type="checkbox"
                     id="bus-included"
-                    className="h-4 w-4 accent-[#257C86] cursor-pointer"
+                    className="h-4 w-4 accent-brand-600 cursor-pointer"
                     checked={!!eventForm.busIncluded}
                     onChange={e => setEventForm({ ...eventForm, busIncluded: e.target.checked })}
                   />
@@ -965,7 +965,7 @@ export default function EventsModule({
                   <label className="text-xs font-bold text-slate-600 block mb-1" htmlFor="event-year">السنة الدراسية</label>
                   <select
                     id="event-year"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={eventForm.schoolYear || getCurrentAcademicYear()}
                     onChange={e => setEventForm({ ...eventForm, schoolYear: e.target.value })}
                   >
@@ -976,15 +976,15 @@ export default function EventsModule({
                 </div>
               </div>
 
-              <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 space-y-3">
-                <div className="text-xs font-black text-[#1e626b]">تسعيرة المشاركين (د.ت)</div>
+              <div className="p-4 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 space-y-3">
+                <div className="text-xs font-black text-brand-700">تسعيرة المشاركين (د.ت)</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 block mb-1" htmlFor="price-student">تلميذ</label>
                     <input
                       id="price-student"
                       type="number"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={eventForm.priceStudent || 0}
                       onChange={e => setEventForm({ ...eventForm, priceStudent: parseFloat(e.target.value) || 0 })}
                     />
@@ -994,7 +994,7 @@ export default function EventsModule({
                     <input
                       id="price-parent"
                       type="number"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={eventForm.priceParent || 0}
                       onChange={e => setEventForm({ ...eventForm, priceParent: parseFloat(e.target.value) || 0 })}
                     />
@@ -1004,7 +1004,7 @@ export default function EventsModule({
                     <input
                       id="price-sibling"
                       type="number"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={eventForm.priceSibling || 0}
                       onChange={e => setEventForm({ ...eventForm, priceSibling: parseFloat(e.target.value) || 0 })}
                     />
@@ -1014,7 +1014,7 @@ export default function EventsModule({
                     <input
                       id="price-external"
                       type="number"
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={eventForm.priceExternal || 0}
                       onChange={e => setEventForm({ ...eventForm, priceExternal: parseFloat(e.target.value) || 0 })}
                     />
@@ -1031,7 +1031,7 @@ export default function EventsModule({
               </button>
               <button
                 onClick={handleSubmitEvent}
-                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 حفظ الفعالية
@@ -1053,7 +1053,7 @@ export default function EventsModule({
                     <input
                       id="part-name"
                       type="text"
-                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={participantForm.participantName || ''}
                       onChange={e => setParticipantForm({ ...participantForm, participantName: e.target.value })}
                     />
@@ -1081,7 +1081,7 @@ export default function EventsModule({
                           onClick={() => setParticipantForm({ ...participantForm, participantType: t.type })}
                           className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                             participantForm.participantType === t.type
-                              ? 'bg-[#257C86] text-white border-[#257C86]'
+                              ? 'bg-brand-600 text-white border-brand-600'
                               : 'bg-slate-50 text-slate-600 border-slate-200'
                           }`}
                         >
@@ -1097,7 +1097,7 @@ export default function EventsModule({
                       type="text"
                       inputMode="numeric"
                       maxLength={8}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                       value={participantForm.contactPhone || ''}
                       onChange={e => setParticipantForm({ ...participantForm, contactPhone: e.target.value.replace(/\D/g, '').slice(0, 8) })}
                     />
@@ -1113,7 +1113,7 @@ export default function EventsModule({
                         onClick={() => setParticipantForm({ ...participantForm, paymentMethod: m })}
                         className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                           (participantForm.paymentMethod || 'Espèces') === m
-                            ? 'bg-[#257C86] text-white border-[#257C86]'
+                            ? 'bg-brand-600 text-white border-brand-600'
                             : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}
                       >
@@ -1123,13 +1123,13 @@ export default function EventsModule({
                   </div>
                 </div>
                 {(participantForm.paymentMethod || 'Espèces') === 'Chèque' && (
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
                     <div>
                       <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="part-cheque-num">رقم الشيك *</label>
                       <input
                         id="part-cheque-num"
                         type="text"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-brand-600"
                         value={participantForm.chequeNumber || ''}
                         onChange={e => setParticipantForm({ ...participantForm, chequeNumber: e.target.value })}
                       />
@@ -1150,15 +1150,15 @@ export default function EventsModule({
                   const maxDiscount = Math.max(0, price - 1);
                   const remainingAfter = round2(Math.max(0, price - (participantForm.discount || 0) - (participantForm.amountPaid || 0)));
                   return (
-                    <div className="p-4 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-discount">التخفيض (د.ت)</label>
+                        <label className="text-[10px] font-black text-brand-700 block mb-1" htmlFor="part-discount">التخفيض (د.ت)</label>
                         <input
                           id="part-discount"
                           type="number"
                           min="0"
                           max={maxDiscount}
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                           value={participantForm.discount || 0}
                           onChange={e => setParticipantForm({ ...participantForm, discount: Math.max(0, Math.min(maxDiscount, parseFloat(e.target.value) || 0)) })}
                         />
@@ -1169,13 +1169,13 @@ export default function EventsModule({
                         )}
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[#1e626b] block mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
+                        <label className="text-[10px] font-black text-brand-700 block mb-1" htmlFor="part-paid">المبلغ المدفوع (د.ت)</label>
                         <input
                           id="part-paid"
                           type="number"
                           min="0"
                           max={Math.max(0, price - (participantForm.discount || 0))}
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                           value={participantForm.amountPaid || 0}
                           onChange={e => setParticipantForm({
                             ...participantForm,
@@ -1183,7 +1183,7 @@ export default function EventsModule({
                           })}
                         />
                       </div>
-                      <div className={`col-span-2 p-2.5 rounded-xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-[#257C86]/20 text-[#1e626b]'}`}>
+                      <div className={`col-span-2 p-2.5 rounded-xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-brand-600/20 text-brand-700'}`}>
                         <span>{remainingAfter > 0 ? 'المتبقي بعد الدفع (Reste):' : 'حالة الخلاص:'}</span>
                         <span className="font-mono font-black">
                           {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
@@ -1197,7 +1197,7 @@ export default function EventsModule({
                   <input
                     id="part-notes"
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                     value={participantForm.notes || ''}
                     onChange={e => setParticipantForm({ ...participantForm, notes: e.target.value })}
                   />
@@ -1213,7 +1213,7 @@ export default function EventsModule({
               </button>
               <button
                 onClick={handleSubmitParticipant}
-                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 حفظ المشارك
@@ -1229,7 +1229,7 @@ export default function EventsModule({
           >
             <div className="space-y-4">
               {selectedEvent && paymentModal.participantId && (
-                <div className="p-3.5 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 flex justify-between items-center text-xs font-bold text-[#1e626b]">
+                <div className="p-3.5 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 flex justify-between items-center text-xs font-bold text-brand-700">
                   <span className="font-black text-sm">
                     {selectedEvent.participants.find(p => p.id === paymentModal.participantId)?.participantName}
                   </span>
@@ -1254,7 +1254,7 @@ export default function EventsModule({
                           type="number"
                           min="0"
                           max={part ? remainingBefore : undefined}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-[#1e626b] font-mono focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700 font-mono focus:outline-none focus:ring-1 focus:ring-brand-600"
                           value={paymentForm.amount || ''}
                           onChange={e => setPaymentForm({
                             ...paymentForm,
@@ -1268,7 +1268,7 @@ export default function EventsModule({
                         )}
                       </div>
                       {part && (
-                        <div className={`p-3 rounded-2xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-[#257C86]/[0.06] border-[#257C86]/20 text-[#1e626b]'}`}>
+                        <div className={`p-3 rounded-2xl border text-xs flex justify-between items-center font-bold ${remainingAfter > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-brand-600/[0.06] border-brand-600/20 text-brand-700'}`}>
                           <span>{remainingAfter > 0 ? 'المتبقي بعد هذه الدفعة (Reste):' : 'بعد هذه الدفعة:'}</span>
                           <span className="font-mono font-black">
                             {remainingAfter > 0 ? `${remainingAfter} د.ت` : 'خلاص كامل ✓'}
@@ -1287,7 +1287,7 @@ export default function EventsModule({
                         onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
                         className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                           paymentForm.method === m
-                            ? 'bg-[#257C86] text-white border-[#257C86]'
+                            ? 'bg-brand-600 text-white border-brand-600'
                             : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}
                       >
@@ -1297,13 +1297,13 @@ export default function EventsModule({
                   </div>
                 </div>
                 {paymentForm.method === 'Chèque' && (
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20">
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
                     <div>
                       <label className="text-[10px] font-bold text-slate-600 block mb-1" htmlFor="pay-cheque-num">رقم الشيك</label>
                       <input
                         id="pay-cheque-num"
                         type="text"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px] focus:outline-none focus:ring-1 focus:ring-brand-600"
                         value={paymentForm.chequeNumber || ''}
                         onChange={e => setPaymentForm({ ...paymentForm, chequeNumber: e.target.value })}
                       />
@@ -1330,7 +1330,7 @@ export default function EventsModule({
               </button>
               <button
                 onClick={handleSubmitPayment}
-                className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <CreditCard className="h-4 w-4" />
                 تسجيل الدفعة
@@ -1354,12 +1354,12 @@ export default function EventsModule({
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
               >
-                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+                <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                   <span className="font-bold text-sm">وصل خلاص رسمي — فعالية {selectedEvent.name}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => window.print()}
-                      className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                     >
                       <Printer className="h-4 w-4" />
                       طباعة الوصل 🖨️
@@ -1384,7 +1384,7 @@ export default function EventsModule({
                       </div>
                       <div className="text-left font-mono font-bold text-xs bg-slate-100 p-2 rounded border border-slate-300">
                         <p>الخدمة: <strong>فعالية / خرجة</strong></p>
-                        <p className="text-[11px] text-[#1e626b] mt-0.5">الفعالية: {selectedEvent.name}</p>
+                        <p className="text-[11px] text-brand-700 mt-0.5">الفعالية: {selectedEvent.name}</p>
                         <p className="text-[11px] text-slate-500">{selectedEvent.date}{selectedEvent.location ? ` — ${selectedEvent.location}` : ''}</p>
                       </div>
                     </div>
@@ -1432,10 +1432,10 @@ export default function EventsModule({
                                       شيك رقم: {part.chequeNumber}{part.chequeDate ? ` — ${part.chequeDate}` : ''}
                                     </span>
                                   )}
-                                  {part.discount ? <span className="text-[#1e626b] text-[10px] block font-bold">التخفيض: {part.discount} د.ت</span> : null}
+                                  {part.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {part.discount} د.ت</span> : null}
                                   {part.notes && <span className="text-slate-500 text-[10px] block">{part.notes}</span>}
                                 </td>
-                                <td className="p-2 text-left font-black font-mono text-[#1e626b]">{round2(part.amountPaid)} د.ت</td>
+                                <td className="p-2 text-left font-black font-mono text-brand-700">{round2(part.amountPaid)} د.ت</td>
                               </tr>
                             </tbody>
                           </table>
@@ -1448,27 +1448,27 @@ export default function EventsModule({
                           <span className="text-base font-black text-slate-900 font-mono">{round2(part.totalRequired)} د.ت</span>
                         </div>
 
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
-                          <span className="text-[10px] text-[#1e626b] block font-bold">المسدد حتى الآن:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">{round2(part.amountPaid)} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/30">
+                          <span className="text-[10px] text-brand-700 block font-bold">المسدد حتى الآن:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">{round2(part.amountPaid)} د.ت</span>
                         </div>
 
-                        <div className={`p-2.5 rounded-xl border ${receiptRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-[#257C86]/[0.06] border-[#257C86]/20'}`}>
-                          <span className="text-[10px] text-[#1e626b] block font-bold">الرصيد المتبقي:</span>
+                        <div className={`p-2.5 rounded-xl border ${receiptRemaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-brand-600/[0.06] border-brand-600/20'}`}>
+                          <span className="text-[10px] text-brand-700 block font-bold">الرصيد المتبقي:</span>
                           <span className={`text-base font-black font-mono ${receiptRemaining === 0 ? 'text-slate-400' : 'text-red-700'}`}>{receiptRemaining} د.ت</span>
                         </div>
                       </div>
 
                       {part.discount ? (
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/20 flex justify-between items-center">
-                          <span className="text-[10px] text-[#1e626b] font-bold">التخفيض الممنوح:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">-{part.discount} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/20 flex justify-between items-center">
+                          <span className="text-[10px] text-brand-700 font-bold">التخفيض الممنوح:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">-{part.discount} د.ت</span>
                         </div>
                       ) : null}
 
                       <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center font-bold">
                         {receiptRemaining === 0 ? (
-                          <span className="text-[#1e626b] text-xs flex items-center justify-center gap-1">
+                          <span className="text-brand-700 text-xs flex items-center justify-center gap-1">
                             <CheckCircle2 className="h-4 w-4" />
                             حالة المشاركة: مسدد بالكامل
                           </span>
@@ -1478,7 +1478,7 @@ export default function EventsModule({
                             حالة المشاركة: شيك معلق — بانتظار التحصيل من وحدة المالية
                           </span>
                         ) : (
-                          <span className="text-[#1e626b] text-xs">
+                          <span className="text-brand-700 text-xs">
                             حالة المشاركة: خلاص جزئي — باقي: {receiptRemaining} د.ت
                           </span>
                         )}
@@ -1511,12 +1511,12 @@ export default function EventsModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
-              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">كشف حضور ومغادرة — {selectedEvent.name}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="h-4 w-4" />
                     طباعة الكشف (A4) 🖨️
@@ -1630,7 +1630,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
         exit={{ opacity: 0, scale: 0.95 }}
         className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
       >
-        <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+        <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
           <h3 className="text-lg font-black">{title}</h3>
           <button
             onClick={onClose}

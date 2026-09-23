@@ -17,3 +17,4 @@ playwright-report/
 release/
 .dev.vars*
 _worker.bundle*
+.freebuff/cookies.txt

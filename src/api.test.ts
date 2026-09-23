@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveEventsApi, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi } from './api';
+import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveEventsApi, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
 import { normalizeSettings, normalizeFeeSet } from './types';
 
 // ---------------------------------------------------------------------------
@@ -367,6 +367,64 @@ describe('SaaS Platform API', () => {
     const centers = await fetchCentersApi();
     expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
     expect(centers[0].name).toBe('Centre 1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchActiveAdvertisementsApi — request dedupe + TTL cache
+// 3 surfaces (2 carousels + interstitial) × StrictMode used to fire 6 identical
+// requests per page load; the module cache must collapse them to one.
+// ---------------------------------------------------------------------------
+describe('fetchActiveAdvertisementsApi dedupe', () => {
+  beforeEach(() => {
+    __resetActiveAdsCacheForTests();
+    mockFetch.mockReset();
+  });
+
+  const ads = [{ id: 'a1', title: 'Pub' }];
+
+  it('collapses concurrent calls with the same key into one network request', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    const [r1, r2, r3] = await Promise.all([
+      fetchActiveAdvertisementsApi('public_landing'),
+      fetchActiveAdvertisementsApi('public_landing'),
+      fetchActiveAdvertisementsApi('public_landing')
+    ]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(r1).toEqual(ads);
+    expect(r2).toEqual(ads);
+    expect(r3).toEqual(ads);
+  });
+
+  it('serves repeated calls from cache within the TTL window', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    await fetchActiveAdvertisementsApi('public_landing');
+    await fetchActiveAdvertisementsApi('public_landing');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes cache keys by location and centerId', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    await fetchActiveAdvertisementsApi('public_landing');
+    await fetchActiveAdvertisementsApi('center_admin', 'c9');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('never caches failures — the next call retries the network', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('خطأ في جلب الإعلانات.'));
+    await expect(fetchActiveAdvertisementsApi('public_landing')).rejects.toThrow();
+
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+    const result = await fetchActiveAdvertisementsApi('public_landing');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(ads);
   });
 });
 

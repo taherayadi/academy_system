@@ -137,4 +137,56 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
       }));
     });
   });
+
+  it('shows an error with retry instead of fake success when the API fails', async () => {
+    const apiMock = vi.mocked(submitDemoRequestApi);
+    apiMock.mockClear();
+    apiMock.mockRejectedValueOnce(new Error('network down'));
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    fireEvent.click(screen.getByText('Jardin d’enfant'));
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    // The failure must be announced — never a success screen.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/envoi a échoué/i);
+    expect(screen.queryByText(/Demande envoyée avec succès/i)).toBeNull();
+
+    // Retry succeeds → success screen, API called twice.
+    apiMock.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole('button', { name: /Réessayer/i }));
+    await screen.findByText(/Demande envoyée avec succès/i);
+    expect(apiMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('resurfaces a previously saved offline lead and resends it', async () => {
+    // Une visite précédente a échoué : une copie dort dans localStorage.
+    localStorage.setItem('academy_demo_requests', JSON.stringify([
+      { id: 'REQ-1', requestType: 'trial', fullName: 'Old Lead', academyName: 'Old Academy', email: 'old@test.tn', phone: '20123456', estimatedSize: '3 modules', requestedModules: ['scolaire', 'studentTimeSheets', 'finance'], message: '', submittedAt: new Date().toISOString() }
+    ]));
+    const apiMock = vi.mocked(submitDemoRequestApi);
+    apiMock.mockClear();
+    apiMock.mockResolvedValue(undefined);
+
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    // The banner appears (status role) and offers the resend.
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toMatch(/n'a pas pu partir/i);
+    fireEvent.click(screen.getByRole('button', { name: /Renvoyer maintenant/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        fullName: 'Old Lead',
+        phone: '20123456'
+      }));
+    });
+    // The saved copy is consumed after a successful resend.
+    await waitFor(() => {
+      expect(localStorage.getItem('academy_demo_requests')).toBeNull();
+    });
+    // Banner gone.
+    expect(screen.queryByText(/n'a pas pu partir/i)).toBeNull();
+  });
 });

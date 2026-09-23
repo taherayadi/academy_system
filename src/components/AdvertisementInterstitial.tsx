@@ -191,7 +191,7 @@ export default function AdvertisementInterstitial({
                   type="button"
                   onClick={close}
                   aria-label="Fermer la publicité"
-                  className="cursor-pointer rounded-lg p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                  className="cursor-pointer rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-red-500"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -215,7 +215,7 @@ export default function AdvertisementInterstitial({
                   href={ad.linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 rounded-xl bg-[#257C86]/10 px-3 py-1.5 text-[11px] font-black text-[#257C86] transition hover:bg-[#257C86]/20"
+                  className="shrink-0 rounded-xl bg-brand-600/10 px-3 py-1.5 text-[11px] font-black text-brand-600 transition hover:bg-brand-600/20"
                 >
                   En savoir plus
                 </a>
@@ -225,7 +225,7 @@ export default function AdvertisementInterstitial({
             {/* Barre de progression du compte à rebours */}
             <div className="h-[3px] w-full bg-slate-100">
               <div
-                className="h-full bg-[#257C86] transition-[width] duration-100 ease-linear"
+                className="h-full bg-brand-600 transition-[width] duration-100 ease-linear"
                 style={{ width: `${progress}%` }}
               />
             </div>
