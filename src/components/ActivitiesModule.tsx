@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, Edit3, X, Layers, MapPin } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Layers, MapPin, CalendarDays } from 'lucide-react';
 import { Activity, ActivityCategory } from '../types';
 import { useToast } from './Toast';
+import { TIME_BANDS, bandIndexFor, bandStartTime, CATEGORY_COLORS, validateActivity, groupActivities, GroupByKey } from '../utils/planner';
 
 interface ActivitiesModuleProps {
   activities: Activity[];
@@ -19,18 +20,12 @@ const CATEGORY_LABELS: Record<ActivityCategory, string> = {
   jeu: 'ألعاب'
 };
 
-const CATEGORY_CHIP_CLASS: Record<ActivityCategory, string> = {
+/** Full Tailwind chip classes derived from the pure palette prefix (004 T011). */
+const CHIP_CLASS: Record<ActivityCategory, string> = {
   motricite: 'bg-emerald-100 text-emerald-800 border-emerald-300',
   art: 'bg-violet-100 text-violet-800 border-violet-300',
-  musique: 'bg-sky-100 text-sky-800 border-sky-300',
-  jeu: 'bg-amber-100 text-amber-800 border-amber-300'
-};
-
-const CATEGORY_TEST_ID: Record<ActivityCategory, string> = {
-  motricite: 'bg-emerald',
-  art: 'bg-violet',
-  musique: 'bg-sky',
-  jeu: 'bg-amber'
+  musique: 'bg-amber-100 text-amber-800 border-amber-300',
+  jeu: 'bg-sky-100 text-sky-800 border-sky-300'
 };
 
 const CATEGORIES: ActivityCategory[] = ['motricite', 'art', 'musique', 'jeu'];
@@ -51,12 +46,17 @@ const emptyForm = (): Omit<Activity, 'id' | 'createdAt'> => ({
   staffId: ''
 });
 
+type ViewMode = 'week' | GroupByKey;
+
 export default function ActivitiesModule({ activities, onUpdateActivities, staff = [] }: ActivitiesModuleProps) {
   const { error, success } = useToast();
+  const [view, setView] = useState<ViewMode>('week');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [groupBy, setGroupBy] = useState<'levelClass' | 'location'>('levelClass');
+  const [inlineError, setInlineError] = useState<string>('');
+  /** Tap-select fallback state: id of the chip being moved (research R3). */
+  const [moveSourceId, setMoveSourceId] = useState<string | null>(null);
 
   const staffName = (id?: string) => {
     if (!id) return undefined;
@@ -67,6 +67,7 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
   const openCreate = () => {
     setForm(emptyForm());
     setEditingId(null);
+    setInlineError('');
     setModalOpen(true);
   };
 
@@ -74,7 +75,8 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
     setForm({
       title: a.title,
       category: a.category,
-      weekday: a.weekday ?? 0,
+      weekday: a.date ? 0 : (a.weekday ?? 0),
+      date: a.date || '',
       timeStart: a.timeStart,
       timeEnd: a.timeEnd,
       location: a.location || '',
@@ -82,34 +84,36 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
       staffId: a.staffId || ''
     });
     setEditingId(a.id);
+    setInlineError('');
     setModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // FR-015: title required, category required, weekday-or-date, timeStart < timeEnd
-    if (!form.title.trim()) {
-      error('يرجى إدخال عنوان النشاط');
+    setInlineError('');
+    // FR-015 / data-model predicate — validated client-side with inline blocking.
+    const candidate: Partial<Activity> = {
+      ...form,
+      // In weekly mode strip an empty date so the predicate sees weekday only.
+      date: form.date ? form.date : undefined
+    };
+    if (!validateActivity(candidate)) {
+      if (!form.title.trim()) setInlineError('يرجى إدخال عنوان النشاط');
+      else if (timeToMinutes(form.timeStart) >= timeToMinutes(form.timeEnd)) setInlineError('وقت البداية يجب أن يسبق وقت النهاية');
+      else setInlineError('يرجى اختيار اليوم أو التاريخ بشكل صحيح');
       return;
     }
-    if (!CATEGORIES.includes(form.category)) {
-      error('يرجى اختيار فئة النشاط');
-      return;
-    }
-    if (timeToMinutes(form.timeStart) >= timeToMinutes(form.timeEnd)) {
-      error('وقت البداية يجب أن يسبق وقت النهاية');
-      return;
-    }
+    const clean: Activity = {
+      ...(form as Activity),
+      id: editingId || 'act_' + crypto.randomUUID(),
+      date: form.date || undefined,
+      createdAt: editingId ? undefined : new Date().toISOString()
+    } as Activity;
     if (editingId) {
-      onUpdateActivities(activities.map(a => a.id === editingId ? { ...a, ...form } : a));
+      onUpdateActivities(activities.map(a => a.id === editingId ? { ...a, ...clean, id: a.id, createdAt: a.createdAt } : a));
       success('تم تحديث النشاط بنجاح');
     } else {
-      const created: Activity = {
-        ...form,
-        id: 'act_' + crypto.randomUUID(),
-        createdAt: new Date().toISOString()
-      };
-      onUpdateActivities([...activities, created]);
+      onUpdateActivities([...activities, clean]);
       success('تمت إضافة النشاط بنجاح');
     }
     setModalOpen(false);
@@ -120,51 +124,68 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
     success('تم حذف النشاط');
   };
 
-  /** Click-to-move fallback for touch devices (research R3). */
-  const [moveSourceId, setMoveSourceId] = useState<string | null>(null);
-  const handleDayClick = (day: number) => {
-    if (moveSourceId == null) return;
-    onUpdateActivities(activities.map(a => a.id === moveSourceId ? { ...a, weekday: day } : a));
-    setMoveSourceId(null);
+  /** Apply a move to the given day (and optionally band-snapped start). */
+  const applyMove = (id: string, day: number) => {
+    const src = activities.find(a => a.id === id);
+    if (!src) return;
+    if (src.date) {
+      // Dated activities move by recomputing the date's weekday — keep the date,
+      // shift it so it lands on the requested weekday column (nearest future).
+      const d = new Date(src.date + 'T00:00:00');
+      const current = (d.getDay() + 6) % 7; // JS: 0=Sun → 0=Mon
+      const delta = (day - current + 7) % 7 || 7;
+      d.setDate(d.getDate() + delta);
+      const next = d.toISOString().slice(0, 10);
+      onUpdateActivities(activities.map(a => a.id === id ? { ...a, date: next } : a));
+    } else {
+      onUpdateActivities(activities.map(a => a.id === id ? { ...a, weekday: day } : a));
+    }
     success('تم نقل النشاط');
   };
+
   const handleDrop = (day: number, e: React.DragEvent) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
-    onUpdateActivities(activities.map(a => a.id === id ? { ...a, weekday: day } : a));
-    success('تم نقل النشاط');
+    applyMove(id, day);
   };
 
-  /** Grouping labels (view-only, research R4): by class or by location. */
-  const groupedChips = useMemo(() => {
-    const groups = new Map<string, Activity[]>();
-    for (const a of activities) {
-      const key = groupBy === 'levelClass' ? (a.levelClass || 'بدون فئة') : (a.location || 'بدون مكان');
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    }
-    // 'بدون …' group last, alphabetical otherwise
-    return Array.from(groups.entries()).sort(([ka], [kb]) => {
-      const unassigned = (k: string) => k.startsWith('بدون') ? 1 : 0;
-      if (unassigned(ka) !== unassigned(kb)) return unassigned(ka) - unassigned(kb);
-      return ka.localeCompare(kb);
-    });
-  }, [activities, groupBy]);
+  const handleDayClick = (day: number) => {
+    if (moveSourceId == null) return;
+    applyMove(moveSourceId, day);
+    setMoveSourceId(null);
+  };
+
+  /** Grouped sections for the class/location views (view-only). */
+  const grouped = useMemo(
+    () => view === 'week' ? [] : groupActivities(activities, view),
+    [activities, view]
+  );
 
   const Chip = ({ a }: { a: Activity }) => (
     <div
-      data-category={CATEGORY_TEST_ID[a.category] || a.category}
-      draggable
+      data-category={CATEGORY_COLORS[a.category] || a.category}
+      draggable={view === 'week'}
       onDragStart={(e: React.DragEvent) => e.dataTransfer.setData('text/plain', a.id)}
-      onClick={() => setMoveSourceId(moveSourceId === a.id ? null : a.id)}
-      className={`${CATEGORY_CHIP_CLASS[a.category]} border rounded-lg px-2 py-1 text-[10px] font-bold cursor-grab active:cursor-grabbing select-none group relative`}
-      title={`${a.timeStart} - ${a.timeEnd}`}
+      onClick={(e) => {
+        if (view !== 'week') return;
+        e.stopPropagation();
+        setMoveSourceId(moveSourceId === a.id ? null : a.id);
+      }}
+      className={`${CHIP_CLASS[a.category]} border rounded-lg px-2 py-1 text-[10px] font-bold cursor-grab active:cursor-grabbing select-none group relative ${
+        moveSourceId === a.id ? 'ring-2 ring-brand-600' : ''
+      }`}
+      title={`${a.timeStart} - ${a.timeEnd}${a.location ? ` · ${a.location}` : ''}${staffName(a.staffId) ? ` · ${staffName(a.staffId)}` : ''}`}
     >
       <div className="flex items-center justify-between gap-1">
         <span className="truncate">{a.title}</span>
         <span className="font-mono text-[9px] opacity-70 shrink-0">{a.timeStart}</span>
       </div>
+      {(a.levelClass || staffName(a.staffId)) && (
+        <div className="text-[9px] opacity-70 truncate">
+          {a.levelClass}{a.levelClass && staffName(a.staffId) ? ' · ' : ''}{staffName(a.staffId) || ''}
+        </div>
+      )}
       <div className="hidden group-hover:flex items-center justify-end gap-0.5 mt-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); openEdit(a); }}
@@ -186,35 +207,46 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
     </div>
   );
 
+  /** Week grid: dated activities render under their own header column. */
+  const datedActivities = activities.filter(a => !!a.date);
+  const datedDates = useMemo(
+    () => Array.from(new Set(datedActivities.map(a => a.date as string))).sort(),
+    [datedActivities]
+  );
+
   return (
     <div className="space-y-6" dir="rtl">
       {/* Module banner */}
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
-              الأنشطة والبرنامج
-            </span>
-            <span className="text-xs text-slate-400 font-bold">حركية · فنون · موسيقى · ألعاب</span>
-          </div>
+          <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
+            الأنشطة والبرنامج
+          </span>
           <h2 className="text-2xl font-black text-slate-900 mt-2">الأنشطة والبرنامج الأسبوعي</h2>
           <p className="text-slate-500 text-xs mt-1">
             تخطيط الأنشطة عبر أيام الأسبوع مع تلوين حسب الفئة.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Grouping toggle */}
+          {/* 3-way grouping toggle: week ↔ class ↔ location */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
             <button
-              onClick={() => setGroupBy('levelClass')}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition ${groupBy === 'levelClass' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setView('week')}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition ${view === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <CalendarDays className="h-3 w-3" />
+              الأسبوع
+            </button>
+            <button
+              onClick={() => setView('class')}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition ${view === 'class' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <Layers className="h-3 w-3" />
               حسب الفئة
             </button>
             <button
-              onClick={() => setGroupBy('location')}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition ${groupBy === 'location' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setView('location')}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition ${view === 'location' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <MapPin className="h-3 w-3" />
               حسب المكان
@@ -230,47 +262,96 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
         </div>
       </div>
 
-      {/* Grouped listing (view-only summary above the grid) */}
-      {activities.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5 no-print">
-          <span className="text-xs font-black text-slate-500 flex items-center gap-1.5">
-            {groupBy === 'levelClass' ? <Layers className="h-3.5 w-3.5 text-brand-600" /> : <MapPin className="h-3.5 w-3.5 text-brand-600" />}
-            تجميع {groupBy === 'levelClass' ? 'حسب الفئة' : 'حسب المكان'} ({groupedChips.length} مجموعات)
-          </span>
-          <div className="mt-2 space-y-1.5">
-            {groupedChips.map(([group, acts]) => (
-              <div key={group} className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
-                <span className="min-w-[110px] truncate">{group}</span>
-                <span className="text-slate-400">{acts.length} أنشطة</span>
-              </div>
-            ))}
-          </div>
+      {moveSourceId != null && (
+        <div className="bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl px-4 py-2.5 text-xs font-bold text-brand-700 no-print">
+          يتم النقل: اضغط على عمود اليوم الهدف (أو أسقط النشاط عليه)
         </div>
       )}
 
-      {/* Weekly grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        {WEEK_DAYS.map((label, day) => {
-          const dayActivities = activities.filter(a => a.weekday === day);
-          return (
-            <div
-              key={day}
-              data-day-column={day}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(day, e)}
-              onClick={() => handleDayClick(day)}
-              className={`bg-white rounded-2xl border p-2.5 min-h-[180px] space-y-1.5 transition ${
-                moveSourceId != null ? 'border-brand-600/50 bg-brand-600/[0.04]' : 'border-slate-200/70'
-              }`}
-            >
-              <div className="text-[11px] font-black text-slate-500 text-center pb-1.5 border-b border-slate-100">
-                {label}
-              </div>
-              {dayActivities.map(a => <Chip key={a.id} a={a} />)}
+      {/* ── Week view: rows = half-hour bands, columns = days ── */}
+      {view === 'week' && (
+        <div className="bg-white rounded-3xl border border-slate-200/70 p-3 shadow-lg shadow-slate-900/5 overflow-x-auto">
+          <table className="w-full border-collapse min-w-[720px]">
+            <thead>
+              <tr>
+                <th className="w-14 p-1 text-[10px] font-black text-slate-400">الساعة</th>
+                {WEEK_DAYS.map((d, i) => <th key={d} className="p-1 text-[11px] font-black text-slate-600">{d}</th>)}
+                {datedDates.map(d => (
+                  <th key={d} className="p-1 text-[11px] font-black text-brand-700 border-l border-slate-100">
+                    <span className="font-mono">{d}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TIME_BANDS.map((band, bi) => (
+                <tr key={band.start} className={bi % 2 === 0 ? 'bg-slate-50/60' : ''}>
+                  <td className="p-1 text-[9px] font-mono text-slate-400 text-center">{band.label}</td>
+                  {WEEK_DAYS.map((_, day) => {
+                    const cell = activities.filter(a =>
+                      !a.date && (a.weekday ?? 0) === day && bandIndexFor(a.timeStart) === bi
+                    );
+                    return (
+                      <td key={day} className="p-0.5 align-top">
+                        <div
+                          data-band={band.start}
+                          data-day-column={day}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDrop(day, e)}
+                          onClick={() => handleDayClick(day)}
+                          className={`min-h-[36px] space-y-1 rounded-lg transition ${moveSourceId != null ? 'cursor-pointer hover:bg-brand-600/[0.04]' : ''}`}
+                        >
+                          {cell.map(a => <Chip key={a.id} a={a} />)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  {datedDates.map(d => {
+                    const cell = activities.filter(a => a.date === d && bandIndexFor(a.timeStart) === bi);
+                    return (
+                      <td key={d} className="p-0.5 align-top border-l border-slate-100">
+                        <div
+                          data-band={band.start}
+                          data-day-column={`date:${d}`}
+                          className="min-h-[36px] space-y-1"
+                        >
+                          {cell.map(a => <Chip key={a.id} a={a} />)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[10px] text-slate-400 font-bold mt-2">
+            الأنشطة المؤرَّخة (مناسبات لمرة واحدة) تظهر في أعمدة خاصة بتواريخها.
+          </p>
+        </div>
+      )}
+
+      {/* ── Grouped views: class / location sections ── */}
+      {view !== 'week' && (
+        <div className="space-y-3">
+          {grouped.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200/70 p-8 text-center shadow-lg shadow-slate-900/5">
+              <p className="text-sm font-bold text-slate-500">لا توجد أنشطة بعد</p>
             </div>
-          );
-        })}
-      </div>
+          ) : (
+            grouped.map(g => (
+              <div key={g.key} className="bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5">
+                <span className="text-xs font-black text-slate-500 flex items-center gap-1.5">
+                  {view === 'class' ? <Layers className="h-3.5 w-3.5 text-brand-600" /> : <MapPin className="h-3.5 w-3.5 text-brand-600" />}
+                  {g.key} <span className="text-slate-400">({g.items.length})</span>
+                </span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {g.items.map(a => <Chip key={a.id} a={a} />)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Create / edit dialog */}
       {modalOpen && (
@@ -283,6 +364,11 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {inlineError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs font-bold" role="alert">
+                  {inlineError}
+                </div>
+              )}
               <div>
                 <label htmlFor="act-title" className="text-xs font-bold text-slate-600 block mb-1">العنوان *</label>
                 <input
@@ -291,7 +377,7 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
-                  placeholder="مثال: ورقة رسم"
+                  placeholder="مثال: ورشة رسم"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -306,6 +392,32 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
                     {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
                   </select>
                 </div>
+                {/* Weekday-or-date toggle (FR-015): weekly vs single occurrence */}
+                <div>
+                  <label htmlFor="act-daymode" className="text-xs font-bold text-slate-600 block mb-1">التكرار</label>
+                  <select
+                    id="act-daymode"
+                    value={form.date ? 'date' : 'weekly'}
+                    onChange={(e) => setForm(e.target.value === 'date' ? { ...form, date: new Date().toISOString().slice(0, 10) } : { ...form, date: undefined, weekday: 0 })}
+                    className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    <option value="weekly">أسبوعي (يوم ثابت)</option>
+                    <option value="date">تاريخ واحد</option>
+                  </select>
+                </div>
+              </div>
+              {form.date ? (
+                <div>
+                  <label htmlFor="act-date" className="text-xs font-bold text-slate-600 block mb-1">التاريخ *</label>
+                  <input
+                    id="act-date"
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                  />
+                </div>
+              ) : (
                 <div>
                   <label htmlFor="act-weekday" className="text-xs font-bold text-slate-600 block mb-1">اليوم *</label>
                   <select
@@ -317,7 +429,7 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
                     {WEEK_DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
                   </select>
                 </div>
-              </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="act-start" className="text-xs font-bold text-slate-600 block mb-1">من *</label>
@@ -342,8 +454,9 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">المكان</label>
+                  <label htmlFor="act-location" className="text-xs font-bold text-slate-600 block mb-1">المكان</label>
                   <input
+                    id="act-location"
                     type="text"
                     value={form.location || ''}
                     onChange={(e) => setForm({ ...form, location: e.target.value })}
@@ -352,8 +465,9 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">القسم</label>
+                  <label htmlFor="act-class" className="text-xs font-bold text-slate-600 block mb-1">القسم</label>
                   <input
+                    id="act-class"
                     type="text"
                     value={form.levelClass || ''}
                     onChange={(e) => setForm({ ...form, levelClass: e.target.value })}
@@ -364,8 +478,9 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
               </div>
               {staff.length > 0 && (
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">المشرف</label>
+                  <label htmlFor="act-staff" className="text-xs font-bold text-slate-600 block mb-1">المشرف</label>
                   <select
+                    id="act-staff"
                     value={form.staffId || ''}
                     onChange={(e) => setForm({ ...form, staffId: e.target.value })}
                     className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"
@@ -394,7 +509,6 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
           </div>
         </div>
       )}
-
     </div>
   );
 }

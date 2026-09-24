@@ -41,7 +41,8 @@ import { hasStudyModules } from './utils/centerType';
 
 
 // Map sidebar tabs to subscription modules enabled for the current center.
-const TAB_MODULE: Record<string, string> = {
+// Exported for the 006 catalog-coherence cross-check (no phantom module keys).
+export const TAB_MODULE: Record<string, string> = {
   module1: 'scolaire',            // تسجيل التلاميذ
   module2: 'scolaire',            // المتابعة الدراسية
   studentTimeSheets: 'studentTimeSheets', // جداول التوقيت (Jd. Horaires)
@@ -213,7 +214,7 @@ export default function App() {
   const menuLogoSrc = !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
 
   useEffect(() => {
-    if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
+    if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6' || activeTab === 'module8')) {
       setActiveTab('module1');
     }
   }, [hideRestrictedModules, activeTab]);
@@ -938,7 +939,7 @@ export default function App() {
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
-        hasStaffOrEtude && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
+        hasStaffOrEtude && !hideRestrictedModules && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
         { id: 'renewal', label: 'التجديد', icon: RefreshCw },
@@ -1178,6 +1179,7 @@ export default function App() {
                   onDeleteStudent={handleDeleteStudent}
                   hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
+                  centerType={currentCenter?.centerType}
                   enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
@@ -1190,6 +1192,7 @@ export default function App() {
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
                   studentTimeSheets={studentTimeSheets}
+                  centerType={currentCenter?.centerType}
                 />
               )}
 
@@ -1277,6 +1280,7 @@ export default function App() {
                   onUpdateDoc={handleUpdateSkills}
                   students={students}
                   currentUserRole={currentUser?.role}
+                  staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
                   canUseRoster={currentUser?.role !== 'restricted_admin'}
                 />
               )}

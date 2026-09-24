@@ -43,11 +43,22 @@ function renderModule(props: Record<string, unknown> = {}) {
 }
 
 const POINTAGE_TAB_LABEL = 'نظام الحضور والغياب اليومي';
+const LOCKED_MESSAGE = 'ميزة مقفلة';
 
 beforeEach(() => {
   localStorage.clear();
   cleanup();
 });
+
+/**
+ * The motion/react Proxy mock gives every motion component a fresh identity,
+ * so state updates remount the dialog. Always re-query nodes before touching
+ * them, or the event lands on a detached subtree and React ignores it.
+ */
+function changeByPlaceholder(ph: string, value: string) {
+  const el = document.querySelector(`input[placeholder="${ph}"]`) as HTMLInputElement;
+  fireEvent.change(el, { target: { value } });
+}
 
 describe('StaffManagementModule staff-lite gating', () => {
   it('hides the pointage sub-tab in lite mode and keeps roster CRUD', () => {
@@ -75,5 +86,65 @@ describe('StaffManagementModule staff-lite gating', () => {
     fireEvent.click(screen.getByText(POINTAGE_TAB_LABEL));
     // pointage pane header appears (assert the tab switch worked without crashing)
     expect(screen.getByText(POINTAGE_TAB_LABEL)).toBeTruthy();
+  });
+
+  // ── T004 [US1]: lite roster CRUD works end to end ────────────────────────
+
+  it('US1: opens the add-staff dialog and invokes onUpdateStaff with the new roster (lite)', () => {
+    const onUpdateStaff = vi.fn();
+    renderModule({ staffLite: true, onUpdateStaff });
+    fireEvent.click(screen.getByText('إضافة موظف / أستاذ'));
+    // Fill required identity fields: first name, last name, phone, 8-digit CIN
+    changeByPlaceholder('مثال: مراد', 'Salah');
+    changeByPlaceholder('مثال: المنصوري', 'Ben Ali');
+    changeByPlaceholder('98765432', '20123456');
+    changeByPlaceholder('08765432', '09876543');
+    fireEvent.submit(document.querySelector('form')!);
+    expect(onUpdateStaff).toHaveBeenCalledTimes(1);
+    const roster = onUpdateStaff.mock.calls[0][0];
+    expect(roster.length).toBe(2); // existing fixture + the new one
+    expect(roster[1].firstName).toBe('Salah');
+  });
+
+  it('US1: edit control present per staff card (lite)', () => {
+    renderModule({ staffLite: true });
+    expect(screen.queryByTitle('تعديل الموظف')).toBeTruthy();
+    expect(screen.queryByTitle('حذف الموظف')).toBeTruthy();
+  });
+
+  it('US1: full mode keeps the same CRUD controls (regression baseline)', () => {
+    renderModule({});
+    expect(screen.getByText('إضافة موظف / أستاذ')).toBeTruthy();
+    expect(screen.queryByTitle('تعديل الموظف')).toBeTruthy();
+    expect(screen.queryByTitle('حذف الموظف')).toBeTruthy();
+  });
+
+  // ── T006 [US2]: payroll surfaces locked in lite mode ─────────────────────
+
+  it('US2: locked cards replace schedule/congés/advances/payslip surfaces and navigate to renewal', () => {
+    const onGoToRenewal = vi.fn();
+    renderModule({ staffLite: true, onGoToRenewal, staff: [makeStaff({ id: 'stf_1' })] });
+    // locked messages render in place of payroll surfaces
+    const locked = screen.getAllByText(new RegExp(LOCKED_MESSAGE));
+    expect(locked.length).toBeGreaterThanOrEqual(4);
+    // upgrade navigation works
+    fireEvent.click(screen.getAllByText('الذهاب إلى التجديد')[0]);
+    expect(onGoToRenewal).toHaveBeenCalledTimes(1);
+    // no payroll write surfaces: advance request form absent
+    expect(screen.queryByText('إرسال طلب السلفة')).toBeNull();
+  });
+
+  it('US2: full mode renders no locked cards and no upgrade buttons', () => {
+    renderModule({});
+    expect(screen.queryByText(new RegExp(LOCKED_MESSAGE))).toBeNull();
+    expect(screen.queryByText('الذهاب إلى التجديد')).toBeNull();
+  });
+
+  // ── T009 [US3]: full-mode parity ─────────────────────────────────────────
+
+  it('US3: full mode exposes payslip/avance/congé/schedule labeled surfaces', () => {
+    renderModule({});
+    expect(screen.queryByText('التوقيت الأسبوعي')).toBeTruthy();
+    expect(screen.queryByText('طلبات السلفة')).toBeTruthy();
   });
 });

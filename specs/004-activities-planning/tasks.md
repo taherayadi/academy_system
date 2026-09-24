@@ -33,9 +33,9 @@ co-located as `*.test.ts(x)`.
 
 **Purpose**: Type vocabulary + pure planner logic every story consumes.
 
-- [ ] T001 In `src/types.ts`: add `'activites'` to the `ModuleKey` union and the `Activity` interface exactly per data-model.md (fields id, centerId, title, category, weekday, date, timeStart, timeEnd, location?, levelClass?, staffId?, createdAt; `category` enum = motricite|art|musique|jeu; weekday 0–6; date YYYY-MM-DD)
-- [ ] T002 [P] Create `src/utils/planner.ts` with pure helpers: `TIME_BANDS` (fixed half-hour bands 06:00–20:00), `bandIndexFor(timeStart: string): number` (band containing timeStart, minutes ignored), `CATEGORY_COLORS` (motricite=emerald, art=violet, musique=amber, jeu=sky), `validateActivity(a)` (title.trim() != '' AND category ∈ enum AND weekday ∈ 0–6 XOR date present AND timeStart < timeEnd), `groupActivities(list, by: 'class' | 'location')` (ordered buckets alphabetical, 'unassigned' last, view-only)
-- [ ] T003 [P] Create `src/utils/planner.test.ts`: bandIndexFor edge cases (06:00 first band, 19:30 last, minute offsets snap), validateActivity truth table (each invalid branch + valid cases incl. weekday-XOR-date), groupActivities (alphabetical order, unassigned last, empty groups omitted, no data mutation)
+- [x] T001 In `src/types.ts`: add `'activites'` to the `ModuleKey` union and the `Activity` interface exactly per data-model.md (fields id, centerId, title, category, weekday, date, timeStart, timeEnd, location?, levelClass?, staffId?, createdAt; `category` enum = motricite|art|musique|jeu; weekday 0–6; date YYYY-MM-DD)
+- [x] T002 [P] Create `src/utils/planner.ts` with pure helpers: `TIME_BANDS` (fixed half-hour bands 06:00–20:00), `bandIndexFor(timeStart: string): number` (band containing timeStart, minutes ignored), `CATEGORY_COLORS` (motricite=emerald, art=violet, musique=amber, jeu=sky), `validateActivity(a)` (title.trim() != '' AND category ∈ enum AND weekday ∈ 0–6 XOR date present AND timeStart < timeEnd), `groupActivities(list, by: 'class' | 'location')` (ordered buckets alphabetical, 'unassigned' last, view-only)
+- [x] T003 [P] Create `src/utils/planner.test.ts`: bandIndexFor edge cases (06:00 first band, 19:30 last, minute offsets snap), validateActivity truth table (each invalid branch + valid cases incl. weekday-XOR-date), groupActivities (alphabetical order, unassigned last, empty groups omitted, no data mutation)
 
 **Checkpoint**: Pure logic exists and is fully tested; no wiring yet.
 
@@ -49,12 +49,12 @@ them; US3 does not.
 **⚠️ CRITICAL**: The `activities` table must exist in local D1 (admin-repo migration
 per constitution Principle I) before T007 runs.
 
-- [ ] T004 Add `readActivities`/`writeActivities` to `functions/api/_lib.ts` following `readFormations`/`writeFormations`: SELECT/DELETE/INSERT on `activities` (columns id, center_id, title, category, weekday, date, time_start, time_end, location, level_class, staff_id, created_at) all filtered/stamped by the session-derived `center_id`; write drops rows failing the data-model predicate and dedupes ids (first wins)
-- [ ] T005 Create `functions/api/activities.ts` per contracts/activities-api.md: `onRequestGet` returns the center's array (empty array when none, date null for weekly rows); `onRequestPut` requires a JSON array (400 otherwise), stamps server-side center_id (payload ownership ignored), returns `{ ok: true }` / shared error envelope
-- [ ] T006 Add `"/api/activities": ["GET", "PUT"]` to the `ROUTES` inventory in `functions/api/_middleware.ts` (same change as the handler — constitution Principle IV)
-- [ ] T007 Create `functions/api/activities.test.ts`: foreign-center isolation both directions, unauthenticated rejection, wrong method → 405, invalid-row drops, duplicate-id dedupe, payload centerId ignored, GET returns only own rows
-- [ ] T008 Extend `functions/api/_middleware.test.ts` expected inventory with `/api/activities` [GET, PUT]
-- [ ] T009 Extend `src/api.ts` with `saveActivities(activities: Activity[]): Promise<void>` (PUT to relative `/api/activities`, matching the `saveFormations` helper pattern)
+- [x] T004 Add `readActivities`/`writeActivities` to `functions/api/_lib.ts` following `readFormations`/`writeFormations`: SELECT/DELETE/INSERT on `activities` (columns id, center_id, title, category, weekday, date, time_start, time_end, location, level_class, staff_id, created_at) all filtered/stamped by the session-derived `center_id`; write drops rows failing the data-model predicate and dedupes ids (first wins)
+- [x] T005 Create `functions/api/activities.ts` per contracts/activities-api.md: `onRequestGet` returns the center's array (empty array when none, date null for weekly rows); `onRequestPut` requires a JSON array (400 otherwise), stamps server-side center_id (payload ownership ignored), returns `{ ok: true }` / shared error envelope
+- [x] T006 Add `"/api/activities": ["GET", "PUT"]` to the `ROUTES` inventory in `functions/api/_middleware.ts` (same change as the handler — constitution Principle IV)
+- [x] T007 Create `functions/api/activities.test.ts`: foreign-center isolation both directions, unauthenticated rejection, wrong method → 405, invalid-row drops, duplicate-id dedupe, payload centerId ignored, GET returns only own rows
+- [x] T008 Extend `functions/api/_middleware.test.ts` expected inventory with `/api/activities` [GET, PUT]
+- [x] T009 Extend `src/api.ts` with `saveActivities(activities: Activity[]): Promise<void>` (PUT to relative `/api/activities`, matching the `saveFormations` helper pattern)
 
 **Checkpoint**: Domain API live and isolation-tested (`npm run lint && npm test`).
 
@@ -70,13 +70,13 @@ right day/band; reload → intact; invalid submissions blocked; edit/delete refl
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T010 [P] [US1] Create `src/components/ActivitiesModule.test.tsx`: rendering activities places chips in the correct day column and band cell with the category color class (from CATEGORY_COLORS); opening the create dialog and submitting without title/category or with timeEnd <= timeStart is blocked (no save call); editing changes the chip; deleting removes it and calls the save callback with the updated list
+- [x] T010 [P] [US1] Create `src/components/ActivitiesModule.test.tsx`: rendering activities places chips in the correct day column and band cell with the category color class (from CATEGORY_COLORS); opening the create dialog and submitting without title/category or with timeEnd <= timeStart is blocked (no save call); editing changes the chip; deleting removes it and calls the save callback with the updated list
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Create `src/components/ActivitiesModule.tsx`: weekly grid (columns Lun–Dim + date-mode header for dated activities, rows = TIME_BANDS), chips positioned by bandIndexFor with CATEGORY_COLORS, create/edit dialog with fields per FR-002/003 (title required, category select, weekday-or-date toggle, timeStart/timeEnd validated by validateActivity with inline blocking message, optional location/levelClass/staffId — staff picker from the staff list prop), delete with confirm, all changes persisted via the `onSave` prop (App-side `commitDomain(saveActivities)`), overlapping chips stack within the cell
-- [ ] T012 [US1] In `src/App.tsx`: add activities state (fetched with the domain data), `TAB_MODULE.activites = 'activites'`, sidebar entry `{ id: 'activites', label: 'الأنشطة والبرنامج', icon: Shapes }`, render branch (~module6 region) passing activities + `onSave={(list) => commitDomain(() => saveActivities(list))}` + staff list, and the guard-effect fallback via the existing tab map (no extra code — verify deep-link fallback works)
-- [ ] T013 [US1] In `src/components/Dashboard.tsx` add the quick-access card (tab 'activites', icon Shapes, tile `bg-brand-600/10 text-brand-600`) filtered by the existing `isModuleAllowed` check
+- [x] T011 [US1] Create `src/components/ActivitiesModule.tsx`: weekly grid (columns Lun–Dim + date-mode header for dated activities, rows = TIME_BANDS), chips positioned by bandIndexFor with CATEGORY_COLORS, create/edit dialog with fields per FR-002/003 (title required, category select, weekday-or-date toggle, timeStart/timeEnd validated by validateActivity with inline blocking message, optional location/levelClass/staffId — staff picker from the staff list prop), delete with confirm, all changes persisted via the `onSave` prop (App-side `commitDomain(saveActivities)`), overlapping chips stack within the cell
+- [x] T012 [US1] In `src/App.tsx`: add activities state (fetched with the domain data), `TAB_MODULE.activites = 'activites'`, sidebar entry `{ id: 'activites', label: 'الأنشطة والبرنامج', icon: Shapes }`, render branch (~module6 region) passing activities + `onSave={(list) => commitDomain(() => saveActivities(list))}` + staff list, and the guard-effect fallback via the existing tab map (no extra code — verify deep-link fallback works)
+- [x] T013 [US1] In `src/components/Dashboard.tsx` add the quick-access card (tab 'activites', icon Shapes, tile `bg-brand-600/10 text-brand-600`) filtered by the existing `isModuleAllowed` check
 
 **Checkpoint**: US1 demoable end-to-end (quickstart S1–S2) with gates green.
 
@@ -92,12 +92,12 @@ unassigned last; touch fallback moves too.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T014 [P] [US2] Extend `src/components/ActivitiesModule.test.tsx`: drag events (dragstart on chip, drop on another day/band cell) move the chip and invoke the save callback with updated weekday/band times; tapping a chip then tapping a target cell achieves the same move (fallback); grouping toggle renders per-group sections (alphabetical, unassigned last) and switching never mutates the saved list
+- [x] T014 [P] [US2] Extend `src/components/ActivitiesModule.test.tsx`: drag events (dragstart on chip, drop on another day/band cell) move the chip and invoke the save callback with updated weekday/band times; tapping a chip then tapping a target cell achieves the same move (fallback); grouping toggle renders per-group sections (alphabetical, unassigned last) and switching never mutates the saved list
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] In `src/components/ActivitiesModule.tsx` add the move interaction: HTML5 dragstart/dragover/drop handlers on chips/cells computing the new weekday + snapped band time (update timeStart to the band start, keep duration), tap-select-then-choose fallback (selected ring state), both persisting via `onSave`
-- [ ] T016 [US2] In `src/components/ActivitiesModule.tsx` add the grouping toggle (week view ↔ per class ↔ per location) rendering group sections via `groupActivities` — pure view change, `onSave` never called on toggle
+- [x] T015 [US2] In `src/components/ActivitiesModule.tsx` add the move interaction: HTML5 dragstart/dragover/drop handlers on chips/cells computing the new weekday + snapped band time (update timeStart to the band start, keep duration), tap-select-then-choose fallback (selected ring state), both persisting via `onSave`
+- [x] T016 [US2] In `src/components/ActivitiesModule.tsx` add the grouping toggle (week view ↔ per class ↔ per location) rendering group sections via `groupActivities` — pure view change, `onSave` never called on toggle
 
 **Checkpoint**: US1+US2 complete — full planner experience (quickstart S3–S4).
 
@@ -113,12 +113,12 @@ Basic doesn't; base+module derives Growth; no entitlement → no nav trace.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T017 [P] [US3] Create `src/utils/pricing.test.ts` (extend if a pricing test file already exists): ALL_MODULES contains key 'activites' with label/icon/description; PLAN_PRESET_MODULES.starter excludes 'activites'; growth and pro include it; derivePlanFromModules(base + activites) === 'growth', derivePlanFromModules(all) === 'pro'; LandingPage smoke test still green
+- [x] T017 [P] [US3] Create `src/utils/pricing.test.ts` (extend if a pricing test file already exists): ALL_MODULES contains key 'activites' with label/icon/description; PLAN_PRESET_MODULES.starter excludes 'activites'; growth and pro include it; derivePlanFromModules(base + activites) === 'growth', derivePlanFromModules(all) === 'pro'; LandingPage smoke test still green
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] In `src/utils/pricing.ts`: import `Shapes` from lucide-react and append `{ key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' }` to ALL_MODULES; add 'activites' to PLAN_PRESET_MODULES.growth and .pro only (starter untouched)
-- [ ] T019 [US3] Verify (no code change expected) `src/components/RenewalModule.tsx` and the landing simulator render the new add-on from the shared catalog automatically; fix only if a hard-coded list bypasses ALL_MODULES
+- [x] T018 [US3] In `src/utils/pricing.ts`: import `Shapes` from lucide-react and append `{ key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' }` to ALL_MODULES; add 'activites' to PLAN_PRESET_MODULES.growth and .pro only (starter untouched)
+- [x] T019 [US3] Verify (no code change expected) `src/components/RenewalModule.tsx` and the landing simulator render the new add-on from the shared catalog automatically; fix only if a hard-coded list bypasses ALL_MODULES
 
 **Checkpoint**: All three stories complete (quickstart S5).
 
@@ -128,10 +128,10 @@ Basic doesn't; base+module derives Growth; no entitlement → no nav trace.
 
 **Purpose**: Sync wiring, edge-case verification, final gates.
 
-- [ ] T020 [P] In `src/App.tsx` add the activities domain to the live-sync refetch key list (same mechanism as formations/events) so multi-session edits propagate (FR-013)
-- [ ] T021 [P] Verify edge cases per quickstart S6: deleted staff reference renders chip without supervisor name; module disable/re-enable retains data; overlap stacking renders both chips
-- [ ] T022 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6
-- [ ] T023 Confirm the admin-repo migration for the `activities` table (DDL per data-model.md) is scheduled — coordination item blocking production deploy only
+- [x] T020 [P] In `src/App.tsx` add the activities domain to the live-sync refetch key list (same mechanism as formations/events) so multi-session edits propagate (FR-013)
+- [x] T021 [P] Verify edge cases per quickstart S6: deleted staff reference renders chip without supervisor name; module disable/re-enable retains data; overlap stacking renders both chips
+- [x] T022 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6
+- [x] T023 Confirm the admin-repo migration for the `activities` table (DDL per data-model.md) is scheduled — coordination item blocking production deploy only
 
 ---
 

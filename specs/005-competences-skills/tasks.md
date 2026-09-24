@@ -33,9 +33,9 @@ co-located as `*.test.ts(x)`.
 
 **Purpose**: Type vocabulary + pure skills logic every story consumes.
 
-- [ ] T001 In `src/types.ts`: add `'competences'` to the `ModuleKey` union and the `Skill` + `SkillEvaluation` interfaces exactly per data-model.md (`Skill`: id, centerId, domain enum langage|motricite|social|autonomie, label, ageFrom?, ageTo?, createdAt; `SkillEvaluation`: id, centerId, studentId, skillId, level enum non_evalue|emergent|en_cours|acquis, evaluatedByStaffId XOR evaluatedByName, evaluatedAt)
-- [ ] T002 [P] Create `src/utils/skills.ts` with pure helpers: `validateSkill(s)` (label.trim() != '' AND domain ∈ enum AND ageFrom absent-or-≥0 AND ageTo absent-or-≥ageFrom), `LEVEL_COLORS` (non_evalue=neutral, emergent=amber, en_cours=sky, acquis=emerald), `evaluatorMode(staffEnabled: boolean)` → 'roster'|'freetext', `heatmapBuckets(children, skills)` (rows grouped by child class label, alphabetical, 'unassigned' last; columns in catalog order grouped by domain)
-- [ ] T003 [P] Create `src/utils/skills.test.ts`: validateSkill truth table (each invalid branch incl. inverted age range + valid cases), LEVEL_COLORS completeness over the four levels, evaluatorMode both values, heatmapBuckets ordering/unassigned-last/no-mutation
+- [x] T001 In `src/types.ts`: add `'competences'` to the `ModuleKey` union and the `Skill` + `SkillEvaluation` interfaces exactly per data-model.md (`Skill`: id, centerId, domain enum langage|motricite|social|autonomie, label, ageFrom?, ageTo?, createdAt; `SkillEvaluation`: id, centerId, studentId, skillId, level enum non_evalue|emergent|en_cours|acquis, evaluatedByStaffId XOR evaluatedByName, evaluatedAt)
+- [x] T002 [P] Create `src/utils/skills.ts` with pure helpers: `validateSkill(s)` (label.trim() != '' AND domain ∈ enum AND ageFrom absent-or-≥0 AND ageTo absent-or-≥ageFrom), `LEVEL_COLORS` (non_evalue=neutral, emergent=amber, en_cours=sky, acquis=emerald), `evaluatorMode(staffEnabled: boolean)` → 'roster'|'freetext', `heatmapBuckets(children, skills)` (rows grouped by child class label, alphabetical, 'unassigned' last; columns in catalog order grouped by domain)
+- [x] T003 [P] Create `src/utils/skills.test.ts`: validateSkill truth table (each invalid branch incl. inverted age range + valid cases), LEVEL_COLORS completeness over the four levels, evaluatorMode both values, heatmapBuckets ordering/unassigned-last/no-mutation
 
 **Checkpoint**: Pure logic exists and is fully tested; no wiring yet.
 
@@ -49,12 +49,12 @@ need them; US4 does not.
 **⚠️ CRITICAL**: The `skills` + `skill_evaluations` tables must exist in local D1
 (admin-repo migration per constitution Principle I) before T007 runs.
 
-- [ ] T004 Add `readSkills`/`writeSkills` to `functions/api/_lib.ts` following `readFormations`/`writeFormations`: SELECT/DELETE/INSERT on both tables (columns per data-model.md) all filtered/stamped by the session-derived `center_id`; write enforces the write-time rules verbatim — drop evaluations whose skillId is absent from the same write's catalog (cascade), drop evaluations whose studentId is not a child of the center, dedupe (studentId, skillId) pairs keeping the last occurrence, enforce exactly one of evaluatedByStaffId/evaluatedByName non-null
-- [ ] T005 Create `functions/api/skills.ts` per contracts/skills-api.md: `onRequestGet` returns `{ catalog, evaluations }` (empty arrays when none); `onRequestPut` requires the document shape (400 otherwise), stamps server-side center_id, returns `{ ok: true }` / shared error envelope
-- [ ] T006 Add `"/api/skills": ["GET", "PUT"]` to the `ROUTES` inventory in `functions/api/_middleware.ts` (same change as the handler — constitution Principle IV)
-- [ ] T007 Create `functions/api/skills.test.ts`: foreign-center isolation both directions, unauthenticated rejection, wrong method → 405, cascade drop precision (removed skill's evaluations gone, others intact), foreign-studentId drop, evaluator XOR enforcement, pair dedupe latest-wins, 400 on invalid shape, payload centerId ignored
-- [ ] T008 Extend `functions/api/_middleware.test.ts` expected inventory with `/api/skills` [GET, PUT]
-- [ ] T009 Extend `src/api.ts` with `saveSkills(doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }): Promise<void>` (PUT to relative `/api/skills`, matching the `saveFormations` helper pattern)
+- [x] T004 Add `readSkills`/`writeSkills` to `functions/api/_lib.ts` following `readFormations`/`writeFormations`: SELECT/DELETE/INSERT on both tables (columns per data-model.md) all filtered/stamped by the session-derived `center_id`; write enforces the write-time rules verbatim — drop evaluations whose skillId is absent from the same write's catalog (cascade), drop evaluations whose studentId is not a child of the center, dedupe (studentId, skillId) pairs keeping the last occurrence, enforce exactly one of evaluatedByStaffId/evaluatedByName non-null
+- [x] T005 Create `functions/api/skills.ts` per contracts/skills-api.md: `onRequestGet` returns `{ catalog, evaluations }` (empty arrays when none); `onRequestPut` requires the document shape (400 otherwise), stamps server-side center_id, returns `{ ok: true }` / shared error envelope
+- [x] T006 Add `"/api/skills": ["GET", "PUT"]` to the `ROUTES` inventory in `functions/api/_middleware.ts` (same change as the handler — constitution Principle IV)
+- [x] T007 Create `functions/api/skills.test.ts`: foreign-center isolation both directions, unauthenticated rejection, wrong method → 405, cascade drop precision (removed skill's evaluations gone, others intact), foreign-studentId drop, evaluator XOR enforcement, pair dedupe latest-wins, 400 on invalid shape, payload centerId ignored
+- [x] T008 Extend `functions/api/_middleware.test.ts` expected inventory with `/api/skills` [GET, PUT]
+- [x] T009 Extend `src/api.ts` with `saveSkills(doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }): Promise<void>` (PUT to relative `/api/skills`, matching the `saveFormations` helper pattern)
 
 **Checkpoint**: Domain API live and isolation-tested (`npm run lint && npm test`).
 
@@ -69,13 +69,13 @@ evaluations present) → catalog persists exactly, cascade precise.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T010 [P] [US1] Create `src/components/CompetencesModule.test.tsx`: catalog renders grouped under the four domains; submitting a skill with empty label or inverted age range is blocked (no save call); editing updates the entry; removing a skill removes it and its dependent evaluations from the saved document while unrelated evaluations persist
+- [x] T010 [P] [US1] Create `src/components/CompetencesModule.test.tsx`: catalog renders grouped under the four domains; submitting a skill with empty label or inverted age range is blocked (no save call); editing updates the entry; removing a skill removes it and its dependent evaluations from the saved document while unrelated evaluations persist
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] In `src/components/CompetencesModule.tsx` build the catalog manager: domain-grouped listing, add/edit dialog with fields per FR-002 (domain select, label required, optional ageFrom/ageTo in months validated by validateSkill with inline blocking message), remove with cascade applied to the local document before `onSave` (per FR-004), persistence via the `onSave` prop (App-side `commitDomain(() => saveSkills(doc))`)
-- [ ] T012 [US1] In `src/App.tsx`: add skills-domain state (fetched with the domain data), `TAB_MODULE.competences = 'competences'`, sidebar entry `{ id: 'competences', label: 'المهارات والكفاءات', icon: Brain }`, render branch passing the domain document + `onSave` + staff list + staff-entitlement signal, guard fallback via the existing tab map (verify deep-link fallback)
-- [ ] T013 [US1] In `src/components/Dashboard.tsx` add the quick-access card (tab 'competences', icon Brain, tile `bg-brand-600/10 text-brand-600`) filtered by the existing `isModuleAllowed` check
+- [x] T011 [US1] In `src/components/CompetencesModule.tsx` build the catalog manager: domain-grouped listing, add/edit dialog with fields per FR-002 (domain select, label required, optional ageFrom/ageTo in months validated by validateSkill with inline blocking message), remove with cascade applied to the local document before `onSave` (per FR-004), persistence via the `onSave` prop (App-side `commitDomain(() => saveSkills(doc))`)
+- [x] T012 [US1] In `src/App.tsx`: add skills-domain state (fetched with the domain data), `TAB_MODULE.competences = 'competences'`, sidebar entry `{ id: 'competences', label: 'المهارات والكفاءات', icon: Brain }`, render branch passing the domain document + `onSave` + staff list + staff-entitlement signal, guard fallback via the existing tab map (verify deep-link fallback)
+- [x] T013 [US1] In `src/components/Dashboard.tsx` add the quick-access card (tab 'competences', icon Brain, tile `bg-brand-600/10 text-brand-600`) filtered by the existing `isModuleAllowed` check
 
 **Checkpoint**: US1 demoable end-to-end (quickstart S1) with gates green.
 
@@ -91,11 +91,11 @@ all persist with level/evaluator/date; re-evaluation replaces all three.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T014 [P] [US2] Extend `src/components/CompetencesModule.test.tsx`: with staff-entitlement signal true — evaluator control is a roster select; with false — a free-text input; setting a level and saving invokes `onSave` with the evaluation (level, evaluator, today's date); re-evaluating the same child-skill replaces the previous entry (one current evaluation in the saved document); per-child view renders evaluated skills grouped by domain
+- [x] T014 [P] [US2] Extend `src/components/CompetencesModule.test.tsx`: with staff-entitlement signal true — evaluator control is a roster select; with false — a free-text input; setting a level and saving invokes `onSave` with the evaluation (level, evaluator, today's date); re-evaluating the same child-skill replaces the previous entry (one current evaluation in the saved document); per-child view renders evaluated skills grouped by domain
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] In `src/components/CompetencesModule.tsx` build the per-child evaluation view: child selector, domain-grouped skill list with level control per skill (four-level enum via LEVEL_COLORS), evaluator control driven by `evaluatorMode(staffEntitled)` (roster select sourcing the same staff list as Étude, or free-text input — mutually exclusive per FR-006), date field defaulting to today and editable, save composing the document with the new evaluation replacing any existing pair (client mirror of R3 dedupe), all via `onSave`
+- [x] T015 [US2] In `src/components/CompetencesModule.tsx` build the per-child evaluation view: child selector, domain-grouped skill list with level control per skill (four-level enum via LEVEL_COLORS), evaluator control driven by `evaluatorMode(staffEntitled)` (roster select sourcing the same staff list as Étude, or free-text input — mutually exclusive per FR-006), date field defaulting to today and editable, save composing the document with the new evaluation replacing any existing pair (client mirror of R3 dedupe), all via `onSave`
 
 **Checkpoint**: US1+US2 complete — the module's daily-use core (quickstart S2–S3).
 
@@ -111,12 +111,12 @@ empty state.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T016 [P] [US3] Extend `src/components/CompetencesModule.test.tsx`: heatmap rows group children by class label (unassigned group last) with columns per catalog skill grouped by domain; a child with no evaluation for a skill renders a neutral cell (no level color); the print section renders the per-child report (domains → skills → level/evaluator/date) and an explicit empty state for a child with no evaluations
+- [x] T016 [P] [US3] Extend `src/components/CompetencesModule.test.tsx`: heatmap rows group children by class label (unassigned group last) with columns per catalog skill grouped by domain; a child with no evaluation for a skill renders a neutral cell (no level color); the print section renders the per-child report (domains → skills → level/evaluator/date) and an explicit empty state for a child with no evaluations
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] In `src/components/CompetencesModule.tsx` build the heatmap view using `heatmapBuckets` (rows = children by class label, columns = skills by domain, cells = LEVEL_COLORS with explicit neutral for unevaluated) — view-only, no `onSave` on render/toggle
-- [ ] T018 [US3] In `src/components/CompetencesModule.tsx` add the print-ready per-child report as a state-toggled print-only section using the established print conventions (`.print-area` / `.no-print` per `src/index.css`): domains → skills with level, evaluator (roster-resolved name or free-text), date; explicit "no evaluations" empty state; visually consistent with the existing bulletin print styling
+- [x] T017 [US3] In `src/components/CompetencesModule.tsx` build the heatmap view using `heatmapBuckets` (rows = children by class label, columns = skills by domain, cells = LEVEL_COLORS with explicit neutral for unevaluated) — view-only, no `onSave` on render/toggle
+- [x] T018 [US3] In `src/components/CompetencesModule.tsx` add the print-ready per-child report as a state-toggled print-only section using the established print conventions (`.print-area` / `.no-print` per `src/index.css`): domains → skills with level, evaluator (roster-resolved name or free-text), date; explicit "no evaluations" empty state; visually consistent with the existing bulletin print styling
 
 **Checkpoint**: US1–US3 complete — full module experience (quickstart S4).
 
@@ -132,12 +132,12 @@ Basic doesn't; base+module derives Growth; no entitlement → no nav trace.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T019 [P] [US4] Create `src/utils/pricing.test.ts` (extend if a pricing test file already exists — coordinate with 004's T017 if both land): ALL_MODULES contains key 'competences' with label/icon/description; PLAN_PRESET_MODULES.starter excludes 'competences'; growth and pro include it; derivePlanFromModules(base + competences) === 'growth', derivePlanFromModules(all) === 'pro'; LandingPage smoke test still green
+- [x] T019 [P] [US4] Create `src/utils/pricing.test.ts` (extend if a pricing test file already exists — coordinate with 004's T017 if both land): ALL_MODULES contains key 'competences' with label/icon/description; PLAN_PRESET_MODULES.starter excludes 'competences'; growth and pro include it; derivePlanFromModules(base + competences) === 'growth', derivePlanFromModules(all) === 'pro'; LandingPage smoke test still green
 
 ### Implementation for User Story 4
 
-- [ ] T020 [US4] In `src/utils/pricing.ts`: import `Brain` from lucide-react and append `{ key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' }` to ALL_MODULES; add 'competences' to PLAN_PRESET_MODULES.growth and .pro only (starter untouched)
-- [ ] T021 [US4] Verify (no code change expected) `src/components/RenewalModule.tsx` and the landing simulator render the new add-on from the shared catalog automatically; fix only if a hard-coded list bypasses ALL_MODULES
+- [x] T020 [US4] In `src/utils/pricing.ts`: import `Brain` from lucide-react and append `{ key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' }` to ALL_MODULES; add 'competences' to PLAN_PRESET_MODULES.growth and .pro only (starter untouched)
+- [x] T021 [US4] Verify (no code change expected) `src/components/RenewalModule.tsx` and the landing simulator render the new add-on from the shared catalog automatically; fix only if a hard-coded list bypasses ALL_MODULES
 
 **Checkpoint**: All four stories complete (quickstart S5).
 
@@ -145,12 +145,20 @@ Basic doesn't; base+module derives Growth; no entitlement → no nav trace.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
+> **Coordination item (T025)**: the admin-repo DDL migration for the `skills` and
+> `skill_evaluations` tables (per data-model.md) is scheduled — it blocks production
+> deploy only, not code (handler tests run against the local D1 mock).
+> **Convergence note**: feature 001 shipped this skills domain first (handler, ROUTES,
+> api.ts, module UI), so T004-T009/T011-T013/T017/T020/T022 were satisfied by reusing it;
+> the deltas recorded here are `utils/skills.ts`, the per-child heatmap buckets, the
+> state-toggled print report with evaluator/date/empty state, and the test extensions.
+
 **Purpose**: Sync wiring, edge-case verification, final gates.
 
-- [ ] T022 [P] In `src/App.tsx` add the skills domain to the live-sync refetch key list (same mechanism as formations/events) so multi-session edits propagate (FR-013) — latest-save-wins then holds across sessions
-- [ ] T023 [P] Verify edge cases per quickstart S6: deleted staff evaluator renders without breaking; module disable/re-enable retains data; two-session edit resolves to latest per pair
-- [ ] T024 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6
-- [ ] T025 Confirm the admin-repo migration for `skills` + `skill_evaluations` (DDL per data-model.md) is scheduled — coordination item blocking production deploy only
+- [x] T022 [P] In `src/App.tsx` add the skills domain to the live-sync refetch key list (same mechanism as formations/events) so multi-session edits propagate (FR-013) — latest-save-wins then holds across sessions
+- [x] T023 [P] Verify edge cases per quickstart S6: deleted staff evaluator renders without breaking; module disable/re-enable retains data; two-session edit resolves to latest per pair
+- [x] T024 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6
+- [x] T025 Confirm the admin-repo migration for `skills` + `skill_evaluations` (DDL per data-model.md) is scheduled — coordination item blocking production deploy only
 
 ---
 

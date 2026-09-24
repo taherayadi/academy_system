@@ -32,8 +32,8 @@ Frontend-only feature (per plan.md): all code under `src/`; tests co-located as
 
 **Purpose**: The single source of the type-behavior matrix everything consumes.
 
-- [ ] T001 Create `src/utils/centerType.ts` exporting `hasSchoolLevel(type?: string): boolean` (true ONLY for 'garderie' and 'formation'), `hasStudyModules(type?: string): boolean` (true ONLY for 'garderie' and 'formation'), and `CENTER_TYPES = ['jardin', 'creche', 'garderie', 'formation']` — unknown/empty/undefined input returns true (legacy passthrough per data-model invariant 4)
-- [ ] T002 Create `src/utils/centerType.test.ts` covering the full truth table: both predicates true for garderie + formation, false for creche + jardin, true for undefined / '' / 'unknown' / legacy values; CENTER_TYPES exact contents
+- [x] T001 Create `src/utils/centerType.ts` exporting `hasSchoolLevel(type?: string): boolean` (true ONLY for 'garderie' and 'formation'), `hasStudyModules(type?: string): boolean` (true ONLY for 'garderie' and 'formation'), and `CENTER_TYPES = ['jardin', 'creche', 'garderie', 'formation']` — unknown/empty/undefined input returns true (legacy passthrough per data-model invariant 4)
+- [x] T002 Create `src/utils/centerType.test.ts` covering the full truth table: both predicates true for garderie + formation, false for creche + jardin, true for undefined / '' / 'unknown' / legacy values; CENTER_TYPES exact contents
 
 **Checkpoint**: Predicates exist, tested, no UI change yet (feature is a no-op).
 
@@ -44,7 +44,7 @@ Frontend-only feature (per plan.md): all code under `src/`; tests co-located as
 **Purpose**: Thread `centerType` into the two gated components so story tasks touch
 only gating logic.
 
-- [ ] T003 In `src/App.tsx` add `centerType={currentCenter?.centerType}` to the `StudentRegistrationModule` render (~line 1103) and the `SuiviScolaireModule` render (~line 1122), and extend both components' props interfaces in `src/components/StudentRegistrationModule.tsx` and `src/components/SuiviScolaireModule.tsx` with optional `centerType?: string` (defaulting undefined — no behavior change)
+- [x] T003 In `src/App.tsx` add `centerType={currentCenter?.centerType}` to the `StudentRegistrationModule` render (~line 1103) and the `SuiviScolaireModule` render (~line 1122), and extend both components' props interfaces in `src/components/StudentRegistrationModule.tsx` and `src/components/SuiviScolaireModule.tsx` with optional `centerType?: string` (defaulting undefined — no behavior change)
 
 **Checkpoint**: Prop plumbing compiles; zero behavioral change (existing tests still green).
 
@@ -61,13 +61,13 @@ unchanged.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T004 [P] [US1] Create `src/components/StudentRegistrationModule.test.tsx` (Testing Library, per LandingPage.smoke.test.tsx convention): rendering with `centerType='creche'` → « المستوى الدراسي » and « المؤسسة التعليمية » absent, no « + إضافة مؤسسة » button, submitting a child with empty grade calls the save callback; rendering with `centerType='formation'` → grade select present and required, établissement select present
+- [x] T004 [P] [US1] Create `src/components/StudentRegistrationModule.test.tsx` (Testing Library, per LandingPage.smoke.test.tsx convention): rendering with `centerType='creche'` → « المستوى الدراسي » and « المؤسسة التعليمية » absent, no « + إضافة مؤسسة » button, submitting a child with empty grade calls the save callback; rendering with `centerType='formation'` → grade select present and required, établissement select present
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] In `src/components/StudentRegistrationModule.tsx` wrap the grade select block (~line 861) and the établissement block incl. add-establishment sub-form (~lines 877–910) in `{hasSchoolLevel(centerType) && (...)}`; make the grade `required` attribute conditional so hidden state submits (import from `../utils/centerType`)
-- [ ] T006 [US1] Gate grade display surfaces in `src/components/StudentRegistrationModule.tsx` with `hasSchoolLevel(centerType)`: list row grade chip (~line 629), student card print title grade (~line 1583), registration print « المستوى الدراسي » line (~line 1763), sibling grade inputs stay (they are form data entry, not display — verify only)
-- [ ] T007 [US1] In `src/components/SuiviScolaireModule.tsx` gate the receipt print grade (~line 1216) and the grade filter select + `matchesGrade`/search grade matching (~lines 80, 149–162, 607, 859–865) with `hasSchoolLevel(centerType)` — filter hidden and search falls back to name-only for crèche/jardin
+- [x] T005 [US1] In `src/components/StudentRegistrationModule.tsx` wrap the grade select block (~line 861) and the établissement block incl. add-establishment sub-form (~lines 877–910) in `{hasSchoolLevel(centerType) && (...)}`; make the grade `required` attribute conditional so hidden state submits (import from `../utils/centerType`)
+- [x] T006 [US1] Gate grade display surfaces in `src/components/StudentRegistrationModule.tsx` with `hasSchoolLevel(centerType)`: list row grade chip (~line 629), student card print title grade (~line 1583), registration print « المستوى الدراسي » line (~line 1763), sibling grade inputs stay (they are form data entry, not display — verify only)
+- [x] T007 [US1] In `src/components/SuiviScolaireModule.tsx` gate the receipt print grade (~line 1216) and the grade filter select + `matchesGrade`/search grade matching (~lines 80, 149–162, 607, 859–865) with `hasSchoolLevel(centerType)` — filter hidden and search falls back to name-only for crèche/jardin
 
 **Checkpoint**: US1 fully functional and independently demoable (quickstart S1).
 
@@ -83,11 +83,11 @@ both icons present and functional.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T008 [P] [US2] Create `src/components/SuiviScolaireModule.test.tsx`: `centerType='creche'` → no element with title « إدخال نقاط الفروض (Notes Devoirs) », no « عرض الجدول الزمني » button, no disabled « لم يُسنَد جدول توقيت بعد » placeholder; registration/monthly payment buttons still render; `centerType='formation'` → all three row-action variants present
+- [x] T008 [P] [US2] Create `src/components/SuiviScolaireModule.test.tsx`: `centerType='creche'` → no element with title « إدخال نقاط الفروض (Notes Devoirs) », no « عرض الجدول الزمني » button, no disabled « لم يُسنَد جدول توقيت بعد » placeholder; registration/monthly payment buttons still render; `centerType='formation'` → all three row-action variants present
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] In `src/components/SuiviScolaireModule.tsx` wrap the NotebookPen button block (~lines 664–678) and the Clock button/disabled-placeholder pair (~lines 679–697) in `{hasSchoolLevel(centerType) && (...)}` — payment cells and all other row content untouched (FR-007)
+- [x] T009 [US2] In `src/components/SuiviScolaireModule.tsx` wrap the NotebookPen button block (~lines 664–678) and the Clock button/disabled-placeholder pair (~lines 679–697) in `{hasSchoolLevel(centerType) && (...)}` — payment cells and all other row content untouched (FR-007)
 
 **Checkpoint**: US1 + US2 both live; crèche Suivi table fully type-clean.
 
@@ -103,13 +103,13 @@ Formation → all four usable (subject to existing subscription gating).
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T010 [P] [US3] Create `src/App.typeGating.test.tsx`: render the App shell with a crèche center → sidebar contains none of « الدروس الخصوصية », « تأطير Étude », « حصة مراجعة », « التكوينات والدورات »; setting activeTab to 'module4' renders the dashboard instead; with a formation center → all four labels present in nav
+- [x] T010 [P] [US3] Create `src/App.typeGating.test.tsx`: render the App shell with a crèche center → sidebar contains none of « الدروس الخصوصية », « تأطير Étude », « حصة مراجعة », « التكوينات والدورات »; setting activeTab to 'module4' renders the dashboard instead; with a formation center → all four labels present in nav
 
 ### Implementation for User Story 3
 
-- [ ] T011 [US3] In `src/App.tsx` add `const hasStudy = hasStudyModules(currentCenter?.centerType)`; extend the restricted-tabs guard effect (~line 192) to redirect 'module3' | 'module4' | 'module4b' | 'formations' to 'dashboard' when `!hasStudy`; extend the existing not-enabled-module fallback effect (~line 197 region) the same way so deep links always land on dashboard
-- [ ] T012 [US3] In `src/App.tsx` gate the four menuItems entries (~lines 869–872: module3, module4, module4b, formations) with `hasStudy &&` (composing with the existing `!hideRestrictedModules` conditions)
-- [ ] T013 [US3] In `src/components/Dashboard.tsx` (~line 37) filter the four study quick-access cards with `hasStudyModules(centerType)` composed into the existing `isModuleAllowed` check
+- [x] T011 [US3] In `src/App.tsx` add `const hasStudy = hasStudyModules(currentCenter?.centerType)`; extend the restricted-tabs guard effect (~line 192) to redirect 'module3' | 'module4' | 'module4b' | 'formations' to 'dashboard' when `!hasStudy`; extend the existing not-enabled-module fallback effect (~line 197 region) the same way so deep links always land on dashboard
+- [x] T012 [US3] In `src/App.tsx` gate the four menuItems entries (~lines 869–872: module3, module4, module4b, formations) with `hasStudy &&` (composing with the existing `!hideRestrictedModules` conditions)
+- [x] T013 [US3] In `src/components/Dashboard.tsx` (~line 37) filter the four study quick-access cards with `hasStudyModules(centerType)` composed into the existing `isModuleAllowed` check
 
 **Checkpoint**: All three stories done — full visibility matrix implemented (data-model.md).
 
@@ -119,9 +119,9 @@ Formation → all four usable (subject to existing subscription gating).
 
 **Purpose**: Verification, regression safety, docs.
 
-- [ ] T014 [P] Verify composition rule (FR-010) by test or manual check: a garderie center WITHOUT 'etude' in enabledModules still has no étude tab (subscription gating intact); an unknown-type center sees everything as today (quickstart S4)
-- [ ] T015 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S5 including the data-preservation round-trip (S5)
-- [ ] T016 Confirm no consumer of the touched components breaks: run the full vitest suite and check existing module tests (EventsModule, RenewalModule, Advertisement*, SubscriptionStatusCard, LandingPage smoke) pass unchanged
+- [x] T014 [P] Verify composition rule (FR-010) by test or manual check: a garderie center WITHOUT 'etude' in enabledModules still has no étude tab (subscription gating intact); an unknown-type center sees everything as today (quickstart S4)
+- [x] T015 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S5 including the data-preservation round-trip (S5)
+- [x] T016 Confirm no consumer of the touched components breaks: run the full vitest suite and check existing module tests (EventsModule, RenewalModule, Advertisement*, SubscriptionStatusCard, LandingPage smoke) pass unchanged
 
 ---
 

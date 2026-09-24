@@ -151,7 +151,10 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
     const studentYear = st.academicYear || getCurrentAcademicYear();
     const matchesYear = schoolYear === 'all' || studentYear === schoolYear;
     const matchesGrade = gradeFilter === 'all' || st.grade === gradeFilter;
-    const name = `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase();
+    // Search matches grade text only when school-level content is shown (002 T007).
+    const name = showSchoolLevel
+      ? `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase()
+      : `${st.firstName} ${st.lastName}`.toLowerCase();
     return isEnrolled && matchesYear && matchesGrade && name.includes(searchTerm.toLowerCase());
   });
 

@@ -34,7 +34,7 @@ Frontend-only feature (per plan.md): all code under `src/`; tests co-located as
 
 **Purpose**: The App-side derivation and plumbing every story consumes.
 
-- [ ] T001 In `src/App.tsx` derive `const staffLite = centerModuleKeys.length > 0 && centerModuleKeys.includes('etude') && !centerModuleKeys.includes('staff');` next to the existing `centerModuleKeys` computation (~line 179), and add `onGoToRenewal={() => setActiveTab('renewal')}` plus `staffLite={staffLite}` to the module8 render branch (~line 1255) — no behavior change yet (prop undefined elsewhere)
+- [x] T001 In `src/App.tsx` derive `const staffLite = centerModuleKeys.length > 0 && centerModuleKeys.includes('etude') && !centerModuleKeys.includes('staff');` next to the existing `centerModuleKeys` computation (~line 179), and add `onGoToRenewal={() => setActiveTab('renewal')}` plus `staffLite={staffLite}` to the module8 render branch (~line 1255) — no behavior change yet (prop undefined elsewhere)
 
 **Checkpoint**: Derivation exists; module untouched; all tests green.
 
@@ -45,8 +45,8 @@ Frontend-only feature (per plan.md): all code under `src/`; tests co-located as
 **Purpose**: Make the staff module reachable (or hidden) correctly per mode before
 any in-module work.
 
-- [ ] T002 In `src/App.tsx` extend the module8 sidebar entry (~line 877) to render when the center's enabled modules include 'staff' OR 'etude' (composing with the existing `hideRestrictedModules` condition), and whitelist 'module8' in the module-enablement fallback guard (~line 197 region) when étude is present so live-sync never bounces a lite center out of the staff tab
-- [ ] T003 In `src/components/StaffManagementModule.tsx` extend `StaffManagementModuleProps` with optional `staffLite?: boolean` and `onGoToRenewal?: () => void` (both defaulting undefined = full mode — every existing render/test unchanged)
+- [x] T002 In `src/App.tsx` extend the module8 sidebar entry (~line 877) to render when the center's enabled modules include 'staff' OR 'etude' (composing with the existing `hideRestrictedModules` condition), and whitelist 'module8' in the module-enablement fallback guard (~line 197 region) when étude is present so live-sync never bounces a lite center out of the staff tab
+- [x] T003 In `src/components/StaffManagementModule.tsx` extend `StaffManagementModuleProps` with optional `staffLite?: boolean` and `onGoToRenewal?: () => void` (both defaulting undefined = full mode — every existing render/test unchanged)
 
 **Checkpoint**: Étude-only centers see « إدارة الموظفين » and open it in full mode; paying centers unchanged; neither-centers still hidden (existing gating).
 
@@ -61,11 +61,11 @@ persists.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T004 [P] [US1] Create `src/components/StaffManagementModule.test.tsx`: with `staffLite` — module renders profiles view, add/edit/delete controls present; performing an add then an edit invokes `onUpdateStaff` with the modified roster; with `staffLite` undefined — same CRUD controls present (full mode, regression baseline)
+- [x] T004 [P] [US1] Create `src/components/StaffManagementModule.test.tsx`: with `staffLite` — module renders profiles view, add/edit/delete controls present; performing an add then an edit invokes `onUpdateStaff` with the modified roster; with `staffLite` undefined — same CRUD controls present (full mode, regression baseline)
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] In `src/components/StaffManagementModule.tsx` verify (and adjust only if needed) that staff CRUD controls live in the profiles sub-tab so lite mode inherits them unchanged — the profiles view is the default `activeSubTab` value (~line 123), which lite mode keeps
+- [x] T005 [US1] In `src/components/StaffManagementModule.tsx` verify (and adjust only if needed) that staff CRUD controls live in the profiles sub-tab so lite mode inherits them unchanged — the profiles view is the default `activeSubTab` value (~line 123), which lite mode keeps
 
 **Checkpoint**: US1 demoable (quickstart S1) — roster CRUD works for étude-only centers.
 
@@ -82,12 +82,12 @@ possible.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T006 [P] [US2] Extend `src/components/StaffManagementModule.test.tsx`: with `staffLite` — the pointage sub-tab button is absent, the pointage view never renders, a locked message renders in place of payslip/avance/congé/schedule surfaces, and clicking the upgrade button calls `onGoToRenewal`; with `staffLite` undefined — none of these locked cards render
+- [x] T006 [P] [US2] Extend `src/components/StaffManagementModule.test.tsx`: with `staffLite` — the pointage sub-tab button is absent, the pointage view never renders, a locked message renders in place of payslip/avance/congé/schedule surfaces, and clicking the upgrade button calls `onGoToRenewal`; with `staffLite` undefined — none of these locked cards render
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] In `src/components/StaffManagementModule.tsx` when `staffLite`: force `activeSubTab` to 'profiles' (ignore/default any other value), hide the pointage sub-tab button (~line 742), and short-circuit the `activeSubTab === 'pointage'` branch (~line 1132) so it renders nothing
-- [ ] T008 [US2] In `src/components/StaffManagementModule.tsx` when `staffLite`: render a locked-feature card (« وحدة Personnel & Salaires الكاملة غير مفعّلة — فعّلها من التجديد ») in place of the payslip generation control (~line 193 state, its button in the profile detail), the advances section, the congés section, and the schedule section; the card's button calls `onGoToRenewal` (no-op fallback if the prop is absent)
+- [x] T007 [US2] In `src/components/StaffManagementModule.tsx` when `staffLite`: force `activeSubTab` to 'profiles' (ignore/default any other value), hide the pointage sub-tab button (~line 742), and short-circuit the `activeSubTab === 'pointage'` branch (~line 1132) so it renders nothing
+- [x] T008 [US2] In `src/components/StaffManagementModule.tsx` when `staffLite`: render a locked-feature card (« وحدة Personnel & Salaires الكاملة غير مفعّلة — فعّلها من التجديد ») in place of the payslip generation control (~line 193 state, its button in the profile detail), the advances section, the congés section, and the schedule section; the card's button calls `onGoToRenewal` (no-op fallback if the prop is absent)
 
 **Checkpoint**: US1+US2 demoable together (quickstart S2) — the full lite experience.
 
@@ -102,11 +102,11 @@ congé flows work, no locked cards.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T009 [P] [US3] Extend `src/components/StaffManagementModule.test.tsx`: with `staffLite` undefined — both sub-tab buttons render, the pointage view renders when selected, payslip/avance/congé controls render (assert by their existing labels), and no locked cards or upgrade buttons exist anywhere
+- [x] T009 [P] [US3] Extend `src/components/StaffManagementModule.test.tsx`: with `staffLite` undefined — both sub-tab buttons render, the pointage view renders when selected, payslip/avance/congé controls render (assert by their existing labels), and no locked cards or upgrade buttons exist anywhere
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Verify full-mode behavioral parity in `src/components/StaffManagementModule.tsx`: every `staffLite` branch is strictly conditional (default undefined = today's code path); run the full existing staff-related tests to confirm zero regressions — fix only if a diff leaks into the default path
+- [x] T010 [US3] Verify full-mode behavioral parity in `src/components/StaffManagementModule.tsx`: every `staffLite` branch is strictly conditional (default undefined = today's code path); run the full existing staff-related tests to confirm zero regressions — fix only if a diff leaks into the default path
 
 **Checkpoint**: All three stories done — the complete mode matrix (data-model.md) implemented.
 
@@ -116,9 +116,9 @@ congé flows work, no locked cards.
 
 **Purpose**: Composition rules, mid-session flip, final verification.
 
-- [ ] T011 [P] Verify composition (FR-009/010): restricted_admin limits still apply to module8 for lite centers; simulate an enabled-modules flip (étude-only → +staff) and confirm the module transitions lite→full on next sync without re-login (quickstart S5)
-- [ ] T012 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6 including data preservation (S6)
-- [ ] T013 Confirm no consumer of the staff module breaks: full vitest suite green including Dashboard (`openAddStaff` → module8 navigation still valid for both modes) and any existing staff references in module tests
+- [x] T011 [P] Verify composition (FR-009/010): restricted_admin limits still apply to module8 for lite centers; simulate an enabled-modules flip (étude-only → +staff) and confirm the module transitions lite→full on next sync without re-login (quickstart S5)
+- [x] T012 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` green; manually verify S1–S6 including data preservation (S6)
+- [x] T013 Confirm no consumer of the staff module breaks: full vitest suite green including Dashboard (`openAddStaff` → module8 navigation still valid for both modes) and any existing staff references in module tests
 
 ---
 

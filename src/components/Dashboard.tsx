@@ -47,7 +47,8 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const totalStudents = students.length;
 
   // ── Quick-access catalog: ONLY the modules enabled in the center's plan ──
-  const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6'];
+  // Role layer mirrors the sidebar: restricted_admin never sees these surfaces.
+  const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6', 'module8'];
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
     { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-brand-600/[0.06] text-brand-600' },
@@ -143,7 +144,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         </motion.div>
 
         {/* Total Staff — uniquement si le module Personnel est au plan */}
-        {allowed('module8') && (
+        {allowed('module8') && !hideRestrictedModules && (
         <motion.div 
           whileHover={{ y: -4 }}
           className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex items-center justify-between"

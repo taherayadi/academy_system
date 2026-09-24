@@ -1,7 +1,14 @@
-import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, Edit3, X, Printer, Users, LayoutGrid, List, Palette, HandMetal, MessageSquare, Footprints } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, Edit3, X, Printer, Users, LayoutGrid, List, HandMetal, MessageSquare, Footprints } from 'lucide-react';
 import { Skill, SkillEvaluation, SkillDomain, SkillLevel } from '../types';
 import { useToast } from './Toast';
+import {
+  validateSkill,
+  LEVEL_CHIP_CLASS,
+  evaluatorMode,
+  heatmapBuckets,
+  evaluatorDisplay
+} from '../utils/skills';
 
 interface CompetencesModuleProps {
   catalog: Skill[];
@@ -9,6 +16,8 @@ interface CompetencesModuleProps {
   onUpdateDoc: (doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }) => void;
   students: { id: string; firstName: string; lastName: string; grade?: string }[];
   currentUserRole?: string;
+  /** Staff list sourcing the evaluator roster (same list as Étude). */
+  staff?: { id: string; firstName: string; lastName: string }[];
   /** Staff-entitlement discriminator (FR-023): roster picker when true, free text otherwise. */
   canUseRoster: boolean;
 }
@@ -45,34 +54,36 @@ const LEVEL_LABELS: Record<SkillLevel, string> = {
   acquis: 'مكتسب'
 };
 
-const LEVEL_CLASS: Record<SkillLevel, string> = {
-  non_evalue: 'bg-slate-100 text-slate-500 border-slate-200',
-  emergent: 'bg-red-100 text-red-700 border-red-200',
-  en_cours: 'bg-amber-100 text-amber-700 border-amber-200',
-  acquis: 'bg-emerald-100 text-emerald-700 border-emerald-200'
-};
-
-/** Neutral print shading for the heatmap (research R6/R8). */
+/** Neutral print shading for the report (research R6/R8). */
 const LEVEL_PRINT_SHADE: Record<SkillLevel, string> = {
   non_evalue: 'bg-white',
-  emergent: 'bg-red-100',
-  en_cours: 'bg-amber-100',
+  emergent: 'bg-amber-100',
+  en_cours: 'bg-sky-100',
   acquis: 'bg-emerald-100'
 };
+
+/** Current-session evaluator sentinel (no staff row exists for the signed-in user). */
+const SELF_EVALUATOR_ID = '__me__';
+const SELF_EVALUATOR_LABEL = 'أنا (المستخدم الحالي)';
 
 const emptySkillForm = (): Omit<Skill, 'id' | 'createdAt'> => ({
   domain: 'langage',
   label: ''
 });
 
-export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, students, canUseRoster }: CompetencesModuleProps) {
+export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, students, staff = [], canUseRoster }: CompetencesModuleProps) {
   const { error, success } = useToast();
   const [view, setView] = useState<'catalog' | 'evaluation' | 'heatmap'>('catalog');
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [skillForm, setSkillForm] = useState(emptySkillForm());
+  const [skillError, setSkillError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [evalForm, setEvalForm] = useState<Record<string, { level: SkillLevel; evaluatorStaffId: string; evaluatorName: string; evaluatedAt: string }>>({});
+  /** T018: print report is state-toggled, never always-mounted. */
+  const [printStudentId, setPrintStudentId] = useState<string | null>(null);
+
+  const mode = evaluatorMode(canUseRoster);
 
   const studentName = (id: string) => {
     const s = students.find(st => st.id === id);
@@ -82,32 +93,39 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
   const openSkillCreate = (domain: SkillDomain = 'langage') => {
     setSkillForm({ domain, label: '' });
     setEditingSkillId(null);
+    setSkillError(null);
     setSkillModalOpen(true);
   };
 
   const openSkillEdit = (s: Skill) => {
-    setSkillForm({ domain: s.domain, label: s.label });
+    setSkillForm({ domain: s.domain, label: s.label, ageFrom: s.ageFrom, ageTo: s.ageTo });
     setEditingSkillId(s.id);
+    setSkillError(null);
     setSkillModalOpen(true);
   };
 
+  /** FR-002: validateSkill gates the save and surfaces an inline blocking message. */
   const handleSkillSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!skillForm.label.trim()) {
-      error('يرجى إدخال اسم المهارة');
+    if (!validateSkill(skillForm)) {
+      let message = 'بيانات المهارة غير صالحة';
+      if (!skillForm.label || skillForm.label.trim() === '') {
+        message = 'يرجى إدخال اسم المهارة';
+      } else if (!DOMAINS.includes(skillForm.domain)) {
+        message = 'يرجى اختيار مجال المهارة';
+      } else if (
+        skillForm.ageFrom != null && skillForm.ageTo != null &&
+        Number(skillForm.ageFrom) > Number(skillForm.ageTo)
+      ) {
+        message = 'العمر الأدنى يجب أن يكون أصغر من أو يساوي العمر الأقصى';
+      } else if ((skillForm.ageFrom != null && skillForm.ageFrom < 0) || (skillForm.ageTo != null && skillForm.ageTo < 0)) {
+        message = 'العمر لا يمكن أن يكون سالبًا';
+      }
+      setSkillError(message);
+      error(message);
       return;
     }
-    if (!DOMAINS.includes(skillForm.domain)) {
-      error('يرجى اختيار مجال المهارة');
-      return;
-    }
-    if (
-      skillForm.ageFrom != null && skillForm.ageTo != null &&
-      Number(skillForm.ageFrom) > Number(skillForm.ageTo)
-    ) {
-      error('العمر الأدنى يجب أن يكون أصغر من أو يساوي العمر الأقصى');
-      return;
-    }
+    setSkillError(null);
     if (editingSkillId) {
       onUpdateDoc({
         catalog: catalog.map(s => s.id === editingSkillId ? { ...s, ...skillForm } : s),
@@ -167,14 +185,14 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
       error('لا توجد تعديلات لحفظها');
       return;
     }
-    // FR-023: exactly one evaluator discriminator per entitlement mode
+    // FR-006/FR-023: exactly one evaluator discriminator per entitlement mode
     for (const [, v] of entries) {
       if (v.level === 'non_evalue') continue;
-      if (canUseRoster && !v.evaluatorStaffId) {
+      if (mode === 'roster' && !v.evaluatorStaffId) {
         error('يرجى اختيار المقيّم من القائمة');
         return;
       }
-      if (!canUseRoster && !(v.evaluatorName || '').trim()) {
+      if (mode === 'freetext' && !(v.evaluatorName || '').trim()) {
         error('يرجى إدخال اسم المقيّم');
         return;
       }
@@ -182,14 +200,14 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
     let next = [...evaluations];
     for (const [skillId, v] of entries) {
       if (v.level === 'non_evalue') continue;
-      // latest-save-wins: replace any previous evaluation for this pair
+      // R3 latest-save-wins: replace any previous evaluation for this pair
       next = next.filter(ev => !(ev.studentId === selectedStudentId && ev.skillId === skillId));
       next.push({
         id: 'ev_' + crypto.randomUUID(),
         studentId: selectedStudentId,
         skillId,
         level: v.level,
-        ...(canUseRoster
+        ...(mode === 'roster'
           ? { evaluatedByStaffId: v.evaluatorStaffId, evaluatedByName: undefined }
           : { evaluatedByName: v.evaluatorName.trim(), evaluatedByStaffId: undefined }),
         evaluatedAt: v.evaluatedAt || new Date().toISOString().slice(0, 10)
@@ -200,71 +218,95 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
     setEvalForm({});
   };
 
-  /** US3: per-class mastery heatmap. */
-  const classes = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of students) set.add(s.grade || 'غير مُسند');
-    return Array.from(set).sort();
-  }, [students]);
+  /** US3: view-only derivations — rows = children bucketed by class label (unassigned last). */
+  const heatmap = useMemo(
+    () => heatmapBuckets(students, catalog, evaluations),
+    [students, catalog, evaluations]
+  );
 
-  const heatmapCell = (cls: string, skillId: string): SkillLevel | 'empty' => {
-    const ids = students.filter(s => (s.grade || 'غير مُسند') === cls).map(s => s.id);
-    const levels = ids
-      .map(id => latestFor(id, skillId)?.level)
-      .filter((l): l is SkillLevel => !!l && l !== 'non_evalue');
-    if (levels.length === 0) return 'empty';
-    // majority level, tie broken by the more advanced level
-    const order: Record<SkillLevel, number> = { non_evalue: 0, emergent: 1, en_cours: 2, acquis: 3 };
-    const counts = new Map<SkillLevel, number>();
-    for (const l of levels) counts.set(l, (counts.get(l) || 0) + 1);
-    let best: SkillLevel = 'non_evalue';
-    let bestCount = 0;
-    for (const [l, c] of counts.entries()) {
-      if (c > bestCount || (c === bestCount && order[l] > order[best])) {
-        best = l; bestCount = c;
-      }
-    }
-    return best;
+  const heatmapGroups = useMemo(
+    () => Array.from(new Set(heatmap.rows.map(r => r.group))),
+    [heatmap]
+  );
+
+  /** Explicit neutral cell: never evaluated or explicitly marked "non évalué". */
+  const isNeutralLevel = (level: SkillLevel | null) => !level || level === 'non_evalue';
+
+  const resolveEvaluator = (ev?: SkillEvaluation): string => {
+    if (!ev) return '';
+    if (ev.evaluatedByStaffId === SELF_EVALUATOR_ID) return SELF_EVALUATOR_LABEL;
+    return evaluatorDisplay(ev, staff);
   };
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
+  const printStudent = students.find(s => s.id === printStudentId);
+
+  /** T018: mounting the report triggers the browser print dialog. */
+  useEffect(() => {
+    if (!printStudentId) return;
+    const t = setTimeout(() => {
+      try {
+        if (typeof window !== 'undefined' && typeof window.print === 'function') window.print();
+      } catch {
+        /* printing is unavailable in this environment */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, [printStudentId]);
 
   const PrintReport = () => {
-    if (!selectedStudent) return null;
+    if (!printStudent) return null;
+    const hasAnyEvaluation = catalog.some(sk => !!latestFor(printStudent.id, sk.id));
     return (
-      <div className="hidden print:block print-area bg-white p-6 text-slate-900" dir="rtl">
+      <div data-testid="print-report" className="hidden print:block print-area bg-white p-6 text-slate-900" dir="rtl">
         <div className="text-center border-b-2 border-slate-800 pb-3 mb-4">
           <h1 className="text-xl font-black">تقرير المهارات والكفايات</h1>
-          <p className="text-sm font-bold mt-1">{studentName(selectedStudent.id)}</p>
-          <p className="text-xs text-slate-600">{selectedStudent.grade || ''}</p>
+          <p className="text-sm font-bold mt-1">{studentName(printStudent.id)}</p>
+          <p className="text-xs text-slate-600">{printStudent.grade || ''}</p>
         </div>
-        {DOMAINS.map(d => {
-          const skills = catalog.filter(s => s.domain === d);
-          if (skills.length === 0) return null;
-          return (
-            <div key={d} className="mb-4">
-              <h2 className="text-sm font-black border-b border-slate-400 pb-1 mb-2">{DOMAIN_LABELS[d]}</h2>
-              <table className="w-full text-xs">
-                <tbody>
-                  {skills.map(sk => {
-                    const ev = latestFor(selectedStudent.id, sk.id);
-                    const level: SkillLevel = ev?.level || 'non_evalue';
-                    return (
-                      <tr key={sk.id} className="border-b border-slate-200">
-                        <td className="py-1.5 font-bold">{sk.label}</td>
-                        <td className="py-1.5 w-32 text-center font-bold border border-slate-300 px-2">
-                          <span className={`inline-block px-2 py-0.5 rounded border ${LEVEL_PRINT_SHADE[level]} border-slate-300`}>
-                            {LEVEL_LABELS[level]}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
+        {!hasAnyEvaluation ? (
+          <p data-testid="print-empty" className="text-sm font-bold text-slate-500 text-center py-6">
+            لا توجد تقييمات لهذا الطفل بعد.
+          </p>
+        ) : (
+          DOMAINS.map(d => {
+            const skills = catalog.filter(s => s.domain === d);
+            if (skills.length === 0) return null;
+            return (
+              <div key={d} className="mb-4">
+                <h2 className="text-sm font-black border-b border-slate-400 pb-1 mb-2">{DOMAIN_LABELS[d]}</h2>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-slate-500">
+                      <th className="text-right font-bold py-1">المهارة</th>
+                      <th className="font-bold py-1 w-24">المستوى</th>
+                      <th className="font-bold py-1 w-32">المقيّم</th>
+                      <th className="font-bold py-1 w-24">التاريخ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {skills.map(sk => {
+                      const ev = latestFor(printStudent.id, sk.id);
+                      const level: SkillLevel = ev?.level || 'non_evalue';
+                      return (
+                        <tr key={sk.id} className="border-b border-slate-200">
+                          <td className="py-1.5 font-bold">{sk.label}</td>
+                          <td className="py-1.5 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded border ${LEVEL_PRINT_SHADE[level]} border-slate-300 font-bold`}>
+                              {LEVEL_LABELS[level]}
+                            </span>
+                          </td>
+                          <td className="py-1.5 text-center">{resolveEvaluator(ev) || '—'}</td>
+                          <td className="py-1.5 text-center">{ev?.evaluatedAt ? ev.evaluatedAt.slice(0, 10) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })
+        )}
         <p className="text-[10px] text-slate-500 mt-4 text-left">تاريخ الطباعة: {new Date().toLocaleDateString('ar-TN')}</p>
       </div>
     );
@@ -284,7 +326,7 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
             </span>
             <h2 className="text-2xl font-black text-slate-900 mt-2">المهارات والكفايات</h2>
             <p className="text-slate-500 text-xs mt-1">
-              كتالوج المهارات حسب المجالات الأربعة، تقييم الأطفال، وخريطة التحكم الصفية.
+              كتالوج المهارات حسب المجالات الأربعة، تقييم الأطفال، وخريطة التحكم حسب الفئة.
             </p>
           </div>
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
@@ -308,6 +350,21 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
             </button>
           </div>
         </div>
+
+        {/* Print status / dismissal (screen only) */}
+        {printStudentId && printStudent && (
+          <div className="no-print flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2">
+            <span className="text-[11px] font-bold text-emerald-800">
+              تقرير {studentName(printStudent.id)} جاهز للطباعة
+            </span>
+            <button
+              onClick={() => setPrintStudentId(null)}
+              className="px-3 py-1.5 bg-white border border-emerald-200 text-emerald-800 rounded-xl text-[11px] font-black cursor-pointer"
+            >
+              إغلاق التقرير
+            </button>
+          </div>
+        )}
 
         {/* Catalog view */}
         {view === 'catalog' && (
@@ -400,6 +457,12 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
                               return (
                                 <div key={sk.id} className="flex flex-wrap items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
                                   <span className="text-xs font-bold text-slate-700 min-w-[140px] flex-1 truncate">{sk.label}</span>
+                                  <span
+                                    data-testid="level-chip"
+                                    className={`inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-black ${LEVEL_CHIP_CLASS[currentLevel]}`}
+                                  >
+                                    {LEVEL_LABELS[currentLevel]}
+                                  </span>
                                   <select
                                     aria-label={`المستوى ${sk.label}`}
                                     value={currentLevel}
@@ -408,21 +471,24 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
                                   >
                                     {LEVELS.map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
                                   </select>
-                                  {canUseRoster ? (
+                                  {mode === 'roster' ? (
                                     <select
                                       aria-label="المقيّم"
-                                      value={form?.evaluatorStaffId || ''}
+                                      value={form?.evaluatorStaffId ?? existing?.evaluatedByStaffId ?? ''}
                                       onChange={(e) => setEval(sk.id, { evaluatorStaffId: e.target.value })}
                                       className="h-8 px-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer"
                                     >
                                       <option value="">-- المقيّم --</option>
-                                      <option value="__me__">أنا (المستخدم الحالي)</option>
+                                      <option value={SELF_EVALUATOR_ID}>{SELF_EVALUATOR_LABEL}</option>
+                                      {staff.map(st => (
+                                        <option key={st.id} value={st.id}>{st.firstName} {st.lastName}</option>
+                                      ))}
                                     </select>
                                   ) : (
                                     <input
                                       type="text"
                                       aria-label="المقيّم"
-                                      value={form?.evaluatorName || ''}
+                                      value={form?.evaluatorName ?? existing?.evaluatedByName ?? ''}
                                       onChange={(e) => setEval(sk.id, { evaluatorName: e.target.value })}
                                       placeholder="اسم المقيّم"
                                       className="h-8 px-2 bg-white border border-slate-200 rounded-lg text-[11px] font-semibold w-32"
@@ -459,65 +525,79 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
           </div>
         )}
 
-        {/* Heatmap view */}
+        {/* Heatmap view — rows = children bucketed by class label, columns = skills by domain */}
         {view === 'heatmap' && (
           <div className="bg-white rounded-3xl border border-slate-200/70 p-4 shadow-lg shadow-slate-900/5 overflow-x-auto">
-            <span className="text-xs font-black text-slate-500">خريطة التحكم الصفية (حسب الفئة)</span>
-            {classes.length === 0 || catalog.length === 0 ? (
+            <span className="text-xs font-black text-slate-500">خريطة التحكم حسب الفئة</span>
+            {heatmap.rows.length === 0 || heatmap.columns.length === 0 ? (
               <p className="text-xs text-slate-400 font-bold text-center py-6">
-                لا توجد بيانات كافية — أضف مهارات وتقييمات لتظهر الخريطة.
+                لا توجد بيانات كافية — أضف مهارات وتلاميذ لتظهر الخريطة.
               </p>
             ) : (
-              <table className="mt-3 text-[11px] border-collapse">
+              <table data-testid="heatmap-table" className="mt-3 text-[11px] border-collapse">
                 <thead>
                   <tr>
-                    <th className="p-2 text-right font-black text-slate-600">المهارة</th>
-                    {classes.map(c => <th key={c} className="p-2 font-black text-slate-600">{c}</th>)}
+                    <th rowSpan={2} className="p-2 text-right font-black text-slate-600">الطفل</th>
+                    {DOMAINS.map(d => {
+                      const cols = heatmap.columns.filter(c => c.domain === d);
+                      if (cols.length === 0) return null;
+                      return (
+                        <th key={d} colSpan={cols.length} className="p-1 font-black text-slate-500">
+                          <span className={`inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-black ${DOMAIN_CLASS[d]}`}>
+                            {DOMAIN_LABELS[d]}
+                          </span>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    {heatmap.columns.map(c => (
+                      <th key={c.skillId} className="p-2 font-black text-slate-600 whitespace-nowrap">{c.label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {DOMAINS.map(d => {
-                    const skills = catalog.filter(s => s.domain === d);
-                    if (skills.length === 0) return null;
-                    return (
-                      <>
-                        <tr key={`h-${d}`}>
-                          <td colSpan={classes.length + 1} className="pt-3 pb-1">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-black ${DOMAIN_CLASS[d]}`}>
-                              {DOMAIN_LABELS[d]}
-                            </span>
-                          </td>
+                  {heatmapGroups.map(g => (
+                    <React.Fragment key={g}>
+                      <tr data-testid="heatmap-group">
+                        <td colSpan={heatmap.columns.length + 1} className="pt-3 pb-1">
+                          <span className="inline-flex px-2 py-0.5 rounded-lg border border-slate-300 bg-slate-100 text-[10px] font-black text-slate-600">
+                            {g}
+                          </span>
+                        </td>
+                      </tr>
+                      {heatmap.rows.filter(r => r.group === g).map(r => (
+                        <tr key={r.studentId} data-testid="heatmap-row">
+                          <td className="p-2 font-bold text-slate-700 whitespace-nowrap">{r.studentName}</td>
+                          {r.cells.map(cell => {
+                            const neutral = isNeutralLevel(cell.level);
+                            return (
+                              <td key={cell.skillId} className="p-1">
+                                <div
+                                  data-testid="heatmap-cell"
+                                  data-level={neutral ? 'none' : cell.level}
+                                  className={`h-7 min-w-[52px] rounded-lg border border-slate-200 flex items-center justify-center text-[10px] ${neutral ? 'bg-white text-slate-300' : `${LEVEL_CHIP_CLASS[cell.level as SkillLevel]} font-black`}`}
+                                >
+                                  {neutral ? '—' : LEVEL_LABELS[cell.level as SkillLevel]}
+                                </div>
+                              </td>
+                            );
+                          })}
                         </tr>
-                        {skills.map(sk => (
-                          <tr key={sk.id}>
-                            <td className="p-2 font-bold text-slate-700 whitespace-nowrap">{sk.label}</td>
-                            {classes.map(c => {
-                              const cell = heatmapCell(c, sk.id);
-                              const cls = cell === 'empty' ? 'bg-white text-slate-300' : `${LEVEL_CLASS[cell]} font-black`;
-                              return (
-                                <td key={c} className="p-1">
-                                  <div className={`h-7 min-w-[52px] rounded-lg border border-slate-200 flex items-center justify-center text-[10px] ${cls}`}>
-                                    {cell === 'empty' ? '—' : LEVEL_LABELS[cell]}
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </>
-                    );
-                  })}
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </tbody>
               </table>
             )}
           </div>
         )}
 
-        {/* Evaluation print button (visible only when a child is selected) */}
+        {/* Evaluation print trigger (visible only when a child is selected) */}
         {view === 'evaluation' && selectedStudent && (
           <div className="flex justify-end">
             <button
-              onClick={() => window.print()}
+              onClick={() => setPrintStudentId(selectedStudent.id)}
               className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="h-4 w-4" /> طباعة التقرير
@@ -583,6 +663,11 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
                   />
                 </div>
               </div>
+              {skillError && (
+                <p data-testid="skill-error" className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  {skillError}
+                </p>
+              )}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

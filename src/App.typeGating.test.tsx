@@ -107,4 +107,23 @@ describe('App type gating (study modules)', () => {
       expect(screen.getAllByText(label).length, `legacy must show ${label}`).toBeGreaterThan(0);
     }
   });
+
+  // 002 T014 — composition rule (FR-010): type gating composes with
+  // subscription gating by intersection and never re-enables a module the
+  // subscription withholds.
+  it('hides the étude tab for a garderie center without the etude module enabled (FR-010)', async () => {
+    // Type permits the study modules, but the subscription does not include
+    // 'etude' — the tab must stay hidden.
+    await loginAs(makeCenter('garderie', ['scolaire', 'studentTimeSheets', 'finance', 'coursParticuliers', 'revision', 'formations', 'events']));
+    expect(screen.queryByText('تأطير Étude'), 'garderie without etude entitlement must not show the étude tab').toBeNull();
+    // Other study modules that ARE entitled remain type-permitted.
+    expect(screen.getAllByText('الدروس الخصوصية').length).toBeGreaterThan(0);
+  });
+
+  it('shows all tabs for an unknown type value (legacy passthrough, quickstart S4)', async () => {
+    await loginAs(makeCenter('maternelle-1998', ['scolaire', 'studentTimeSheets', 'finance', 'etude', 'coursParticuliers', 'revision', 'formations', 'events']));
+    for (const label of STUDY_TAB_LABELS) {
+      expect(screen.getAllByText(label).length, `unknown type must show ${label}`).toBeGreaterThan(0);
+    }
+  });
 });

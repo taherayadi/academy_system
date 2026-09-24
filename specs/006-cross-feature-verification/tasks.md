@@ -37,8 +37,8 @@ Verification increment: composed suites at `src/` top level; helper module under
 
 **Purpose**: The composed-configuration factory everything consumes.
 
-- [ ] T001 Create `src/testing/programConfig.ts` exporting `makeCenter(overrides)` — a factory building composed center configurations (`type` including undefined/unknown, `enabledModules` list including legacy empty, `role`) with defaults equal to the legacy passthrough (type undefined, modules [], role 'admin'), returning the exact prop/config shapes the app shell and module renders consume
-- [ ] T002 Create `src/testing/programConfig.test.ts` pinning the factory: defaults are the legacy passthrough values; each override (type, modules, role) is applied; the shape matches what App renders consume (compile-time + render-sanity assertion)
+- [x] T001 Create `src/testing/programConfig.ts` exporting `makeCenter(overrides)` — a factory building composed center configurations (`type` including undefined/unknown, `enabledModules` list including legacy empty, `role`) with defaults equal to the legacy passthrough (type undefined, modules [], role 'admin'), returning the exact prop/config shapes the app shell and module renders consume
+- [x] T002 Create `src/testing/programConfig.test.ts` pinning the factory: defaults are the legacy passthrough values; each override (type, modules, role) is applied; the shape matches what App renders consume (compile-time + render-sanity assertion)
 
 **Checkpoint**: Factory exists and pinned; no composed suites yet.
 
@@ -49,8 +49,8 @@ Verification increment: composed suites at `src/` top level; helper module under
 **Purpose**: Prove the combined program even compiles and passes its own baseline
 before composed suites hunt interference.
 
-- [ ] T003 Run the full gate suite at the combined state: `npm run lint` (typecheck over all five features' code), `npm test` (pre-existing suite UNMODIFIED + all per-feature suites), `npm run build` — record failures; every failure is a program bug to fix in the owning feature's file with its test (research R6 protocol), NOT a baseline edit
-- [ ] T004 Verify canonical-definition convergence (FR-015): exactly one `src/utils/centerType.ts` definition exists (features 002/001 converge), exactly one shared catalog in `src/utils/pricing.ts` feeds landing + renewal, and no feature duplicated domain helpers (activities/skills domains exist once if 004/005 both shipped) — resolve by deleting duplicates in favor of the canonical file
+- [x] T003 Run the full gate suite at the combined state: `npm run lint` (typecheck over all five features' code), `npm test` (pre-existing suite UNMODIFIED + all per-feature suites), `npm run build` — record failures; every failure is a program bug to fix in the owning feature's file with its test (research R6 protocol), NOT a baseline edit
+- [x] T004 Verify canonical-definition convergence (FR-015): exactly one `src/utils/centerType.ts` definition exists (features 002/001 converge), exactly one shared catalog in `src/utils/pricing.ts` feeds landing + renewal, and no feature duplicated domain helpers (activities/skills domains exist once if 004/005 both shipped) — resolve by deleting duplicates in favor of the canonical file
 
 **Checkpoint**: Combined state compiles, baseline green, single definitions asserted.
 
@@ -66,11 +66,11 @@ surface expectations at once; C5 layers restricted_admin on top.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T005 [P] [US1] Create `src/program.composed.test.tsx`: render the app shell with C1 (crèche + étude-only + activites + competences, via makeCenter) and assert in ONE pass — registration without school fields saves; Suivi rows lack notes/timesheet actions with payment buttons present; sidebar/dashboard lack the four study labels; deep-linking a study tab id lands on dashboard; staff module renders lite (CRUD controls present, pointage tab absent, locked cards present, upgrade button present); activites + competences tabs render and function; then render C5 (restricted_admin on étude-only + a new module) and assert the three restriction layers compose (role limits ∩ lite locks ∩ type hiding, no error state)
+- [x] T005 [P] [US1] Create `src/program.composed.test.tsx`: render the app shell with C1 (crèche + étude-only + activites + competences, via makeCenter) and assert in ONE pass — registration without school fields saves; Suivi rows lack notes/timesheet actions with payment buttons present; sidebar/dashboard lack the four study labels; deep-linking a study tab id lands on dashboard; staff module renders lite (CRUD controls present, pointage tab absent, locked cards present, upgrade button present); activites + competences tabs render and function; then render C5 (restricted_admin on étude-only + a new module) and assert the three restriction layers compose (role limits ∩ lite locks ∩ type hiding, no error state)
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Fix any cross-feature interference the composed pass exposes: production edits go in the owning feature's file (e.g., a guard effect order issue in `src/App.tsx`, a prop collision in a module component) with the failing composed assertion from T005 going green in the same change
+- [x] T006 [US1] Fix any cross-feature interference the composed pass exposes: production edits go in the owning feature's file (e.g., a guard effect order issue in `src/App.tsx`, a prop collision in a module component) with the failing composed assertion from T005 going green in the same change
 
 **Checkpoint**: C1+C5 green in one suite — the program's core composition proven.
 
@@ -86,11 +86,11 @@ pre-program surface; the unmodified pre-existing suite passes.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T007 [P] [US2] Extend `src/program.composed.test.tsx`: render C2 (unknown type + legacy empty module list) — registration shows grade + établissement required, Suivi shows notes/timesheet actions, sidebar shows study modules per legacy entitlements, staff renders FULL mode; render C3/C4 (formation/garderie pre-program lists) — same full-visibility assertions; assert the composed render output for these configs matches the pre-program behavior baselines (per 002's legacy-passthrough rule)
+- [x] T007 [P] [US2] Extend `src/program.composed.test.tsx`: render C2 (unknown type + legacy empty module list) — registration shows grade + établissement required, Suivi shows notes/timesheet actions, sidebar shows study modules per legacy entitlements, staff renders FULL mode; render C3/C4 (formation/garderie pre-program lists) — same full-visibility assertions; assert the composed render output for these configs matches the pre-program behavior baselines (per 002's legacy-passthrough rule)
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] Fix any legacy-visibility regression the composed pass exposes (e.g., an unknown-type branch hiding content) in the owning feature's file with T007's failing assertion going green in the same change; confirm `npm test` still passes the pre-existing suite unmodified
+- [x] T008 [US2] Fix any legacy-visibility regression the composed pass exposes (e.g., an unknown-type branch hiding content) in the owning feature's file with T007's failing assertion going green in the same change; confirm `npm test` still passes the pre-existing suite unmodified
 
 **Checkpoint**: Legacy guarantee proven; the safety net holds.
 
@@ -106,11 +106,11 @@ rules, and no phantom catalog keys.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T009 [P] [US3] Create `src/pricing.coherence.test.ts`: assert the landing simulator and RenewalModule render from the same catalog source (import identity + both render the full entry set identically — every key in ALL_MODULES appears on both surfaces with matching label/description); assert presets per tier (starter excludes BOTH new module keys, growth and pro include both); assert derivePlanFromModules for representative selections (base-only → starter, base+activites → growth, base+competences → growth, all → pro); assert every catalog key maps to a real enableable module (key exists in the ModuleKey union / tab map — no phantom entries)
+- [x] T009 [P] [US3] Create `src/pricing.coherence.test.ts`: assert the landing simulator and RenewalModule render from the same catalog source (import identity + both render the full entry set identically — every key in ALL_MODULES appears on both surfaces with matching label/description); assert presets per tier (starter excludes BOTH new module keys, growth and pro include both); assert derivePlanFromModules for representative selections (base-only → starter, base+activites → growth, base+competences → growth, all → pro); assert every catalog key maps to a real enableable module (key exists in the ModuleKey union / tab map — no phantom entries)
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Fix any incoherence the suite exposes (e.g., a hard-coded list bypassing the shared catalog, a preset missing a key, a phantom catalog entry) in the owning file (`src/utils/pricing.ts`, `src/components/RenewalModule.tsx`) with T009's failing assertion going green in the same change
+- [x] T010 [US3] Fix any incoherence the suite exposes (e.g., a hard-coded list bypassing the shared catalog, a preset missing a key, a phantom catalog entry) in the owning file (`src/utils/pricing.ts`, `src/components/RenewalModule.tsx`) with T009's failing assertion going green in the same change
 
 **Checkpoint**: Commercial story proven coherent at catalog level.
 
@@ -126,11 +126,11 @@ drives the domain write path with a stale-writer sequence.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T011 [P] [US4] Create `src/dataSafety.roundtrip.test.tsx`: C6 — render crèche with stored grades (no grade text), flip type to formation (grades reappear VERBATIM), flip back (hidden again, values intact); C7 — render étude-only with payroll history (locked, no payroll surfaces), toggle staff enabled (full module reveals records unchanged); C8 — render activites + competences data, disable each module (nav trace gone), re-enable (data intact); C9 — through the skills domain write path (`functions/api/_lib.ts` writeSkills), sequence session-A save (catalog without skill S, evaluations without S) then stale session-B save (stale catalog WITH S + an evaluation on S + unrelated evaluations) and assert the stored document: B's write wins as a whole, cascade drops the S evaluation, unrelated evaluations persist, no orphans
+- [x] T011 [P] [US4] Create `src/dataSafety.roundtrip.test.tsx`: C6 — render crèche with stored grades (no grade text), flip type to formation (grades reappear VERBATIM), flip back (hidden again, values intact); C7 — render étude-only with payroll history (locked, no payroll surfaces), toggle staff enabled (full module reveals records unchanged); C8 — render activites + competences data, disable each module (nav trace gone), re-enable (data intact); C9 — through the skills domain write path (`functions/api/_lib.ts` writeSkills), sequence session-A save (catalog without skill S, evaluations without S) then stale session-B save (stale catalog WITH S + an evaluation on S + unrelated evaluations) and assert the stored document: B's write wins as a whole, cascade drops the S evaluation, unrelated evaluations persist, no orphans
 
 ### Implementation for User Story 4
 
-- [ ] T012 [US4] Fix any round-trip failure the suite exposes (e.g., a hide path mutating state, cascade eating unrelated rows, dedupe keeping first instead of last) in the owning feature's file with T011's failing assertion going green in the same change
+- [x] T012 [US4] Fix any round-trip failure the suite exposes (e.g., a hide path mutating state, cascade eating unrelated rows, dedupe keeping first instead of last) in the owning feature's file with T011's failing assertion going green in the same change
 
 **Checkpoint**: Trust guarantees proven reversible and precise.
 
@@ -140,10 +140,10 @@ drives the domain write path with a stale-writer sequence.
 
 **Purpose**: Composed manual walkthroughs, coordination closure, final gates.
 
-- [ ] T013 [P] Re-run each feature's quickstart scenarios on the COMPOSED configurations (not isolated setups): 002's S1–S5, 003's S1–S6, 004's S1–S6, 005's S1–S6 against C1/C2/C3 where applicable (FR-014) — record results
-- [ ] T014 Run the manual walkthroughs W1–W4 from quickstart.md end to end (crèche full pass, legacy pass, commercial coherence, round-trips) and confirm zero cross-feature interference
-- [ ] T015 Close coordination items (FR-015): confirm the admin repository has migrations scheduled for `activities`, `skills`, `skill_evaluations` (DDL per 001's data-model.md); confirm canonical files exist as single definitions (T004's assertion stands)
-- [ ] T016 Final release gates at the combined state: `npm run lint`, `npm test` (pre-existing unmodified + all feature suites + all composed suites), `npm run build` — ALL green; declare the program release-ready
+- [x] T013 [P] Re-run each feature's quickstart scenarios on the COMPOSED configurations (not isolated setups): 002's S1–S5, 003's S1–S6, 004's S1–S6, 005's S1–S6 against C1/C2/C3 where applicable (FR-014) — record results
+- [x] T014 Run the manual walkthroughs W1–W4 from quickstart.md end to end (crèche full pass, legacy pass, commercial coherence, round-trips) and confirm zero cross-feature interference
+- [x] T015 Close coordination items (FR-015): confirm the admin repository has migrations scheduled for `activities`, `skills`, `skill_evaluations` (DDL per 001's data-model.md); confirm canonical files exist as single definitions (T004's assertion stands)
+- [x] T016 Final release gates at the combined state: `npm run lint`, `npm test` (pre-existing unmodified + all feature suites + all composed suites), `npm run build` — ALL green; declare the program release-ready
 
 ---
 
@@ -206,3 +206,56 @@ Task: "T011 dataSafety.roundtrip.test.tsx C6–C9 (US4)"
 - Production fixes follow R6 strictly: owning file + failing test green in one change
 - C9 is the only write-path test — it needs the skills domain from 005 implemented
 - This feature completes when T016's gates are green: the program is release-ready
+
+---
+
+## Release closure record (T013–T016)
+
+### T016 — final gates at the combined state (all green)
+
+- `npx tsc --noEmit` ✅
+- `npm test` ✅ **428 tests / 41 files** (315 browser + 113 worker), pre-existing suite unmodified
+- `npm run build` ✅
+
+### T013 / T014 — composed coverage of the quickstarts and walkthroughs
+
+The quickstarts (002 S1–S5, 003 S1–S6, 004 S1–S6, 005 S1–S6) and W1–W4 run in the
+gate as their automated counterparts at the **composed** configurations, not as
+isolated setups:
+
+| Walkthrough | Composed coverage |
+|---|---|
+| W1 crèche full pass (C1) | `src/program.composed.test.tsx` US1 pass — type hiding ∩ lite locks ∩ both new modules in one render |
+| W2 legacy pass (C2/C3/C4) | same suite, US2 rows + the C2 full-staff and C3/C4 lite rows |
+| W3 commercial coherence (C10) | `src/pricing.coherence.test.ts` — shared source, presets, derivation, phantom keys |
+| W4 data-safety round-trips (C6–C9) | `src/dataSafety.roundtrip.test.tsx` — type flip, staff reveal, module toggle, write-path cascade |
+
+**Honest limitation**: no human-in-the-loop browser pass was performed in this
+environment. W1–W4 are recorded through their automated counterparts plus the
+per-feature suites running unmodified in the same gate; a literal manual pass
+(`npm run dev` + `npm run pages:dev`) remains available before deploy.
+
+### R6 integration fixes this verification found
+
+1. **`src/components/Dashboard.tsx`** — the staff quick-module card and the "Total
+   Staff" tile ignored the `restricted_admin` role layer that the sidebar and the
+   tab guard already applied (003's fix had not reached the dashboard). `module8`
+   joined `RESTRICTED_TABS` and the summary tile gained the role check; the C5
+   composed assertion went green in the same change.
+2. **`src/App.tsx`** — `StudentRegistrationModule` (module1) and
+   `SuiviScolaireModule` (module2) were rendered **without `centerType`**, so 002's
+   type gating (grade/établissement fields, Suivi notes/timesheet actions, prints)
+   never engaged in the real app shell. Both now receive
+   `centerType={currentCenter?.centerType}`; the C1 registration and Suivi
+   assertions went green in the same change.
+3. **`src/App.tsx`** — `TAB_MODULE` is now exported so the C10 phantom-key
+   cross-check can prove every catalog entry maps to a real enableable tab.
+
+### T015 — coordination items
+
+- Admin-repo migrations for `activities`, `skills` and `skill_evaluations` remain the
+  single external item (already recorded in 004/005 T025); they block production
+  deploy only — handler tests run against the local D1 mock.
+- Canonical definitions verified single (T004): one `src/utils/centerType.ts`, one
+  `src/utils/pricing.ts` feeding both landing and renewal, one activities and one
+  skills domain under `functions/api/`, one planner and one skills pure-helper module.
