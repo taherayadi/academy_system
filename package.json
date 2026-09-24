@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "System Academy \u2014 center-only frontend and Cloudflare Pages API",
+  "description": "EduSphère \u2014 center-only frontend and Cloudflare Pages API",
   "author": "Taher Ayadi",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",

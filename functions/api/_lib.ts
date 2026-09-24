@@ -1269,6 +1269,259 @@ export async function writeEvents(db: D1Database, events: any[], centerId: strin
 }
 
 // ===========================================================================
+// ACTIVITIES (Activités & Planning)
+// ===========================================================================
+
+const ACTIVITY_CATEGORIES = new Set(['motricite', 'art', 'musique', 'jeu']);
+
+/** Règles data-model : titre requis, catégorie de l'enum, timeStart < timeEnd, weekday 0–6 XOR date. */
+function isValidActivity(a: any): boolean {
+  if (!a || typeof a !== 'object') return false;
+  if (!str(a.title).trim()) return false;
+  if (!ACTIVITY_CATEGORIES.has(str(a.category))) return false;
+  const ts = str(a.timeStart);
+  const te = str(a.timeEnd);
+  if (!/^\d{1,2}:\d{2}$/.test(ts) || !/^\d{1,2}:\d{2}$/.test(te) || ts >= te) return false;
+  const hasDate = !!str(a.date);
+  if (!hasDate) {
+    const wd = Number(a.weekday);
+    if (!Number.isInteger(wd) || wd < 0 || wd > 6) return false;
+  }
+  return true;
+}
+
+/**
+ * Lit les activités du centre. Les tables sont créées par la migration SQL
+ * appliquée manuellement dans Cloudflare D1 (dépôt admin propriétaire du
+ * schéma) : tant qu'elle n'est pas déployée, on renvoie une liste vide.
+ */
+export async function readActivities(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM activities WHERE center_id = ? ORDER BY created_at, time_start').bind(centerId).all();
+    return (results || []).map((r: any) => ({
+      id: str(r.id),
+      centerId: str(r.center_id),
+      title: str(r.title),
+      category: str(r.category),
+      weekday: r.weekday == null ? undefined : num(r.weekday),
+      date: r.date == null ? undefined : str(r.date),
+      timeStart: str(r.time_start),
+      timeEnd: str(r.time_end),
+      location: r.location == null || str(r.location) === '' ? undefined : str(r.location),
+      levelClass: r.level_class == null || str(r.level_class) === '' ? undefined : str(r.level_class),
+      staffId: r.staff_id == null || str(r.staff_id) === '' ? undefined : str(r.staff_id),
+      createdAt: str(r.created_at)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function buildActivitiesStmts(db: D1Database, activities: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const stmts: D1PreparedStatement[] = [];
+  for (const a of activities || []) {
+    if (!a || !a.id || !isValidActivity(a)) continue;
+    stmts.push(db.prepare(
+      'INSERT OR REPLACE INTO activities (id, center_id, title, category, weekday, date, time_start, time_end, location, level_class, staff_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      str(a.id), centerId, str(a.title).trim(), str(a.category),
+      a.date ? null : Number(a.weekday),
+      str(a.date) || null,
+      str(a.timeStart), str(a.timeEnd),
+      str(a.location) || null, str(a.levelClass) || null, str(a.staffId) || null,
+      str(a.createdAt) || new Date().toISOString()
+    ));
+  }
+  return stmts;
+}
+
+export async function writeActivities(db: D1Database, activities: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    // Dédupliquer par id : un seul upsert par activité (premier gagne).
+    const clean: any[] = [];
+    const seen = new Set<string>();
+    for (const a of activities || []) {
+      if (!a || a.id == null || seen.has(String(a.id))) continue;
+      if (!isValidActivity(a)) continue; // lignes invalides ignorées, jamais écrites
+      seen.add(String(a.id));
+      clean.push(a);
+    }
+
+    const stmts = buildActivitiesStmts(db, clean, centerId);
+
+    if (clean.length > 0) {
+      const ids = clean.map(a => String(a.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM activities WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM activities WHERE center_id = ?').bind(centerId));
+    }
+
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeActivities skipped (activities table unavailable):', err);
+  }
+}
+
+// ===========================================================================
+// SKILLS (Compétences & Skills)
+// ===========================================================================
+
+const SKILL_DOMAINS = new Set(['langage', 'motricite', 'social', 'autonomie']);
+const SKILL_LEVELS = new Set(['non_evalue', 'emergent', 'en_cours', 'acquis']);
+
+function isValidSkill(s: any): boolean {
+  if (!s || typeof s !== 'object') return false;
+  if (!str(s.label).trim()) return false;
+  if (!SKILL_DOMAINS.has(str(s.domain))) return false;
+  const hasFrom = s.ageFrom != null && s.ageFrom !== '';
+  const hasTo = s.ageTo != null && s.ageTo !== '';
+  if (hasFrom && (!Number.isFinite(Number(s.ageFrom)) || Number(s.ageFrom) < 0)) return false;
+  if (hasTo && (!Number.isFinite(Number(s.ageTo)) || Number(s.ageTo) < 0)) return false;
+  if (hasFrom && hasTo && Number(s.ageTo) < Number(s.ageFrom)) return false;
+  return true;
+}
+
+/** Discriminateur : exactement un évaluateur (staff id XOR nom libre). */
+function isValidEvaluation(e: any): boolean {
+  if (!e || typeof e !== 'object') return false;
+  if (!str(e.studentId).trim() || !str(e.skillId).trim()) return false;
+  if (!SKILL_LEVELS.has(str(e.level))) return false;
+  if (!str(e.evaluatedAt).trim()) return false;
+  const byStaff = !!str(e.evaluatedByStaffId).trim();
+  const byName = !!str(e.evaluatedByName).trim();
+  return byStaff !== byName; // XOR strict
+}
+
+/**
+ * Lit le document compétences du centre (catalogue + évaluations). Tables
+ * créées par la migration admin ; renvoie un document vide tant qu'elles
+ * n'existent pas.
+ */
+export async function readSkills(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<{ catalog: any[]; evaluations: any[] }> {
+  try {
+    const [skillRows, evalRows] = await Promise.all([
+      db.prepare('SELECT * FROM skills WHERE center_id = ? ORDER BY domain, label').bind(centerId).all(),
+      db.prepare('SELECT * FROM skill_evaluations WHERE center_id = ?').bind(centerId).all()
+    ]);
+    return {
+      catalog: (skillRows.results || []).map((r: any) => ({
+        id: str(r.id),
+        centerId: str(r.center_id),
+        domain: str(r.domain),
+        label: str(r.label),
+        ageFrom: r.age_from == null ? undefined : num(r.age_from),
+        ageTo: r.age_to == null ? undefined : num(r.age_to),
+        createdAt: str(r.created_at)
+      })),
+      evaluations: (evalRows.results || []).map((r: any) => ({
+        id: str(r.id),
+        centerId: str(r.center_id),
+        studentId: str(r.student_id),
+        skillId: str(r.skill_id),
+        level: str(r.level),
+        evaluatedByStaffId: r.evaluated_by_staff_id == null || str(r.evaluated_by_staff_id) === '' ? undefined : str(r.evaluated_by_staff_id),
+        evaluatedByName: r.evaluated_by_name == null || str(r.evaluated_by_name) === '' ? undefined : str(r.evaluated_by_name),
+        evaluatedAt: str(r.evaluated_at)
+      }))
+    };
+  } catch {
+    return { catalog: [], evaluations: [] };
+  }
+}
+
+export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evaluations?: any[] }, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    // 1. Catalogue valide de CETTE écriture — il définit ce qui survit.
+    const skills: any[] = [];
+    const seenSkills = new Set<string>();
+    for (const s of (doc && doc.catalog) || []) {
+      if (!s || s.id == null || seenSkills.has(String(s.id)) || !isValidSkill(s)) continue;
+      seenSkills.add(String(s.id));
+      skills.push(s);
+    }
+
+    // 2. Élèves du centre — une évaluation référençant un élève étranger est jetée.
+    let validStudentIds = new Set<string>();
+    try {
+      const { results } = await db.prepare('SELECT id FROM students WHERE center_id = ?').bind(centerId).all();
+      validStudentIds = new Set((results || []).map((r: any) => str(r.id)));
+    } catch { /* table students indisponible : pas de filtrage possible */ }
+
+    // 3. Évaluations valides, rattachées au catalogue de la même écriture
+    //    (cascade : suppression d'une compétence => ses évaluations tombent)
+    //    et à un élève du centre. Dédup (studentId, skillId) : la dernière gagne.
+    const evals: any[] = [];
+    const evalIndex = new Map<string, any>();
+    for (const e of (doc && doc.evaluations) || []) {
+      if (!e || e.id == null || !isValidEvaluation(e)) continue;
+      if (!seenSkills.has(String(e.skillId))) continue; // cascade catalog
+      if (validStudentIds.size > 0 && !validStudentIds.has(String(e.studentId))) continue; // isolation
+      evalIndex.set(`${String(e.studentId)}|${String(e.skillId)}`, e); // latest-save-wins
+    }
+    const seenEvalIds = new Set<string>();
+    for (const e of evalIndex.values()) {
+      if (seenEvalIds.has(String(e.id))) continue;
+      seenEvalIds.add(String(e.id));
+      evals.push(e);
+    }
+
+    const stmts: D1PreparedStatement[] = [];
+    for (const s of skills) {
+      stmts.push(db.prepare(
+        'INSERT OR REPLACE INTO skills (id, center_id, domain, label, age_from, age_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        str(s.id), centerId, str(s.domain), str(s.label).trim(),
+        s.ageFrom != null && s.ageFrom !== '' ? Number(s.ageFrom) : null,
+        s.ageTo != null && s.ageTo !== '' ? Number(s.ageTo) : null,
+        str(s.createdAt) || new Date().toISOString()
+      ));
+    }
+    for (const e of evals) {
+      stmts.push(db.prepare(
+        'INSERT OR REPLACE INTO skill_evaluations (id, center_id, student_id, skill_id, level, evaluated_by_staff_id, evaluated_by_name, evaluated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        str(e.id), centerId, str(e.studentId), str(e.skillId), str(e.level),
+        str(e.evaluatedByStaffId) || null, str(e.evaluatedByName) || null, str(e.evaluatedAt)
+      ));
+    }
+
+    // 4. Purge : compétences/évaluations absentes de l'écriture + évaluations
+    //    orphelines (compétence retirée) dans la même transaction logique.
+    if (skills.length > 0) {
+      const ids = skills.map(s => String(s.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM skills WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM skills WHERE center_id = ?').bind(centerId));
+    }
+    if (evals.length > 0) {
+      const ids = evals.map(e => String(e.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM skill_evaluations WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM skill_evaluations WHERE center_id = ?').bind(centerId));
+    }
+
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeSkills skipped (skills tables unavailable):', err);
+  }
+}
+
+// ===========================================================================
 // FULL STATE
 // ===========================================================================
 

@@ -15,7 +15,9 @@ export type ModuleKey =
   | 'events' 
   | 'bibliotheque' 
   | 'studentTimeSheets' 
-  | 'staff';
+  | 'staff'
+  | 'activites'
+  | 'competences';
 
 
 export interface CenterTenant {
@@ -32,7 +34,8 @@ export interface CenterTenant {
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
-  centerType?: string; // 'jardin' | 'formation'
+  // 'jardin' | 'creche' | 'garderie' | 'formation' — unknown/empty keeps legacy full-visibility
+  centerType?: string;
   logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
 }
@@ -1081,6 +1084,63 @@ export function generateReceiptNumber(students: Student[], prefix: string): stri
     }
   }
   return `${prefix}${String(max + 1).padStart(3, '0')}`;
+}
+
+
+// ─── Activités & Planning (module « activites ») ─────────────────────────
+
+export type ActivityCategory = 'motricite' | 'art' | 'musique' | 'jeu';
+
+/** Planned activity in a center's weekly calendar (module Activités & Planning). */
+export interface Activity {
+  id: string;
+  /** Stampé côté serveur depuis la session — jamais pris du payload. */
+  centerId?: string;
+  title: string;
+  category: ActivityCategory;
+  /** 0–6 (Lun–Dim), requis quand `date` est absent ; ignoré si `date` présent. */
+  weekday?: number;
+  /** Date ISO unique (YYYY-MM-DD) — remplace `weekday` quand présent. */
+  date?: string;
+  timeStart: string; // HH:MM
+  timeEnd: string;   // HH:MM (> timeStart)
+  location?: string;
+  /** Classe/niveau — clé de groupement optionnelle. */
+  levelClass?: string;
+  /** Référence optionnelle au staff encadrant ; référence pendante tolérée. */
+  staffId?: string;
+  createdAt?: string;
+}
+
+// ─── Compétences & Skills (module « competences ») ────────────────────────
+
+export type SkillDomain = 'langage' | 'motricite' | 'social' | 'autonomie';
+
+export type SkillLevel = 'non_evalue' | 'emergent' | 'en_cours' | 'acquis';
+
+/** Catalog entry of observable skills, grouped by domain. */
+export interface Skill {
+  id: string;
+  centerId?: string;
+  domain: SkillDomain;
+  label: string;
+  /** Âge en mois, optionnel ; ageTo >= ageFrom quand les deux sont présents. */
+  ageFrom?: number;
+  ageTo?: number;
+  createdAt?: string;
+}
+
+/** A child's assessed level on one skill (latest save wins per pair). */
+export interface SkillEvaluation {
+  id: string;
+  centerId?: string;
+  studentId: string;
+  skillId: string;
+  level: SkillLevel;
+  /** Discriminateur : evaluatedByStaffId XOR evaluatedByName (jamais les deux). */
+  evaluatedByStaffId?: string;
+  evaluatedByName?: string;
+  evaluatedAt: string; // ISO date
 }
 
 

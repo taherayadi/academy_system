@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill } from './types';
 
 
 const API_BASE = '/api';
@@ -268,6 +268,28 @@ export async function fetchEventsApi(): Promise<SchoolEvent[]> {
     throw new Error(errObj.error || 'تعذر تحميل بيانات الفعاليات.');
   }
   return Array.isArray(data) ? data : [];
+}
+
+
+// ─── Activités & Planning / Compétences & Skills ───────────────────────
+
+export async function saveActivities(activities: Activity[]): Promise<void> {
+  return putDomain('/activities', activities, 'تعذر حفظ بيانات الأنشطة.');
+}
+
+
+export async function fetchActivitiesApi(): Promise<Activity[]> {
+  return getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.');
+}
+
+
+export async function saveSkills(doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }): Promise<void> {
+  return putDomain('/skills', doc, 'تعذر حفظ بيانات المهارات.');
+}
+
+
+export async function fetchSkillsApi(): Promise<{ catalog: Skill[]; evaluations: SkillEvaluation[] }> {
+  return getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.');
 }
 
 

@@ -95,7 +95,7 @@ const MOCK_BARS = [
   { m: 'Déc', v: 68 }, { m: 'Jan', v: 58 }, { m: 'Fév', v: 88 }
 ];
 
-export default function LandingPage({ onOpenLogin, centerName = 'System Academy' }: LandingPageProps) {
+export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: LandingPageProps) {
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
   const [selectedModules, setSelectedModules] = useState<string[]>([...BASE_KEYS]);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
@@ -125,7 +125,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     const root = document.documentElement;
     root.lang = 'fr';
     root.dir = 'ltr';
-    document.title = 'System Academy — Gestion académique pour centres : étude, suivi scolaire, finance';
+    document.title = 'EduSphère — Gestion académique pour centres : étude, suivi scolaire, finance';
     return () => {
       root.lang = 'ar';
       root.dir = 'rtl';
@@ -1766,7 +1766,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
           <div className="pt-7 border-t border-slate-200/70 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-slate-500 text-xs font-bold">
-              © {new Date().getFullYear()} System Academy. Tous droits réservés.
+              © {new Date().getFullYear()} EduSphère. Tous droits réservés.
             </p>
             <p className="text-slate-500 text-xs font-bold">Conçu en Tunisie 🇹🇳</p>
           </div>
