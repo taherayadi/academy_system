@@ -31,6 +31,7 @@ import { Student, StudentTimeSheet, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADE
 import { useToast } from './Toast';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
+import { hasSchoolLevel } from '../utils/centerType';
 
 interface SuiviScolaireModuleProps {
   students: Student[];
@@ -39,6 +40,8 @@ interface SuiviScolaireModuleProps {
   studentTimeSheets: StudentTimeSheet[];
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
+  /** Center type — hides school artifacts (Notes Devoirs, timesheet, grade filter) when school level is absent. */
+  centerType?: string;
 }
 
 // Academic months (Sept -> Mai) mapped to their index
@@ -72,9 +75,10 @@ function upsertNotes(student: Student, year: string, trimester: 1 | 2 | 3, subje
   return newSets;
 }
 
-export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, studentTimeSheets, settings, onUpdateSettings }: SuiviScolaireModuleProps) {
+export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, studentTimeSheets, settings, onUpdateSettings, centerType }: SuiviScolaireModuleProps) {
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
+  const showSchoolLevel = hasSchoolLevel(centerType);
   const [searchTerm, setSearchTerm] = useState('');
   const [schoolYear, setSchoolYear] = useState<string>(getCurrentAcademicYear());
   const [gradeFilter, setGradeFilter] = useState<string>('all');
@@ -601,6 +605,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
           </select>
         </div>
 
+        {showSchoolLevel && (
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-brand-600 shrink-0" />
           <select
@@ -612,6 +617,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
             {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
+        )}
       </div>
 
       {/* STUDENTS ACADEMIC MONTH GRID TABLE (Module 2 Grid Septembre -> Mai) */}
@@ -665,6 +671,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     <tr key={st.id} className="hover:bg-slate-50/80 transition">
                       <td className="p-4 font-extrabold text-slate-900">
                         <div className="flex items-center gap-2">
+                          {showSchoolLevel && (
                           <button
                             onClick={() => {
                               setNotesStudent(st);
@@ -675,7 +682,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                           >
                             <NotebookPen className="h-3.5 w-3.5" />
                           </button>
-                          {st.timeSheetId && studentTimeSheets.some(t => t.id === st.timeSheetId) ? (
+                          )}
+                          {showSchoolLevel && st.timeSheetId && studentTimeSheets.some(t => t.id === st.timeSheetId) ? (
                             <button
                               onClick={() => {
                                 const ts = studentTimeSheets.find(t => t.id === st.timeSheetId);
@@ -686,14 +694,14 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                             >
                               <Clock className="h-3.5 w-3.5" />
                             </button>
-                          ) : (
+                          ) : showSchoolLevel ? (
                             <span
                               className="p-1.5 shrink-0 bg-slate-100 text-slate-400 rounded-lg border border-slate-200 cursor-not-allowed"
                               title="لم يُسنَد جدول توقيت بعد"
                             >
                               <Clock className="h-3.5 w-3.5" />
                             </span>
-                          )}
+                          ) : null}
                           <button
                             onClick={() => handleOpenRefund(st)}
                             className="p-1.5 shrink-0 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition cursor-pointer"
@@ -862,7 +870,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                       <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
                         <div>
                           <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
-                          <p className="text-[10px] text-slate-400">{st.grade} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                          <p className="text-[10px] text-slate-400">{showSchoolLevel ? `${st.grade} — ` : ''}ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
                         </div>
                         <button
                           onClick={() => handleEnrollStudent(st)}
@@ -1213,7 +1221,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     <div className="space-y-3">
                       <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <span className="text-slate-500 font-bold">اسم التلميذ(ة):</span>
-                        <span className="font-extrabold text-slate-900">{printingReceipt.student.firstName} {printingReceipt.student.lastName} ({printingReceipt.student.grade})</span>
+                        <span className="font-extrabold text-slate-900">{printingReceipt.student.firstName} {printingReceipt.student.lastName}{showSchoolLevel && printingReceipt.student.grade ? ` (${printingReceipt.student.grade})` : ''}</span>
                       </div>
 
                       <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">

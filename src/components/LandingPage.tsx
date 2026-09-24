@@ -151,7 +151,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
-  const [centerType, setCenterType] = useState<'jardin' | 'formation' | ''>('');
+  const [centerType, setCenterType] = useState<'jardin' | 'creche' | 'garderie' | 'formation' | ''>('');
   const [fullName, setFullName] = useState('');
   const [academyName, setAcademyName] = useState('');
   const [email, setEmail] = useState('');
@@ -345,8 +345,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     { key: 'info', label: 'Plus d’infos' }
   ];
 
-  const centerTypes: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
+  const centerTypes: { key: 'jardin' | 'creche' | 'garderie' | 'formation'; label: string; hint: string }[] = [
     { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
+    { key: 'creche', label: 'Crèche', hint: 'Petite enfance · 0–3 ans' },
+    { key: 'garderie', label: 'Garderie', hint: 'Garderie périscolaire' },
     { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
   ];
 

@@ -70,12 +70,12 @@ migration per constitution Principle I / research R2) before any handler test ru
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T012 [P] [US1] Extend `src/components/LandingPage.smoke.test.tsx`: type selector renders Crèche and Garderie options; submitting selects sends `centerType: 'creche'` in the demo-request payload; type-omitted submission still blocked
+- [x] T012 [P] [US1] Extend `src/components/LandingPage.smoke.test.tsx`: type selector renders Crèche and Garderie options; submitting selects sends `centerType: 'creche'` in the demo-request payload; type-omitted submission still blocked
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Add Crèche (`key: 'creche'`, label « Crèche », hint 'Petite enfance · 0–3 ans') and Garderie (`key: 'garderie'`, label « Garderie », hint 'Garderie périscolaire') to the `centerTypes` array (~line 348) and widen the `useState` generic at ~line 154 in `src/components/LandingPage.tsx` to include them
-- [ ] T014 [US1] Update the `centerType` doc comment in `src/types.ts` (line ~35) to the four accepted values — no behavioral change
+- [x] T013 [US1] Add Crèche (`key: 'creche'`, label « Crèche », hint 'Petite enfance · 0–3 ans') and Garderie (`key: 'garderie'`, label « Garderie », hint 'Garderie périscolaire') to the `centerTypes` array (~line 348) and widen the `useState` generic at ~line 154 in `src/components/LandingPage.tsx` to include them
+- [x] T014 [US1] Update the `centerType` doc comment in `src/types.ts` (line ~35) to the four accepted values — no behavioral change
 
 **Checkpoint**: US1 independently demoable on the landing page.
 
@@ -91,14 +91,14 @@ and saves; student lists/cards/prints show no grade. Garderie/formation → unch
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T015 [P] [US2] Create `src/components/StudentRegistrationModule.test.tsx`: with `centerType='creche'` the form has no « المستوى الدراسي » / « المؤسسة التعليمية » fields and a save with empty grade succeeds; with `centerType='formation'` both render and grade is required
+- [x] T015 [P] [US2] Create `src/components/StudentRegistrationModule.test.tsx`: with `centerType='creche'` the form has no « المستوى الدراسي » / « المؤسسة التعليمية » fields and a save with empty grade succeeds; with `centerType='formation'` both render and grade is required
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] In `src/components/StudentRegistrationModule.tsx` accept a `centerType?: string` prop (passed from App.tsx render branch ~line 1132); wrap the grade select block (~line 861) and the établissement block (~line 877–910) in `{hasSchoolLevel(centerType) && (...)}`, making the grade `required` attribute conditional so hidden state submits
-- [ ] T017 [US2] Gate grade display in StudentRegistration lists/cards (~line 629), student card print (~line 1583), registration print (~line 1763) and the sibling/academic-history grade lines with `hasSchoolLevel(centerType)` in `src/components/StudentRegistrationModule.tsx`
-- [ ] T018 [US2] Gate the grade value in Suivi receipt print (~line 1216) and the grade filter select + `matchesGrade` logic (~lines 80, 149–162, 607, 859–865) with `hasSchoolLevel(centerType)` in `src/components/SuiviScolaireModule.tsx` (shared prop plumbing with T021)
-- [ ] T019 [US2] In `src/components/Dashboard.tsx` no change needed for this story (verify only) — grade never appears on dashboard cards
+- [x] T016 [US2] In `src/components/StudentRegistrationModule.tsx` accept a `centerType?: string` prop (passed from App.tsx render branch ~line 1132); wrap the grade select block (~line 861) and the établissement block (~line 877–910) in `{hasSchoolLevel(centerType) && (...)}`, making the grade `required` attribute conditional so hidden state submits
+- [x] T017 [US2] Gate grade display in StudentRegistration lists/cards (~line 629), student card print (~line 1583), registration print (~line 1763) and the sibling/academic-history grade lines with `hasSchoolLevel(centerType)` in `src/components/StudentRegistrationModule.tsx`
+- [x] T018 [US2] Gate the grade value in Suivi receipt print (~line 1216) and the grade filter select + `matchesGrade` logic (~lines 80, 149–162, 607, 859–865) with `hasSchoolLevel(centerType)` in `src/components/SuiviScolaireModule.tsx` (shared prop plumbing with T021)
+- [x] T019 [US2] In `src/components/Dashboard.tsx` no change needed for this story (verify only) — grade never appears on dashboard cards
 
 **Checkpoint**: US2 + US1 demoable together; crèche center registration flow clean.
 
@@ -113,12 +113,12 @@ session → both present and functional.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T020 [P] [US3] Create `src/components/SuiviScolaireModule.test.tsx`: `centerType='creche'` renders no row quick-action icons and no grade filter; `centerType='formation'` renders both icons (assert by title text « إدخال نقاط الفروض (Notes Devoirs) » and « عرض الجدول الزمني »)
+- [x] T020 [P] [US3] Create `src/components/SuiviScolaireModule.test.tsx`: `centerType='creche'` renders no row quick-action icons and no grade filter; `centerType='formation'` renders both icons (assert by title text « إدخال نقاط الفروض (Notes Devoirs) » and « عرض الجدول الزمني »)
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] In `src/components/SuiviScolaireModule.tsx` accept `centerType` prop from App.tsx (~line 1249 region); wrap the NotebookPen button block (~lines 664–678) and the Clock button/disabled placeholder pair (~lines 679–697) in `{hasSchoolLevel(centerType) && (...)}`
-- [ ] T022 [US3] Hide the grade filter select (~line 607) for non-school types (completes T018's filter half; same guard)
+- [x] T021 [US3] In `src/components/SuiviScolaireModule.tsx` accept `centerType` prop from App.tsx (~line 1249 region); wrap the NotebookPen button block (~lines 664–678) and the Clock button/disabled placeholder pair (~lines 679–697) in `{hasSchoolLevel(centerType) && (...)}`
+- [x] T022 [US3] Hide the grade filter select (~line 607) for non-school types (completes T018's filter half; same guard)
 
 **Checkpoint**: Suivi table fully type-aware; US2+US3 share the prop plumbing.
 
@@ -134,12 +134,12 @@ Formation session → all four work.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T023 [P] [US4] Create `src/App.typeGating.test.tsx`: with center `centerType='creche'` the rendered sidebar contains none of the four study labels (« الدروس الخصوصية », « تأطير Étude », « حصة مراجعة », « التكوينات والدورات »); with `centerType='formation'` all four appear
+- [x] T023 [P] [US4] Create `src/App.typeGating.test.tsx`: with center `centerType='creche'` the rendered sidebar contains none of the four study labels (« الدروس الخصوصية », « تأطير Étude », « حصة مراجعة », « التكوينات والدورات »); with `centerType='formation'` all four appear
 
 ### Implementation for User Story 4
 
-- [ ] T024 [US4] In `src/App.tsx`: add `const hasStudy = hasStudyModules(currentCenter?.centerType)`; extend the restricted-modules guard effect (~line 192) and the `menuItems` array (~lines 869–872) so `module3`/`module4`/`module4b`/`formations` are excluded when `!hasStudy` (existing `hasCenterModule` then still applies on top)
-- [ ] T025 [US4] In `src/components/Dashboard.tsx` (~line 37) filter the four study quick-access cards with the same `hasStudyModules(centerType)` predicate in addition to the existing `isModuleAllowed` check
+- [x] T024 [US4] In `src/App.tsx`: add `const hasStudy = hasStudyModules(currentCenter?.centerType)`; extend the restricted-modules guard effect (~line 192) and the `menuItems` array (~lines 869–872) so `module3`/`module4`/`module4b`/`formations` are excluded when `!hasStudy` (existing `hasCenterModule` then still applies on top)
+- [x] T025 [US4] In `src/components/Dashboard.tsx` (~line 37) filter the four study quick-access cards with the same `hasStudyModules(centerType)` predicate in addition to the existing `isModuleAllowed` check
 
 **Checkpoint**: Type gating complete across nav surfaces; combined with US1–US3 a crèche sees zero school artifacts.
 
@@ -155,12 +155,12 @@ FR-028; toggling updates derived plan per FR-029.
 
 ### Tests for User Story 8 ⚠️
 
-- [ ] T026 [P] [US8] Extend pricing tests (`src/utils/pricing.test.ts` — create if absent): `ALL_MODULES` contains keys 'activites' and 'competences'; `PLAN_PRESET_MODULES.starter` excludes both; growth and pro include both; `derivePlanFromModules(base + both)` === 'growth' and `derivePlanFromModules(all)` === 'pro'; `LandingPage.smoke.test.tsx` pricing section still passes
+- [x] T026 [P] [US8] Extend pricing tests (`src/utils/pricing.test.ts` — create if absent): `ALL_MODULES` contains keys 'activites' and 'competences'; `PLAN_PRESET_MODULES.starter` excludes both; growth and pro include both; `derivePlanFromModules(base + both)` === 'growth' and `derivePlanFromModules(all)` === 'pro'; `LandingPage.smoke.test.tsx` pricing section still passes
 
 ### Implementation for User Story 8
 
-- [ ] T027 [US8] In `src/utils/pricing.ts`: append `{ key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' }` and `{ key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' }` to `ALL_MODULES` (import `Shapes`, `Brain` from lucide-react — verified present); add both keys to `PLAN_PRESET_MODULES.growth` and `.pro` only (starter untouched)
-- [ ] T028 [US8] Verify (no code change expected) that `src/components/RenewalModule.tsx` renders the two new add-ons from the shared catalog (~lines 287–294) and the landing simulator picks them up automatically via `ALL_MODULES` — fix only if a hard-coded list exists
+- [x] T027 [US8] In `src/utils/pricing.ts`: append `{ key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' }` and `{ key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' }` to `ALL_MODULES` (import `Shapes`, `Brain` from lucide-react — verified present); add both keys to `PLAN_PRESET_MODULES.growth` and `.pro` only (starter untouched)
+- [x] T028 [US8] Verify (no code change expected) that `src/components/RenewalModule.tsx` renders the two new add-ons from the shared catalog (~lines 287–294) and the landing simulator picks them up automatically via `ALL_MODULES` — fix only if a hard-coded list exists
 
 **Checkpoint**: Commercial surface correct before the in-app modules land (landing/renewal can list them ahead of US6/US7).
 
@@ -176,12 +176,12 @@ works, pointage/payslip/avance/congé unreachable. Staff-enabled center → unch
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T029 [P] [US5] Create `src/components/StaffManagementModule.test.tsx`: with `staffLite` true — pointage sub-tab absent, payslip/advance/congé/schedule surfaces replaced by an upgrade card whose button requests the renewal tab, staff add/edit/delete controls present; with `staffLite` false — pointage sub-tab present
+- [x] T029 [P] [US5] Create `src/components/StaffManagementModule.test.tsx`: with `staffLite` true — pointage sub-tab absent, payslip/advance/congé/schedule surfaces replaced by an upgrade card whose button requests the renewal tab, staff add/edit/delete controls present; with `staffLite` false — pointage sub-tab present
 
 ### Implementation for User Story 5
 
-- [ ] T030 [US5] In `src/App.tsx`: compute `const staffLite = !centerModuleKeys.includes('staff')` and make the staff sidebar entry (~line 876) visible when `currentCenter?.enabledModules` includes 'etude' OR 'staff'; pass `staffLite` into the StaffManagementModule render branch (~line 1280 region) — the existing `hasCenterModule('module8')` gate now admits etude-only centers, and the tab-guard effect must whitelist 'module8' for etude-only centers
-- [ ] T031 [US5] In `src/components/StaffManagementModule.tsx`: accept `staffLite?: boolean`; when true force `activeSubTab='profiles'`, hide the pointage sub-tab button (~line 742) and the `activeSubTab === 'pointage'` branch (~line 1132); in the profiles detail view hide payslip generation (~line 193+), advances, congés and schedule sections behind the same flag, rendering a locked-feature card (« فعّل وحدة Personnel & Salaires من التجديد ») whose button calls `setActiveTab('renewal')` (thread a new `onGoToRenewal` prop from App.tsx)
+- [x] T030 [US5] In `src/App.tsx`: compute `const staffLite = !centerModuleKeys.includes('staff')` and make the staff sidebar entry (~line 876) visible when `currentCenter?.enabledModules` includes 'etude' OR 'staff'; pass `staffLite` into the StaffManagementModule render branch (~line 1280 region) — the existing `hasCenterModule('module8')` gate now admits etude-only centers, and the tab-guard effect must whitelist 'module8' for etude-only centers
+- [x] T031 [US5] In `src/components/StaffManagementModule.tsx`: accept `staffLite?: boolean`; when true force `activeSubTab='profiles'`, hide the pointage sub-tab button (~line 742) and the `activeSubTab === 'pointage'` branch (~line 1132); in the profiles detail view hide payslip generation (~line 193+), advances, congés and schedule sections behind the same flag, rendering a locked-feature card (« فعّل وحدة Personnel & Salaires من التجديد ») whose button calls `setActiveTab('renewal')` (thread a new `onGoToRenewal` prop from App.tsx)
 
 **Checkpoint**: US5 independently testable; existing staff centers regression-safe via T029.
 
@@ -196,13 +196,13 @@ days → persists after reload; grouping class ↔ location works.
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T032 [P] [US6] Create `src/components/ActivitiesModule.test.tsx`: rendering an activity places a chip in the correct day column; category values map to the four color classes; grouping toggle re-chunks activities; add form requires title/category/weekday/times per FR-015
+- [X] T032 [P] [US6] Create `src/components/ActivitiesModule.test.tsx`: rendering an activity places a chip in the correct day column; category values map to the four color classes; grouping toggle re-chunks activities; add form requires title/category/weekday/times per FR-015
 
 ### Implementation for User Story 6
 
-- [ ] T033 [US6] Create `src/components/ActivitiesModule.tsx`: weekly grid (columns Lun–Dim or date mode, half-hour row bands per research R7), category-colored chips (motricite|art|musique|jeu), create/edit dialog with fields exactly per FR-015 (title required, category required, weekday-or-date, `timeStart` < `timeEnd`, optional location/levelClass/staffId), HTML5 drag-to-move with click-to-move fallback, grouping toggle per `levelClass` vs per `location`; local state follows the existing save-on-change pattern (`commitDomain` style) wired to `saveActivities` from T011
-- [ ] T034 [US6] Register the module in `src/App.tsx`: `TAB_MODULE.activites = 'activites'`, sidebar entry `{ id: 'activites', label: 'الأنشطة والبرنامج', icon: Shapes }` (visible via existing `hasCenterModule` gate), render branch passing activities state + setter (sync key added in T040), fallback-guard coverage automatic via `TAB_MODULE`
-- [ ] T035 [US6] Add the dashboard card in `src/components/Dashboard.tsx` (icon Shapes, tile `bg-brand-600/10 text-brand-600`, tab 'activites') filtered by `isModuleAllowed`
+- [X] T033 [US6] Create `src/components/ActivitiesModule.tsx`: weekly grid (columns Lun–Dim or date mode, half-hour row bands per research R7), category-colored chips (motricite|art|musique|jeu), create/edit dialog with fields exactly per FR-015 (title required, category required, weekday-or-date, `timeStart` < `timeEnd`, optional location/levelClass/staffId), HTML5 drag-to-move with click-to-move fallback, grouping toggle per `levelClass` vs per `location`; local state follows the existing save-on-change pattern (`commitDomain` style) wired to `saveActivities` from T011
+- [X] T034 [US6] Register the module in `src/App.tsx`: `TAB_MODULE.activites = 'activites'`, sidebar entry `{ id: 'activites', label: 'الأنشطة والبرنامج', icon: Shapes }` (visible via existing `hasCenterModule` gate), render branch passing activities state + setter (sync key added in T040), fallback-guard coverage automatic via `TAB_MODULE`
+- [X] T035 [US6] Add the dashboard card in `src/components/Dashboard.tsx` (icon Shapes, tile `bg-brand-600/10 text-brand-600`, tab 'activites') filtered by `isModuleAllowed`
 
 **Checkpoint**: US6 fully functional for enabled centers; hidden for others.
 
@@ -217,13 +217,13 @@ or free-text by staff entitlement) → heatmap → print report.
 
 ### Tests for User Story 7 ⚠️
 
-- [ ] T036 [P] [US7] Create `src/components/CompetencesModule.test.tsx`: catalog CRUD groups by the four domains; evaluator picker renders roster select when staff enabled vs free-text input when not (FR-023); level values restricted to the four-level enum; heatmap cells aggregate evaluations; print section renders per-child report
+- [X] T036 [P] [US7] Create `src/components/CompetencesModule.test.tsx`: catalog CRUD groups by the four domains; evaluator picker renders roster select when staff enabled vs free-text input when not (FR-023); level values restricted to the four-level enum; heatmap cells aggregate evaluations; print section renders per-child report
 
 ### Implementation for User Story 7
 
-- [ ] T037 [US7] Create `src/components/CompetencesModule.tsx`: domain-grouped catalog manager (add/edit/remove, optional ageFrom/ageTo with `ageFrom` <= `ageTo`), per-child evaluation view storing level enum + evaluator (staff select sourced like Étude's supervising-staff picker when staff enabled, else free-text name — discriminated fields per data-model) + `evaluatedAt` date, per-class mastery heatmap grid, print-only A4 report section reusing the bulletin print CSS patterns (research R8); persistence via `saveSkills` from T011
-- [ ] T038 [US7] Register the module in `src/App.tsx`: `TAB_MODULE.competences = 'competences'`, sidebar entry `{ id: 'competences', label: 'المهارات والكفاءات', icon: Brain }`, render branch with state + setter (sync key in T040)
-- [ ] T039 [US7] Add the dashboard card in `src/components/Dashboard.tsx` (icon Brain, tab 'competences') filtered by `isModuleAllowed`
+- [X] T037 [US7] Create `src/components/CompetencesModule.tsx`: domain-grouped catalog manager (add/edit/remove, optional ageFrom/ageTo with `ageFrom` <= `ageTo`), per-child evaluation view storing level enum + evaluator (staff select sourced like Étude's supervising-staff picker when staff enabled, else free-text name — discriminated fields per data-model) + `evaluatedAt` date, per-class mastery heatmap grid, print-only A4 report section reusing the bulletin print CSS patterns (research R8); persistence via `saveSkills` from T011
+- [X] T038 [US7] Register the module in `src/App.tsx`: `TAB_MODULE.competences = 'competences'`, sidebar entry `{ id: 'competences', label: 'المهارات والكفاءات', icon: Brain }`, render branch with state + setter (sync key in T040)
+- [X] T039 [US7] Add the dashboard card in `src/components/Dashboard.tsx` (icon Brain, tab 'competences') filtered by `isModuleAllowed`
 
 **Checkpoint**: US7 independently complete; both new modules demoable end-to-end.
 
@@ -233,10 +233,10 @@ or free-text by staff entitlement) → heatmap → print report.
 
 **Purpose**: Sync wiring, cosmetic type labels, final verification.
 
-- [ ] T040 [P] In `src/App.tsx` add `activities` and `skills` to the state fetch/save wiring and the live-sync refetch key list (same mechanism as formations/events) so plan/module changes and multi-session edits propagate
-- [ ] T041 [P] Cosmetic pass: in `src/components/StudentTimeSheetModule.tsx` and `src/components/TimeSheetModal.tsx` extend `centerType === 'jardin'` label branches to include 'creche' (crèche reads the jardin wording); BusDriverModule untouched except verifying no school-only copy assumes formation
-- [ ] T042 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` all green; manually verify scenarios S1–S8 including legacy-center regression (empty centerType keeps everything visible)
-- [ ] T043 Confirm the admin repository migration for `activities`, `skills`, `skill_evaluations` (DDL per data-model.md) is scheduled — coordination item, blocking production deploy only
+- [X] T040 [P] In `src/App.tsx` add `activities` and `skills` to the state fetch/save wiring and the live-sync refetch key list (same mechanism as formations/events) so plan/module changes and multi-session edits propagate
+- [X] T041 [P] Cosmetic pass: in `src/components/StudentTimeSheetModule.tsx` and `src/components/TimeSheetModal.tsx` extend `centerType === 'jardin'` label branches to include 'creche' (crèche reads the jardin wording); BusDriverModule untouched except verifying no school-only copy assumes formation
+- [X] T042 Run full quickstart.md: `npm run lint`, `npm test`, `npm run build` all green; manually verify scenarios S1–S8 including legacy-center regression (empty centerType keeps everything visible)
+- [X] T043 Confirm the admin repository migration for `activities`, `skills`, `skill_evaluations` (DDL per data-model.md) is scheduled — coordination item, blocking production deploy only
 
 ---
 

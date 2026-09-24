@@ -10,6 +10,8 @@ import {
   Bus,
   Calendar,
   ShieldCheck,
+  Shapes,
+  Brain,
 } from 'lucide-react';
 import type { SubscriptionPlan } from '../types';
 
@@ -41,6 +43,8 @@ export const ALL_MODULES: readonly PricedModule[] = [
   { key: 'transport', label: 'Transport Scolaire', icon: Bus, description: 'Circuits, feuilles de route, chauffeurs.' },
   { key: 'events', label: 'Événements & Sorties', icon: Calendar, description: 'Inscriptions, sorties scolaires.' },
   { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, description: 'Équipe, paie, pointages, congés.' },
+  { key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' },
+  { key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' },
 ];
 
 export const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));
@@ -96,7 +100,7 @@ export const cycleDays = (cycle?: string | null): number => (String(cycle) === '
  */
 export const PLAN_PRESET_MODULES: Record<string, string[]> = {
   starter: ['scolaire', 'studentTimeSheets', 'finance'],
-  growth: ['scolaire', 'studentTimeSheets', 'finance', 'etude', 'coursParticuliers', 'revision'],
+  growth: ['scolaire', 'studentTimeSheets', 'finance', 'etude', 'coursParticuliers', 'revision', 'activites', 'competences'],
   pro: ALL_MODULES.map(m => m.key),
 };
 

@@ -26,6 +26,7 @@ import {
   Cookie
 } from 'lucide-react';
 import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
+import { hasSchoolLevel } from '../utils/centerType';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { capitalizeFirst } from '../utils/format';
@@ -43,6 +44,8 @@ interface StudentRegistrationModuleProps {
   sidebarCollapsed?: boolean;
   /** Center subscription: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
+  /** Center type ('jardin' | 'creche' | 'garderie' | 'formation') — hides school-level artifacts when absent. */
+  centerType?: string;
 }
 
 const emptyParent = (): ParentInfo => ({
@@ -86,10 +89,14 @@ export default function StudentRegistrationModule({
   setOpenAddFormTrigger,
   hideRestrictedModules,
   sidebarCollapsed,
-  enabledModules
+  enabledModules,
+  centerType
 }: StudentRegistrationModuleProps) {
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
+  // School-bearing surfaces (grade / établissement) exist only for school types;
+  // unknown/empty keeps legacy visibility.
+  const showSchoolLevel = hasSchoolLevel(centerType);
 
   // Subscription gating: a student can only be enrolled in services included in the
   // center's plan (undefined = all modules, legacy compat).
@@ -422,8 +429,10 @@ export default function StudentRegistrationModule({
       lastName: lastName.trim(),
       birthDate,
       birthPlace,
-      grade,
-      etablissement: etablissement.trim() || undefined,
+      // Le niveau est un artefact scolaire : vide pour crèche/jardin (jamais
+      // supprimé côté données existantes — les éditions y accèdent encore).
+      grade: showSchoolLevel ? grade : '',
+      etablissement: showSchoolLevel ? (etablissement.trim() || undefined) : undefined,
       mother,
       father,
       parentalSituation,
@@ -596,6 +605,7 @@ export default function StudentRegistrationModule({
           </div>
         </div>
 
+        {showSchoolLevel && (
         <div className="flex items-center gap-3 w-full md:w-auto">
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <select
@@ -610,6 +620,7 @@ export default function StudentRegistrationModule({
             {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
+        )}
       </div>
 
       {/* Students list cards */}
@@ -625,9 +636,11 @@ export default function StudentRegistrationModule({
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-1.5">
+                    {showSchoolLevel && (
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-700 bg-brand-600/[0.06] border border-brand-600/20 px-2.5 py-0.5 rounded-md">
                       {st.grade}
                     </span>
+                    )}
                     <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                       {st.academicYear || getCurrentAcademicYear()}
                     </span>
@@ -861,8 +874,11 @@ export default function StudentRegistrationModule({
                       />
                     </div>
                     <div>
+                      {showSchoolLevel && (
+                      <>
                       <label className="text-xs font-bold text-slate-600 block mb-1">المستوى الدراسي *</label>
                       <select
+                        required={showSchoolLevel}
                         value={grade} onChange={(e) => setGrade(e.target.value)}
                         className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer appearance-none pr-8 focus:outline-none focus:ring-1 focus:ring-brand-600"
                         style={{
@@ -874,8 +890,12 @@ export default function StudentRegistrationModule({
                       >
                         {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
+                      </>
+                      )}
                     </div>
                     <div>
+                      {showSchoolLevel && (
+                      <>
                       <label className="text-xs font-bold text-slate-600 block mb-1">المؤسسة التعليمية (المعهد / الإعدادية / الابتدائية)</label>
                       <div className="flex gap-2">
                         <select
@@ -927,6 +947,8 @@ export default function StudentRegistrationModule({
                             إضافة
                           </button>
                         </div>
+                      )}
+                      </>
                       )}
                     </div>
                   </div>
@@ -1580,7 +1602,7 @@ export default function StudentRegistrationModule({
               <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div>
                   <span className="text-[10px] font-bold text-brand-600 bg-brand-600/20 px-2.5 py-1 rounded-md">
-                    بطاقة تلميذ — {selectedStudent.grade}
+                    بطاقة تلميذ{showSchoolLevel && selectedStudent.grade ? ` — ${selectedStudent.grade}` : ''}
                   </span>
                   <h3 className="text-2xl font-black mt-1.5">
                     {selectedStudent.firstName} {selectedStudent.lastName}
@@ -1760,7 +1782,9 @@ export default function StudentRegistrationModule({
                       <p><span className="text-slate-500">اللقب والاسم:</span> <strong>{printingRegistrationStudent.lastName} {printingRegistrationStudent.firstName}</strong></p>
                       <p><span className="text-slate-500">تاريخ الميلاد:</span> <strong>{printingRegistrationStudent.birthDate || 'غير محدد'}</strong></p>
                       <p><span className="text-slate-500">مكان الميلاد:</span> <strong>{printingRegistrationStudent.birthPlace || 'تونس'}</strong></p>
+                      {showSchoolLevel && (
                       <p><span className="text-slate-500">المستوى الدراسي:</span> <strong>{printingRegistrationStudent.grade}</strong></p>
+                      )}
                     </div>
                     {printingRegistrationStudent.allergies && (
                       <p className="mt-1 text-[11px]"><span className="text-slate-500">الحساسيات والاحتياطات الطبية:</span> <strong className="text-red-700">{printingRegistrationStudent.allergies}</strong></p>

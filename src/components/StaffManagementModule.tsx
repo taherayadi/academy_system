@@ -37,6 +37,11 @@ interface StaffManagementModuleProps {
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   expenses?: CenterExpense[];
   onUpdateExpenses?: (expenses: CenterExpense[]) => void;
+  /** Staff-lite: the center has Étude but not the Staff module — roster CRUD only,
+   *  all payroll surfaces (pointage, payslips, advances, congés, schedule) locked. */
+  staffLite?: boolean;
+  /** Navigate to the renewal tab (used by the locked-feature upgrade card). */
+  onGoToRenewal?: () => void;
 }
 
 // Arabic month names -> month number (1-12)
@@ -116,11 +121,17 @@ export default function StaffManagementModule({
   settings,
   onUpdateSettings,
   expenses = [],
-  onUpdateExpenses
+  onUpdateExpenses,
+  staffLite = false,
+  onGoToRenewal
 }: StaffManagementModuleProps) {
    const toast = useToast();
    const centerName = settings?.centerName || 'EduSphère';
-   const [activeSubTab, setActiveSubTab] = useState<'profiles' | 'pointage'>('profiles');
+   const [activeSubTab, setActiveSubTabState] = useState<'profiles' | 'pointage'>('profiles');
+   // Lite centers are pinned to the roster sub-tab — payroll is unreachable.
+   const setActiveSubTab = (tab: 'profiles' | 'pointage') => {
+     setActiveSubTabState(staffLite ? 'profiles' : tab);
+   };
    // selectedStaffId drives the detail view so that schedule/avance/leave changes persist automatically
    const [selectedStaffId, setSelectedStaffId] = useState<string | null>(staff[0]?.id || null);
    const selectedStaff = staff.find(s => s.id === selectedStaffId) || null;
@@ -736,6 +747,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
           فريق العمل والملفات
         </button>
 
+        {!staffLite && (
         <button
           onClick={() => setActiveSubTab('pointage')}
           className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer ${
@@ -747,6 +759,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
           <CheckSquare className="h-4 w-4" />
           نظام الحضور والغياب اليومي
         </button>
+        )}
 
         </div>
 
@@ -878,13 +891,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
                 </div>
               </div>
 
-              {/* Emploi du temps Card */}
+              {/* Emploi du temps Card — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
                 <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-brand-600" />
                   التوقيت الأسبوعي
                 </h4>
-                {selectedStaff.schedule && selectedStaff.schedule.length > 0 ? (
+                {staffLite && (
+                  <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                    <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                    {onGoToRenewal && (
+                      <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                        الذهاب إلى التجديد
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!staffLite && selectedStaff.schedule && selectedStaff.schedule.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {selectedStaff.schedule.map(sd => (
                       <div key={sd.day} className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
@@ -906,8 +929,19 @@ const base = generatingPayslipStaff.baseSalary || 850;
                 )}
               </div>
 
-              {/* Leave Requests Management Card */}
+              {/* Leave Requests Management Card — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">طلبات الإجازات والرخص</h4>
                   <button
@@ -979,10 +1013,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
-              {/* Advance Requests (طلبات السلفة) */}
+              {/* Advance Requests (طلبات السلفة) — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">طلبات السلفة</h4>
                   <button
@@ -1050,10 +1097,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
-              {/* Payslip history card (بعد التحقق: عرض وطباعة فقط) */}
+              {/* Payslip history card (بعد التحقق: عرض وطباعة فقط) — locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">كشوف الأجر المؤكدة</h4>
                   <button
@@ -1112,6 +1172,8 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
             </div>
@@ -1129,7 +1191,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
       )}
 
        {/* SUB TAB 2: POINTAGE CALENDRIER */}
-       {activeSubTab === 'pointage' && (
+       {activeSubTab === 'pointage' && !staffLite && (
          <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-6 no-print">
            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
              <div>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -19,6 +19,8 @@ import ExternalCoursesModule from './components/ExternalCoursesModule';
 import SeanceRevisionModule from './components/SeanceRevisionModule';
 import FormationModule from './components/FormationModule';
 import EventsModule from './components/EventsModule';
+import ActivitiesModule from './components/ActivitiesModule';
+import CompetencesModule from './components/CompetencesModule';
 import LibraryModule from './components/LibraryModule';
 import MealsModule from './components/MealsModule';
 import FinanceModule from './components/FinanceModule';
@@ -35,6 +37,7 @@ import { useToast } from './components/Toast';
 import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from './hooks/useLiveSync';
 import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
+import { hasStudyModules } from './utils/centerType';
 
 
 // Map sidebar tabs to subscription modules enabled for the current center.
@@ -51,7 +54,10 @@ const TAB_MODULE: Record<string, string> = {
   module6: 'cantine',             // إدارة الوجبات
   moduleBus: 'transport',         // خطة الحافلة
   module7: 'finance',             // المنظومة المالية
-  module8: 'staff'                // إدارة الموظفين
+  module8: 'staff',               // إدارة الموظفين
+  moduleActivities: 'activites', // الأنشطة والبرنامج
+  activites: 'activites',         // الأنشطة والبرنامج
+  competences: 'competences'      // المهارات والكفاءات
 };
 
 // Bibliothèque désactivée pour l'instant : masquée du menu centre.
@@ -181,8 +187,26 @@ export default function App() {
     const moduleKey = TAB_MODULE[tabId];
     if (!moduleKey) return true; // dashboard / settings — always available
     if (centerModuleKeys.length === 0) return true;
+    // Staff-lite: étude-only centers keep the staff tab (roster only, payroll locked).
+    if (tabId === 'module8') return centerModuleKeys.includes('staff') || centerModuleKeys.includes('etude');
     return centerModuleKeys.includes(moduleKey);
   };
+
+  // Type gating: the four study tabs exist only for school-bearing centers.
+  // Unknown/empty type keeps legacy visibility (research R5).
+  const hasStudy = hasStudyModules(currentCenter?.centerType);
+
+  // Staff-lite (US5): a center subscribed to Étude but not to the Staff module
+  // still gets staff roster management, with all payroll surfaces locked.
+  // Legacy empty module lists keep the tab fully available (existing behavior).
+  const staffLite = centerModuleKeys.length > 0 && !centerModuleKeys.includes('staff');
+  const hasStaffOrEtude = centerModuleKeys.length === 0
+    || centerModuleKeys.includes('staff')
+    || centerModuleKeys.includes('etude');
+
+  // New Growth/Pro modules (US6/US7): gated on the center's enabled module list.
+  const hasActivitiesModule = hasCenterModule('activites');
+  const hasSkillsModule = hasCenterModule('competences');
 
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
@@ -195,13 +219,17 @@ export default function App() {
   }, [hideRestrictedModules, activeTab]);
 
   // If the active tab belongs to a module not enabled for this center (e.g. the
-  // subscription modules changed after login), fall back to the dashboard
-  // so a disabled module can never be opened.
+  // subscription modules changed after login), or to a study module hidden by
+  // the center type, fall back to the dashboard so a restricted module can
+  // never be opened — including via stale deep links.
   useEffect(() => {
     if (currentUser && !hasCenterModule(activeTab)) {
       setActiveTab('dashboard');
     }
-  }, [currentUser, currentCenter, activeTab]);
+    if (currentUser && !hasStudy && ['module3', 'module4', 'module4b', 'formations'].includes(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [currentUser, currentCenter, activeTab, hasStudy]);
 
   // Server-backed center state (Cloudflare D1)
   const [students, setStudents] = useState<Student[]>([]);
@@ -219,6 +247,8 @@ export default function App() {
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceRecord[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
   const [events, setEvents] = useState<SchoolEvent[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [skillsDoc, setSkillsDoc] = useState<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>({ catalog: [], evaluations: [] });
   // Meal "forfait ferme" closures — loaded separately from the main DB snapshot because
   // they live in their own tables and are only read by the finance module.
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
@@ -243,7 +273,8 @@ export default function App() {
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
     studentAttendance: StudentAttendanceRecord[]; formations: Formation[]; events: SchoolEvent[];
-  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [] });
+    activities: Activity[]; skills: Skill[]; skillEvaluations: SkillEvaluation[];
+  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [], activities: [], skills: [], skillEvaluations: [] });
 
   // Serializes full-state PUTs so concurrent module updates never overwrite each other.
   const commitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -276,7 +307,10 @@ export default function App() {
           studentTimeSheets: db.studentTimeSheets || [],
           studentAttendance: stateRef.current.studentAttendance || [],
           formations: db.formations || [],
-          events: db.events || []
+          events: db.events || [],
+          activities: db.activities || [],
+          skills: db.skills || [],
+          skillEvaluations: db.skillEvaluations || []
         };
         setStudents(db.students || []);
         setStaff(db.staff || []);
@@ -291,6 +325,8 @@ export default function App() {
         setStudentTimeSheets(db.studentTimeSheets || []);
         setFormations(db.formations || []);
         setEvents(db.events || []);
+        setActivities(db.activities || []);
+        setSkillsDoc({ catalog: db.skills || [], evaluations: db.skillEvaluations || [] });
         setSettings(db.settings);
       })
       .catch((err) => {
@@ -514,6 +550,16 @@ export default function App() {
     commitDomain(() => saveEventsApi(updated));
   };
 
+  const handleUpdateActivities = (updated: Activity[]) => {
+    setActivities(updated);
+    commitDomain(() => saveActivities(updated));
+  };
+
+  const handleUpdateSkills = (doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }) => {
+    setSkillsDoc(doc);
+    commitDomain(() => saveSkills(doc));
+  };
+
   const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
@@ -571,7 +617,8 @@ export default function App() {
   // Import database backup
   const VALID_COLLECTION_KEYS = [
     'students', 'staff', 'slots', 'courses', 'sessions', 'mealPlans',
-    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations', 'events'
+    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations', 'events',
+    'activities', 'skills', 'skillEvaluations'
   ];
   const VALID_OBJECT_KEYS = ['settings'];
 
@@ -733,6 +780,18 @@ export default function App() {
       if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
       setEvents(next.events as SchoolEvent[]);
     }
+    if (next.activities !== undefined) {
+      if (!validateArray(next.activities as unknown[], ['id', 'title'], 'الأنشطة')) return;
+      setActivities(next.activities as Activity[]);
+    }
+    if (next.skills !== undefined) {
+      if (!validateArray(next.skills as unknown[], ['id', 'label'], 'المهارات')) return;
+      setSkillsDoc(prev => ({ ...prev, catalog: next.skills as Skill[] }));
+    }
+    if (next.skillEvaluations !== undefined) {
+      if (!validateArray(next.skillEvaluations as unknown[], ['id', 'studentId', 'skillId'], 'تقييمات المهارات')) return;
+      setSkillsDoc(prev => ({ ...prev, evaluations: next.skillEvaluations as SkillEvaluation[] }));
+    }
 
     // Extract settings/fees from parsed payload
     const rawSettings = parsed.settings || (parsed.fees ? { fees: parsed.fees, feesByYear: parsed.feesByYear } : null) || (parsed.fraisAnnuelSuivi != null || parsed.frais_annuel_suivi != null ? parsed : null);
@@ -758,7 +817,10 @@ export default function App() {
       studentTimeSheets: next.studentTimeSheets !== undefined ? (next.studentTimeSheets as StudentTimeSheet[]) : studentTimeSheets,
       studentAttendance: next.studentAttendance !== undefined ? (next.studentAttendance as StudentAttendanceRecord[]) : (stateRef.current.studentAttendance || []),
       formations: next.formations !== undefined ? (next.formations as Formation[]) : formations,
-      events: next.events !== undefined ? (next.events as SchoolEvent[]) : events
+      events: next.events !== undefined ? (next.events as SchoolEvent[]) : events,
+      activities: next.activities !== undefined ? (next.activities as Activity[]) : activities,
+      skills: next.skills !== undefined ? (next.skills as Skill[]) : skillsDoc.catalog,
+      skillEvaluations: next.skillEvaluations !== undefined ? (next.skillEvaluations as SkillEvaluation[]) : skillsDoc.evaluations
     };
 
     commitDomain(async () => {
@@ -865,16 +927,18 @@ export default function App() {
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-        !hideRestrictedModules && { id: 'studentTimeSheets', label: currentCenter?.centerType === 'jardin' ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
-        { id: 'module3', label: 'تأطير Étude', icon: Clock },
-        !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
-        !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
-        !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        !hideRestrictedModules && { id: 'studentTimeSheets', label: (currentCenter?.centerType === 'jardin' || currentCenter?.centerType === 'creche') ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
+        hasStudy && { id: 'module3', label: 'تأطير Étude', icon: Clock },
+        hasStudy && !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
+        hasStudy && !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
+        hasStudy && !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
         { id: 'events', label: 'الفعاليات والخرجات', icon: Calendar },
+        hasActivitiesModule && { id: 'activites', label: 'الأنشطة والبرنامج', icon: PuzzleIcon },
+        hasSkillsModule && { id: 'competences', label: 'المهارات والكفاءات', icon: BrainIcon },
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
-        { id: 'module8', label: 'إدارة الموظفين', icon: Users },
+        hasStaffOrEtude && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
         { id: 'renewal', label: 'التجديد', icon: RefreshCw },
@@ -1199,6 +1263,23 @@ export default function App() {
                   sidebarCollapsed={sidebarCollapsed}
                 />
               )}
+              {activeTab === 'activites' && (
+                <ActivitiesModule
+                  activities={activities}
+                  onUpdateActivities={handleUpdateActivities}
+                  staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
+                />
+              )}
+              {activeTab === 'competences' && (
+                <CompetencesModule
+                  catalog={skillsDoc.catalog}
+                  evaluations={skillsDoc.evaluations}
+                  onUpdateDoc={handleUpdateSkills}
+                  students={students}
+                  currentUserRole={currentUser?.role}
+                  canUseRoster={currentUser?.role !== 'restricted_admin'}
+                />
+              )}
 
               {LIBRARY_ENABLED && activeTab === 'module5' && (
                 <LibraryModule 
@@ -1263,6 +1344,8 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStaff={handleUpdateStaff}
                   onUpdateTimesheets={handleUpdateTimesheets}
+                  staffLite={staffLite}
+                  onGoToRenewal={() => setActiveTab('renewal')}
                 />
               )}
 

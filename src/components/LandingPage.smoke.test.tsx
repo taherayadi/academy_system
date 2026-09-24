@@ -160,6 +160,37 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
     expect(apiMock).toHaveBeenCalledTimes(2);
   });
 
+  it('offers Crèche and Garderie as establishment types and submits creche', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    expect(screen.getByText('Crèche')).toBeTruthy();
+    expect(screen.getByText('Garderie')).toBeTruthy();
+
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByText('Crèche'));
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        centerType: 'creche'
+      }));
+    });
+  });
+
+  it('submits garderie as the selected center type', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByText('Garderie'));
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        centerType: 'garderie'
+      }));
+    });
+  });
+
   it('resurfaces a previously saved offline lead and resends it', async () => {
     // Une visite précédente a échoué : une copie dort dans localStorage.
     localStorage.setItem('academy_demo_requests', JSON.stringify([

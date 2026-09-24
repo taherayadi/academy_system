@@ -83,6 +83,9 @@ export interface DatabaseState {
   studentTimeSheets: StudentTimeSheet[];
   formations: Formation[];
   events: SchoolEvent[];
+  activities: Activity[];
+  skills: Skill[];
+  skillEvaluations: SkillEvaluation[];
 }
 
 
@@ -350,7 +353,9 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     revisionSeances,
     studentTimeSheets,
     formations,
-    events
+    events,
+    activities,
+    skills
   ] = await Promise.all([
     getDomain<CenterSettings>('/settings', 'تعذر تحميل إعدادات المنظومة.'),
     getDomain<Student[]>('/students', 'تعذر تحميل بيانات التلاميذ.'),
@@ -365,11 +370,16 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     getDomain<RevisionSeance[]>('/revision-seances', 'تعذر تحميل بيانات حصص المراجعة.'),
     getDomain<StudentTimeSheet[]>('/student-timesheets', 'تعذر تحميل جداول التوقيت.'),
     getDomain<Formation[]>('/formations', 'تعذر تحميل بيانات التكوينات.'),
-    fetchEventsApi()
+    fetchEventsApi(),
+    getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.'),
+    getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.')
   ]);
 
   return {
     settings,
+    activities: activities || [],
+    skills: skills?.catalog || [],
+    skillEvaluations: skills?.evaluations || [],
     students: students || [],
     staff: staff || [],
     slots: slots || [],

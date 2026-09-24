@@ -54,7 +54,7 @@ export default function StudentTimeSheetModule({
   const [timeSheetPage, setTimeSheetPage] = useState(1);
   const TIMESHEET_PAGE_SIZE = 9;
 
-  if (centerType === 'jardin') {
+  if ((centerType === 'jardin' || centerType === 'creche')) {
     return (
       <StudentAttendanceModule
         students={students}
@@ -72,16 +72,16 @@ export default function StudentTimeSheetModule({
         <div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
-              {centerType === 'jardin' ? 'Pointage Élèves' : 'جداول التوقيت'}
+              {(centerType === 'jardin' || centerType === 'creche') ? 'Pointage Élèves' : 'جداول التوقيت'}
             </span>
-            <span className="text-xs text-slate-400 font-bold">{centerType === 'jardin' ? 'تسجيل الدخول والخروج اليومي للتلاميذ' : 'الجداول الزمنية الأسبوعية للتلاميذ'}</span>
+            <span className="text-xs text-slate-400 font-bold">{(centerType === 'jardin' || centerType === 'creche') ? 'تسجيل الدخول والخروج اليومي للتلاميذ' : 'الجداول الزمنية الأسبوعية للتلاميذ'}</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
             <Clock className="h-6 w-6 text-brand-600" />
-            {centerType === 'jardin' ? 'نظام تسجيل حضور التلاميذ' : 'إدارة جداول التوقيت الأسبوعية'}
+            {(centerType === 'jardin' || centerType === 'creche') ? 'نظام تسجيل حضور التلاميذ' : 'إدارة جداول التوقيت الأسبوعية'}
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            {centerType === 'jardin' ? 'تسجيل أوقات حضور وخروج التلاميذ يومياً وإسناد الجدول الأسبوعي لكل تلميذ.' : 'إنشاء وتعديل جداول التوقيت الأسبوعية وإسنادها للتلاميذ حسب المؤسسة والمستوى.'}
+            {(centerType === 'jardin' || centerType === 'creche') ? 'تسجيل أوقات حضور وخروج التلاميذ يومياً وإسناد الجدول الأسبوعي لكل تلميذ.' : 'إنشاء وتعديل جداول التوقيت الأسبوعية وإسنادها للتلاميذ حسب المؤسسة والمستوى.'}
           </p>
         </div>
       </div>

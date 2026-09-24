@@ -16,9 +16,12 @@ import {
   CalendarClock,
   BookOpenCheck,
   Award,
-  Bus
+  Bus,
+  Puzzle,
+  Brain
 } from 'lucide-react';
 import { StaffMember, Student, ACADEMIC_MONTHS, CenterSettings } from '../types';
+import { hasStudyModules } from '../utils/centerType';
 
 interface DashboardProps {
   staff: StaffMember[];
@@ -37,6 +40,9 @@ interface DashboardProps {
 export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed }: DashboardProps) {
   // Center subscription gating (default: everything allowed).
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
+  // Type gating mirrors the sidebar: study modules only for school-bearing types.
+  const hasStudy = hasStudyModules(centerType);
+  const STUDY_TABS = ['module3', 'module4', 'module4b', 'formations'];
   const totalStaff = staff.length;
   const totalStudents = students.length;
 
@@ -45,7 +51,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
     { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-brand-600/[0.06] text-brand-600' },
-    { tab: 'studentTimeSheets', title: centerType === 'jardin' ? 'Pointage Élèves' : 'Jd. Horaires', desc: centerType === 'jardin' ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'studentTimeSheets', title: (centerType === 'jardin' || centerType === 'creche') ? 'Pointage Élèves' : 'Jd. Horaires', desc: (centerType === 'jardin' || centerType === 'creche') ? 'تسجيل حضور وخروج التلاميذ' : 'جداول التوقيت الأسبوعية', icon: CalendarClock, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module3', title: `Étude ${settings?.centerName || 'EduSphère'}`, desc: 'الخانات الزمنية والتايم شيت', icon: Clock, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module4', title: `Études Hors ${settings?.centerName || 'EduSphère'}`, desc: 'الكورسات الخاصة', icon: BookMarked, tile: 'bg-slate-100 text-slate-500' },
     { tab: 'module4b', title: 'Séance de Révision', desc: 'حصص المراجعة', icon: BookOpenCheck, tile: 'bg-brand-600/[0.06] text-brand-600' },
@@ -53,11 +59,15 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
     { tab: 'module5', title: 'Bibliothèque', desc: 'مكتبة المطالعة', icon: Library, tile: 'bg-brand-600/[0.06] text-brand-600' },
     { tab: 'module6', title: 'Gestion des Repas', desc: 'وجبة اليوم وتعويض الإلغاء', icon: Utensils, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'moduleBus', title: 'Plan de Bus', desc: 'خطة الحافلة والتوصيل', icon: Bus, tile: 'bg-slate-100 text-slate-500' },
+    { tab: 'activites', title: 'Activités & Planning', desc: 'الأنشطة والبرنامج الأسبوعي', icon: Puzzle, tile: 'bg-brand-600/10 text-brand-600' },
+    { tab: 'competences', title: 'Compétences & Skills', desc: 'المهارات والكفاءات وخريطة الصف', icon: Brain, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module7', title: 'Module Financier', desc: 'المصاريف STEG/SONEDE والمقبوضات', icon: DollarSign, tile: 'bg-brand-600/[0.06] text-brand-600' },
     { tab: 'module8', title: 'Gestion du Personnel', desc: 'بطاقات المعلمين وكشوفات الرواتب', icon: Users, tile: 'bg-slate-100 text-slate-500' }
   ];
   const quickModules = QUICK_MODULES.filter(m =>
-    allowed(m.tab) && !(hideRestrictedModules && RESTRICTED_TABS.includes(m.tab))
+    allowed(m.tab)
+    && (hasStudy || !STUDY_TABS.includes(m.tab))
+    && !(hideRestrictedModules && RESTRICTED_TABS.includes(m.tab))
   );
   const moduleCount = quickModules.length;
 
