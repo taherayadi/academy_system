@@ -25,6 +25,8 @@ import {
   Cookie
 } from 'lucide-react';
 import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType } from '../types';
+import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent } from '../utils/mealLogic';
+import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -36,16 +38,6 @@ interface MealsModuleProps {
   onUpdateMealPlans: (plans: MealPlanDay[]) => void;
   settings?: CenterSettings;
 }
-
-const WEEKDAYS: MealPlanDay['day'][] = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-const DAY_BY_INDEX: Record<number, MealPlanDay['day']> = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi' };
-const ARABIC_WEEKDAYS: Record<MealPlanDay['day'], string> = {
-  'Lundi': 'الإثنين',
-  'Mardi': 'الثلاثاء',
-  'Mercredi': 'الأربعاء',
-  'Jeudi': 'الخميس',
-  'Vendredi': 'الجمعة'
-};
 
 export default function MealsModule({
   students,
@@ -110,6 +102,10 @@ export default function MealsModule({
   // Add one-time (unit) meal student modal
   const [isAddUnitMealModalOpen, setIsAddUnitMealModalOpen] = useState(false);
   const [unitMealSearch, setUnitMealSearch] = useState('');
+  // Revision D (remark M3): two-step unit-meal modal — services render first
+  // (disabled) and enable per the selected student's subscription.
+  const [unitMealSelectedId, setUnitMealSelectedId] = useState<string | null>(null);
+  const [unitMealTicked, setUnitMealTicked] = useState<Record<string, boolean>>({});
 
   // Removal from daily meal list confirmation
   const [removeAttendanceStudent, setRemoveAttendanceStudent] = useState<Student | null>(null);
@@ -166,43 +162,8 @@ export default function MealsModule({
     return hasRefundRecord && net <= 0;
   };
 
-  const getGouterStatus = (st: Student, month: AcademicMonth) => {
-    const fees = settings ? getFeesForYear(settings, schoolYear) : null;
-    const isBoth = st.enrolledServices?.gouterBoth || (!!st.enrolledServices?.gouterMatin && !!st.enrolledServices?.gouterSoir);
-    const isMatin = st.enrolledServices?.gouterMatin;
-    const isSoir = st.enrolledServices?.gouterSoir;
-
-    let total = 0;
-    let typeLabel = 'غير محدد';
-    if (isBoth) {
-      total = fees?.fraisDeuxGoutersMensuel || ((fees?.fraisGouterMatinMensuel || 0) + (fees?.fraisGouterSoirMensuel || 0));
-      typeLabel = 'اللمجتان معاً';
-    } else if (isMatin) {
-      total = fees?.fraisGouterMatinMensuel || 0;
-      typeLabel = 'لمجة الصباح';
-    } else if (isSoir) {
-      total = fees?.fraisGouterSoirMensuel || 0;
-      typeLabel = 'لمجة المساء';
-    }
-    if (total === 0) total = 30;
-
-    const payments = (st.payments || []).filter(p => p.service === 'Goûter' && p.month === `${month} (${schoolYear})`);
-    const paidAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
-    const discount = payments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
-    const effectiveRequired = Math.max(0, total - discount);
-    return {
-      status: paidAmount >= effectiveRequired && effectiveRequired > 0 ? ('paid' as const) : paidAmount > 0 ? ('advance' as const) : ('unpaid' as const),
-      paidAmount,
-      remaining: Math.max(0, effectiveRequired - paidAmount),
-      total,
-      discount,
-      effectiveRequired,
-      isBoth,
-      isMatin,
-      isSoir,
-      typeLabel
-    };
-  };
+  const getGouterStatus = (st: Student, month: AcademicMonth) =>
+    getGouterStatusFor(st, month, schoolYear, settings ? getFeesForYear(settings, schoolYear) : null);
 
   const hasGouterSubscription = (st: Student) => {
     return (
@@ -354,9 +315,13 @@ export default function MealsModule({
     const prefix = `${year}-${String(num).padStart(2, '0')}`;
     return (st.mealAttendances || []).filter(a => a.type === 'subscription' && a.date.startsWith(prefix)).length;
   };
-  const consumptionStudents = consumptionMonth === 'all'
-    ? subscribedStudents
-    : subscribedStudents;
+  // Revision D (remark M2): the lunch consumption table lists lunch subscribers
+  // only — keyed on the explicit lunch predicate (mealSubscription.active),
+  // NOT the `meals` flag: the goûter track never writes `meals`, while legacy
+  // rows (registration's lockedMeals path) can carry stale `meals: true` on
+  // goûter-only students, which is exactly the mixing this fixes.
+  const lunchSubscriberStudents = subscribedStudents.filter(s => s.mealSubscription?.active === true);
+  const consumptionStudents = lunchSubscriberStudents;
   const consumptionTotalPages = Math.ceil(consumptionStudents.length / pageSize) || 1;
   const consumptionCurrentPage = Math.min(Math.max(1, consumptionPage), consumptionTotalPages);
   const paginatedConsumption = consumptionStudents.slice((consumptionCurrentPage - 1) * pageSize, consumptionCurrentPage * pageSize);
@@ -458,9 +423,8 @@ export default function MealsModule({
   };
 
   // Add one-time unit student for today's dish
-  const handleAddOneTimeMealStudent = (stId: string) => {
-    const stObj = students.find(s => s.id === stId);
-    if (!stObj) return;
+  const handleAddUnitServicesForStudent = (stObj: Student, services: MealServiceType[]) => {
+    if (!services.length) return;
 
     if (getAttendance(stObj)) {
       toast.info('هذا التلميذ مسجل بالفعل في قائمة وجبات هذا التاريخ.');
@@ -475,11 +439,14 @@ export default function MealsModule({
       ...stObj,
       mealAttendances: [
         ...(stObj.mealAttendances || []),
-        { date: selectedDate, service: 'lunch', type: 'unit', paid: false, traiteurPrice: snapshotTraiteurPrice }
+        ...services.map(service => ({ date: selectedDate, service, type: 'unit' as const, paid: false, traiteurPrice: snapshotTraiteurPrice }))
       ]
     };
-    onUpdateStudents(students.map(s => s.id === stId ? updatedStudent : s));
-    toast.success('تمت إضافة التلميذ إلى قائمة وجبات اليوم — سجّل الدفع عند الاستلام.');
+    onUpdateStudents(students.map(s => s.id === stObj.id ? updatedStudent : s));
+    setIsAddUnitMealModalOpen(false);
+    setUnitMealSelectedId(null);
+    setUnitMealTicked({});
+    toast.success('تمت إضافة التلميذ إلى قائمة خدمات اليوم — سجّل الدفع عند الاستلام.');
   };
 
   const handlePayUnitMeal = (st: Student) => {
@@ -1372,13 +1339,10 @@ export default function MealsModule({
                             >
                               <Edit3 className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleUnenrollGouter(st)}
-                              className="p-1.5 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold cursor-pointer"
-                              title="إلغاء الاشتراك في اللمجة"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+                            {/* Revision D (remark M4): the delete/unenroll action
+                                was removed from this table per the client's
+                                request; the edit-type modal above remains the
+                                deliberate unenrollment path. */}
                           </div>
                         </td>
                       </tr>
@@ -2021,6 +1985,27 @@ export default function MealsModule({
         )}
       </div>
 
+      {/* Revision D (remark M2): dedicated Goûter consumption table — the
+          Goûter counterpart of the lunch consumption table above. */}
+      <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
+        <div className="p-5 border-b border-brand-600/10 bg-brand-600/[0.03] flex items-center gap-2">
+          <Cookie className="h-5 w-5 text-brand-600" />
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-base">متابعة استهلاك مشتركي اللمجة شهرياً</h3>
+            <p className="text-xs text-slate-500">الاستهلاك الفعلي وخلاصات اللمجة (صباح/مساء) لكل تلميذ مشترك في اللمجة.</p>
+          </div>
+        </div>
+        <div className="p-4">
+          <GouterConsumptionTable
+            students={students}
+            month={consumptionMonth === 'all' ? 'Septembre' : (consumptionMonth as AcademicMonth)}
+            schoolYear={schoolYear}
+            fees={settings ? getFeesForYear(settings, schoolYear) : null}
+            onPayUnit={handlePayUnitService}
+          />
+        </div>
+      </div>
+
       {/* DATED DAILY MEAL & GOUTER LIST */}
       {(() => {
         const dailyLunchCount = yearStudents.reduce((sum, st) => sum + ((st.mealAttendances || []).filter(a => a.date === selectedDate && (!a.service || a.service === 'lunch')).length), 0);
@@ -2048,7 +2033,7 @@ export default function MealsModule({
                 </label>
 
                 <button
-                  onClick={() => { setIsAddUnitMealModalOpen(true); setUnitMealSearch(''); }}
+                  onClick={() => { setIsAddUnitMealModalOpen(true); setUnitMealSearch(''); setUnitMealSelectedId(null); setUnitMealTicked({}); }}
                   className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-lg shadow-slate-900/5"
                 >
                   <UserPlus className="h-4 w-4" />
@@ -2592,7 +2577,9 @@ export default function MealsModule({
 
               <div className="p-6 space-y-4">
                 <p className="text-xs text-slate-500 font-medium">
-                  التلاميذ الذين لا يملكون اشتراكاً شهرياً فعّالاً بالمطعم لهذه السنة الدراسية، أو مشتركون لكنهم مسترجعون (refunded) لهذا الشهر ويواصلون تناوُل أطباقهم الفردية بالثمن الفردي. تُحتسب الوجبة بالثمن الفردي فقط.
+                  {/* Revision D (remark M3): services are shown first (disabled)
+                      and enable exactly per the selected student's subscription. */}
+                  اختر الخدمات التي يطلبها التلميذ لهذا اليوم — تُحتسب الخدمات غير المشتركة بالثمن الفردي.
                 </p>
 
                 {(() => {
@@ -2614,13 +2601,79 @@ export default function MealsModule({
                     const full = `${s.firstName} ${s.lastName} ${s.grade}`.toLowerCase();
                     return full.includes(unitMealSearch.toLowerCase());
                   });
-                  return eligible.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border">
-                      لا توجد تلاميذ متاحين لإضافتهم كوجبة منفردة لهذا التاريخ.
-                    </div>
-                  ) : (
+                  const selected = eligible.find(s => s.id === unitMealSelectedId) || null;
+                  const serviceMeta: { key: MealServiceType; label: string; emoji: string; enabled: boolean }[] = selected
+                    ? [
+                        { key: 'lunch', label: 'Déjeuner — الغداء', emoji: '🍽️', enabled: eligibleServicesForStudent(selected, { refundedMonth: selMonth ? refundedForMonth(selected) : false }).lunch },
+                        { key: 'gouter_matin', label: 'Goûter matin — لمجة الصباح', emoji: '🥐', enabled: eligibleServicesForStudent(selected, { refundedMonth: selMonth ? refundedForMonth(selected) : false }).gouterMatin },
+                        { key: 'gouter_apres_midi', label: 'Goûter après-midi — لمجة المساء', emoji: '🍪', enabled: eligibleServicesForStudent(selected, { refundedMonth: selMonth ? refundedForMonth(selected) : false }).gouterSoir }
+                      ]
+                    : [];
+                  return (
                     <>
-                      <div className="p-2 border border-slate-200 rounded-t-2xl bg-white border-b-0">
+                      {/* Step 1: service choice renders FIRST, disabled until a
+                          student is selected (the client's requested order). */}
+                      <div className="p-4 border border-slate-200 rounded-2xl bg-slate-50/60" data-testid="unit-service-choices">
+                        <p className="text-[11px] font-black text-slate-600 mb-2">اختر الخدمات:</p>
+                        {!selected && (
+                          <div className="flex flex-col gap-2">
+                            {([
+                              { key: 'lunch', label: 'Déjeuner — الغداء', emoji: '🍽️' },
+                              { key: 'gouter_matin', label: 'Goûter matin — لمجة الصباح', emoji: '🥐' },
+                              { key: 'gouter_apres_midi', label: 'Goûter après-midi — لمجة المساء', emoji: '🍪' }
+                            ] as { key: MealServiceType; label: string; emoji: string }[]).map(s => (
+                              <label key={s.key} className="flex items-center gap-2 text-xs font-bold text-slate-400 cursor-not-allowed">
+                                <input
+                                  type="checkbox"
+                                  data-testid={`unit-service-toggle-${s.key}`}
+                                  disabled
+                                  className="accent-brand-600"
+                                />
+                                <span>{s.emoji} {s.label}</span>
+                              </label>
+                            ))}
+                            <p className="text-[10px] text-slate-400 font-bold">اختر تلميذاً أولاً لتفعيل الخدمات المتاحة له.</p>
+                          </div>
+                        )}
+                        {selected && (
+                          <div className="flex flex-col gap-2">
+                            {serviceMeta.map(s => {
+                              const checked = !!unitMealTicked[s.key];
+                              return (
+                                <label
+                                  key={s.key}
+                                  className={`flex items-center gap-2 text-xs font-bold ${s.enabled ? 'text-slate-700 cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    data-testid={`unit-service-toggle-${s.key}`}
+                                    disabled={!s.enabled}
+                                    checked={checked}
+                                    onChange={() => setUnitMealTicked(prev => ({ ...prev, [s.key]: !checked }))}
+                                    className="accent-brand-600"
+                                  />
+                                  <span>{s.emoji} {s.label}{!s.enabled ? ' — غير مشترك' : ''}</span>
+                                </label>
+                              );
+                            })}
+                            {(() => {
+                              const e = eligibleServicesForStudent(selected, { refundedMonth: selMonth ? refundedForMonth(selected) : false });
+                              return e.allAtUnitPrice ? (
+                                <p className="text-[10px] text-amber-700 font-bold bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 inline-block">
+                                  تلميذ غير مشترك — تُحتسب الخدمات بالثمن الفردي عند الاستلام.
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-brand-700 font-bold">
+                                  الخدمات غير المتاحة مخفّاة — لا تُحتسب إلا الخدمات المشمولة بالاشتراك أو المدفوعة بالوحدة.
+                                </p>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step 2: the student picker. */}
+                      <div className="p-2 border border-slate-200 rounded-2xl bg-white">
                         <div className="relative">
                           <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
                           <input
@@ -2633,13 +2686,18 @@ export default function MealsModule({
                         </div>
                       </div>
                       {candidates.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-b-2xl border border-t-0 border-slate-200">
+                        <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
                           لا توجد نتائج مطابقة لبحثك.
                         </div>
                       ) : (
-                        <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 border-t-0 rounded-b-2xl">
+                        <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
                           {candidates.map(s => (
-                            <div key={s.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
+                            <div
+                              key={s.id}
+                              className={`p-3 hover:bg-slate-50 flex items-center justify-between gap-2 cursor-pointer ${unitMealSelectedId === s.id ? 'bg-brand-600/[0.06]' : ''}`}
+                              data-testid={`unit-candidate-${s.id}`}
+                              onClick={() => { setUnitMealSelectedId(s.id); setUnitMealTicked({}); }}
+                            >
                               <div className="flex-1">
                                 <p className="font-extrabold text-xs text-slate-900">{s.firstName} {s.lastName}</p>
                                 <p className="text-[10px] text-slate-400">{s.grade} — ولي الأمر: <span dir="ltr">{s.father?.phoneMobile || s.mother?.phoneMobile || 'لا يوجد'}</span></p>
@@ -2649,29 +2707,37 @@ export default function MealsModule({
                                   </span>
                                 )}
                               </div>
-                              <button
-                                onClick={() => handleAddOneTimeMealStudent(s.id)}
-                                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1 shrink-0"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                أضف وجبة اليوم
-                              </button>
+                              {unitMealSelectedId === s.id && (
+                                <span className="text-[10px] font-black text-brand-700">محدد ✓</span>
+                              )}
                             </div>
                           ))}
                         </div>
                       )}
+                      <div className="pt-2 flex items-center justify-between gap-2">
+                        <button
+                          data-testid="unit-confirm-add"
+                          disabled={!selected || !serviceMeta.some(s => unitMealTicked[s.key])}
+                          onClick={() => {
+                            if (!selected) return;
+                            const services = serviceMeta.filter(s => unitMealTicked[s.key]).map(s => s.key);
+                            handleAddUnitServicesForStudent(selected, services);
+                          }}
+                          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer disabled:cursor-default flex items-center gap-1"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          إضافة الخدمات المحددة
+                        </button>
+                        <button
+                          onClick={() => { setIsAddUnitMealModalOpen(false); setUnitMealSelectedId(null); setUnitMealTicked({}); }}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          إغلاق
+                        </button>
+                      </div>
                     </>
                   );
                 })()}
-
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => setIsAddUnitMealModalOpen(false)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
-                  >
-                    إغلاق
-                  </button>
-                </div>
               </div>
             </motion.div>
           </div>

@@ -347,3 +347,127 @@ change to the four study modules' visibility, removing or hiding already-paid
 modules. Remarks 2 and 6 need no code: their verifying suites (001/004/005
 handler + component suites, composed C8/C9, coherence C10) already run in the
 gate.
+
+---
+
+## Revision D — Meals & Goûter remarks alignment (`remarques-module-repas-gouter.md`)
+
+**Date**: 2026-09-25 | **Input**: the client's remarks file on the Restoration
+module (Repas & Goûter), organised in three groups: **Module Repas (Cantine)** —
+4 remarks — plus **Paramètres** (1 remark) and **Module Finance ▸ Gestion des
+repas** (2 remarks). The client's 4 headline issues therefore map onto 7
+discrete asks; this revision plans all 7.
+
+An implementation audit against the file found **four gaps** (M1, M2, M3, S1),
+**one structural gap shared by two screens** (F2), **one mode-conditional
+rendering adjustment** (F1) and **one removal** (M4). Every row needs a code
+change, but none requires a schema migration, a new route, or a backend change.
+
+### Audit result per remark
+
+| # | Remark | Current state (verified in code) | Verdict |
+|---|--------|----------------------------------|---------|
+| M1 | «برنامج وجبة اليوم»: add «السبت» as a selectable day | `WEEKDAYS` (`src/components/MealsModule.tsx` L40) and the `MealPlanDay['day']` union (`src/types.ts` L915) both stop at `'Vendredi'`; `ARABIC_WEEKDAYS` lacks السبت; `DAY_BY_INDEX` maps `getDay()` 1–5 only, so a Saturday visit falls back to Lundi; `src/api.ts` stores meal plans verbatim under the day name | **GAP** — add `'Samedi'` to the union, the list, the label map and the index map (Sunday keeps the existing Lundi fallback) |
+| M2 | «المشتركون لشهر … — مسددون + غير مسددين» mixes lunch-only and Goûter-only subscribers | The consumption table is fed by `subscribedStudents` (L142: `enrolledServices.meals === true && mealSubscription.active !== false`), which ignores `enrolledServices.gouter*`; Goûter-only subscribers appear as generic rows with no Goûter columns | **GAP** — new dedicated Goûter consumption table beside the lunch one; the existing table becomes lunch-only |
+| M3 | «إضافة تلميذ بالوحدة…»: show the 3 services disabled first, enable per subscription after selecting the student | The unit-meal modal (L2566) lists candidates with one add button wired to `handleAddOneTimeMealStudent` → a single `service: 'lunch'` unit attendance; no per-service choice exists | **GAP** — two-step modal: 3 service toggles (Déjeuner / Goûter matin / Goûter après-midi) rendered disabled until a student is selected, enabled only for services his subscription covers |
+| M4 | Remove the delete action from the Goûter subscribers table | The Goûter table's إجراءات column (L1376) renders the «إلغاء الاشتراك في اللمجة» button (`handleUnenrollGouter`) next to the edit-type button — that button IS the delete affordance | **ADJUST (removal)** — remove it from that table; the edit-type modal remains the unenrollment path; daily-pointage remove button untouched |
+| S1 | Goûter pricing must accept decimals (ex: 2,5 dt) | The five Goûter fee inputs (fraisGouterMatinMensuel/Unitaire, fraisGouterSoirMensuel/Unitaire, fraisDeuxGoutersMensuel — `SettingsModule` L538–612) are `type="number"` with integer-leaning onChange parsing and no `step`; storage is JSON numbers, already decimal-safe | **GAP** — decimal-safe input handling for those five fields (decimal-tolerant parse, `step="0.5"`); no rounding anywhere |
+| F1 | In «مطبخ داخلي» mode hide حصة الـ Traiteur / ربح السنتر للوجبة / حصة السنتر in Finance ▸ Gestion des repas | The pricing-info strip (`FinanceModule` L2453) always renders حصة الـ Traiteur and ربح السنتر للوجبة; the consumption table headers (L2528) always render حصة السنتر / حصة الـ Traiteur; `isInHouseKitchen` (L404) already exists and zeroes the cost in calculations, but the UI blocks render unconditionally | **ADJUST** — gate the three indicator surfaces on `!isInHouseKitchen`; in-house mode shows an explicit «مطبخ داخلي» hint instead; totals unchanged |
+| F2 | «تفاصيل استهلاك التلاميذ»: add a separate Goûter consumption component | The Finance Gestion-des-repas tab renders one detail table (`restoStudents`, L2231) aggregating lunch + goûter attendances; only the summary badges separate the counts | **GAP** — split the detail into the existing lunch table plus a new Goûter detail table with Goûter-specific columns |
+
+### Technical approach (deltas)
+
+**M1 — Saturday in the weekly meal program.** Four single-definition edits:
+(a) extend the `MealPlanDay['day']` union in `src/types.ts` with `'Samedi'`;
+(b) append `'Samedi'` to `WEEKDAYS`; (c) add `'السبت'` to `ARABIC_WEEKDAYS`;
+(d) map `6: 'Samedi'` in `DAY_BY_INDEX` so a Saturday visit opens the Saturday
+plan (the existing Lundi fallback covers Sunday). No backend change: meal plans
+persist under the day name verbatim, so existing plans load unchanged and a new
+Saturday plan is stored like any other. New union member is additive and
+back-compatible.
+
+**M2 + F2 — one reusable Goûter consumption table, two hosts.** New component
+`GouterConsumptionTable` (own file, `src/components/GouterConsumptionTable.tsx`)
+used in both screens. In `MealsModule` it renders beside the existing
+consumption table, fed from `gouterStudents` with the same month-selector
+semantics; the existing table keeps its title and filters but is fed an
+**explicit lunch predicate** (`mealSubscription.active === true`) instead of
+the `meals` flag — the audit traced the mixing to legacy data (the goûter
+track never sets `meals`; registration's lockedMeals path can leave stale
+`meals: true` on goûter-only students) — so Goûter-only students no longer
+appear in it under either data shape. In `FinanceModule`'s Gestion-des-repas tab the same
+component renders under the existing lunch detail table, fed from the filtered
+students' goûter attendances. Columns: student, service type
+(matin/soir/both), payment status per academic month (reusing
+`getGouterStatus` semantics), consumed count per service (from
+`mealAttendances` filtered on `gouter_matin` / `gouter_apres_midi`), and unpaid
+unit actions reusing the daily grid's pay-unit pattern. Everything derives from
+existing `enrolledServices`, `mealAttendances`, `payments` — no stored-shape
+change (FR-010).
+
+**M3 — unit-meal modal: services first, gated by subscription.** The add-unit
+modal becomes two-step: the three service toggles render **disabled** from the
+start (remark's exact wording: «à l'état désactivé»); selecting a candidate
+enables exactly the toggles his `enrolledServices` cover (lunch subscription →
+Déjeuner; `gouterMatin` → Goûter matin; `gouterSoir`/`gouterBoth` → Goûter
+après-midi); confirm requires at least one enabled+selected service. True
+non-subscribed (or refunded-month) students enable all three at unit price.
+Submission generalises `handleAddOneTimeMealStudent` to write **one unit
+attendance per ticked service**, reusing the traiteur-price snapshotting and
+the existing `service` discriminator — no schema change.
+
+**M4 — remove the Goûter table's delete action.** Delete the unenroll button
+from the Goûter subscribers table's إجراءات column; the edit-type button stays
+and its modal remains the unenrollment path. The daily pointage grid's
+remove-attendance button and the lunch table's actions are untouched — the
+remark scopes the removal to the Goûter subscribers table only.
+
+**S1 — decimal Goûter pricing.** Give the five Goûter fee fields a shared
+decimal-money parse helper (comma-tolerant: «2,5» → 2.5; keeps the existing
+leading-zero cleanup) and `step="0.5"`; `updateFee` stores the parsed number
+unchanged. `getGouterStatus`, unit-payment buttons and all consumers already
+handle non-integers (JSON numbers) — no rounding introduced anywhere, FR-006
+immutability holds. Other fee fields keep today's behavior.
+
+**F1 — traiteur indicators only in external-traiteur mode.** In
+`FinanceModule`, gate three surfaces on `!isInHouseKitchen`: the pricing
+strip's «حصة الـ Traiteur» and «ربح السنتر للوجبة» cells, and the consumption
+table's «حصة السنتر» / «حصة الـ Traiteur» column header + cells (other columns
+stay in-house). In in-house mode a small «مطبخ داخلي — بدون وسيط» hint replaces
+the strip (mirroring SettingsModule's existing «نظام المطبخ الداخلي مفعّل»
+note). Calculations already branch on `isInHouseKitchen`; this delta is
+presentational and changes no totals.
+
+**Tests** (adjacent per-feature files; composed re-checks in 006 suites):
+1. `src/meals.test.ts` extension — pure-logic pins: day-union/`DAY_BY_INDEX`
+   Saturday coverage via the module's exported constants, decimal parsing
+   truth table («2,5» → 2.5, «0,75» → 0.75, «2» → 2), the modal's
+   service-eligibility helper (subscription gates the toggles), and
+   GouterConsumptionTable derivation (status per month from attendances +
+   payments).
+2. `src/components/MealsModule.test.tsx` (new) — Saturday tab renders and is
+   selectable; unit modal: toggles disabled before selection, enabled per
+   subscription after, multi-service submit writes one attendance per service;
+   Goûter table appears beside the lunch table and lunch rows exclude
+   Goûter-only students; Goûter subscribers table no longer renders the
+   unenroll button (edit stays).
+3. `src/components/SettingsModule.test.tsx` (new) — the five Goûter fee inputs
+   accept «2,5» and hold 2.5 in form state; other fee fields unchanged.
+4. `src/components/FinanceModule.test.tsx` (new) — external-traiteur mode:
+   traiteur strip + center/traiteur columns render; in-house mode: hidden,
+   hint shown, totals identical between modes for the same data; Goûter detail
+   table renders under the lunch one and counts only gouter_* attendances.
+5. `src/program.composed.test.tsx` — C1 crèche walkthrough adds: Saturday tab
+   present; unit modal gates by subscription; no unenroll button in the Goûter
+   table (composed remark assertions).
+
+**Constitution Check (revision D)**: re-verified — no new routes (IV), no new
+endpoints and no security surface change (III), tenant context untouched (II),
+no migrations (I: everything stays in the existing settings/students JSON
+surfaces), every delta lands with its test (V). No violations.
+
+**Out of scope**: pricing/value changes, new modules or routes, backend/API
+changes, attendance-schema changes (the `service` discriminator already
+exists), changes to the lunch table's own behaviors beyond its feed list, and
+any change to module visibility (revision B/C territory stays frozen).
+

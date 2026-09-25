@@ -199,3 +199,88 @@ the green badge keeps its text label. No data, props, or state change.
 5. **Single derivation definition** (extends FR-015): the applicable-set
    computation exists once (`pricing.ts` + `centerType.ts`), consumed by
    renewal, presets, and the composed tests — no surface-local counting.
+
+---
+
+# Revision D artifacts & invariants (`remarques-module-repas-gouter.md`)
+
+## `MealPlanDay['day']` union (additive extension)
+
+| Property | Before | After |
+|---|---|---|
+| Members | 'Lundi' 'Mardi' 'Mercredi' 'Jeudi' 'Vendredi' | + **'Samedi'** (append-only) |
+| `ARABIC_WEEKDAYS` | 5 entries | + السبت |
+| `DAY_BY_INDEX` | `getDay()` 1–5, else 'Lundi' | `getDay()` 1–6, else 'Lundi' (Sunday fallback kept) |
+| Storage | day name, verbatim | unchanged — a 'Samedi' plan is stored like any other; no migration |
+
+## `GouterConsumptionTable` (new component, two hosts)
+
+Derived-only table over existing fields (`enrolledServices`, `mealAttendances`
+with the `service` discriminator, `payments`); exports a pure
+`computeGouterRows(students, month, schoolYear, fees)` so the logic is testable
+without DOM. Hosts own only their data wiring:
+
+**Service predicates** (single definitions, exercised by tests):
+- **Goûter subscriber** = any `enrolledServices.gouter*` flag true (same rule
+  the Goûter grid already uses).
+- **Lunch subscriber** = `mealSubscription?.active === true` (an explicit
+  predicate, NOT `enrolledServices.meals` — the goûter track never sets
+  `meals`, and registration's lockedMeals path can leave stale `meals: true`
+  on goûter-only students, which is exactly the mixing remark M2 reports).
+
+| Host | Feed | Position |
+|---|---|---|
+| `MealsModule` | `gouterStudents` + the same month selector | beside the lunch consumption table, which becomes lunch-only (explicit lunch predicate above) |
+| `FinanceModule` (Gestion des repas) | filtered students' `gouter_matin`/`gouter_apres_midi` attendances | under the existing «تفاصيل استهلاك التلاميذ» lunch table |
+
+Columns: student, service type (matin/soir/both), payment status per academic
+month (`getGouterStatus` semantics), consumed per service, unpaid-unit pay
+action. No stored shape changes (FR-010).
+
+## Unit-meal modal eligibility (pure helper)
+
+Input: `enrolledServices` + meal-subscription mode/active + refunded-month
+state. Output: enabled services ⊆ {lunch, gouter_matin, gouter_apres_midi}.
+
+| Student state | Déjeuner | Goûter matin | Goûter après-midi |
+|---|---|---|---|
+| lunch-subscribed | enabled | per `gouterMatin` | per `gouterSoir`/`gouterBoth` |
+| `gouterMatin` only | per lunch flag | enabled | per `gouterSoir`/`gouterBoth` |
+| non-subscribed (unit) / refunded month | enabled (unit price) | enabled (unit price) | enabled (unit price) |
+
+Submit writes **one unit attendance per ticked service** — `MealAttendance`
+already carries `service`; schema untouched. Toggles render disabled until a
+student is selected (remark M3's «à l'état désactivé»).
+
+## Decimal fee input (input-layer only)
+
+The five Goûter fee fields gain a comma-tolerant parse helper («2,5» → 2.5,
+«2» → 2) + `step="0.5"`. `CenterFeeSet` stays JSON numbers; no consumer
+changes; **no rounding anywhere** (FR-006).
+
+## Finance in-house gating (rendering-only)
+
+`!isInHouseKitchen` gates: pricing strip's «حصة الـ Traiteur» +
+«ربح السنتر للوجبة»; consumption table's «حصة السنتر» / «حصة الـ Traiteur»
+columns. In-house renders a «مطبخ داخلي — بدون وسيط» hint. Totals are
+byte-identical between modes for the same data (pinned by test).
+
+## Invariants added (revision D)
+
+1. **Day names are the storage contract** (extends FR-006): meal plans persist
+   verbatim under the French day name; 'Samedi' is additive — existing plans
+   load unchanged.
+2. **Lunch and Goûter consumption surfaces are disjoint per service**: a
+   student appears in the lunch table only if `mealSubscription.active ===
+   true`; the Goûter table lists every `gouter*`-flagged student (including
+   legacy shapes carrying stale `meals: true` with missing/false
+   `mealSubscription.active`); a dual-service student (`active: true` + gouter
+   flags) legitimately appears in both, once per service.
+3. **Modal enablement derives solely from subscription state**: the three
+   service toggles enable exactly per `enrolledServices`/subscription — staff
+   cannot mark a service the student is neither subscribed to nor paying unit
+   price for.
+4. **No rounding introduced** (extends FR-006): decimal fee entry round-trips
+   exactly through state, persistence and every consumer.
+5. **Finance meal totals are mode-invariant** (extends FR-010): hiding
+   traiteur indicators in-house changes no number anywhere.

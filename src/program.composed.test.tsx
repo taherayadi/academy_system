@@ -334,6 +334,52 @@ describe('US2 — legacy regression safety (C2/C3/C4)', { timeout: 30000 }, () =
     expect(screen.getAllByTitle(PAYMENT_ACTION).length).toBeGreaterThan(0);
   });
 
+  it('C1 — meals & goûter remarks compose through the App shell (revision D)', async () => {
+    // C1 is entitled to cantine by revision D's composed extension: the meals
+    // module must compose its remark surfaces with every other feature active.
+    const { center, user } = makeProgram({ ...CRECHE_COMPOSED_CONFIG, enabledModules: [...CRECHE_COMPOSED_CONFIG.enabledModules!, 'cantine'] });
+    // Seed a lunch subscriber and both goûter-only shapes (fresh + legacy stale
+    // meals:true) so the disjoint-table assertions have data to bite on.
+    const base = composedDb();
+    h.db = {
+      ...base,
+      students: [
+        ...base.students,
+        {
+          id: 'stu_gouter_fresh', firstName: 'Gouter', lastName: 'Fresh', grade: 'PS',
+          enrolledServices: { suivi: true, gouterMatin: true }
+        },
+        {
+          id: 'stu_gouter_legacy', firstName: 'Gouter', lastName: 'Legacy', grade: 'GS',
+          enrolledServices: { suivi: true, meals: true, gouterSoir: true }
+        }
+      ]
+    };
+    await loginAs(center, user);
+    await clickTab('إدارة الوجبات', 'برنامج وجبة اليوم');
+
+    // Remark M1: the six day tabs including «السبت».
+    for (const label of ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']) {
+      const tabs = screen.getAllByRole('button', { name: label });
+      expect(tabs.length, `day tab ${label}`).toBeGreaterThan(0);
+    }
+
+    // Remark M2: the dedicated Goûter consumption table renders beside the lunch table.
+    expect(screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeTruthy();
+    expect(screen.getByText('متابعة استهلاك المشتركين شهرياً')).toBeTruthy();
+
+    // Remark M3: the unit-meal modal gates its three toggles by subscription —
+    // all three start disabled before any candidate is selected.
+    fireEvent.click(screen.getAllByRole('button', { name: /إضافة تلميذ بالوحدة/ })[0]);
+    expect(document.querySelector('[data-testid="unit-service-toggle-lunch"]')).toHaveProperty('disabled', true);
+    expect(document.querySelector('[data-testid="unit-service-toggle-gouter_matin"]')).toHaveProperty('disabled', true);
+    expect(document.querySelector('[data-testid="unit-service-toggle-gouter_apres_midi"]')).toHaveProperty('disabled', true);
+
+    // Remark M4: the Goûter subscribers table keeps its edit-type action and no unenroll button.
+    expect(screen.queryByTitle('إلغاء الاشتراك في اللمجة')).toBeNull();
+    expect(screen.getAllByTitle('تعديل نوع الاشتراك').length).toBe(2);
+  });
+
   it('C2 — the legacy empty module list keeps the FULL staff module (no locks)', async () => {
     const { center, user } = makeProgram(LEGACY_PASSTHROUGH_CONFIG);
     await loginAs(center, user);

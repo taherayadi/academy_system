@@ -196,6 +196,23 @@ export const DEFAULT_ACADEMIC_YEARS = [
 ];
 
 
+/**
+ * Revision D (remark S1): decimal-tolerant money parsing for fee inputs.
+ * Accepts comma or dot decimals («2,5» → 2.5), keeps the historical
+ * leading-zero cleanup («02,5» → 2.5), and never rounds. Non-numeric → 0.
+ */
+export function parseDecimalFee(raw: string | number | null | undefined): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  const cleaned = (raw ?? '')
+    .toString()
+    .trim()
+    .replace(',', '.')
+    .replace(/^0+(\d)/, '$1');
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+
 export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | null): CenterFeeSet {
   const fb = fallback || {};
   if (!raw || typeof raw !== 'object') {
@@ -912,7 +929,7 @@ export interface ExternalCourseSession {
 
 export interface MealPlanDay {
   id: string;
-  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi';
+  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi' | 'Samedi'; // Revision D (remark M1): السبت added
   date: string;
   dishName: string;
   description: string;

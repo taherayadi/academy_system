@@ -248,3 +248,27 @@ describe('buildExternalGradeOptions', () => {
     expect(values).toContain('Lycée 1ère Année');
   });
 });
+
+describe('Decimal fee parsing — revision D, remark S1', () => {
+  it('accepts comma decimals and normalizes them to numbers', async () => {
+    const { parseDecimalFee } = await import('./types');
+    expect(parseDecimalFee('2,5')).toBe(2.5);
+    expect(parseDecimalFee('0,75')).toBe(0.75);
+    expect(parseDecimalFee('2')).toBe(2);
+    expect(parseDecimalFee('')).toBe(0);
+  });
+
+  it('keeps the leading-zero cleanup and tolerates dot decimals', async () => {
+    const { parseDecimalFee } = await import('./types');
+    expect(parseDecimalFee('02,5')).toBe(2.5);
+    expect(parseDecimalFee('2.5')).toBe(2.5);
+    expect(parseDecimalFee('abc')).toBe(0);
+  });
+
+  it('stores decimal fees through normalizeFeeSet without rounding', async () => {
+    const { normalizeFeeSet, initialCenterFeeSet } = await import('./types');
+    const normalized = normalizeFeeSet({ ...initialCenterFeeSet, fraisGouterMatinMensuel: 2.5, fraisGouterSoirUnitaire: 0.75 });
+    expect(normalized.fraisGouterMatinMensuel).toBe(2.5);
+    expect(normalized.fraisGouterSoirUnitaire) .toBe(0.75);
+  });
+});

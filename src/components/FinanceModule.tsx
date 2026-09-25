@@ -22,6 +22,7 @@ import {
   Eye
 } from 'lucide-react';
 import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -2448,16 +2449,24 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
             </div>
 
-            {/* Pricing Info */}
+            {/* Pricing Info — Revision D (remark F1): traiteur-share indicators
+                are external-traiteur artifacts; hidden in in-house kitchen mode. */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-wrap items-center gap-6 text-xs font-bold">
               <span className="text-slate-500">سعر الوجبة:</span>
               <span className="font-mono text-brand-700">{fmt(prixPlat)} د.ت</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-500">حصة الـ Traiteur:</span>
-              <span className="font-mono text-red-700">{fmt(prixTraiteur)} د.ت</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-500">ربح السنتر للوجبة:</span>
-              <span className="font-mono text-brand-700">{fmt(centerMarginPerPlate)} د.ت</span>
+              {!isInHouseKitchen && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500">حصة الـ Traiteur:</span>
+                  <span className="font-mono text-red-700">{fmt(prixTraiteur)} د.ت</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500">ربح السنتر للوجبة:</span>
+                  <span className="font-mono text-brand-700">{fmt(centerMarginPerPlate)} د.ت</span>
+                </>
+              )}
+              {isInHouseKitchen && (
+                <span className="text-brand-700">👨‍🍳 مطبخ داخلي — بدون وسيط</span>
+              )}
             </div>
 
             {/* Goûter Summary in Tab 6 */}
@@ -2525,8 +2534,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <th className="p-3 text-center text-brand-700">المدفوع</th>
                       <th className="p-3 text-center text-red-600">المسترجع</th>
                       <th className="p-3 text-center text-amber-800">الفرفي</th>
-                      <th className="p-3 text-center text-brand-700">حصة السنتر</th>
-                      <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
+                      {!isInHouseKitchen && (
+                        <>
+                          <th className="p-3 text-center text-brand-700">حصة السنتر</th>
+                          <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2559,8 +2572,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               <span className="text-slate-400" title="تقدير — يصبح مكتسباً بعد إغلاق الشهر">({fmt(s.forfaitEstimate)})</span>
                             ) : '—'}
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-brand-700">{fmt(s.centerPart)} د.ت</td>
-                          <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
+                          {!isInHouseKitchen && (
+                            <>
+                              <td className="p-3 text-center font-mono font-bold text-brand-700">{fmt(s.centerPart)} د.ت</td>
+                              <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
+                            </>
+                          )}
                         </tr>
                       ))
                     )}
@@ -2737,6 +2754,25 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+
+            {/* Revision D (remark F2): the dedicated Goûter detail table —
+                the Goûter counterpart of the lunch detail table above. */}
+            <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5">
+              <div className="p-5 border-b border-brand-600/10 bg-brand-600/[0.03] flex items-center gap-2">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">تفاصيل استهلاك التلاميذ — اللمجة (Goûter)</h3>
+                  <p className="text-[11px] text-slate-400">الاستهلاك وخلاصات اللمجة (صباح/مساء) فقط — مفصولة عن جدول الغداء.</p>
+                </div>
+              </div>
+              <div className="p-4" data-testid="finance-gouter-table">
+                <GouterConsumptionTable
+                  students={filteredStudents}
+                  month={monthFilter === 'all' ? 'Septembre' : (monthFilter as AcademicMonth)}
+                  schoolYear={schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter}
+                  fees={settings ? getFeesForYear(settings, schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter) : null}
+                />
               </div>
             </div>
           </div>

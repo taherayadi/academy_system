@@ -22,7 +22,7 @@ import {
   Trash2,
   Loader2
 } from 'lucide-react';
-import { CenterSettings, CenterFeeSet, getFeesForYear, initialStudentFeeSet, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear } from '../types';
+import { CenterSettings, CenterFeeSet, getFeesForYear, initialStudentFeeSet, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear, parseDecimalFee } from '../types';
 import { changeAccountPassword } from '../auth';
 import { uploadCenterLogoApi, saveCenterLogoApi } from '../api';
 import { useToast } from './Toast';
@@ -540,11 +540,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" 
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          data-fee="fraisGouterMatinMensuel"
                           value={currentYearFees.fraisGouterMatinMensuel || 0}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateFee('fraisGouterMatinMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          onChange={(e) => updateFee('fraisGouterMatinMensuel', parseDecimalFee(e.target.value))}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                         />
                         <span className="text-[11px] font-black text-slate-500">د.ت</span>
@@ -557,11 +558,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" 
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          data-fee="fraisGouterMatinUnitaire"
                           value={currentYearFees.fraisGouterMatinUnitaire || 0}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateFee('fraisGouterMatinUnitaire', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          onChange={(e) => updateFee('fraisGouterMatinUnitaire', parseDecimalFee(e.target.value))}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                         />
                         <span className="text-[11px] font-black text-slate-500">د.ت</span>
@@ -574,11 +576,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" 
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          data-fee="fraisGouterSoirMensuel"
                           value={currentYearFees.fraisGouterSoirMensuel || 0}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateFee('fraisGouterSoirMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          onChange={(e) => updateFee('fraisGouterSoirMensuel', parseDecimalFee(e.target.value))}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                         />
                         <span className="text-[11px] font-black text-slate-500">د.ت</span>
@@ -591,11 +594,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" 
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          data-fee="fraisGouterSoirUnitaire"
                           value={currentYearFees.fraisGouterSoirUnitaire || 0}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateFee('fraisGouterSoirUnitaire', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          onChange={(e) => updateFee('fraisGouterSoirUnitaire', parseDecimalFee(e.target.value))}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
                         />
                         <span className="text-[11px] font-black text-slate-500">د.ت</span>
@@ -608,11 +612,12 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" 
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          data-fee="fraisDeuxGoutersMensuel"
                           value={currentYearFees.fraisDeuxGoutersMensuel || 0}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateFee('fraisDeuxGoutersMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                          onChange={(e) => updateFee('fraisDeuxGoutersMensuel', parseDecimalFee(e.target.value))}
                           className="w-full px-2.5 py-1.5 bg-brand-600/[0.06] border border-brand-600/20 rounded-xl text-xs font-bold font-mono text-brand-700"
                         />
                         <span className="text-[11px] font-black text-brand-600">د.ت</span>

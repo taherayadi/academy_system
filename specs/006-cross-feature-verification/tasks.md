@@ -745,3 +745,253 @@ CompetencesModule +1, RenewalModule +4, pricing.coherence +3, program.composed
 No human browser pass has been performed. W9–W11 (quickstart.md revision C) are
 covered by their automated counterparts and remain available as a manual
 pre-deploy pass (`npm run dev` + `npm run pages:dev`).
+
+---
+
+# Revision D — Meals & Goûter remarks (`remarques-module-repas-gouter.md`)
+
+**Test-first per the constitution (V): every implementation task follows its
+failing-test task. Tasks stay unchecked until `/speckit.implement` runs.**
+
+## Phase R-D1: Foundational — day union & pure meal logic
+
+**Goal**: single-definition surfaces for the Saturday day (M1), the unit-modal
+eligibility helper (M3), the Goûter consumption rows (M2/F2) and the decimal
+fee parser (S1) — all pure, all testable without DOM.
+
+**Independent Test**: `src/meals.test.ts` (+ `src/types.test.ts`) pins the
+'Samedi' constants, the «2,5» → 2.5 parse truth table, the per-subscription
+service eligibility, and `computeGouterRows` derivation from attendances +
+payments.
+
+- [x] T044 [P] Write failing tests first in `src/meals.test.ts` (and
+      `src/types.test.ts` for the fee parser): `WEEKDAYS` contains 'Samedi' last,
+      `ARABIC_WEEKDAYS['Samedi'] === 'السبت'`, `DAY_BY_INDEX[6] === 'Samedi'`
+      (Sunday still falls back to 'Lundi'); decimal parse truth table («2,5» →
+      2.5, «0,75» → 0.75, «2» → 2, «» → 0, leading-zero cleanup preserved);
+      `eligibleServicesForStudent` truth table (lunch-subscribed → Déjeuner
+      enabled; gouterMatin/gouterSoir/gouterBoth map to the two Goûter toggles;
+      non-subscribed or refunded-month student → all three enabled at unit
+      price); `computeGouterRows` returns per-student type (matin/soir/both),
+      per-month payment status (the existing `getGouterStatus` semantics — see
+      T045's move), and per-service consumed counts from `mealAttendances`
+- [x] T045 Extend the `MealPlanDay['day']` union in `src/types.ts` with
+      `'Samedi'` and add the comma-tolerant decimal fee parser beside the fee
+      normalization helpers; create `src/utils/mealLogic.ts` exporting
+      `WEEKDAYS`/`ARABIC_WEEKDAYS`/`DAY_BY_INDEX` (moved from
+      `MealsModule.tsx`, + 'Samedi' / index 6), `eligibleServicesForStudent`,
+      `getGouterStatus` **moved verbatim** from `MealsModule.tsx` (made pure by
+      taking `fees` as a parameter instead of closing over settings —
+      single definition, FR-015; `MealsModule` delegates to it), and
+      `computeGouterRows` built on it; `MealsModule.tsx` imports the constants
+      and status function from the new module (deleting its local copies),
+      until T044 passes
+
+**Checkpoint**: pure-logic suites green; `npm run lint` clean (the union
+extension surfaces every exhaustive consumer at compile time).
+
+## Phase R-D2: Goûter consumption table component (M2 + F2 artifact)
+
+**Goal**: the dedicated Goûter table both screens asked for, defined once.
+
+**Independent Test**: its own suite renders rows for Goûter-only students with
+type, monthly status and per-service counts; lunch attendance is never counted.
+
+- [x] T046 [P] Write failing tests first in
+      `src/components/GouterConsumptionTable.test.tsx` (new): a gouterBoth
+      student shows «اللمجتان معاً» with both service counts; a matin-only
+      student shows one; month payment status renders paid/unpaid per
+      `computeGouterRows`; an unpaid unit goûter attendance shows the pay-unit
+      action; a lunch-only student never appears; empty input renders the
+      explicit empty state
+- [x] T047 Create `src/components/GouterConsumptionTable.tsx`: presentational,
+      props = students, consumption month, school year, fees, pay-unit
+      callback; renders from `computeGouterRows`; no data fetching and no
+      writes of its own (FR-010), until T046 passes
+
+## Phase R-D3: MealsModule integration (M1, M2, M3, M4)
+
+**Goal**: the four Repas-module remarks land on the live screen.
+
+**Independent Test**: the new `MealsModule.test.tsx` renders the module with
+mixed-subscription students and asserts the Saturday tab, the disjoint
+consumption tables, the gated unit modal and the deleted unenroll button.
+
+- [x] T048 [P] Write failing tests first in `src/components/MealsModule.test.tsx`
+      (new): the «برنامج وجبة اليوم» row renders six day tabs including
+      «السبت» and selecting it shows the Saturday plan editor; the lunch
+      consumption table lists lunch subscribers only while the Goûter table
+      renders beside it for `gouterStudents`; fixtures model BOTH goûter-only
+      shapes — fresh (`meals: false` + gouter flags) and legacy/stale
+      (`meals: true` with `mealSubscription` missing or `active: false` — the
+      lockedMeals/registration path leaves these; `active: true` + gouter
+      flags is a genuine dual-service student and appears in BOTH tables) —
+      and BOTH goûter-only shapes are excluded from the lunch table and
+      included in the Goûter table; the unit-meal
+      modal shows the three service toggles disabled before any selection and
+      enables exactly per `eligibleServicesForStudent` after selecting a
+      candidate; confirming with two services writes two unit attendances
+      (lunch + gouter_matin); the Goûter subscribers table's actions column
+      renders the edit-type button and NO unenroll button
+- [x] T049 Implement M1 in `src/components/MealsModule.tsx`: consume the
+      mealLogic constants (Saturday tab appears; `DAY_BY_INDEX` opens the
+      Saturday plan on `getDay() === 6`), until the T048 Saturday assertions
+      pass
+- [x] T050 Implement M2+M4 in `src/components/MealsModule.tsx`: host
+      `GouterConsumptionTable` beside the consumption table (same month
+      selector), and feed the existing table an **explicit lunch predicate** —
+      `subscribedStudents` filtered to `mealSubscription?.active === true` —
+      so legacy goûter-only students (stale `meals: true` from registration's
+      lockedMeals path) land in the Goûter table only; remove the unenroll
+      button from the Goûter subscribers table (edit-type stays;
+      `handleUnenrollGouter` itself is kept for the modal path), until the
+      T048 table assertions pass
+- [x] T051 Implement M3 in `src/components/MealsModule.tsx`: restructure the
+      unit-meal modal into the two-step flow (candidate selection → three
+      toggles gated by `eligibleServicesForStudent` → confirm requires ≥1
+      ticked service), and generalize `handleAddOneTimeMealStudent` into a
+      multi-service submit writing one unit attendance per ticked service with
+      the existing traiteur snapshot per service, until the T048 modal
+      assertions pass
+
+**Checkpoint**: `src/meals.test.ts` (FR-006 immutability suite) still green;
+the daily pointage grid and lunch payment flows unchanged.
+
+## Phase R-D4: Settings decimals (S1) + Finance mode gating (F1, F2 host)
+
+**Goal**: decimal Goûter pricing entry and the traiteur indicators shown only
+in external-traiteur mode, plus the Finance-side Goûter detail table.
+
+**Independent Test**: the new Settings/Finance suites accept «2,5», hide the
+three indicator surfaces in-house with identical totals, and render the Goûter
+detail table under the lunch one.
+
+- [x] T052 [P] Write failing tests first in
+      `src/components/SettingsModule.test.tsx` (new): each of the five Goûter
+      fee inputs (fraisGouterMatinMensuel/Unitaire, fraisGouterSoirMensuel/
+      Unitaire, fraisDeuxGoutersMensuel) accepts «2,5» and holds 2.5 in form
+      state, carries `step="0.5"`, and the other fee fields keep today's
+      integer-preferring behavior
+- [x] T053 Implement S1 in `src/components/SettingsModule.tsx`: wire the five
+      Goûter fee fields to the shared decimal parser + `step="0.5"` (no other
+      field touched; `updateFee` unchanged), until T052 passes
+- [x] T054 [P] Write failing tests first in
+      `src/components/FinanceModule.test.tsx` (new): external-traiteur mode
+      renders the pricing strip's «حصة الـ Traiteur»/«ربح السنتر للوجبة» and
+      the consumption table's «حصة السنتر»/«حصة الـ Traiteur» columns; in-house
+      mode hides them, shows the «مطبخ داخلي — بدون وسيط» hint, and every
+      total matches the traiteur-mode run on the same data; the Gestion-des-
+      repas tab renders `GouterConsumptionTable` under the lunch detail table
+      counting only `gouter_*` attendances
+- [x] T055 Implement F1 + the Finance host of F2 in
+      `src/components/FinanceModule.tsx`: gate the three indicator surfaces on
+      `!isInHouseKitchen` with the in-house hint, and host
+      `GouterConsumptionTable` under the lunch detail table (feed: filtered
+      students' goûter attendances), until T054 passes
+
+## Phase R-D5: Composition & final gates
+
+- [x] T056 [P] Extend `src/program.composed.test.tsx`: the C1 crèche
+      walkthrough adds — Saturday tab present in the meals module; the unit
+      modal gates its toggles by subscription; the Goûter subscribers table
+      renders no unenroll button (composed remark assertions through the real
+      App shell)
+- [x] T057 Final gates at the combined state: `npm run lint`, `npm test`
+      (pre-existing suite unmodified + all new suites), `npm run build` — all
+      green; record the closure (test-count reconciliation, W12–W16 coverage
+      note) in a revision D closure record appended here
+
+### Phase Dependencies (revision D)
+
+- R-D1 → R-D2 (the table consumes `computeGouterRows`); R-D2 → R-D3/R-D4's
+  hosting tasks; R-D3 and R-D4 are independent of each other after R-D2;
+  R-D5 last.
+- Within R-D1: T044 → T045. Within each later phase: tests before impl.
+
+### Parallel Opportunities (revision D)
+
+```text
+T044 (meals.test.ts + types.test.ts) stands alone
+# After T045:
+T046 GouterConsumptionTable.test.tsx | T048 MealsModule.test.tsx | T052 SettingsModule.test.tsx | T054 FinanceModule.test.tsx
+# Then their impls (each after its own test):
+T047 | T049→T050→T051 | T053 | T055
+# Finally:
+T056 composed | T057 gates
+```
+
+### Implementation strategy (revision D)
+
+MVP = Phases R-D1 + R-D2 + T050: the disjoint consumption surfaces (the
+client's structural complaints M2/F2) plus the Saturday day (M1, trivially
+cheap). R-D3 completes the Repas module (M3, M4); R-D4 closes Settings (S1)
+and Finance (F1, F2 host); R-D5 re-proves the composition and closes the
+gates. Explicitly out of scope (per plan.md Revision D): backend/API changes,
+new routes, schema migrations, attendance-shape changes, pricing/value
+changes, and any revision B/C territory (module visibility, planner bands,
+renewal derivation).
+
+**Closure record**: appended by T057 after implementation.
+
+
+---
+
+# Revision D closure record (T044–T057)
+
+## T057 — final gates at the combined state (all green)
+
+- `npm run lint` (tsc --noEmit): clean.
+- `npm test`: **526 passing** — browser project 34 files / 413 tests,
+  node/worker project 13 files / 113 tests. Pre-existing suites unmodified;
+  all revision D suites added alongside.
+- `npm run build`: green (pre-existing chunk-size advisory only).
+
+## What revision D shipped
+
+1. **T044/T045** — `src/utils/mealLogic.ts` (new): shared pure meal logic —
+   `WEEKDAYS`/`DAY_BY_INDEX`/`ARABIC_WEEKDAYS` with **'Samedi' / index 6**
+   (remark M1), `eligibleServicesForStudent` (remark M3), `getGouterStatusFor`
+   (moved verbatim from MealsModule, fees as a parameter — FR-015),
+   `computeGouterRows` (remarks M2+F2). `MealPlanDay['day']` union extended
+   with 'Samedi' (additive); `parseDecimalFee` added to `src/types.ts`
+   (comma-tolerant decimal money parsing, no rounding — remark S1);
+   `MealsModule` now imports the shared constants and delegates status.
+2. **T046/T047** — `src/components/GouterConsumptionTable.tsx` (new): the
+   dedicated Goûter consumption table (type, month payment status, per-service
+   counts, pay-unit actions), purely presentational over `computeGouterRows`.
+3. **T048–T051** — `MealsModule`: Saturday tab with index-based preselection
+   (M1); the lunch consumption table feeds the **explicit lunch predicate**
+   (`mealSubscription.active === true`) so legacy goûter-only students
+   (stale `meals: true`, missing/false `active`) stay out, with the Goûter
+   table hosted beside it (M2); the Goûter subscribers table lost its
+   unenroll button, edit-type modal remains the unenrollment path (M4); the
+   unit-meal modal is two-step — three toggles rendered disabled first,
+   enabled exactly per `eligibleServicesForStudent`, confirm writes one unit
+   attendance per ticked service (M3).
+4. **T052/T053** — `SettingsModule`: the five Goûter fee inputs are
+   `type="text" inputMode="decimal"` wired to `parseDecimalFee` («2,5» → 2.5;
+   `type="number"` would sanitize the comma before any parser could see it);
+   other fee fields untouched (S1).
+5. **T054/T055** — `FinanceModule`: the pricing strip's traiteur cells and the
+   consumption table's «حصة السنتر»/«حصة الـ Traiteur» columns render only in
+   external-traiteur mode, with a «مطبخ داخلي — بدون وسيط» hint in-house
+   (F1, totals provably mode-invariant); the Goûter detail table is hosted
+   under the lunch detail table in Gestion des repas (F2 host).
+6. **T056** — composed suite: the C1 crèche walkthrough (with cantine
+   composed in, and fresh + legacy goûter-only students seeded) asserts the
+   six day tabs, the disjoint consumption tables, the subscription-gated
+   unit-meal modal and the unenroll-free Goûter table through the real App
+   shell.
+
+## Test count reconciliation
+
+Pre-revision 484 → post-revision 526 (+42): meals.test.ts +11, types.test.ts
++3, GouterConsumptionTable.test.tsx +6 (new), MealsModule.test.tsx +11 (new),
+SettingsModule.test.tsx +5 (new), FinanceModule.test.tsx +5 (new),
+program.composed +1. Browser files 30 → 34 (four new component suites).
+
+## Honest limitation (unchanged from earlier revisions)
+
+No human browser pass has been performed. W12–W16 (quickstart.md revision D)
+are covered by their automated counterparts and remain available as a manual
+pre-deploy pass (`npm run dev` + `npm run pages:dev`).

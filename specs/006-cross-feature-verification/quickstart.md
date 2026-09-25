@@ -130,3 +130,55 @@ module list changed after the simulator session (derivation never mutates
 gates stay green with the re-pinned planner tests and the type-aware derivation
 tests; `derivePlanFromModules` without a type returns the pre-revision-C
 verdicts (baseline frozen); no schema change was required for any remark.
+
+---
+
+# Revision D walkthroughs — remarks alignment (`remarques-module-repas-gouter.md`)
+
+Run on the same dev servers as W1 (`npm run dev` + `npm run pages:dev`).
+
+**W12 — Saturday in the meal program (M1)**: open « إدارة الوجبات » → the
+«برنامج وجبة اليوم» tab row shows six tabs, the last being «السبت» → click it:
+the Saturday plan card and its edit affordance open → edit the Saturday dish,
+save, reload: the Saturday plan persists → visit the page on a Saturday (or
+mock `getDay()` = 6): the Saturday tab is preselected → existing Monday–Friday
+plans load untouched.
+
+**W13 — Separate Goûter consumption tables (M2 + F2)**: in « إدارة الوجبات »
+with a Goûter-only subscriber in the data → the lunch consumption table
+«المشتركون لشهر …» lists lunch subscribers only → the new Goûter table beside
+it lists Goûter subscribers with matin/soir/both type and per-service
+consumption → in « الوحدة المالية ▸ Gestion des repas » the
+«تفاصيل استهلاك التلاميذ» lunch table is followed by a Goûter detail table
+counting only `gouter_matin`/`gouter_apres_midi` attendances → no student is
+double-counted across the two tables.
+
+**W14 — Unit-meal modal gated by subscription (M3)**: open « Pointage اليوم » →
+«إضافة تلميذ بالوحدة…» → before selecting anyone the three toggles
+(Déjeuner / Goûter matin / Goûter après-midi) are visible and **disabled** →
+select a lunch-subscribed student: Déjeuner enables, the two Goûter toggles
+stay disabled → select a `gouterBoth` student: both Goûter toggles enable,
+Déjeuner per his lunch flag → select a non-subscribed (unit) student: all
+three enable at unit price → confirm writes one attendance per ticked service
+and the daily grid's KPI badges and payment buttons follow.
+
+**W15 — Goûter table without delete + decimal pricing (M4 + S1)**: in the
+Goûter subscribers table «جدول المشتركين في خدمة اللمجة» the actions column
+shows only the edit-type button (no unenroll/delete) → unenrollment still
+works via the edit-type modal → in « الإعدادات » the five Goûter fee fields
+accept «2,5» and store 2.5 (visible after save + reload, used verbatim by the
+Goûter table's «المعلوم الشهري» and unit-payment buttons) → integer entry
+(«2») still works, other fee fields unchanged.
+
+**W16 — Finance traiteur indicators by mode (F1)**: with «🤝 متعاقد مع
+Traiteur خارجي» in settings → the Gestion-des-repas pricing strip shows حصة
+الـ Traiteur and ربح السنتر للوجبة, and the consumption table shows حصة
+السنتر / حصة الـ Traiteur columns → switch to «👨‍🍳 مطبخ داخلي (طباخ قار)»
+→ those indicators are hidden, a «مطبخ داخلي — بدون وسيط» hint appears, the
+table's other columns remain, and every total is identical to the traiteur
+mode for the same data → switch back: indicators return.
+
+**Expected end state (revision D)**: W12–W16 behave exactly as described; all
+gates stay green with the new meals/settings/finance suites; no schema change,
+no route change, no rounding anywhere; revision B/C states (module visibility,
+planner bands, renewal derivation) untouched.

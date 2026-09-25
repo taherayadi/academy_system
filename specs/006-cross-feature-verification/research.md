@@ -268,3 +268,155 @@ node) so the placement cannot regress silently.
 the label — rejected: that is the current state the remark rejects; a left
 floating icon column outside both — rejected: diverges from the established
 banner pattern used by every other module.
+
+---
+
+# Revision D research (`remarques-module-repas-gouter.md`)
+
+## R15 — Samedi as an additive union member, stored under its own name
+
+**Decision**: add `'Samedi'` to the `MealPlanDay['day']` union in `src/types.ts`,
+to the `WEEKDAYS` list, to `ARABIC_WEEKDAYS` (السبت) and to `DAY_BY_INDEX`
+(`6: 'Samedi'`, keeping the Lundi fallback for Sunday). No normalization or
+migration in `src/api.ts`.
+
+**Rationale**: meal plans persist verbatim under the French day name, so the
+storage contract is the day *string*, not an index — an additive union member is
+back-compatible by construction: existing plans carry `Lundi…Vendredi` keys and
+load unchanged; a Saturday plan is just another name. Extending the union at the
+type level means the compiler surfaces every exhaustive consumer (the tab row,
+`ARABIC_WEEKDAYS` lookups), which the tests pin. The remark's Arabic wording
+(السبت) is honored by the label map, keeping the UI fully Arabic like its five
+siblings.
+
+**Alternatives considered**: recomputing the day from each plan entry's `date`
+field — rejected: the day tabs select plans by name, not by date, and a
+computed scheme would rewrite the storage contract for zero client benefit; a
+per-center "school week days" setting — rejected: new persisted entity, admin
+repo involvement, nothing in the remark asks for configurability.
+
+## R16 — One shared Goûter consumption table for both screens
+
+**Decision**: new `src/components/GouterConsumptionTable.tsx`, hosted twice:
+beside the lunch consumption table in `MealsModule` (fed from `gouterStudents`,
+same month selector) and under the lunch detail table in `FinanceModule`'s
+Gestion-des-repas tab (fed from the filtered students' goûter attendances). The
+existing lunch tables become lunch-only by feeding them `subscribedStudents`.
+
+**Rationale**: remarks M2 and F2 describe the same missing artifact on two
+screens («tableau dédié» / «composant séparé»); one component keeps the
+column set, status semantics (`getGouterStatus` per academic month) and
+per-service consumption counts defined once (FR-015), while each host owns
+only its data wiring. Everything the table shows derives from existing
+`enrolledServices`, `mealAttendances` and `payments` — no stored-shape change,
+so FR-010 holds and no backend or migration work is triggered. Filtering
+Goûter-only students out of the lunch table directly answers the «mélange les
+deux cas» complaint without touching any lunch behavior.
+
+**Mechanism refinement (from the tasks-phase audit)**: the lunch feed cannot
+key on `enrolledServices.meals` — the goûter track never writes it
+(`handleEnrollStudentInGouter` and goûter payments only set `gouter*` flags),
+but registration's lockedMeals path (`hasPaidService('Repas')` forcing
+`meals: true`) and pre-goûter-track records can leave stale `meals: true` on
+goûter-only students. The lunch table therefore keys on
+`mealSubscription.active === true`, which the goûter track never touches.
+Two exclusion shapes are pinned in tests: fresh goûter-only students
+(`meals: false` + gouter flags) and legacy ones (`meals: true` with
+`mealSubscription.active` true/undefined). The Goûter feed stays the existing
+`gouterStudents` rule (any gouter* flag).
+
+**Alternatives considered**: one mixed table with a «service» type column —
+rejected: the remark explicitly asks for a dedicated component/table, and the
+payment-status semantics genuinely differ (Repas month status vs Goûter
+per-type status); computing the split in `src/api.ts` or the worker — rejected:
+presentational concern, would add an endpoint surface the constitution's
+route-freeze discourages for no test benefit.
+
+## R17 — Unit-meal modal: enablement mirrors the subscription, confirm needs one service
+
+**Decision**: the modal's three service toggles (Déjeuner / Goûter matin /
+Goûter après-midi) render disabled until a candidate is selected; a small
+eligibility helper maps `enrolledServices` (+ subscription mode, refunded-month
+state) to enabled services; confirm requires ≥1 enabled-and-ticked service and
+writes one unit attendance per ticked service.
+
+**Rationale**: the remark's sequence is exact — «afficher d'abord les 3 choix à
+l'état désactivé … en activant uniquement les options correspondant à son
+abonnement» — so the gating must derive from the subscription, not from free
+choice, and the disabled-before-selection state is part of the requested UX.
+The eligibility logic is pure and therefore testable in `src/meals.test.ts`
+without DOM. Multi-service submission reuses the `service` discriminator that
+`MealAttendance` already carries and the daily grid already writes — the data
+model anticipated per-service rows, so no schema change is needed; the
+traiteur-price snapshot and unit pricing stay per-service as the daily grid
+already handles.
+
+**Alternatives considered**: letting staff tick any of the three regardless of
+subscription — rejected: contradicts «uniquement les options correspondant à
+son abonnement» and would blur subscription vs unit accounting; forcing an
+exact-subscription match with no unit fallback — rejected: the modal's very
+purpose is *unit* meals for non-subscribed or refunded-month students, who must
+be able to take all three at unit price.
+
+## R18 — Remove the Goûter table's delete action without losing the unenroll path
+
+**Decision**: delete the «إلغاء الاشتراك في اللمجة» button from the Goûter
+subscribers table's actions column; the edit-type button stays, and its modal
+remains the (deliberate) unenrollment path. No other surface changes.
+
+**Rationale**: the audit shows the table's delete affordance IS the unenroll
+button; the client asks for its removal from *this* table (likely after
+accidental unenrollments), not for the capability to disappear. Keeping the
+edit-type modal as the unenroll path preserves data-safety: enrollment flags
+remain writable, just behind a two-step intent (FR-010 — no stored value is
+touched by the removal itself). The daily pointage grid's remove-attendance
+button and the lunch table's actions are different objects on different
+screens, explicitly out of the remark's scope.
+
+**Alternatives considered**: removing unenrollment everywhere — over-scoped,
+would contradict the enroll modal's own semantics; replacing the button with a
+confirm dialog — rejected: the remark says «retirer», not «protéger», and a
+confirmation keeps the accidental-click surface the client is complaining
+about.
+
+## R19 — Decimal Goûter pricing at the input layer
+
+**Decision**: a shared decimal-money parse helper (comma-tolerant, keeps the
+leading-zero cleanup) + `step="0.5"` on the five Goûter fee inputs; `updateFee`
+keeps storing plain numbers.
+
+**Rationale**: the cap is purely the input layer — `CenterFeeSet` holds JSON
+numbers, `getGouterStatus`, unit-payment math and persistence all round-trip
+non-integers untouched, so no rounding may be introduced anywhere (FR-006).
+Tunisian dinar entry is conventionally comma-written («2,5»), and the numeric
+keyboard on `type="number"` inputs with a decimal step admits it on most
+locales; normalising «2,5» → 2.5 in one helper keeps the five fields
+consistent and testable as a truth table. Restricting the change to the five
+Goûter fields matches the remark's scope (tarification du service Goûter)
+while the helper stays reusable if the client extends decimals later.
+
+**Alternatives considered**: switching money state to strings end-to-end — a
+large refactor across payments math for no client ask; rounding stored fees to
+integers — directly contradicts the remark; per-field inline parsing copied
+five times — violates the single-definition rule (FR-015).
+
+## R20 — Traiteur indicators are external-traiteur-mode artifacts
+
+**Decision**: gate the pricing strip's «حصة الـ Traiteur» / «ربح السنتر للوجبة»
+cells and the consumption table's «حصة السنتر» / «حصة الـ Traiteur» columns on
+`!isInHouseKitchen`; show an explicit «مطبخ داخلي — بدون وسيط» hint in-house.
+No calculation changes.
+
+**Rationale**: `isInHouseKitchen` already exists, already zeroes the traiteur
+cost in every computation, and SettingsModule already shows the in-house
+confirmation note — the finance screen simply forgot to follow. Hiding (not
+zero-displaying) is what the remark asks («masquer les blocs»), and the values
+would be structurally meaningless in-house anyway (the strip's «ربح السنتر»
+in-house equals the full plate price, inviting misreading). Gating rendering
+keeps the totals byte-identical between modes for the same data, which the new
+FinanceModule test pins — the change is provably presentational.
+
+**Alternatives considered**: grey-out instead of hide — rejected: the remark
+says «masquer» and greyed indicators still invite reading; a new explicit
+settings flag for indicator visibility — rejected: redundant with
+`mealOperatingMode`, which is already the mode of record.
