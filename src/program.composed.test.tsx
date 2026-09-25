@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act, waitFor, within } from '@testing-library/react';
 import App from './App';
+import * as api from './api';
 import type { CenterTenant, UserAccount } from './types';
 import {
   CRECHE_COMPOSED_CONFIG,
@@ -36,6 +37,7 @@ vi.mock('./api', async (importOriginal) => {
     fetchMealForfaitClosures: vi.fn().mockResolvedValue([]),
     fetchCentersApi: vi.fn(() => Promise.resolve(h.centers)),
     fetchRenewalRequestsApi: vi.fn().mockResolvedValue({ requests: [], history: [] }),
+    createRenewalRequestApi: vi.fn().mockResolvedValue({ success: true, id: 'req_1' }),
     fetchActiveAdvertisementsApi: vi.fn().mockResolvedValue([]),
     saveDatabase: vi.fn().mockResolvedValue(undefined)
   };
@@ -205,6 +207,12 @@ describe('US1 — the crèche composed pass (C1)', { timeout: 30000 }, () => {
     expect(screen.getAllByText(LOCKED_MESSAGE).length).toBeGreaterThanOrEqual(4);
     expect(screen.getAllByText('الذهاب إلى التجديد').length).toBeGreaterThan(0);
 
+    // Attendance register (remark 1, revision C): the crèche/jardin surface
+    // shows no grade filter — search and status buttons stay.
+    await clickTab('تسجيل حضور التلاميذ', 'حفظ pointage اليوم');
+    expect(screen.queryByText('كل المستويات')).toBeNull();
+    expect(screen.getByPlaceholderText('ابحث عن تلميذ...')).toBeTruthy();
+
     // Both new modules are functional with real data in the same session.
     await clickTab('الأنشطة والبرنامج', 'Motricité du matin');
     await clickTab('المهارات والكفاءات', 'الكتالوج');
@@ -228,6 +236,29 @@ describe('US1 — the crèche composed pass (C1)', { timeout: 30000 }, () => {
     // The étude this center is already entitled to (pre-program list) stays
     // displayed as active — never re-offered, never hidden (research R9).
     expect(screen.getByText(/Étude Surveillée — reste actif/)).toBeTruthy();
+  });
+
+  it('C1 — the crèche renewal derives Pro from the type-applicable selection (composed, remark 7)', async () => {
+    const { center, user } = makeProgram(CRECHE_COMPOSED_CONFIG);
+    await loginAs(center, user);
+    await clickTab('التجديد', 'Simulateur de plan');
+
+    // Tick every compatible addon the simulator offers (cantine, transport,
+    // events, staff, activites, competences — étude is entitled but never
+    // re-offered, and the base is always included).
+    for (const label of ['Cantine & Repas', 'Transport Scolaire', 'Événements & Sorties', 'Personnel & Salaires', 'Activités & Planning', 'Compétences & Skills']) {
+      const box = screen.getByRole('checkbox', { name: new RegExp(label) });
+      if (!(box as HTMLInputElement).checked) fireEvent.click(box);
+    }
+
+    // Selecting the type-applicable set derives Pro (remark 7) — the submit
+    // button offers the plan change, and the request carries requestedPlan pro.
+    await waitFor(() => expect(screen.getByText(/Demander le changement d/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Demander le changement d/));
+    await waitFor(() => expect(api.createRenewalRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'upgrade',
+      requestedPlan: 'pro',
+    })));
   });
 
   it('falls back to the dashboard when the center type flips under a study tab (stale deep link)', async () => {

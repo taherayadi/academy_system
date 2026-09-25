@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Edit3, X, Printer, Users, LayoutGrid, List, HandMetal, MessageSquare, Footprints } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Printer, Users, LayoutGrid, List, HandMetal, MessageSquare, Footprints, Brain } from 'lucide-react';
 import { Skill, SkillEvaluation, SkillDomain, SkillLevel } from '../types';
 import { useToast } from './Toast';
 import {
@@ -324,7 +324,11 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
             <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               المهارات والكفايات
             </span>
-            <h2 className="text-2xl font-black text-slate-900 mt-2">المهارات والكفايات</h2>
+            {/* Revision C (remark 5): icon before the title text, outside the green badge. */}
+            <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
+              <Brain className="h-6 w-6 text-brand-600" />
+              المهارات والكفايات
+            </h2>
             <p className="text-slate-500 text-xs mt-1">
               كتالوج المهارات حسب المجالات الأربعة، تقييم الأطفال، وخريطة التحكم حسب الفئة.
             </p>

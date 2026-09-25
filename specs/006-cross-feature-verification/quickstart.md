@@ -95,3 +95,38 @@ blocking).
 gates stay green with the new per-surface tests included; the compatibility
 matrix has a single definition in `src/utils/centerType.ts` asserted by the
 test suite.
+
+---
+
+# Revision C walkthroughs — remarks alignment (`remarques-modules-centre.md`)
+
+Run on the same dev servers as W1 (`npm run dev` + `npm run pages:dev`).
+
+**W9 — Attendance register without levels (remark 1)**: log into the C1 crèche
+center → « تسجيل حضور التلاميذ » → the grade filter « كل المستويات » is absent
+(search field and حاضر/غائب buttons remain) → save a day's pointage: rows save
+normally → repeat in a garden center (same result) → log into the formation
+center's student time-sheets view: the filter is present and filters by grade
+(regression) → unknown-type legacy center: filter present (passthrough).
+
+**W10 — Planner day and banners (remarks 3+4+5)**: open « الأنشطة والبرنامج
+الأسبوعي » → the week grid's first row is **08:00** (no 06:00/06:30/07:00/07:30
+rows) and the last is 19:30–20:00 → the module icon sits before the title
+text, outside the green badge → create an activity at 09:00 and drag it to
+10:00 (snap works) → an activity stored before 08:00 (if any) renders in the
+first band, not lost → open « المهارات والكفايات » → same icon-before-title
+placement, outside the green badge.
+
+**W11 — Renewal Pro for crèche (remark 7)**: on the crèche center → « التجديد »
+→ tick **every** offered addon (cantine, transport, events, staff, activites,
+competences) → the derived offer shows **Pro** (not Growth) and the submitted
+request carries `requestedPlan: "pro"` with exactly the ticked modules →
+pressing the Pro tier button loads exactly those six addons → repeat on the
+formation center: full catalog, Pro as before (regression) → confirm no stored
+module list changed after the simulator session (derivation never mutates
+`enabledModules`).
+
+**Expected end state (revision C)**: W9–W11 behave exactly as described; all
+gates stay green with the re-pinned planner tests and the type-aware derivation
+tests; `derivePlanFromModules` without a type returns the pre-revision-C
+verdicts (baseline frozen); no schema change was required for any remark.

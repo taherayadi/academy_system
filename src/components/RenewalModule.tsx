@@ -142,8 +142,9 @@ export default function RenewalModule({ center, centerType }: { center?: CenterT
 
   const monthly = useMemo(() => modulesPrice(selected, prices), [selected, prices]);
   // L'offre se déduit des modules cochés : base seule → Basic, un module de
-  // plus → Growth, tous les modules → Pro.
-  const tier = useMemo(() => derivePlanFromModules(selected), [selected]);
+  // plus → Growth, tous les modules applicables au type → Pro (revision C,
+  // remark 7). Sans type connu, la comparaison reste globale (FR-006).
+  const tier = useMemo(() => derivePlanFromModules(selected, centerType), [selected, centerType]);
   // Règlement annuel : 12 mois moins 20 %.
   const total = totalForCycle(monthly, cycle);
 
@@ -160,7 +161,7 @@ export default function RenewalModule({ center, centerType }: { center?: CenterT
   // Les préréglages d'offre sont des propositions comme les autres : ils
   // passent par le même filtre de compatibilité (remark 4).
   const chooseTier = (key: string) =>
-    setSelected(modulesForPlan(key).filter(mk => isModuleCompatible(mk, centerType)));
+    setSelected(modulesForPlan(key, centerType));
 
   const submit = async () => {
     setSubmitting(true);

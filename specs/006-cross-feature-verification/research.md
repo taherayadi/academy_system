@@ -158,7 +158,7 @@ rejected: data disappearance without a data change; stripping incompatible keys
 from the payload — rejected: 006 forbids silent data mutation outside explicit
 round-trips.
 
-## R10 — Demo-form compatibility feedback: informative, not blocking
+## R10 — Demo-form compatibility feedback: informative, not blocking (unchanged; see above)
 
 **Decision**: A live info banner (ℹ️, non-error styling) lists incompatible
 selections and suggests removal or a type switch; submit stays enabled and the
@@ -172,3 +172,99 @@ provisioning flow (FR-012 round-trip) stays untouched.
 remark; silently removing incompatible modules from the selection — rejected:
 mutates the visitor's choice without consent, and the remark wants them to
 choose.
+
+---
+
+# Revision C research — remarks alignment (`remarques-modules-centre.md`)
+
+## R11 — Where does type-aware plan derivation live, and what is the Pro predicate?
+
+**Decision**: Add `applicableModuleKeys(centerType?)` to the canonical
+`src/utils/pricing.ts` (filtering `ALL_MODULES` through revision B's
+`isModuleCompatible`) and give `derivePlanFromModules` an optional second
+parameter. Pro = every **applicable** key selected; no type → the exact
+today's global comparison. `RenewalModule` threads its existing `centerType`
+prop into the call.
+
+**Rationale**: Remark 7 names the cause precisely — the counter counts modules
+the center can never select. The comparison base must be the applicable set;
+making the parameter optional keeps every existing caller (landing simulator,
+coherence tests, preset validity checks) byte-identical, honoring the
+immutable-baseline rule. `pricing.ts` is the right home because it already owns
+`ALL_MODULES` and the derivation, and it already imports from (or can import
+from) the canonical type utility — one more single-definition convergence, not
+a fork: the compatibility *map* stays in `centerType.ts`, only the
+pricing-side *derivation* moves here.
+
+**Alternatives considered**: counting "visible modules" from the UI filter
+(renewal's `compatibleAddons.length`) — rejected: derivation would depend on a
+component's render output, not derivable from data; hardcoding "4 hidden
+modules for crèche" — rejected: duplicates the matrix and drifts the moment
+the matrix changes; flipping crèche selections to include study keys in the
+payload — rejected: fabricates selections the user never made and would
+mis-price the request.
+
+## R12 — Planner day start: constant change vs configurable per-center hours
+
+**Decision**: Change the constant (`DAY_START_MIN = 8 * 60`, 24 bands) in the
+single-definition `src/utils/planner.ts`. No per-center configuration.
+
+**Rationale**: The remark states the expected opening hour as a fixed fact
+(« 08h00, heure réelle d'ouverture des activités »), not a per-center setting;
+v1 has no center-hours entity and the scope note forbids new entities. The
+clamp rule (times outside the range snap to the first/last band) already
+defined behavior for out-of-range values, so stored activities before 08:00
+keep rendering (band 0) without any data rewrite — the remark's vigilance
+point (créneaux, exports, rapports) is discharged by verifying those surfaces
+derive from the same helper: the week grid, the moved-chip snap
+(`bandStartTime`), and the form defaults are the only consumers, and no
+export/report references a 06:00 origin anywhere in `src/` (verified by
+searching the time-band consumers).
+
+**Alternatives considered**: keeping 28 bands and hiding the first four rows
+via CSS — rejected: the helper stays wrong and every consumer must remember to
+hide; a `dayStart` setting on centers — rejected: new persisted entity, admin
+repo involvement, and nothing in the remark asks for configurability.
+
+## R13 — Attendance register: gate the filter, not the whole module
+
+**Decision**: `StudentAttendanceModule` gains `centerType?: string` (forwarded
+by `StudentTimeSheetModule`'s crèche/jardin branch); the grade filter select
+renders only when `hasSchoolLevel(centerType)`.
+
+**Rationale**: Revision B already established `hasSchoolLevel` as the canonical
+"does this type carry school-level artifacts" predicate (it gates grade fields,
+prints, and the academic-history section); a grade filter is exactly such an
+artifact, and the register is the crèche/jardin variant of the time-sheet
+module, which is where the remark aims. Reusing the predicate keeps one
+definition; the optional prop preserves the legacy passthrough (undefined →
+filter shown) required by FR-004. Hiding only the filter — not the search box,
+not the status buttons — matches the remark's wording (masquer le filtre) and
+cannot affect stored attendance rows, which are per-student status records
+unrelated to the filter.
+
+**Alternatives considered**: filtering by `gradeOptions.length > 0` (auto-hide
+when no grades exist) — rejected: a crèche could still hold stray grade values
+and the filter would reappear, contradicting the type rule; hiding the grade
+*chips* on the cards too — rejected: the remark targets the filter only, and
+grade display elsewhere is already governed by 002's `showSchoolLevel` rules.
+
+## R14 — Banner icon placement: one pattern for both modules
+
+**Decision**: In both `ActivitiesModule` and `CompetencesModule`, render the
+module icon inside the `text-2xl` title element (flex row, gap-2, icon
+immediately before the text — mirroring `StudentTimeSheetModule`'s existing
+icon-before-title header), outside the green badge span.
+
+**Rationale**: The remark is purely structural: icon **before the title text**,
+**not inside the green rectangle**. The repo already has the target pattern
+(the time-sheet/attendance banners put a `h-6 w-6` icon in the title row), so
+both modules adopt it verbatim rather than inventing a third banner shape. RTL
+direction puts "before" on the right visually, which the existing pattern
+already handles. Component tests pin DOM order (icon precedes the title text
+node) so the placement cannot regress silently.
+
+**Alternatives considered**: moving the icon into the green badge alongside
+the label — rejected: that is the current state the remark rejects; a left
+floating icon column outside both — rejected: diverges from the established
+banner pattern used by every other module.

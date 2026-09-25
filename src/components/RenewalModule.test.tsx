@@ -330,3 +330,90 @@ describe('RenewalModule — module compatibility with the center type (T023, rem
     expect(screen.queryByText('Révision Examens')).toBeNull();
   });
 });
+
+// ─── Revision C (remark 7): Pro is reachable for every center type ────────
+// Uses a LOCAL extended price fixture (adds the two new modules) so the shared
+// PRICES fixture and every pre-revision-C assertion above stay untouched.
+
+const PRICES_RC = { ...PRICES, activites: 45, competences: 45 };
+
+const crècheAddonLabels = [
+  'Cantine & Repas', 'Transport Scolaire', 'Événements & Sorties',
+  'Personnel & Salaires', 'Activités & Planning', 'Compétences & Skills'
+];
+
+const CRÈCHE_ADDON_KEYS = ['cantine', 'transport', 'events', 'staff', 'activites', 'competences'];
+
+const LABEL_TO_KEY: Record<string, string> = {
+  'Cantine & Repas': 'cantine',
+  'Transport Scolaire': 'transport',
+  'Événements & Sorties': 'events',
+  'Personnel & Salaires': 'staff',
+  'Activités & Planning': 'activites',
+  'Compétences & Skills': 'competences'
+};
+
+describe('RenewalModule — type-aware plan derivation (revision C, remark 7)', () => {
+  beforeEach(() => {
+    (api.fetchPublicModulePricesApi as ReturnType<typeof vi.fn>).mockResolvedValue(PRICES_RC);
+  });
+
+  function tickAddon(label: string) {
+    const box = screen.getByText(label).closest('label') as HTMLLabelElement;
+    fireEvent.click(box.querySelector('input[type="checkbox"]') as HTMLInputElement);
+  }
+
+  it('derives Pro for a crèche ticking every offered addon and submits requestedPlan pro', async () => {
+    render(<RenewalModule center={center()} centerType="creche" />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+
+    for (const label of crècheAddonLabels) tickAddon(label);
+
+    // Submit: the derived tier must be Pro — not Growth (remark 7's exact bug).
+    await waitFor(() => expect(screen.getByText(/Demander le changement d/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Demander le changement d/));
+    await waitFor(() => expect(api.createRenewalRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'upgrade',
+      requestedPlan: 'pro',
+      requestedModules: ['scolaire', 'studentTimeSheets', 'finance', ...CRÈCHE_ADDON_KEYS],
+    })));
+  });
+
+  it('loads exactly the 9 applicable keys when the Pro tier button is pressed for a crèche', async () => {
+    render(<RenewalModule center={center()} centerType="creche" />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Pro/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Pro/ }));
+    // No study addon ever becomes offered (revision B filter, unchanged)…
+    expect(screen.queryByText('Étude Surveillée')).toBeNull();
+    // …and every compatible addon is selected (9 applicable = 3 base + 6 addons).
+    await waitFor(() => {
+      const checked = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'));
+      expect(checked.length).toBe(9);
+    });
+  });
+
+  it('keeps the full-catalog Pro for a formation center (regression)', async () => {
+    render(<RenewalModule center={center()} centerType="formation" />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+    for (const label of [...crècheAddonLabels, 'Étude Surveillée', 'Cours Particuliers', 'Révision Examens', 'Formations']) {
+      tickAddon(label);
+    }
+    await waitFor(() => expect(screen.getByText(/Demander le changement d/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/Demander le changement d/));
+    await waitFor(() => expect(api.createRenewalRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'upgrade',
+      requestedPlan: 'pro',
+    })));
+  });
+
+  it('keeps Basic for a crèche with the base only', async () => {
+    render(<RenewalModule center={center()} centerType="creche" />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+    expect(screen.getByText(/Demander le renouvellement/)).toBeTruthy(); // not an upgrade
+    fireEvent.click(screen.getByText(/Demander le renouvellement/));
+    await waitFor(() => expect(api.createRenewalRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'renewal',
+      requestedPlan: 'starter',
+    })));
+  });
+});

@@ -217,3 +217,133 @@ created here (I), every delta lands with its test (V). No violations.
 validation on the demo form. The remarks matrix's «Personnel / Staff» for all
 types is entitlement-gated as shipped (003) — type compatibility does not override
 entitlements.
+
+---
+
+## Revision C — Remarks alignment (`remarques-modules-centre.md`)
+
+**Date**: 2026-09-25 | **Input**: the client's remarks file listing **7 numbered
+remarks** on the original implementation (a superset/duplicate of revision B's
+6-remark source: revision B's remarks 1–3 correspond to remarks 1–3 here, with
+remark 1 now pointing at the *attendance register* screen; revision B's remarks
+4–6 are not repeated in this file).
+
+An implementation audit against this file found **three gaps** (remarks 1, 3, 7)
+and **two UI adjustments** (remarks 4, 5); remarks 2 and 6 are already satisfied
+verbatim by the shipped program and are re-verified, not re-implemented. This
+revision adjusts the technical approach accordingly; it does not re-open the
+verified 001–005 scope and keeps revision B's shipped deltas untouched.
+
+### Audit result per remark
+
+| # | Remark | Current state (verified in code) | Verdict |
+|---|--------|----------------------------------|---------|
+| 1 | Hide the « كل المستويات » grade filter on « نظام تسجيل حضور التلاميذ » for crèche/jardin | The attendance register (`src/components/StudentAttendanceModule.tsx`, rendered by `StudentTimeSheetModule` when `centerType` is crèche/jardin) renders the grade `<select>` unconditionally; it receives **no `centerType` prop** | **GAP** — pass `centerType` through and gate the filter with `hasSchoolLevel` |
+| 2 | Persist Activités & Compétences (migrations + CRUD endpoints) | `functions/api/activities.ts` + `functions/api/skills.ts` (GET/PUT, formations pattern), `readActivities/writeActivities` + `readSkills/writeSkills` in `_lib.ts`, route inventory entries, admin-repo migration coordination (001/004/005 T025, 006 T015) | SATISFIED — composed/handler tests already cover it |
+| 3 | Planner grid starts at 08h00 (not 06h00) | `src/utils/planner.ts` builds `TIME_BANDS` from `DAY_START_MIN = 6 * 60` (28 bands, 06:00–20:00); `planner.test.ts` pins 06:00 edges | **GAP** — move the day start to 08:00 (24 bands, 08:00–20:00) and re-pin the tests |
+| 4 | Icon before the title text, outside the green badge — « الأنشطة والبرنامج الأسبوعي » | `ActivitiesModule` banner: the green badge (`bg-brand-600/[0.06] … border-brand-600/20`) contains only the text label; no icon precedes the `text-2xl` title | **ADJUST** — render the module icon (Puzzle) before the title, outside the badge |
+| 5 | Same for « المهارات والكفايات » | `CompetencesModule` banner: same structure | **ADJUST** — same change (Brain icon) |
+| 6 | Dynamic skills management (skills table, migration, CRUD API, front consumes API) | Full CRUD shipped: catalog CRUD + evaluations in `CompetencesModule` via `onUpdateDoc` → `saveSkills` → `GET/PUT /api/skills` → `skills`/`skill_evaluations` tables; **no hardcoded catalog** exists in `src/` (the 4-skill fixtures live only in tests); empty catalog shows an explicit empty state with add affordances | SATISFIED — re-verified by 005's suites + composed C8/C9 |
+| 7 | Renewal plan detection: selecting all modules for crèche/jardin must yield **Pro**, not Growth | `derivePlanFromModules(selected)` compares against the **global** `ALL_MODULES` list (`pricing.ts`), but the crèche simulator only *offers* type-compatible addons (revision B filter) — a crèche center can therefore never satisfy `all.every(k => selected.includes(k))` and is capped at Growth. Same flaw latent on the landing simulator | **GAP** — make plan derivation type-aware |
+
+### Technical approach (deltas)
+
+**Remark 1 — attendance-register grade filter.** The register component gains an
+optional `centerType?: string` prop; `StudentTimeSheetModule` forwards its
+existing prop when rendering the crèche/jardin branch. The grade `<select>`
+(and its `gradeOptions` derivation feeding it) renders only when
+`hasSchoolLevel(centerType)` — unknown/empty types keep the filter (legacy
+passthrough, FR-004). The filter is presentation-only: filtering defaults to
+«all», so hiding it changes no stored value and no other surface. The search
+field stays for both types.
+
+**Remark 3 — planner day start at 08h00.** Single-definition change in
+`src/utils/planner.ts`: `DAY_START_MIN = 8 * 60`, band count 28 → 24
+(08:00–20:00, half-hour bands, day end unchanged). The remark's point de
+vigilance is answered by construction: the band grid is the **only** consumer of
+the day range — exports/rapports (print report, heatmap, per-class/per-location
+grouping) never reference 06:00; stored activities keep their exact
+`timeStart`/`timeEnd` (chips before 08:00 clamp to the first band, per the
+existing clamp rule, so no data is dropped or rewritten — FR-010). Tests
+re-pinned: 24 bands, 08:00 first band, 19:30 last, `bandIndexFor('10:00') = 4`,
+clamping below 08:00 → band 0. The form default `timeStart: '09:00'` already
+sits inside the new range.
+
+**Remarks 4+5 — icon before the title, outside the green badge.** Both banners
+follow the same adjustment: the module icon (Puzzle / Brain, already imported in
+each file's neighborhood) renders inside the `text-2xl` title row (flex + gap,
+matching the existing icon-before-title pattern used by `StudentTimeSheetModule`
+and `StudentAttendanceModule`), visually **before** the title text in the RTL
+layout and outside the green badge span. The badge itself keeps its text label.
+No test currently asserts either banner's icon; the new component tests pin the
+expected order so it cannot silently regress.
+
+**Remark 7 — type-aware plan derivation (the core fix).** Plan derivation must
+compare the selection against the modules **applicable to the center type**, not
+the global catalog. One canonical helper, extending the existing files:
+
+```text
+src/utils/pricing.ts
++  applicableModuleKeys(centerType?: string | null): string[]
++  derivePlanFromModules(selected, centerType?)          # centerType optional
++  PLAN_PRESET_MODULES filtered through isModuleCompatible when a type is given
+   (modulesForPlan(plan, centerType?))
+```
+
+Semantics (research R11):
+- `applicableModuleKeys(type)`: `ALL_MODULES` keys filtered through
+  `isModuleCompatible` — for crèche/jardin this excludes the four study
+  addons; unknown/empty type returns the full catalog (legacy passthrough).
+- `derivePlanFromModules(selected, centerType?)`: Pro when **every applicable
+  key** is selected; Growth when any non-base key is selected; Basic for base
+  only. No type given → today's global behavior (all existing callers and tests
+  unchanged).
+- `RenewalModule` passes its `centerType` prop through: a crèche center ticking
+  every offered addon now derives **Pro** (remark 7's exact scenario).
+- `chooseTier` presets already filter through compatibility (revision B);
+  `modulesForPlan(plan, centerType)` formalizes that filter as a helper so the
+  Pro preset *is* the applicable set for the type, and ticking it satisfies the
+  Pro predicate.
+- The landing simulator keeps the global derivation: its demo form allows any
+  type×module combination by design (revision B remark 6: informative, not
+  blocking), so there is no single applicable set to compare against. The
+  coherence test asserts the no-type behavior is byte-identical to today.
+
+Data-safety: derivation is a pure computation over the selection; it never
+mutates `enabledModules` (FR-010 carries over).
+
+**Tests** (own files, per-feature adjacency; composed re-check in 006's suites):
+1. `src/utils/planner.test.ts` — re-pin TIME_BANDS (24 bands, 08:00–20:00),
+   bandIndexFor edges incl. sub-08:00 clamping; snap/grouping truth tables
+   updated for the shifted indices.
+2. `src/components/ActivitiesModule.test.tsx` + `src/components/CompetencesModule.test.tsx`
+   — banner assertions: icon precedes the title text in DOM order and sits
+   outside the green badge; week grid renders no 06:00/06:30/07:00/07:30 rows
+   and starts at 08:00 (remark 3 rendered assertion).
+3. `src/components/StudentAttendanceModule.test.tsx` (new) + `StudentTimeSheetModule.test.tsx`
+   extension — crèche/jardin renders without the « كل المستويات » filter
+   (search still present); formation/undefined type renders it (US2 regression);
+   filtering behavior with the filter absent is the unfiltered list.
+4. `src/utils/pricing.test.ts` + `src/utils/centerType.test.ts` —
+   `applicableModuleKeys` per type (crèche = 9 keys: 3 base + 6 core addons;
+   formation = all 13; unknown = all 13); `derivePlanFromModules` type-aware
+   truth table: crèche selecting all applicable → **pro** (remark 7 regression
+   test), crèche base+one addon → growth, base only → starter; no-type calls
+   unchanged.
+5. `src/components/RenewalModule.test.tsx` — crèche center: tick every offered
+   addon → tier shows Pro and the submitted `requestedPlan` is `pro` (remark 7,
+   end-to-end through the simulator); formation center: unchanged Pro behavior;
+   the Pro preset button for a crèche loads exactly the applicable set.
+6. `src/program.composed.test.tsx` — extend the C1 crèche renewal render:
+   selecting all offered addons derives Pro (composed remark-7 assertion);
+   attendance register renders without the grade filter under C1.
+
+**Constitution Check (revision C)**: re-verified — no new routes (IV), no new
+endpoints/security surface (III), tenant context untouched (II), no migrations
+created here (I), every delta lands with its test (V). No violations.
+
+**Out of scope**: pricing/value changes, new modules, backend changes, any
+change to the four study modules' visibility, removing or hiding already-paid
+modules. Remarks 2 and 6 need no code: their verifying suites (001/004/005
+handler + component suites, composed C8/C9, coherence C10) already run in the
+gate.

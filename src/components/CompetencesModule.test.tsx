@@ -330,3 +330,23 @@ describe('CompetencesModule — US3 heatmap + report', () => {
     expect(within(report).getByText('قيد التقدم')).toBeTruthy();
   });
 });
+
+// ── Revision C (remark 5): banner icon before the title, outside the badge ──
+
+describe('CompetencesModule banner (revision C, remark 5)', () => {
+  it('renders the module icon before the title text, outside the green badge', () => {
+    render(<CompetencesModule {...baseProps} />);
+    const title = Array.from(document.querySelectorAll('h2')).find(h => h.textContent === 'المهارات والكفايات') as HTMLElement;
+    expect(title, 'the banner title h2 must exist').toBeTruthy();
+    const icon = title.querySelector('svg');
+    expect(icon, 'an icon must sit inside the title row').toBeTruthy();
+    // icon precedes the title text in DOM order
+    expect(title.firstChild).toBe(icon);
+    // and the green badge span contains no icon
+    const badges = Array.from(document.querySelectorAll('span')).filter(s => s.textContent === 'المهارات والكفايات');
+    expect(badges.length).toBeGreaterThan(0);
+    for (const badge of badges) {
+      expect(badge.querySelector('svg')).toBeNull();
+    }
+  });
+});

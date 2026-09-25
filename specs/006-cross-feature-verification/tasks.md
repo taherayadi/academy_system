@@ -466,3 +466,282 @@ replacement, one added), RenewalModule +4, LandingPage +3, program.composed +1.
 No human browser pass has been performed. W5–W8 (quickstart.md revision B) are
 covered by their automated counterparts and remain available as a manual
 pre-deploy pass (`npm run dev` + `npm run pages:dev`).
+
+---
+
+# Revision C tasks — remarks alignment (`remarques-modules-centre.md`)
+
+**Input**: plan.md Revision C, research.md R11–R14, data-model.md revision-C
+derivations, quickstart.md W9–W11. Original tasks T001–T016 and revision-B tasks
+T017–T028 are complete and untouched; these tasks continue the ID sequence.
+
+**Mapping to user stories**: remark 1 tightens US1's crèche composition; remarks
+3+4+5 are the new modules' presentation (US1 surfaces, coherence-checked in US3);
+remark 7 serves US3's commercial coherence. Remarks 2 and 6 are SATISFIED —
+no tasks; their verifying suites already run in the gate.
+
+**Conventions**: test-first (constitution V) — every impl task follows its own
+failing-test task and lands green in the same change; the pre-existing suite is
+IMMUTABLE (only revision-C-owned assertions may change); no schema change, no
+new routes, no new dependencies.
+
+## Phase R-C1: Foundational (blocks all revision-C stories) ✅
+
+**Purpose**: the two single-definition changes every surface consumes — the
+planner day start (remark 3) and the type-aware plan derivation (remark 7).
+
+- [x] T029 [P] Write failing tests first in `src/utils/planner.test.ts`:
+      re-pin `TIME_BANDS` — 24 half-hour bands covering 08:00–20:00 (first band
+      08:00–08:30, last 19:30–20:00, no 06:00/06:30/07:00/07:30 bands);
+      re-pin `bandIndexFor` — '08:00'→0, '08:29'→0, '19:30'→23, '19:59'→23,
+      minute snap '10:00'/'10:15'/'10:29'→4 and '10:30'→5, sub-08:00 clamp
+      ('06:00', '07:15', '00:00' → 0) and over-20:00 clamp ('20:00', '23:45' →
+      23); keep the `validateActivity` and `groupActivities` truth tables
+      UNTOUCHED (they must still pass unmodified — FR-006)
+- [x] T030 In `src/utils/planner.ts`: set `DAY_START_MIN = 8 * 60` and the band
+      count 28 → 24 (update the constant's comment: « bands from 08:00 to
+      20:00 (24 bands) »), until T029 passes; verify
+      `src/components/ActivitiesModule.test.tsx` placement tests still pass
+      unchanged (their `[data-band="10:00"]` anchors remain valid band starts)
+- [x] T031 [P] Write failing tests first in `src/utils/pricing.test.ts`:
+      `applicableModuleKeys` per type (creche/jardin = exactly the 9 keys
+      scolaire, studentTimeSheets, finance, cantine, transport, events, staff,
+      activites, competences — never etude/coursParticuliers/revision/
+      formations; garderie/formation = all 13; unknown/undefined/null = all 13
+      — legacy passthrough); type-aware `derivePlanFromModules` truth table —
+      creche selecting all 9 applicable → 'pro' (remark 7 regression), creche
+      base+cantine → 'growth', creche base-only → 'starter', formation all 13 →
+      'pro'; no-type calls frozen: [...BASE_KEYS] → 'starter', base+activites →
+      'growth', ALL_MODULES keys → 'pro'; `modulesForPlan` — ('pro','creche') →
+      the 9 applicable keys, ('growth','creche') → base + activites +
+      competences, ('starter', any) → starter preset, unknown plan → starter
+      preset, no type → today's presets verbatim. In
+      `src/utils/centerType.test.ts` add one mutual-coherence invariant:
+      for every CenterType, `applicableModuleKeys(t)` equals exactly the
+      catalog keys `isModuleCompatible(key, t)` accepts (no drift in either
+      direction)
+- [x] T032 In `src/utils/pricing.ts`: export `applicableModuleKeys(centerType?:
+      string | null): string[]` (ALL_MODULES keys filtered through
+      `isModuleCompatible` imported from './centerType'); extend
+      `derivePlanFromModules(selected, centerType?)` — Pro ⇔ every applicable
+      key selected (no type → today's global comparison, byte-identical); extend
+      `modulesForPlan(plan, centerType?)` — preset filtered through
+      `isModuleCompatible` (no type → today's presets verbatim), until T031
+      passes. Derivation is pure: it never mutates selections (FR-010)
+
+**Checkpoint**: `npm run lint` + `npm test` green; no surface consumes the new
+helpers yet; the no-type derivation verdicts are pinned frozen.
+
+## Phase R-C2: User Story 1 — attendance register without levels (remark 1) ✅
+
+**Goal**: the crèche/jardin register (« نظام تسجيل حضور التلاميذ ») hides the
+« كل المستويات » grade filter; every other type keeps it (US2 regression).
+
+**Independent Test**: on the C1 crèche config the register renders without the
+filter (search + حاضر/غائب intact, pointage saves); formation/unknown types
+render it.
+
+- [x] T033 [P] [US1] Write failing tests first: create
+      `src/components/StudentAttendanceModule.test.tsx` — crèche and jardin
+      renders omit the « كل المستويات » grade select while the search input and
+      the حاضر/غائب buttons remain; with the filter absent the rendered list is
+      the unfiltered student list; formation and undefined/unknown-type renders
+      show the filter and filtering by grade still works (US2 regression);
+      create `src/components/StudentTimeSheetModule.test.tsx` (first suite for
+      this component) — with `centerType="creche"` the register branch renders
+      and inherits the filter-less behavior, with `centerType="formation"` the
+      time-sheets view renders as before (regression)
+- [x] T034 [US1] In `src/components/StudentAttendanceModule.tsx` accept
+      `centerType?: string` and render the grade `<select>` (and only it)
+      behind `hasSchoolLevel(centerType)` (import from '../utils/centerType');
+      in `src/components/StudentTimeSheetModule.tsx` forward
+      `centerType={centerType}` to the register branch; `App.tsx` already
+      passes `centerType` to `StudentTimeSheetModule` — verify only, until T033
+      passes. The filter defaults to «all», so hiding it touches no stored
+      attendance row (FR-010)
+
+**Checkpoint**: W9 behavior holds; formation/legacy configs unchanged.
+
+## Phase R-C3: Module presentation — planner day + banners (remarks 3+4+5) ✅
+
+**Goal**: the week grid starts at 08:00 (remark 3, rendered) and both module
+banners show the icon before the title text, outside the green badge (remarks
+4+5).
+
+**Independent Test**: the C1 planner renders first band 08:00 and no 06:00–07:30
+rows; both banners render an icon inside the `text-2xl` title row preceding the
+title text and no icon inside the green badge span.
+
+- [x] T035 [P] [US1] Write failing tests first in
+      `src/components/ActivitiesModule.test.tsx`: the week grid renders a
+      `[data-band="08:00"]` cell and no `[data-band="06:00"]`/`"06:30"`/
+      `"07:00"`/`"07:30"` cells; an activity stored at 06:45 renders in the
+      08:00 band (clamp, no data loss); the banner's `text-2xl` title element
+      contains an svg icon before the title text (DOM order) and the green
+      badge span (`bg-brand-600/[0.06]`) contains no svg
+- [x] T036 [P] [US1] Write failing tests first in
+      `src/components/CompetencesModule.test.tsx`: the banner's `text-2xl`
+      title element contains an svg icon before the «المهارات والكفايات» title
+      text and the green badge span contains no svg (remark 5)
+- [x] T037 [US1] In `src/components/ActivitiesModule.tsx`: render the Puzzle
+      icon (add to the lucide-react import) inside the `text-2xl` title as a
+      flex row with gap-2 preceding the text — mirroring the existing
+      `StudentTimeSheetModule` header pattern (research R14); verify the week
+      grid derives every row from `TIME_BANDS` with no local hour list, until
+      T035 passes
+- [x] T038 [US1] In `src/components/CompetencesModule.tsx`: render the Brain
+      icon (add to the lucide-react import) in the same title-row pattern,
+      until T036 passes
+
+**Checkpoint**: W10 behavior holds; stored times untouched (banding is
+render-time, FR-010); RTL «before» placement comes free from the existing
+pattern.
+
+## Phase R-C4: User Story 3 — Pro is reachable for every type (remark 7) ✅
+
+**Goal**: the renewal simulator derives the tier from the type-applicable set:
+selecting all offered modules for a crèche yields **Pro**.
+
+**Independent Test**: on the crèche center, tick every offered addon → the
+submitted request carries `requestedPlan: "pro"`; the Pro tier button loads
+exactly the applicable set; formation/legacy behavior unchanged.
+
+- [x] T039 [P] [US3] Write failing tests first in
+      `src/components/RenewalModule.test.tsx`: use a LOCAL extended price
+      fixture (add `activites: 45`, `competences: 45`) inside the new cases so
+      the shared `PRICES` fixture and every existing assertion (e.g. «330 TND»)
+      stay untouched; with `centerType="creche"` — tick all six offered addon
+      checkboxes and submit: `createRenewalRequestApi` receives
+      `requestedPlan: 'pro'` and `requestedModules` exactly the ticked keys
+      (remark 7 end-to-end); pressing the Pro tier button selects exactly the
+      9 applicable keys; with `centerType="formation"` — ticking everything
+      still derives Pro with the full catalog (regression); a crèche center
+      with base only still derives Basic
+- [x] T040 [US3] In `src/components/RenewalModule.tsx`: derive the tier via
+      `derivePlanFromModules(selected, centerType)` and preset loading via
+      `modulesForPlan(key, centerType)` in `chooseTier`, until T039 passes;
+      `App.tsx` already passes `centerType` — verify only
+- [x] T041 [P] [US3] Extend `src/pricing.coherence.test.ts`: pin the frozen
+      no-type derivation verdicts explicitly as the FR-006 baseline (the
+      representative combinations from T009/T031); add the type-aware preset
+      invariant — for creche, deriving from each filtered preset returns that
+      preset's own tier (starter→starter, growth→growth, pro→pro) and
+      `modulesForPlan('pro','creche')` ⊆ `ALL_MODULES` keys with every key
+      `isModuleCompatible`-compatible
+
+**Checkpoint**: US3 coherence extends to derivation: one applicable-set
+definition, consumed by the simulator, presets and the coherence suite.
+
+## Phase R-C5: Composed verification & closure ✅
+
+**Purpose**: fold the revision-C deltas into the composed suites and close the
+gates.
+
+- [x] T042 Extend `src/program.composed.test.tsx`: the C1 crèche walkthrough
+      additionally renders «تسجيل حضور التلاميذ» and asserts the grade filter
+      is absent (T033/T034 fallout); extend the composed crèche-renewal render:
+      ticking every offered addon and submitting derives `requestedPlan: 'pro'`
+      (T039/T040 fallout); keep every other C1/C5 assertion untouched
+- [x] T043 Run the full gates at the combined state — `npm run lint`,
+      `npm test`, `npm run build` — confirm the pre-existing suite is green
+      unmodified (FR-006), record the revision-C results in the closure record
+      below, and note that W9–W11 (quickstart.md revision C) remain available
+      as the manual browser pass
+
+## Dependencies & execution order (revision C)
+
+- T029 → T030 (test-first) and T031 → T032 (test-first): the four foundational
+  tasks block every story task; T029∥T031 are independent files
+- After the checkpoint: T033 (US1 tests), T035/T036 (presentation tests) and
+  T039/T041 (US3 tests) are all independent files → parallel; each impl task
+  follows only its own test (T034, T037, T038, T040)
+- T042 depends on T030, T034, T037/T038 (indirectly), T040; T043 depends on T042
+
+## Parallel example (revision C)
+
+```text
+# Foundational (two independent files):
+T029 planner.test.ts | T031 pricing.test.ts + centerType.test.ts
+# Then their impls:
+T030 planner.ts      | T032 pricing.ts
+
+# After the checkpoint, launch the failing-test tasks together:
+T033 StudentAttendance/TimeSheet tests | T035 ActivitiesModule.test.tsx
+T036 CompetencesModule.test.tsx        | T039 RenewalModule.test.tsx | T041 coherence
+# Then the four implementation tasks (each after its own test):
+T034 | T037 | T038 | T040
+```
+
+## Implementation strategy (revision C)
+
+MVP = Phases R-C1 + R-C2: the derivation fix (remark 7, the client-facing
+correctness bug) plus the register filter (remark 1) close the two behavioral
+gaps with three files and their tests. R-C3 delivers the presentation remarks
+(3+4+5); R-C4 wires the derivation into the simulator and pins the coherence
+invariants; R-C5 re-proves the whole composition and closes the gates.
+
+Explicitly out of scope (per plan.md Revision C): pricing/value changes, new
+modules or routes, backend changes, any change to the four study modules'
+visibility, removing or hiding already-paid modules, and any schema change
+(remarks 2 and 6 are satisfied and re-verified only).
+
+---
+
+# Revision C closure record (T029–T043)
+
+## T043 — final gates at the combined state (all green)
+
+- `npm run lint` (tsc --noEmit): clean.
+- `npm test`: **484 passing** — browser project 30 files / 371 tests,
+  node/worker project 13 files / 113 tests. Pre-existing suites unmodified;
+  the only edited old assertions are revision-C-owned re-pins of 004's
+  `planner.test.ts` band expectations (28→24 bands, 06:00→08:00 origin).
+- `npm run build`: green (pre-existing chunk-size advisory only).
+
+## What revision C shipped
+
+1. **T029/T030** — `src/utils/planner.ts`: `DAY_START_MIN = 8*60`, band count
+   28→24 (08:00–20:00, remark 3). Stored `timeStart`/`timeEnd` untouched —
+   banding is render-time; pre-08:00 activities clamp to band 0 (FR-010),
+   asserted by a new component test.
+2. **T031/T032** — `src/utils/pricing.ts`: `applicableModuleKeys(centerType?)`,
+   `derivePlanFromModules(selected, centerType?)` (Pro ⇔ every applicable key
+   selected; no type → frozen global comparison) and
+   `modulesForPlan(plan, centerType?)` (presets filtered through the canonical
+   `isModuleCompatible`). Mutual-coherence invariant added in
+   `centerType.test.ts` (applicable set ≡ compatibility predicate for every
+   type).
+3. **T033/T034** — `StudentAttendanceModule` gains `centerType?` and hides the
+   « كل المستويات » grade filter for crèche/jardin via `hasSchoolLevel`
+   (remark 1); `StudentTimeSheetModule` forwards the prop; search + status
+   buttons unaffected; attendance rows untouched (FR-010). New suites for both
+   components.
+4. **T035–T038** — `ActivitiesModule` + `CompetencesModule` banners render the
+   module icon inside the `text-2xl` title row, before the title text, outside
+   the green badge (remarks 4+5, existing repo header pattern); the week grid
+   asserts 08:00 start, no 06:00–07:30 bands, and clamped rendering of
+   pre-08:00 activities.
+5. **T039–T041** — `RenewalModule` derives the tier from
+   `(selected, centerType)` and loads presets via `modulesForPlan(key,
+   centerType)`; a crèche ticking all six offered addons submits
+   `requestedPlan: 'pro'` (remark 7 end-to-end); formation/legacy Pro behavior
+   unchanged; the coherence suite pins the frozen no-type verdicts and the
+   preset-derives-its-own-tier invariant per type.
+6. **T042** — composed suite: the C1 crèche walkthrough adds the filter-less
+   attendance register; a new composed test ticks every offered addon on the
+   crèche renewal and asserts `requestedPlan: 'pro'` through the real submit
+   path (`createRenewalRequestApi` mock added to the suite's api factory).
+
+## Test count reconciliation
+
+Pre-revision 449 → post-revision 484 (+35): planner.test.ts re-pinned (same
+count), pricing.test.ts +12, centerType.test.ts +1, StudentAttendanceModule
++6 (new file), StudentTimeSheetModule +4 (new file), ActivitiesModule +3,
+CompetencesModule +1, RenewalModule +4, pricing.coherence +3, program.composed
++1.
+
+## Honest limitation (unchanged from T013–T016)
+
+No human browser pass has been performed. W9–W11 (quickstart.md revision C) are
+covered by their automated counterparts and remain available as a manual
+pre-deploy pass (`npm run dev` + `npm run pages:dev`).

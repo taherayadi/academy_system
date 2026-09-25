@@ -14,6 +14,7 @@ import {
   Brain,
 } from 'lucide-react';
 import type { SubscriptionPlan } from '../types';
+import { isModuleCompatible } from './centerType';
 
 /**
  * Catalogue des modules facturables + offres, partagé par le simulateur de la
@@ -104,8 +105,23 @@ export const PLAN_PRESET_MODULES: Record<string, string[]> = {
   pro: ALL_MODULES.map(m => m.key),
 };
 
-export function modulesForPlan(plan?: string | null): string[] {
-  return PLAN_PRESET_MODULES[String(plan || '')] || PLAN_PRESET_MODULES.starter;
+export function modulesForPlan(plan?: string | null, centerType?: string | null): string[] {
+  const preset = PLAN_PRESET_MODULES[String(plan || '')] || PLAN_PRESET_MODULES.starter;
+  // Revision C (remark 7): a type-aware preset only proposes type-compatible
+  // modules — the Pro preset for a crèche IS its applicable set. No type →
+  // today's preset verbatim (legacy passthrough, FR-006 baseline frozen).
+  if (centerType == null || centerType === '') return preset;
+  return preset.filter(key => isModuleCompatible(key, centerType));
+}
+
+/**
+ * Revision C (remark 7): the modules a center of this type can actually select
+ * — ALL_MODULES filtered through the canonical compatibility map. Unknown or
+ * empty type returns the full catalog (legacy passthrough): derivation then
+ * compares against the global set exactly as before this revision.
+ */
+export function applicableModuleKeys(centerType?: string | null): string[] {
+  return ALL_MODULES.map(m => m.key).filter(key => isModuleCompatible(key, centerType));
 }
 
 /** Remise appliquée au règlement annuel (2 mois offerts ≈ −20 %). */
@@ -115,11 +131,17 @@ export const ANNUAL_DISCOUNT = 0.2;
  * L'offre se déduit des modules cochés dans le simulateur :
  *   • la base seule                → Basic
  *   • au moins un module en plus   → Growth
- *   • tous les modules             → Pro
+ *   • tous les modules applicables → Pro
  * Ainsi cocher un module fait évoluer l'offre affichée et envoyée.
+ *
+ * Revision C (remark 7) : « tous » = tous les modules APPLICABLES au type de
+ * centre (moduleCenterTypes), pas le catalogue global — un centre crèche qui
+ * coche tous les modules proposés atteint bien Pro. Sans type connu, la
+ * comparaison reste globale (comportement antérieur inchangé, FR-006).
+ * Dérivation pure : ne mute jamais la sélection (FR-010).
  */
-export function derivePlanFromModules(selected: readonly string[]): SubscriptionPlan {
-  const all = ALL_MODULES.map(m => m.key);
+export function derivePlanFromModules(selected: readonly string[], centerType?: string | null): SubscriptionPlan {
+  const all = applicableModuleKeys(centerType);
   if (all.length > 0 && all.every(k => selected.includes(k))) return 'pro';
   const hasExtra = selected.some(k => !(BASE_KEYS as readonly string[]).includes(k));
   return hasExtra ? 'growth' : 'starter';

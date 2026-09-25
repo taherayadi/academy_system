@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, Edit3, X, Layers, MapPin, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Layers, MapPin, CalendarDays, Puzzle } from 'lucide-react';
 import { Activity, ActivityCategory } from '../types';
 import { useToast } from './Toast';
 import { TIME_BANDS, bandIndexFor, bandStartTime, CATEGORY_COLORS, validateActivity, groupActivities, GroupByKey } from '../utils/planner';
@@ -222,7 +222,11 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
           <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
             الأنشطة والبرنامج
           </span>
-          <h2 className="text-2xl font-black text-slate-900 mt-2">الأنشطة والبرنامج الأسبوعي</h2>
+          {/* Revision C (remark 4): icon before the title text, outside the green badge. */}
+          <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
+            <Puzzle className="h-6 w-6 text-brand-600" />
+            الأنشطة والبرنامج الأسبوعي
+          </h2>
           <p className="text-slate-500 text-xs mt-1">
             تخطيط الأنشطة عبر أيام الأسبوع مع تلوين حسب الفئة.
           </p>

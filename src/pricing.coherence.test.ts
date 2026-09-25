@@ -20,6 +20,7 @@ import {
   modulesForPlan,
   derivePlanFromModules
 } from './utils/pricing';
+import { isModuleCompatible } from './utils/centerType';
 import { TAB_MODULE } from './App';
 import { FORMATION_CONFIG, makeCenter } from './testing/programConfig';
 
@@ -136,5 +137,35 @@ describe('C10 — presets and derivation agree with the catalog', () => {
     expect(modulesForPlan(undefined)).toEqual(PLAN_PRESET_MODULES.starter);
     expect(modulesForPlan('mystery')).toEqual(PLAN_PRESET_MODULES.starter);
     expect(modulesForPlan('pro')).toEqual(PLAN_PRESET_MODULES.pro);
+  });
+});
+
+// ─── Revision C (remark 7): type-aware derivation coherence ────────────────
+
+describe('C10 — type-aware derivation (revision C)', () => {
+  it('freezes the no-type derivation verdicts as the FR-006 baseline', () => {
+    // These are the exact representative combinations pinned before revision C.
+    expect(derivePlanFromModules([...BASE_KEYS])).toBe('starter');
+    expect(derivePlanFromModules([...BASE_KEYS, 'activites'])).toBe('growth');
+    expect(derivePlanFromModules([...BASE_KEYS, 'competences'])).toBe('growth');
+    expect(derivePlanFromModules(ALL_MODULES.map(m => m.key))).toBe('pro');
+  });
+
+  it('every filtered preset derives its own tier for creche (preset = applicable set)', () => {
+    for (const [tier, preset] of Object.entries(PLAN_PRESET_MODULES) as [string, string[]][]) {
+      const filtered = modulesForPlan(tier, 'creche');
+      expect(derivePlanFromModules(filtered, 'creche'), `tier ${tier}`).toBe(tier);
+    }
+  });
+
+  it('modulesForPlan(pro, creche) ⊆ catalog with only isModuleCompatible-compatible keys', () => {
+    const catalogKeys = ALL_MODULES.map(m => m.key);
+    for (const key of modulesForPlan('pro', 'creche')) {
+      expect(catalogKeys, key).toContain(key);
+      expect(isModuleCompatible(key, 'creche'), `${key} must be creche-compatible`).toBe(true);
+    }
+    for (const study of ['etude', 'coursParticuliers', 'revision', 'formations']) {
+      expect(modulesForPlan('pro', 'creche'), study).not.toContain(study);
+    }
   });
 });

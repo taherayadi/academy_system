@@ -169,4 +169,39 @@ describe('ActivitiesModule', () => {
     expect(screen.getByText('Atelier peinture')).toBeTruthy();
     expect(screen.getAllByText('2026-10-15').length).toBeGreaterThan(0);
   });
+
+  // ── Revision C (remarks 3+4): day start at 08:00 + banner icon ──────
+
+  it('renders the week grid starting at 08:00 with no 06:00–07:30 rows (remark 3)', () => {
+    render(<ActivitiesModule activities={[activity]} onUpdateActivities={vi.fn()} />);
+    expect(document.querySelector('[data-band="08:00"]')).toBeTruthy();
+    for (const gone of ['06:00', '06:30', '07:00', '07:30']) {
+      expect(document.querySelector(`[data-band="${gone}"]`), gone).toBeNull();
+    }
+    expect(document.querySelector('[data-band="19:30"]')).toBeTruthy();
+  });
+
+  it('renders a stored pre-08:00 activity in the first band without rewriting it (clamp, no data loss)', () => {
+    const early: Activity = { ...activity, id: 'early_1', title: 'Garde très tôt', timeStart: '06:45', timeEnd: '07:30' };
+    const onUpdateActivities = vi.fn();
+    render(<ActivitiesModule activities={[early]} onUpdateActivities={onUpdateActivities} />);
+    const bandCell = screen.getByText('Garde très tôt').closest('[data-band="08:00"]') as HTMLElement;
+    expect(bandCell).toBeTruthy();
+    // the stored times stay verbatim — banding is render-time only (FR-010)
+    expect(onUpdateActivities).not.toHaveBeenCalled();
+  });
+
+  it('renders the module icon before the title text, outside the green badge (remark 4)', () => {
+    render(<ActivitiesModule activities={[activity]} onUpdateActivities={vi.fn()} />);
+    const title = screen.getByText('الأنشطة والبرنامج الأسبوعي').closest('h2') as HTMLElement;
+    expect(title).toBeTruthy();
+    const icon = title.querySelector('svg');
+    expect(icon, 'an icon must sit inside the title row').toBeTruthy();
+    // icon precedes the title text in DOM order
+    expect(title.firstChild).toBe(icon);
+    // and the green badge span contains no icon
+    const badge = Array.from(document.querySelectorAll('span')).find(s => s.textContent === 'الأنشطة والبرنامج');
+    expect(badge).toBeTruthy();
+    expect(badge!.querySelector('svg')).toBeNull();
+  });
 });

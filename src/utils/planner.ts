@@ -9,21 +9,25 @@
 
 import { Activity, ActivityCategory } from '../types';
 
-/** Fixed half-hour bands from 06:00 to 20:00 (28 bands). */
+/**
+ * Fixed half-hour bands from 08:00 to 20:00 (24 bands).
+ * Revision C (remark 3): the grid starts at 08:00, the activities' real opening
+ * hour — pre-08:00 stored times clamp to the first band (no data rewritten).
+ */
 export const TIME_BANDS: { start: string; end: string; label: string }[] =
-  Array.from({ length: 28 }, (_, i) => {
-    const startMin = 6 * 60 + i * 30;
+  Array.from({ length: 24 }, (_, i) => {
+    const startMin = 8 * 60 + i * 30;
     const endMin = startMin + 30;
     const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     return { start: fmt(startMin), end: fmt(endMin), label: `${fmt(startMin)}` };
   });
 
-const DAY_START_MIN = 6 * 60;
+const DAY_START_MIN = 8 * 60;
 const DAY_END_MIN = 20 * 60;
 
 /**
  * Index of the half-hour band containing `timeStart`; minutes are ignored
- * (10:00–10:29 → the 10:00 band). Times outside 06:00–20:00 clamp to the
+ * (10:00–10:29 → the 10:00 band). Times outside 08:00–20:00 clamp to the
  * first/last band so a stray value still renders instead of crashing.
  */
 export function bandIndexFor(timeStart: string): number {

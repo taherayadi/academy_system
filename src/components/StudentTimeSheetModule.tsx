@@ -60,6 +60,7 @@ export default function StudentTimeSheetModule({
         students={students}
         attendance={studentAttendance}
         onUpdateAttendance={onUpdateStudentAttendance}
+        centerType={centerType}
       />
     );
   }

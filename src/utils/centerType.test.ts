@@ -7,7 +7,7 @@ import {
   isModuleCompatible,
   incompatibleModules,
 } from './centerType';
-import { ALL_MODULES } from './pricing';
+import { ALL_MODULES, applicableModuleKeys } from './pricing';
 
 describe('CENTER_TYPES', () => {
   it('lists the four accepted types in order', () => {
@@ -115,5 +115,14 @@ describe('incompatibleModules', () => {
   it('never blocks for unknown/empty types (legacy passthrough)', () => {
     expect(incompatibleModules(['etude', 'revision'], undefined)).toEqual([]);
     expect(incompatibleModules(['etude', 'revision'], '')).toEqual([]);
+  });
+
+  it('applicableModuleKeys agrees with isModuleCompatible for every type (no drift, revision C)', () => {
+    for (const type of CENTER_TYPES) {
+      const expected = ALL_MODULES.map(m => m.key).filter(key => isModuleCompatible(key, type));
+      expect(applicableModuleKeys(type), `type ${type}`).toEqual(expected);
+    }
+    // passthrough: unknown types get the full catalog
+    expect(applicableModuleKeys(undefined)).toEqual(ALL_MODULES.map(m => m.key));
   });
 });

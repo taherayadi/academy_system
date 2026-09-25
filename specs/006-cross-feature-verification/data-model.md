@@ -118,3 +118,84 @@ silently drift from the catalog.
 4. **Hiding is rendering-level** (extends FR-010): the section-5 gate strips
    *submitted* academic history for new entries (age-appropriate form), but
    pre-existing stored values are only ever hidden/revealed, never deleted.
+
+---
+
+# Revision C data model — plan derivation, planner bands, register filter
+
+No new persisted entities and no schema change. Three derived artifacts:
+
+## `applicableModuleKeys(centerType?)` (pure derivation)
+
+`ALL_MODULES` keys ∩ `isModuleCompatible(·, centerType)` — the set a center of
+the given type can actually select. Per-type result sizes:
+
+| Center type | Applicable keys | Count |
+|---|---|---|
+| `creche` / `jardin` | scolaire, studentTimeSheets, finance, cantine, transport, events, staff, activites, competences | 9 |
+| `garderie` / `formation` | all 13 catalog keys | 13 |
+| unknown/empty (legacy) | all 13 catalog keys (passthrough) | 13 |
+
+**Derived rule (remark 7)**: `derivePlanFromModules(selected, centerType?)`
+compares against the applicable set — Pro ⇔ every applicable key selected.
+With no type the comparison base is the full catalog (today's behavior,
+unchanged). Selections are never mutated by derivation; the submitted
+`requestedModules` remain exactly what the user ticked.
+
+**Consumers**:
+
+1. `RenewalModule` — derives the tier from `(selected, centerType)`; a crèche
+   ticking all nine offered modules derives **Pro**.
+2. `modulesForPlan(plan, centerType?)` — tier presets filtered through
+   compatibility, formalizing revision B's `chooseTier` filter; the Pro preset
+   for a type *is* its applicable set.
+3. `program.composed` — the C1 crèche renewal render asserts the Pro outcome
+   end to end.
+
+## `TIME_BANDS` revision (constant change)
+
+| Property | Before | After |
+|---|---|---|
+| Day start | 06:00 (`DAY_START_MIN = 6*60`) | 08:00 (`DAY_START_MIN = 8*60`) |
+| Day end | 20:00 | 20:00 (unchanged) |
+| Band count | 28 half-hour bands | 24 half-hour bands |
+| First/last band | 06:00–06:30 … 19:30–20:00 | 08:00–08:30 … 19:30–20:00 |
+| Out-of-range times | clamp to first/last band | same rule; stored pre-08:00 activities clamp to band 0 (no data rewrite) |
+
+Storage (`timeStart`/`timeEnd` exact strings) is untouched — banding is a
+render-time derivation, so FR-010 holds by construction.
+
+## `StudentAttendanceModule` prop surface (additive)
+
+`+ centerType?: string` — forwarded from `StudentTimeSheetModule`'s
+crèche/jardin branch. Render-time gating only:
+
+| Type | Grade filter « كل المستويات » | Search | Status buttons |
+|---|---|---|---|
+| crèche / jardin | hidden (`hasSchoolLevel` false) | shown | shown |
+| garderie / formation | shown | shown | shown |
+| unknown/empty | shown (legacy passthrough) | shown | shown |
+
+Attendance rows, their statuses, and their save path are unaffected — the
+filter defaults to «all», so removing it yields the unfiltered list.
+
+## Banner structure (presentational, remarks 4+5)
+
+Title row gains the module icon before the text (existing repo pattern);
+the green badge keeps its text label. No data, props, or state change.
+
+## Invariants added (revision C)
+
+1. **Pro is reachable for every type** (remark 7): selecting all offered
+   modules for any center type derives Pro — the comparison base is the
+   applicable set, never the global catalog, when a type is known.
+2. **No-type derivation is frozen** (FR-006): `derivePlanFromModules(selection)`
+   with no type returns exactly the pre-revision-C verdicts (coherence tests
+   pin the representative combinations).
+3. **Banding is derived, storage exact** (extends FR-010): moving the day start
+   re-buckets rendering only; stored times are verbatim.
+4. **Filter hiding is rendering-level** (extends FR-010): hiding the register's
+   grade filter never touches attendance rows.
+5. **Single derivation definition** (extends FR-015): the applicable-set
+   computation exists once (`pricing.ts` + `centerType.ts`), consumed by
+   renewal, presets, and the composed tests — no surface-local counting.

@@ -11,39 +11,49 @@ const validBase: Partial<Activity> = {
 };
 
 describe('TIME_BANDS', () => {
-  it('covers 06:00–20:00 in 28 half-hour bands', () => {
-    expect(TIME_BANDS.length).toBe(28);
-    expect(TIME_BANDS[0].start).toBe('06:00');
-    expect(TIME_BANDS[0].end).toBe('06:30');
-    expect(TIME_BANDS[27].start).toBe('19:30');
-    expect(TIME_BANDS[27].end).toBe('20:00');
+  it('covers 08:00–20:00 in 24 half-hour bands (remark 3: the grid starts at 08:00)', () => {
+    expect(TIME_BANDS.length).toBe(24);
+    expect(TIME_BANDS[0].start).toBe('08:00');
+    expect(TIME_BANDS[0].end).toBe('08:30');
+    expect(TIME_BANDS[23].start).toBe('19:30');
+    expect(TIME_BANDS[23].end).toBe('20:00');
+  });
+
+  it('contains no 06:00–07:30 bands', () => {
+    const starts = TIME_BANDS.map(b => b.start);
+    for (const gone of ['06:00', '06:30', '07:00', '07:30']) {
+      expect(starts, gone).not.toContain(gone);
+    }
   });
 });
 
 describe('bandIndexFor', () => {
   it('maps edge times to the first and last bands', () => {
-    expect(bandIndexFor('06:00')).toBe(0);
-    expect(bandIndexFor('06:29')).toBe(0);
-    expect(bandIndexFor('19:30')).toBe(27);
-    expect(bandIndexFor('19:59')).toBe(27);
+    expect(bandIndexFor('08:00')).toBe(0);
+    expect(bandIndexFor('08:29')).toBe(0);
+    expect(bandIndexFor('19:30')).toBe(23);
+    expect(bandIndexFor('19:59')).toBe(23);
   });
 
   it('snaps minute offsets into the containing band', () => {
-    expect(bandIndexFor('10:00')).toBe(8);  // 06:00 + 4h
-    expect(bandIndexFor('10:15')).toBe(8);  // minutes ignored
-    expect(bandIndexFor('10:29')).toBe(8);
-    expect(bandIndexFor('10:30')).toBe(9);  // next band boundary
+    expect(bandIndexFor('10:00')).toBe(4);  // 08:00 + 2h
+    expect(bandIndexFor('10:15')).toBe(4);  // minutes ignored
+    expect(bandIndexFor('10:29')).toBe(4);
+    expect(bandIndexFor('10:30')).toBe(5);  // next band boundary
   });
 
-  it('clamps out-of-range times into the grid', () => {
-    expect(bandIndexFor('04:00')).toBe(0);
-    expect(bandIndexFor('23:00')).toBe(27);
+  it('clamps out-of-range times into the grid (pre-08:00 → first band)', () => {
+    expect(bandIndexFor('06:00')).toBe(0);  // stored pre-08:00 activity clamps, no data loss
+    expect(bandIndexFor('07:15')).toBe(0);
+    expect(bandIndexFor('00:00')).toBe(0);
+    expect(bandIndexFor('20:00')).toBe(23);
+    expect(bandIndexFor('23:45')).toBe(23);
     expect(bandIndexFor('')).toBe(0);
   });
 
   it('snaps a moved chip back to a band start time', () => {
-    expect(bandStartTime(8)).toBe('10:00');
-    expect(bandStartTime(27)).toBe('19:30');
+    expect(bandStartTime(4)).toBe('10:00');
+    expect(bandStartTime(23)).toBe('19:30');
   });
 });
 
