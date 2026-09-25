@@ -10,7 +10,8 @@ import ConfirmDialog from '../ConfirmDialog';
 import { StatusBadge } from '../ui';
 import { StatusTone, toneClasses } from '../ui/StatusBadge';
 import { fmtDate, arPlural } from '../../utils/format';
-import { currentSchoolYear, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterModules, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, PLAN_LABEL, isModuleHidden, PLAN_BADGE, PLAN_HISTORY_LABEL } from './constants';
+import { currentSchoolYear, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterModules, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, PLAN_LABEL, isModuleHidden, PLAN_BADGE, PLAN_HISTORY_LABEL, normalizeCenterType, CENTER_TYPE_LABEL, isModuleAllowedForCenterType } from './constants';
+import type { CenterType } from './constants';
 
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
 // All subscription operations live here (the center edit is basic info only).
@@ -151,14 +152,18 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   const startOfToday = (() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); })();
   const trialGoesToStart = isTrial || !hasLiveWindow || windowStartDate >= startOfToday;
 
+  // Eligibility runs against the center's stored type — the plan manager
+  // never changes the type (that lives in Edit Center).
+  const centerType: CenterType | '' = normalizeCenterType(center.centerType);
+
   const handleDraftPlanChange = (plan: string) => {
     setDraft(d => ({ ...d, plan }));
-    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS]);
+    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS].filter(k => isModuleAllowedForCenterType(k, centerType)));
     if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
   };
 
   const toggleDraftModule = (key: string) => {
-    if (isBaseModule(key)) return;
+    if (isBaseModule(key) || !isModuleAllowedForCenterType(key, centerType)) return;
     setEnabledModules(current => current.includes(key)
       ? current.filter(moduleKey => moduleKey !== key)
       : [...current, key]);
@@ -340,9 +345,17 @@ function PlanManagerModal({ center, onClose, onSaved }: {
           <div className="flex flex-wrap gap-1.5">
             {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(module => {
               const selected = enabledModules.includes(module.key);
+              const allowed = isModuleAllowedForCenterType(module.key, centerType);
               return (
-                <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)}
-                  className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${selected ? 'bg-accent-500 text-white border-accent-500' : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40'}`}>
+                <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)} disabled={!allowed}
+                  title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL[centerType] || 'غير معرّف'}»`}
+                  className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition inline-flex items-center gap-1 ${
+                    !allowed
+                      ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                      : selected
+                        ? 'bg-accent-500 text-white border-accent-500 cursor-pointer'
+                        : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40 cursor-pointer'
+                  }`}>
                   {selected && <Check className="h-4 w-4" aria-hidden="true" />} {module.label}
                 </button>
               );
@@ -352,7 +365,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
       )}
       {draft.plan === 'pro' && (
         <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Pro: تُفعَّل كل الوحدات تلقائيًا.
+          Pro: تُفعَّل كل الوحدات المتاحة لنوع «{CENTER_TYPE_LABEL[centerType] || 'غير معرّف'}» تلقائيًا.
         </p>
       )}
       {draft.plan === 'basic' && (

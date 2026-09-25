@@ -41,7 +41,7 @@ describe('buildInvoicePrintDocument — CSP-safe markup', () => {
     expect(html).toContain('مدفوعة');
     expect(html).toContain('@page');
     expect(html).toContain('margin: 0');
-    expect(html).toContain('توقيع منصة SaaS');
+    expect(html).toContain('توقيع EduSphère');
     expect(html).toContain(`id="${PRINT_BUTTON_ID}"`);
   });
 

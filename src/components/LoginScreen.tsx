@@ -13,6 +13,7 @@ import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, ShieldCheck } from 'lucid
 import { UserAccount } from '../types';
 import { verifyPassword } from '../auth';
 import icon from '../assets/icon.png';
+import { BRAND_NAME, BRAND_FOOTER } from '../brand';
 
 interface LoginScreenProps {
   onLogin: (user: UserAccount, passwordUpgraded?: boolean) => void | Promise<void>;
@@ -75,7 +76,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         {/* Header — light, landing-style */}
         <div className="px-6 sm:px-8 pt-8 pb-6 text-center relative bg-gradient-to-b from-accent-500/[0.06] to-transparent border-b border-slate-100">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl overflow-hidden bg-accent-500 shadow-lg shadow-accent-500/25 flex items-center justify-center ring-1 ring-white/40">
-            <img src={icon} alt="System Academy SaaS" className="center-logo-img w-full h-full object-cover" />
+            <img src={icon} alt={`${BRAND_NAME} SaaS`} className="center-logo-img w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-black text-slate-900">إدارة المنصة</h1>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3.5 py-1.5 rounded-full bg-accent-500/10 border border-accent-500/20">
@@ -152,7 +153,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </form>
 
           <p className="text-[11px] text-slate-500 text-center font-bold pt-1">
-            System Academy SaaS © 2026
+            {BRAND_FOOTER}
           </p>
 
         </div>

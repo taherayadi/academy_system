@@ -3,6 +3,10 @@ import { round2, planLabel, BillingCycle } from './planLogic';
 import { logPlanHistory, fetchPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
 import { logError } from './_logger';
+import {
+  BUNDLED_MODULE_KEY, UNBILLED_MODULE_KEYS, AUTO_PRICED_PLANS, ANNUAL_DISCOUNT,
+  normalizeEnabledModules, ineligibleModules, normalizeCenterType, CenterType,
+} from './_modules';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
 // Editing a center's basic info must NEVER touch its plan or invoices.
@@ -18,19 +22,6 @@ import { logError } from './_logger';
 //     voided, scheduled plans cancelled, the center becomes 'expired'.
 
 const DAY_MS = 86400000;
-const BUNDLED_MODULE_KEY = 'studentTimeSheets';
-const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
-const ALL_MODULE_KEYS = [
-  'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-  'formations', 'cantine', 'transport', 'events',
-  BUNDLED_MODULE_KEY, 'staff',
-];
-// Bibliothèque désactivée pour l'instant : hors preset Pro (11 modules comme
-// le simulateur) et jamais facturée, même si un centre l'a encore en stock.
-// Pour réactiver : remettre 'bibliotheque' ici et retirer le filtre prix.
-const UNBILLED_MODULE_KEYS = new Set([BUNDLED_MODULE_KEY, 'bibliotheque']);
-const ANNUAL_DISCOUNT = 0.2;
-const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
 const VALID_PLANS = new Set(['starter', 'basic', 'growth', 'pro', 'custom']);
 
 function storagePlan(plan: string): string {
@@ -44,12 +35,6 @@ function parseModulesJson(value: unknown): string[] {
   } catch {
     return [];
   }
-}
-
-function normalizeEnabledModules(value: unknown, plan?: string): string[] {
-  const requested = Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
-  const modules = plan === 'pro' ? ALL_MODULE_KEYS : plan === 'starter' || plan === 'basic' ? [] : requested;
-  return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...modules]));
 }
 
 function currentSchoolYear(timestamp = Date.now()): string {
@@ -180,7 +165,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!centerId) return json({ error: 'معرف المركز مطلوب.' }, 400);
 
     const center = await env.DB.prepare(`
-      SELECT id, status, plan, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, enabled_modules
+      SELECT id, status, plan, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, enabled_modules, center_type
       FROM centers WHERE id = ?
     `).bind(centerId).first<any>();
     if (!center) return json({ error: 'المركز غير موجود.' }, 404);
@@ -320,11 +305,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       if (!VALID_PLANS.has(rawPlan)) return json({ error: 'خطة غير صالحة.' }, 400);
       const targetPlan = storagePlan(rawPlan);
       const targetCycle: BillingCycle = String(body.billingCycle || 'monthly') === 'annual' ? 'annual' : 'monthly';
+      // Eligibility is enforced against the center's stored type: an
+      // explicitly requested module the type forbids is a hard 400 before
+      // any invoice/schedule write happens.
+      const planCenterType = normalizeCenterType((center as any).center_type);
+      const ineligible = ineligibleModules(body.enabledModules, planCenterType);
+      if (ineligible.length > 0) {
+        return json({ error: `وحدات غير متاحة لنوع المؤسسة «${planCenterType}»: ${ineligible.join('، ')}.` }, 400);
+      }
       const targetModules = normalizeEnabledModules(
         body.enabledModules !== undefined
           ? body.enabledModules
           : parseModulesJson(center.enabled_modules),
-        targetPlan
+        targetPlan,
+        planCenterType
       );
       const customPrice = targetPlan === 'custom'
         ? Math.max(0, Number(body.monthlyPrice ?? center.monthly_price) || 0)

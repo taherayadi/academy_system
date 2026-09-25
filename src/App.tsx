@@ -15,6 +15,7 @@
  */
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BRAND_NAME, BRAND_FOOTER } from './brand';
 import {
   LayoutDashboard,
   DollarSign,
@@ -249,7 +250,7 @@ export default function App() {
         {/* ── Sidebar ── */}
         <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-md:hidden">
           <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
-            <img src={brandIcon} alt="System Academy SaaS" className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-accent-500/20 ring-1 ring-white/40" />
+            <img src={brandIcon} alt={`${BRAND_NAME} SaaS`} className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-accent-500/20 ring-1 ring-white/40" />
             <div>
               <h1 className="font-black text-sm text-slate-900">إدارة المنصة (SaaS)</h1>
               <span className="text-[11px] text-accent-500 font-bold block">لوحة تحكم المنصة فقط</span>
@@ -302,7 +303,7 @@ export default function App() {
                 <LogOut size={13} /> خروج
               </button>
             </div>
-            <p className="text-[11px] text-slate-500 text-center font-bold pt-1">System Academy SaaS © 2026</p>
+            <p className="text-[11px] text-slate-500 text-center font-bold pt-1">{BRAND_FOOTER}</p>
           </div>
         </aside>
 

@@ -2,7 +2,7 @@
 
 <!-- impeccable:design-schema 1 -->
 
-The System Academy platform-operator console. A single-operator, Arabic-first
+The EduSphère platform-operator console. A single-operator, Arabic-first
 back office used every working day; its visual system optimises for
 legibility, scan-ability and calm density over decoration.
 

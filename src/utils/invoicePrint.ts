@@ -26,6 +26,7 @@
  */
 import type { CenterInvoice } from '../api';
 import { escapeHtml } from './html';
+import { BRAND_NAME, BRAND_FOOTER } from '../brand';
 
 /** id of the in-page print button of the generated document. */
 
@@ -86,7 +87,7 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
 </style></head><body>
 <div class="sheet">
   <div class="head">
-    <div><h1>فاتورة اشتراك</h1><div class="muted">منصة SaaS — إدارة المراكز</div></div>
+    <div><h1>فاتورة اشتراك</h1><div class="muted">${BRAND_NAME} — منصة إدارة المراكز</div></div>
     <div style="text-align:left"><div style="font-weight:800;font-size:14px">${esc(inv.invoiceNumber) || '—'}</div>
       <div class="muted">صدرت في ${tnDate(inv.createdAt)}</div>
       <div style="margin-top:8px"><span class="badge">${statusText}</span></div></div>
@@ -103,9 +104,9 @@ export function buildInvoicePrintDocument(inv: CenterInvoice): string {
   <div class="sign"><div class="signbox">
     <div class="signspace"></div>
     <div class="signline"></div>
-    <div class="signcap">توقيع منصة SaaS</div>
+    <div class="signcap">توقيع ${BRAND_NAME}</div>
   </div></div>
-  <footer>وثيقة مولّدة من مساحة الإدارة في SaaS.</footer>
+  <footer>${BRAND_FOOTER} — وثيقة مولّدة من مساحة الإدارة.</footer>
   <div class="noprint" style="text-align:center;margin-top:18px">
     <button id="${PRINT_BUTTON_ID}" type="button" style="background:${BRAND_HEX};color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer">طباعة</button>
     <p style="font-size:11px;color:#94a3b8;margin-top:10px">Ctrl+P (⌘+P) أو القائمة ⋮ → «طباعة» · «حفظ بتنسيق PDF»</p>

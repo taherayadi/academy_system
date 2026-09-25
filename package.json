@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "System Academy SaaS — platform administration console (Cloudflare Pages + shared D1)",
+  "description": "EduSphère SaaS — platform administration console (Cloudflare Pages + shared D1)",
   "author": "Taher Ayadi",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",

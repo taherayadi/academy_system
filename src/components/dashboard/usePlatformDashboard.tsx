@@ -7,6 +7,7 @@ import { useLiveSync, LIVE_SYNC_INTERVAL_MS } from '../../hooks/useLiveSync';
 import { usePubNubSync } from '../../hooks/usePubNubSync';
 import { arPlural } from '../../utils/format';
 import { currentSchoolYear, adStatusOf, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterType, PAGE_SIZE, PLAN_LABEL, formatTnd } from './constants';
+import type { CenterTypeFilter } from './constants';
 import type { AdStatus, PlatformAdminPage, PlatformAdminDashboardProps } from './constants';
 
 /** Undo window for deferred destructive commits (ms). Tests may shrink it. */
@@ -40,13 +41,13 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   // Filters — centers
-  const [centerTypeFilter, setCenterTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
+  const [centerTypeFilter, setCenterTypeFilter] = useState<CenterTypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'trial' | 'active' | 'suspended' | 'expired'>('all');
   const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'growth' | 'pro' | 'custom'>('all');
   // Filters — requests. No 'Tous' and no 'تم الاتصال' tab: the list always
   // starts on Nouveau (legacy 'contacted' requests stay visible there, so
   // none get lost), then Converti / Archivé.
-  const [reqTypeFilter, setReqTypeFilter] = useState<'all' | 'jardin' | 'formation'>('all');
+  const [reqTypeFilter, setReqTypeFilter] = useState<CenterTypeFilter>('all');
   const [reqStatusFilter, setReqStatusFilter] = useState<'new' | 'converted' | 'archived'>('new');
   const [centersPage, setCentersPage] = useState(1);
   const [requestsPage, setRequestsPage] = useState(1);

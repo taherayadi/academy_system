@@ -6,7 +6,8 @@ import { useToast } from '../Toast';
 import icon from '../../assets/icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
-import { currentSchoolYear, parseModules, BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, normalizePhoneInput, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, isValidCenterPhone, formatTnd, CENTER_TYPES, MODULE_LABEL, ALL_MODULES, isModuleHidden } from './constants';
+import { currentSchoolYear, parseModules, BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, normalizePhoneInput, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, isValidCenterPhone, formatTnd, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, ALL_MODULES, isModuleHidden, isModuleAllowedForCenterType } from './constants';
+import type { CenterType } from './constants';
 import { NoticeDialog } from './uiParts';
 
 // ─── New / Convert Center Modal ────────────────────────────────────────────
@@ -75,13 +76,15 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   };
 
   const [form, setForm] = useState(() => {
-    // Base toujours incluse + modules demandés lors d'une conversion
+    // Base toujours incluse + modules demandés lors d'une conversion, filtrés
+    // par l'éligibilité du type de centre présélectionné.
     const requested = parseModules(initialData?.requestedModules);
+    const initialType = (initialData?.centerType as CenterType | '') || '';
     const enabled = Array.from(new Set<string>([
       ...BASE_MODULE_KEYS,
       BUNDLED_MODULE_KEY,
       ...(requested.length ? requested : [])
-    ]));
+    ])).filter(k => isBaseModule(k) || isModuleAllowedForCenterType(k, initialType));
     return {
       name: initialData?.academyName || '',
       logoUrl: '',
@@ -92,7 +95,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       monthlyPrice: '',
       trialDays: '14',
       offerDays: '0',
-      centerType: (initialData?.centerType as 'jardin' | 'formation' | '') || '',
+      centerType: ((initialData?.centerType || '') as CenterType | ''),
       directorName: initialData?.fullName || '',
       directorEmail: initialData?.email || '',
       directorPassword: '',
@@ -123,7 +126,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       plan,
       offerDays: plan === 'trial' ? '0' : current.offerDays,
       enabledModules: plan === 'pro'
-        ? [...SELECTABLE_MODULE_KEYS]
+        ? [...SELECTABLE_MODULE_KEYS].filter(k => isModuleAllowedForCenterType(k, current.centerType))
         : plan === 'basic'
           ? [...BASIC_MODULE_KEYS]
           : current.enabledModules
@@ -143,9 +146,21 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     }
   }, [form.plan]);
 
+  // Modules that the chosen center type does not allow are deactivated as
+  // soon as the type changes (convert flow included) — the server would
+  // reject them otherwise. Base modules are never touched.
+  React.useEffect(() => {
+    setForm(current => {
+      const filtered = current.enabledModules.filter(k =>
+        isBaseModule(k) || isModuleAllowedForCenterType(k, current.centerType));
+      return filtered.length === current.enabledModules.length
+        ? current
+        : { ...current, enabledModules: filtered };
+    });
+  }, [form.centerType]);
   // La base ne peut pas être retirée — on ne peut qu'ajouter des modules
   const toggle = (key: string) => {
-    if (isBaseModule(key)) return;
+    if (isBaseModule(key) || !isModuleAllowedForCenterType(key, form.centerType)) return;
     setForm(f => ({
       ...f,
       enabledModules: f.enabledModules.includes(key)
@@ -161,7 +176,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       return;
     }
     if (!form.centerType) {
-      toast.error('اختر نوع المؤسسة (روضة أطفال أو مركز تدريب).');
+      toast.error(`اختر نوع المؤسسة (${CENTER_TYPES.map(ct => ct.label).join('، ')}).`);
       return;
     }
     setSaving(true);
@@ -448,14 +463,18 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {ALL_MODULES.filter(m => !isBaseModule(m.key) && !isModuleHidden(m.key)).map(m => {
+                {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(m => {
                   const on = form.enabledModules.includes(m.key);
+                  const allowed = isModuleAllowedForCenterType(m.key, form.centerType);
                   return (
-                    <button key={m.key} type="button" onClick={() => toggle(m.key)}
-                      className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer inline-flex items-center gap-1 ${
-                        on
-                          ? 'bg-accent-500 text-white border-accent-500'
-                          : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40'
+                    <button key={m.key} type="button" onClick={() => toggle(m.key)} disabled={!allowed}
+                      title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL[form.centerType as CenterType] || 'غير معرّف'}»`}
+                      className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition inline-flex items-center gap-1 ${
+                        !allowed
+                          ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                          : on
+                            ? 'bg-accent-500 text-white border-accent-500 cursor-pointer'
+                            : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40 cursor-pointer'
                       }`}>
                       {on && <Check aria-hidden="true" className="h-4 w-4" />}
                       {m.label}

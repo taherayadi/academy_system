@@ -165,7 +165,7 @@ describe('PlatformAdminDashboard — Finance content (grouped invoices + cheques
     // Browser header/footer (date, title, « blank », page number) suppressed + signature block.
     expect(html).toContain('@page');
     expect(html).toContain('margin: 0');
-    expect(html).toContain('توقيع منصة SaaS');
+    expect(html).toContain('توقيع EduSphère');
     openSpy.mockRestore();
   });
 

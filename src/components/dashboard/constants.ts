@@ -26,20 +26,43 @@ const ALL_MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'cantine', label: 'مقصف / وجبات' },
   { key: 'transport', label: 'نقل' },
   { key: 'events', label: 'مناسبات' },
-  { key: 'bibliotheque', label: 'مكتبة' },
   { key: 'studentTimeSheets', label: 'سجل الدوام' },
   { key: 'staff', label: 'الموظفون' },
+  { key: 'activites', label: 'أنشطة وبرنامج' },
+  { key: 'competences', label: 'مهارات ومستويات' },
 ];
 
 const ALL_MODULE_KEYS = ALL_MODULES.map(module => module.key);
 
-// Bibliothèque désactivée pour l'instant : masquée des sélections de modules
-// (création / édition / Plans & factures) — la page Tarifs garde son prix.
+// Bibliothèque retirée du catalogue (module plus proposé) : isModuleHidden
+// la masque des sélections de modules et de la page Tarifs, et
+// calculateModuleTotal ne la facture jamais — les lignes de prix historiques
+// restent intactes.
 const isModuleHidden = (key: string) => key === 'bibliotheque';
 
 const SELECTABLE_MODULE_KEYS = ALL_MODULE_KEYS.filter(k => !isModuleHidden(k as string));
 
 const BASIC_MODULE_KEYS = [...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY];
+
+// ─── Module eligibility per center type (mirrors functions/api/_modules.ts) ──
+// étude/cours/révision/formations are school-support modules: not offered to
+// crèches nor jardins. Everything else is universal. Base modules are always
+// included and never togglable.
+const UNIVERSAL_MODULES = ['cantine', 'transport', 'events', 'staff', 'activites', 'competences'];
+const SCHOOL_SUPPORT_MODULES = ['etude', 'coursParticuliers', 'revision', 'formations'];
+const MODULE_CENTER_TYPES: Record<string, readonly CenterType[]> = {
+  ...Object.fromEntries(UNIVERSAL_MODULES.map(k => [k, ['creche', 'jardin', 'garderie', 'formation'] as const])),
+  ...Object.fromEntries(SCHOOL_SUPPORT_MODULES.map(k => [k, ['garderie', 'formation'] as const])),
+};
+
+/** A module may only be attached to a center whose type is marked eligible. */
+function isModuleAllowedForCenterType(key: string, centerType: CenterType | ''): boolean {
+  if (isBaseModule(key)) return true;
+  if (key === 'bibliotheque') return false; // removed from catalog
+  if (!centerType) return true; // legacy/untyped centers stay permissive
+  const allowed = MODULE_CENTER_TYPES[key];
+  return !allowed || allowed.includes(centerType);
+}
 
 const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
 
@@ -95,14 +118,35 @@ const PLAN_BADGE: Record<string, StatusTone> = {
   starter: 'neutral', basic: 'neutral', growth: 'neutral', pro: 'brand', custom: 'brand'
 };
 
-const CENTER_TYPE_LABEL: Record<string, string> = {
-  jardin: 'روضة أطفال',
-  formation: 'مركز تدريب'
+// ─── Center types (single source of truth; server twin: functions/api/_modules.ts) ──
+export type CenterType = 'creche' | 'jardin' | 'garderie' | 'formation';
+export type CenterTypeFilter = 'all' | CenterType;
+
+const CENTER_TYPES: { key: CenterType; label: string; hint: string }[] = [
+  { key: 'creche', label: 'حضانة', hint: 'الرضّع · ما قبل الروضة' },
+  { key: 'jardin', label: 'روضة أطفال', hint: 'ما قبل المدرسي · الروضات' },
+  { key: 'garderie', label: 'دار الرعاية', hint: 'حضانة نهارية · رعاية بعد الدرس' },
+  { key: 'formation', label: 'مركز تدريب', hint: 'دعم · دروس · دورات' }
+];
+
+const CENTER_TYPE_LABEL: Record<CenterType, string> = CENTER_TYPES.reduce(
+  (map, ct) => { map[ct.key] = ct.label; return map; },
+  {} as Record<CenterType, string>
+);
+
+/** Badge tone per center type — replaces per-screen color ternaries. */
+const CENTER_TYPE_BADGE: Record<CenterType, StatusTone> = {
+  creche: 'warning',
+  jardin: 'brand',
+  garderie: 'info',
+  formation: 'neutral',
 };
 
-/** Normalise le type d'établissement : 'jardin' | 'formation' | '' */
-function normalizeCenterType(raw?: string): 'jardin' | 'formation' | '' {
-  const v = String(raw || '').trim().toLowerCase();
+/** Normalise le type d'établissement : CenterType | '' (insensible aux accents — « Crèche » → 'creche'). */
+function normalizeCenterType(raw?: string): CenterType | '' {
+  const v = String(raw || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (v.includes('creche')) return 'creche';
+  if (v.includes('garderie')) return 'garderie';
   if (v.includes('jardin')) return 'jardin';
   if (v.includes('formation') || v.includes('centre')) return 'formation';
   return '';
@@ -122,11 +166,6 @@ function titleCaseName(value?: string): string {
 function normalizeText(value?: string): string {
   return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-
-const CENTER_TYPES: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
-  { key: 'jardin', label: 'روضة أطفال', hint: 'ما قبل المدرسي · الروضات' },
-  { key: 'formation', label: 'مركز تدريب', hint: 'دعم · دروس · دورات' }
-];
 
 const STATUS_BADGE: Record<string, StatusTone> = {
   trial: 'brand', active: 'brand', suspended: 'neutral', expired: 'neutral',
@@ -329,7 +368,9 @@ export {
   PLAN_LABEL,
   PLAN_BADGE,
   CENTER_TYPE_LABEL,
+  CENTER_TYPE_BADGE,
   normalizeCenterType,
+  isModuleAllowedForCenterType,
   titleCaseName,
   normalizeText,
   CENTER_TYPES,

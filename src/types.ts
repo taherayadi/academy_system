@@ -8,6 +8,8 @@
  * were removed together with its modules.
  */
 
+import type { CenterType } from './components/dashboard/constants';
+
 export type SaaSPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
 export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
 
@@ -34,7 +36,9 @@ export type ModuleKey =
   | 'events' 
   | 'bibliotheque' 
   | 'studentTimeSheets' 
-  | 'staff';
+  | 'staff'
+  | 'activites'
+  | 'competences';
 
 export interface CenterTenant {
   id: string;
@@ -50,7 +54,8 @@ export interface CenterTenant {
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
-  centerType?: string; // 'jardin' | 'formation'
+  /** Canonical center type — '' for legacy rows created before typing existed. */
+  centerType?: CenterType | '';
   logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
   studentCount?: number;
@@ -67,7 +72,8 @@ export interface DemoRequest {
   phone: string;
   estimatedSize?: string;
   requestedModules?: string[] | string;
-  centerType?: string; // 'jardin' | 'formation'
+  /** Canonical center type — '' for legacy rows created before typing existed. */
+  centerType?: CenterType | '';
   message?: string;
   status: 'new' | 'contacted' | 'converted' | 'archived';
   notes?: string;

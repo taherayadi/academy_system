@@ -1,6 +1,6 @@
-# System Academy — SaaS Platform Administration
+# EduSphère — SaaS Platform Administration
 
-Dedicated **platform-operator console** for the System Academy SaaS. This repository
+Dedicated **platform-operator console** for the EduSphère SaaS. This repository
 (`academy_system_admin`) manages the *business* of the platform: tenants (centers),
 their subscriptions and invoices, demo/trial requests, renewal-request review,
 advertisement campaigns and platform reporting.

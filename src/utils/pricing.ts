@@ -10,6 +10,8 @@ import {
   Bus,
   Calendar,
   ShieldCheck,
+  Palette,
+  Target,
 } from 'lucide-react';
 import type { SaaSPlan } from '../types';
 
@@ -41,6 +43,8 @@ export const ALL_MODULES: readonly PricedModule[] = [
   { key: 'transport', label: 'نقل مدرسي', icon: Bus, description: 'مسارات، مسارات رحلة، سائقون.' },
   { key: 'events', label: 'مناسبات ونشاطات', icon: Calendar, description: 'تسجيل، رحلات مدرسية.' },
   { key: 'staff', label: 'الموظفون والرواتب', icon: ShieldCheck, description: 'الطاقم، رواتب، دوام، إجازات.' },
+  { key: 'activites', label: 'أنشطة وبرنامج', icon: Palette, description: 'أنشطة يومية، برنامج أسبوعي، مشاركة مع الأولياء.' },
+  { key: 'competences', label: 'مهارات ومستويات', icon: Target, description: 'متابعة المهارات والمستويات مع تقارير التقدم.' },
 ];
 
 export const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));

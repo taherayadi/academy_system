@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Check, X, Loader2, Edit, ImagePlus } from 'lucide-react';
+import { Trash2, Check, X, Loader2, Edit, ImagePlus, AlertTriangle } from 'lucide-react';
 import { updateCenterApi, uploadPlatformLogoApi, fetchInvoicesApi, fetchModulePricesApi, CenterInvoice, PlanChangeOutcome } from '../../api';
 import { CenterTenant } from '../../types';
 import { analyzePlanChange, ClientPlanDecision } from '../../utils/planChange';
@@ -7,7 +7,9 @@ import { useToast } from '../Toast';
 import icon from '../../assets/icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate } from '../../utils/format';
-import { normalizeCenterModules, normalizePhoneInput, normalizeCenterType, centerDateInputValue, currentSchoolYear, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, centerDateTimestamp, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, isValidCenterPhone } from './constants';
+import { normalizeCenterModules, normalizePhoneInput, normalizeCenterType, centerDateInputValue, currentSchoolYear, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, centerDateTimestamp, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, isValidCenterPhone, CENTER_TYPES, CENTER_TYPE_LABEL, ALL_MODULES, isModuleAllowedForCenterType } from './constants';
+import type { CenterType } from './constants';
+import ConfirmDialog from '../ConfirmDialog';
 
 function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
@@ -50,6 +52,17 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
   const [applyChoice, setApplyChoice] = useState<'settle' | 'schedule'>('settle');
   const [paymentState, setPaymentState] = useState<'paid' | 'unpaid'>('unpaid');
   const [pricesReady, setPricesReady] = useState(false);
+  // Type narrowed (e.g. formation → crèche): modules that the new type forbids
+  // will be deactivated — the admin confirms this explicitly before saving.
+  const [confirmTypeChange, setConfirmTypeChange] = useState(false);
+
+  const originalCenterType = normalizeCenterType(center.centerType);
+  const modulesDisabledByTypeChange = form.centerType !== originalCenterType
+    ? enabledModules.filter(k =>
+      !isBaseModule(k)
+      && isModuleAllowedForCenterType(k, originalCenterType)
+      && !isModuleAllowedForCenterType(k, form.centerType))
+    : [];
 
   useEffect(() => {
     let mounted = true;
@@ -223,6 +236,15 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
     // tarif, la durée, les modules et les factures ne sont PLUS touchés ici
     // (ils appartiennent au gestionnaire « Plans & factures »). Sauvegarder
     // ces champs ne doit donc jamais générer de nouvelle facture.
+    // Narrowing the type deactivates modules — explicit confirmation first.
+    if (modulesDisabledByTypeChange.length > 0) {
+      setConfirmTypeChange(true);
+      return;
+    }
+    await doSave();
+  };
+
+  const doSave = async () => {
     setSaving(true);
     try {
       const logoUrl = logoFile ? await uploadPlatformLogoApi(logoFile) : form.logoUrl;
@@ -303,10 +325,11 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ec-type">نوع المؤسسة</label>
-              <select id="ec-type" value={form.centerType} onChange={e => setForm(f => ({ ...f, centerType: e.target.value as 'jardin' | 'formation' | '' }))} className={`${inputCls} cursor-pointer`}>
+              <select id="ec-type" value={form.centerType} onChange={e => setForm(f => ({ ...f, centerType: e.target.value as CenterType | '' }))} className={`${inputCls} cursor-pointer`}>
                 <option value="">غير معرّف</option>
-                <option value="jardin">روضة أطفال</option>
-                <option value="formation">مركز تدريب</option>
+                {CENTER_TYPES.map(ct => (
+                  <option key={ct.key} value={ct.key}>{ct.label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -336,6 +359,16 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
           </div>
         </form>
       </BaseModal>
+      {/* Confirmation when narrowing the type would deactivate modules. */}
+      <ConfirmDialog
+        open={confirmTypeChange}
+        title="تغيير نوع المؤسسة؟"
+        message={`سيتم تعطيل الوحدات التالية لأنها غير متاحة لنوع «${CENTER_TYPE_LABEL[form.centerType as CenterType]}»: ${modulesDisabledByTypeChange.map(k => ALL_MODULES.find(m => m.key === k)?.label || k).join('، ')}. هل تؤكد؟`}
+        confirmLabel="نعم، غيّر النوع"
+        cancelLabel="إلغاء"
+        onConfirm={doSave}
+        onCancel={() => setConfirmTypeChange(false)}
+      />
     </>
   );
 }

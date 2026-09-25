@@ -2,7 +2,8 @@ import { motion } from 'motion/react';
 import {Building2, CheckCircle2, PauseCircle, CalendarClock, Layers, Trash2, X, Edit, Lock, Plus } from 'lucide-react';
 import { StatusBadge, SkeletonCard } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
-import { daysLeft, inferredSubscriptionStart, normalizeCenterType, CENTER_TYPE_LABEL, STATUS_BADGE, STATUS_LABEL, PLAN_BADGE, PLAN_LABEL, isBaseModule, MODULE_LABEL } from './constants';
+import { daysLeft, inferredSubscriptionStart, normalizeCenterType, CENTER_TYPE_LABEL, CENTER_TYPE_BADGE, CENTER_TYPES, STATUS_BADGE, STATUS_LABEL, PLAN_BADGE, PLAN_LABEL, isBaseModule, MODULE_LABEL } from './constants';
+import { toneClasses } from '../ui/StatusBadge';
 import {Segmented, Pagination, Hint, EmptyState } from './uiParts';
 import { PrimaryButton } from '../ui';
 import type { DashboardApi } from './usePlatformDashboard';
@@ -17,13 +18,12 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
-              <Segmented<'all' | 'jardin' | 'formation'>
+              <Segmented<'all' | typeof CENTER_TYPES[number]['key']>
                 value={centerTypeFilter}
                 onChange={setCenterTypeFilter}
                 options={[
                   { key: 'all', label: 'الكل' },
-                  { key: 'jardin', label: 'روضة أطفال' },
-                  { key: 'formation', label: 'مركز تدريب' }
+                  ...CENTER_TYPES.map(ct => ({ key: ct.key, label: ct.label })),
                 ]}
               />
             </div>
@@ -107,7 +107,7 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(c.centerType) && (
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${normalizeCenterType(c.centerType) === 'jardin' ? 'bg-accent-500/[0.06] text-accent-700 border border-accent-500/20' : 'bg-accent-500/10 text-accent-500 border border-accent-500/30'}`}>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${toneClasses(CENTER_TYPE_BADGE[normalizeCenterType(c.centerType)])}`}>
                         {CENTER_TYPE_LABEL[normalizeCenterType(c.centerType)]}
                       </span>
                     )}

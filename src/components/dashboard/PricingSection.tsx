@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { Clock, Plus, Check, Loader2, DollarSign, Lock, GraduationCap } from 'lucide-react';
 import { PrimaryButton, SecondaryButton } from '../ui';
-import { ALL_MODULES, isBaseModule, BUNDLED_MODULE_KEY, MODULE_LABEL } from './constants';
+import { ALL_MODULES, isBaseModule, isModuleHidden, BUNDLED_MODULE_KEY, MODULE_LABEL } from './constants';
 import type { DashboardApi } from './usePlatformDashboard';
 
 export default function PricingSection({ d }: { d: DashboardApi }) {
@@ -85,7 +85,7 @@ export default function PricingSection({ d }: { d: DashboardApi }) {
                   تُستخدم هذه التعريفات في الحساب التلقائي لسعر المركز وفق وحداته المفعلة — سنة {priceYear}.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {ALL_MODULES.map(m => {
+                  {ALL_MODULES.filter(m => !isModuleHidden(m.key)).map(m => {
                     const base = isBaseModule(m.key);
                     return (
                       <div key={m.key}

@@ -4,6 +4,7 @@
  */
 import { Env, json, readBody, validateSession, truncateField } from './_lib';
 import { logError } from './_logger';
+import { normalizeCenterType } from './_modules';
 
 /**
  * POST deliberately absent: public demo/trial submission belongs to the
@@ -33,12 +34,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       } catch {
         modules = r.requested_modules ? [r.requested_modules] : [];
       }
-      // Normalize the center type to 'jardin' | 'formation' | ''
-      // (the DB may contain variants like "jardin d'enfant", "Jardin", "Centre de formation"…)
-      const rawType = String(r.center_type || '').trim().toLowerCase();
-      const centerType = rawType.includes('jardin')
-        ? 'jardin'
-        : (rawType.includes('formation') || rawType.includes('centre')) ? 'formation' : '';
+      // Normalize the center type to a canonical key (accent-insensitive;
+      // the DB may contain variants like "jardin d'enfant", "Jardin",
+      // "Crèche", "Garderie", "Centre de formation"…)
+      const centerType = normalizeCenterType(r.center_type);
       return {
         id: r.id,
         fullName: r.full_name,

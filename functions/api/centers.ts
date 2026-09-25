@@ -1,5 +1,11 @@
 import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState, isValidEmail, validatePasswordStrength, clampMonthlyPrice, isValidPlan } from './_lib';
 import {
+  BUNDLED_MODULE_KEY, ALL_MODULE_KEYS, UNBILLED_MODULE_KEYS, AUTO_PRICED_PLANS,
+  ANNUAL_DISCOUNT, normalizeCenterType, isValidCenterType, CENTER_TYPE_KEYS,
+  normalizeEnabledModules, ineligibleModules, isModuleAllowedForCenterType as isModuleAllowed,
+  REQUIRED_MODULE_KEYS as REQUIRED_BASE_KEYS, CenterType,
+} from './_modules';
+import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
   round2, upgradeSettlement, BillingCycle, PlanChangeEvaluation
 } from './planLogic';
@@ -10,25 +16,6 @@ import { logError } from './_logger';
 const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
-const BUNDLED_MODULE_KEY = 'studentTimeSheets';
-const REQUIRED_MODULE_KEYS = ['scolaire', 'finance', BUNDLED_MODULE_KEY];
-// Bibliothèque désactivée pour l'instant : hors preset Pro (11 modules comme
-// le simulateur) et jamais facturée, même si un centre l'a encore en stock.
-// Pour réactiver : remettre 'bibliotheque' ici et retirer le filtre prix.
-const ALL_MODULE_KEYS = [
-  'scolaire', 'finance', 'etude', 'coursParticuliers', 'revision',
-  'formations', 'cantine', 'transport', 'events',
-  BUNDLED_MODULE_KEY, 'staff'
-];
-const UNBILLED_MODULE_KEYS = new Set([BUNDLED_MODULE_KEY, 'bibliotheque']);
-const ANNUAL_DISCOUNT = 0.2;
-const AUTO_PRICED_PLANS = new Set(['starter', 'growth', 'pro']);
-
-function normalizeEnabledModules(value: unknown, plan?: string): string[] {
-  const requested = Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
-  const modules = plan === 'pro' ? ALL_MODULE_KEYS : plan === 'starter' ? [] : requested;
-  return Array.from(new Set([...REQUIRED_MODULE_KEYS, ...modules]));
-}
 
 function normalizeDayCount(value: unknown, fallback: number): number {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
@@ -447,9 +434,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const billingCycle = isTrial ? 'monthly' : (String(body.billingCycle || 'monthly').trim() === 'annual' ? 'annual' : 'monthly');
 
-    // Pro starts with the complete catalogue selected; the backend enforces
-    // this preset even when a caller does not send the module list.
-    const enabledModules = normalizeEnabledModules(body.enabledModules, plan);
+    // Center type must come from the canonical whitelist — new center types
+    // (crèche, jardin, garderie, formation) are first-class, anything else is a 400.
+    const requestedCenterType = String(body.centerType || '').trim();
+    if (requestedCenterType && !isValidCenterType(normalizeCenterType(requestedCenterType) || requestedCenterType)) {
+      return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${CENTER_TYPE_KEYS.join('، ')}.` }, 400);
+    }
+    const centerType = normalizeCenterType(requestedCenterType);
+
+    // Pro starts with the complete eligible catalogue selected; the backend
+    // enforces this preset (scoped to the center type) even when a caller
+    // does not send the module list. An explicitly requested module that the
+    // center type does not allow is a hard 400 — except in the convert flow,
+    // where a stale requested-modules list is filtered instead of rejected
+    // (a conversion must never fail because the landing form changed).
+    if (!demoRequestId) {
+      const ineligible = ineligibleModules(body.enabledModules, centerType);
+      if (ineligible.length > 0) {
+        return json({ error: `وحدات غير متاحة لنوع المؤسسة «${centerType}»: ${ineligible.join('، ')}.` }, 400);
+      }
+    }
+    const enabledModules = normalizeEnabledModules(body.enabledModules, plan, centerType);
     const modulesJson = JSON.stringify(enabledModules);
 
     // Compute the automatic tariff from module_prices for the current school year
@@ -492,10 +497,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         id, name, slug, phone_number, location_city, plan, enabled_modules,
         meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, logo_url, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    `    ).bind(
       id, name, slug, phoneNumber, locationCity, plan, modulesJson,
       mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
-      String(body.centerType || '').trim(), String(body.logoUrl || '').trim(), createdAt
+      centerType, String(body.logoUrl || '').trim(), createdAt
     ));
 
     // 2. Center Settings
@@ -624,12 +629,24 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       || body.addOfferDays !== undefined || body.extendTrialDays !== undefined
       || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined
       || body.status !== undefined || scheduleChangeBody || cancelScheduledChange || applyScheduledPlan
-      || body.monthlyPrice !== undefined;
+      || body.monthlyPrice !== undefined || body.centerType !== undefined;
 
     let current: any = null;
     if (needsCenter) {
-      current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at FROM centers WHERE id = ?').bind(id).first<any>();
+      current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, center_type FROM centers WHERE id = ?').bind(id).first<any>();
       if (!current) return json({ error: 'المركز غير موجود.' }, 404);
+    }
+
+    // Center type: validate against the whitelist, normalize DB variants.
+    // A narrowed type (e.g. jardin → crèche) prunes now-ineligible modules.
+    let requestedCenterType: CenterType | '' | undefined;
+    if (body.centerType !== undefined) {
+      const rawType = String(body.centerType || '').trim();
+      const normalized = normalizeCenterType(rawType);
+      if (rawType && !isValidCenterType(normalized || rawType)) {
+        return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${CENTER_TYPE_KEYS.join('، ')}.` }, 400);
+      }
+      requestedCenterType = normalized;
     }
 
     // A center with a running subscription cannot be turned back into a trial
@@ -668,9 +685,21 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       }
       const toPlan = rawPlan === 'basic' ? 'starter' : rawPlan;
       const toCycle: BillingCycle = String(scheduleChangeBody.billingCycle || current.billing_cycle || 'monthly') === 'annual' ? 'annual' : 'monthly';
+      // The scheduled target obeys the (possibly new) center type: an
+      // explicitly requested ineligible module is a 400; existing modules
+      // that only become ineligible through a same-request type change are pruned.
+      const scheduledCenterType = requestedCenterType !== undefined ? requestedCenterType : normalizeCenterType(current.center_type);
+      const requestedScheduleModules = Array.isArray(scheduleChangeBody.enabledModules) ? scheduleChangeBody.enabledModules : null;
+      if (requestedScheduleModules) {
+        const ineligibleSched = ineligibleModules(requestedScheduleModules, scheduledCenterType);
+        if (ineligibleSched.length > 0) {
+          return json({ error: `وحدات غير متاحة لنوع المؤسسة «${scheduledCenterType}»: ${ineligibleSched.join('، ')}.` }, 400);
+        }
+      }
       const toModules = normalizeEnabledModules(
-        Array.isArray(scheduleChangeBody.enabledModules) ? scheduleChangeBody.enabledModules : parseModulesJson(current.enabled_modules),
-        toPlan
+        requestedScheduleModules ?? parseModulesJson(current.enabled_modules),
+        toPlan,
+        scheduledCenterType
       );
       const toPrice = scheduleChangeBody.monthlyPrice !== undefined && scheduleChangeBody.monthlyPrice !== null && String(scheduleChangeBody.monthlyPrice).trim() !== ''
         ? Number(scheduleChangeBody.monthlyPrice)
@@ -702,11 +731,23 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       if (body.logoUrl !== undefined) { scheduleBaseUpdates.push('logo_url = ?'); scheduleBaseBinds.push(String(body.logoUrl).trim()); }
       if (body.phoneNumber !== undefined) { scheduleBaseUpdates.push('phone_number = ?'); scheduleBaseBinds.push(String(body.phoneNumber).trim()); }
       if (body.locationCity !== undefined) { scheduleBaseUpdates.push('location_city = ?'); scheduleBaseBinds.push(String(body.locationCity).trim()); }
-      if (body.centerType !== undefined) { scheduleBaseUpdates.push('center_type = ?'); scheduleBaseBinds.push(String(body.centerType).trim()); }
+      if (body.centerType !== undefined) { scheduleBaseUpdates.push('center_type = ?'); scheduleBaseBinds.push(requestedCenterType); }
       if (body.mealOperatingMode !== undefined) { scheduleBaseUpdates.push('meal_operating_mode = ?'); scheduleBaseBinds.push(String(body.mealOperatingMode).trim()); }
       if (scheduleBaseUpdates.length > 0) {
         scheduleBaseBinds.push(id);
         await env.DB.prepare(`UPDATE centers SET ${scheduleBaseUpdates.join(', ')} WHERE id = ?`).bind(...scheduleBaseBinds).run();
+      }
+      // Audit trail: a type change is worth recording, especially when it
+      // deactivates modules the center used to have.
+      if (requestedCenterType !== undefined && requestedCenterType !== normalizeCenterType(current.center_type)) {
+        const removedModules = parseModulesJson(current.enabled_modules)
+          .filter(k => !REQUIRED_BASE_KEYS.includes(k) && !isModuleAllowed(k, requestedCenterType));
+        await logPlanHistory(env.DB, {
+          centerId: id,
+          action: 'center_type_change',
+          details: `نوع المؤسسة: «${normalizeCenterType(current.center_type) || 'غير معرّف'}» → «${requestedCenterType}»`
+            + (removedModules.length ? ` — وحدات تم تعطيلها: ${removedModules.join('، ')}.` : '.'),
+        });
       }
       const scheduleSettingsUpdates: string[] = [];
       const scheduleSettingsBinds: any[] = [];
@@ -790,7 +831,18 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     const requestedModulesRaw = foldSchedule
       ? parseModulesJson(pending!.to_enabled_modules)
       : (Array.isArray(body.enabledModules) ? body.enabledModules : currentModules);
-    const targetModules = normalizeEnabledModules(requestedModulesRaw, effectivePlan);
+    // Eligibility runs against the new type when the request changes it.
+    const effectiveCenterType = requestedCenterType !== undefined ? requestedCenterType : normalizeCenterType(current.center_type);
+    // An explicitly requested module that the center type forbids is a hard
+    // 400 (server-side validation, per the remarks) — silent pruning is only
+    // for modules already on the center that a type change just invalidated.
+    if (Array.isArray(body.enabledModules)) {
+      const ineligibleLive = ineligibleModules(body.enabledModules, effectiveCenterType);
+      if (ineligibleLive.length > 0) {
+        return json({ error: `وحدات غير متاحة لنوع المؤسسة «${effectiveCenterType}»: ${ineligibleLive.join('، ')}.` }, 400);
+      }
+    }
+    const targetModules = normalizeEnabledModules(requestedModulesRaw, effectivePlan, effectiveCenterType);
     const modulesChanged = JSON.stringify(targetModules) !== JSON.stringify(currentModules);
     const planChanged = (normalizedBodyPlan !== null && normalizedBodyPlan !== currentPlan) || (foldSchedule && effectivePlan !== currentPlan);
     const billingCycleChanged = cycleWrite;
@@ -849,7 +901,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { updates.push('phone_number = ?'); binds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { updates.push('location_city = ?'); binds.push(String(body.locationCity).trim()); }
-    if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(String(body.centerType).trim()); }
+    if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(requestedCenterType); }
 
     // Plan / enabled modules: applied live, except for a scheduled decrease.
     if (!scheduleDecrease && (planChanged || modulesChanged || foldSchedule || body.plan !== undefined || body.enabledModules !== undefined)) {
@@ -899,6 +951,26 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     // Audit trail entries for this PATCH — flushed after the writes succeed.
     const historyEntries: Array<{ action: string; details: string; amount?: number | null; invoiceNumber?: string | null }> = [];
+
+    // Type narrowed ⇒ modules the new type forbids are deactivated in the
+    // same write (normalizeEnabledModules pruned them above), and the audit
+    // trail explains why they disappeared.
+    if (requestedCenterType !== undefined && requestedCenterType !== normalizeCenterType(current.center_type)) {
+      const beforeSet = new Set<string>([
+        ...currentModules,
+        ...(Array.isArray(body.enabledModules) ? body.enabledModules.map(String) : []),
+      ]);
+      const removedDueToType = Array.from(beforeSet).filter(k =>
+        k && !REQUIRED_BASE_KEYS.includes(k)
+        && !targetModules.includes(k)
+        && !isModuleAllowed(k, requestedCenterType)
+      );
+      historyEntries.push({
+        action: 'center_type_change',
+        details: `نوع المؤسسة: «${normalizeCenterType(current.center_type) || 'غير معرّف'}» → «${requestedCenterType}»`
+          + (removedDueToType.length ? ` — وحدات تم تعطيلها: ${removedDueToType.join('، ')}.` : '.'),
+      });
+    }
 
     // Add promotional/trial days — ONLY while the center is still in its trial
     // period. A center already inside a paid subscription window cannot be

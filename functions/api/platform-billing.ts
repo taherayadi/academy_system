@@ -178,6 +178,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       const prices = body.prices as Array<{ module_key: string; price: number }>;
       if (!year || !Array.isArray(prices)) return json({ error: 'year et prices requis.' }, 400);
 
+      // Bibliothèque was removed from the catalog: its price can no longer be
+      // set through the API (historical rows and invoice history stay intact).
+      if (prices.some(p => String(p.module_key) === 'bibliotheque')) {
+        return json({ error: 'لا يمكن تعيين سعر وحدة المكتبة — تم سحبها من الكتالوج.' }, 400);
+      }
       const stmts: D1PreparedStatement[] = [];
       prices.forEach(p => {
         stmts.push(env.DB.prepare(`

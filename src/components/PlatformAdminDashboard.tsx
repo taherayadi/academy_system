@@ -6,6 +6,7 @@ import ConfirmDialog from './ConfirmDialog';
 import icon from '../assets/icon.png';
 import { titleCaseName } from './dashboard/constants';
 import type { PlatformAdminDashboardProps } from './dashboard/constants';
+import { BRAND_NAME } from '../brand';
 import { usePlatformDashboard } from './dashboard/usePlatformDashboard';
 import NewCenterModal from './dashboard/NewCenterModal';
 import EditInvoiceModal from './dashboard/EditInvoiceModal';
@@ -36,6 +37,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
     return () => window.removeEventListener('keydown', h);
   }, []);
   const { PAGE_META, lastSync, syncFailed, search, setSearch, load, loading, setShowNewCenter, showNewCenter, convertRequest, setConvertRequest, editCenter, setEditCenter, planCenter, setPlanCenter, reviewRenewal, setReviewRenewal, onRenewalDecided, editInvoice, setEditInvoice, loadFinanceData, handlePrintInvoice, showNewAd, editAd, centers, setShowNewAd, setEditAd, loadAdvertisements, deleteCenter, handleDeleteCenter, setDeleteCenter, deleteRequest, handleDeleteRequest, setDeleteRequest, deleteAd, toast, setDeleteAd, handleDeleteAd } = d;
+  // Browser tab title follows the active console page (brand-suffixed).
+  useEffect(() => {
+    document.title = `${PAGE_META[page].title} — ${BRAND_NAME} SaaS`;
+  }, [page, PAGE_META]);
   return (
     <div className="relative space-y-6 overflow-x-clip" dir="rtl">
 

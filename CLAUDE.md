@@ -4,7 +4,7 @@ Guidance for coding agents working in this repository.
 
 ## What this repository is
 
-**System Academy — SaaS platform administration console ONLY.** It manages the
+**EduSphère — SaaS platform administration console ONLY.** It manages the
 platform business: tenant (center) lifecycle, subscriptions/plans/invoices,
 demo-request handling, renewal-request review, advertisement campaigns and
 platform reporting. The public landing page and the entire center workspace
