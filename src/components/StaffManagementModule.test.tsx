@@ -43,6 +43,7 @@ function renderModule(props: Record<string, unknown> = {}) {
 }
 
 const POINTAGE_TAB_LABEL = 'نظام الحضور والغياب اليومي';
+const POINTAGE_PANE_HEADER = 'سجل الحضور والغياب الشهري';
 const LOCKED_MESSAGE = 'ميزة مقفلة';
 
 beforeEach(() => {
@@ -61,23 +62,29 @@ function changeByPlaceholder(ph: string, value: string) {
 }
 
 describe('StaffManagementModule staff-lite gating', () => {
-  it('hides the pointage sub-tab in lite mode and keeps roster CRUD', () => {
+  it('locks the pointage sub-tab in lite mode (visible but disabled) and keeps roster CRUD', () => {
     renderModule({ staffLite: true });
-    expect(screen.queryByText(POINTAGE_TAB_LABEL)).toBeNull();
+    // remark 3: locked surfaces stay visible with their locked state, so the
+    // upgrade value remains discoverable — the tab is disabled, not removed.
+    const tab = screen.getByText(POINTAGE_TAB_LABEL) as HTMLButtonElement;
+    expect(tab.disabled).toBe(true);
     // roster still manageable: the profiles sub-tab is active and add control exists
     expect(screen.getAllByText(/فريق العمل/).length).toBeGreaterThan(0);
   });
 
-  it('shows the pointage sub-tab in full mode', () => {
+  it('shows the pointage sub-tab enabled in full mode', () => {
     renderModule({});
-    expect(screen.getByText(POINTAGE_TAB_LABEL)).toBeTruthy();
+    const tab = screen.getByText(POINTAGE_TAB_LABEL) as HTMLButtonElement;
+    expect(tab.disabled).toBe(false);
   });
 
-  it('forces the profiles sub-tab in lite mode even when pointage was requested', () => {
-    // A lite center cannot reach pointage: the sub-tab does not exist, and the
-    // profiles pane is the only rendered content.
+  it('never opens the pointage pane in lite mode, even when the locked tab is clicked', () => {
+    // A lite center cannot reach pointage: the disabled tab does not switch,
+    // and the profiles pane is the only rendered content.
     renderModule({ staffLite: true });
-    expect(screen.queryByText(POINTAGE_TAB_LABEL)).toBeNull();
+    const tab = screen.getByText(POINTAGE_TAB_LABEL) as HTMLButtonElement;
+    fireEvent.click(tab);
+    expect(screen.queryByText(POINTAGE_PANE_HEADER)).toBeNull();
     expect(screen.getAllByText(/فريق العمل والملفات/).length).toBeGreaterThan(0);
   });
 

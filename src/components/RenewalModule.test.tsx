@@ -276,3 +276,57 @@ describe('RenewalModule — manual refresh only (no auto-refresh)', () => {
     expect(screen.getByText('04073158006372281336')).toBeTruthy();
   });
 });
+
+describe('RenewalModule — module compatibility with the center type (T023, remark 4)', () => {
+  it('never offers study addons to a crèche but keeps an enabled one displayed (R9)', async () => {
+    render(
+      <RenewalModule
+        center={center({ centerType: 'creche', enabledModules: ['scolaire', 'studentTimeSheets', 'finance', 'etude'] })}
+        centerType="creche"
+      />
+    );
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+
+    // Incompatible study modules are never offered as toggle rows.
+    expect(screen.queryByText('Étude Surveillée')).toBeNull();
+    expect(screen.queryByText('Cours Particuliers')).toBeNull();
+    expect(screen.queryByText('Révision Examens')).toBeNull();
+    expect(screen.queryByText('Formations')).toBeNull();
+
+    // Compatible addons remain offered.
+    for (const label of ['Cantine & Repas', 'Transport Scolaire', 'Événements & Sorties', 'Personnel & Salaires', 'Activités & Planning', 'Compétences & Skills']) {
+      expect(screen.getByText(label), label).toBeTruthy();
+    }
+
+    // The already-enabled étude is displayed, never hidden (research R9).
+    expect(screen.getByText(/Étude Surveillée — reste actif/)).toBeTruthy();
+
+    // The availability counter reflects the filtered catalog (base 3 + 6 offered).
+    expect(screen.getByText(/sur 9 disponibles/)).toBeTruthy();
+  });
+
+  it('offers every addon to a formation center (regression)', async () => {
+    render(<RenewalModule center={center({ centerType: 'formation' })} centerType="formation" />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+    expect(screen.getByText('Étude Surveillée')).toBeTruthy();
+    expect(screen.getByText(/sur 13 disponibles/)).toBeTruthy();
+  });
+
+  it('offers every addon when the type is unknown/empty (legacy passthrough)', async () => {
+    render(<RenewalModule center={center()} />);
+    await waitFor(() => expect(screen.getByText('Étude Surveillée')).toBeTruthy());
+    expect(screen.getByText(/sur 13 disponibles/)).toBeTruthy();
+  });
+
+  it('tier presets never re-introduce incompatible modules for a crèche', async () => {
+    render(<RenewalModule center={center({ centerType: 'creche' })} centerType="creche" />);
+    await waitFor(() => expect(screen.getByText('Simulateur de plan')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Pro'));
+    await waitFor(() => expect(screen.getByText(/Demander le changement d/)).toBeTruthy());
+
+    // Study modules stay absent from the offer grid even under the Pro preset.
+    expect(screen.queryByText('Étude Surveillée')).toBeNull();
+    expect(screen.queryByText('Révision Examens')).toBeNull();
+  });
+});

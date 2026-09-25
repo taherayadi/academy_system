@@ -19,6 +19,7 @@ import {
   X,
   BookOpen,
   CheckSquare,
+  Lock,
   FileCheck
 } from 'lucide-react';
 import { StaffMember, TimesheetEntry, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, StaffRole, StaffScheduleSlot, MONTH_BY_CALENDAR_INDEX, CenterSettings, CenterExpense, getAppSubjects, EtudeSlot, ETUDE_DAYS } from '../types';
@@ -747,19 +748,26 @@ const base = generatingPayslipStaff.baseSalary || 850;
           فريق العمل والملفات
         </button>
 
-        {!staffLite && (
+        {/* Remark 3: the pointage sub-tab stays visible but locked in lite
+            mode — the value of upgrading remains discoverable, exactly like
+            the payroll surfaces below (masquer ≠ verrouiller). */}
         <button
           onClick={() => setActiveSubTab('pointage')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer ${
-            activeSubTab === 'pointage' 
-              ? 'bg-brand-600 text-white shadow-sm' 
-              : 'text-slate-600 hover:bg-slate-100'
+          disabled={staffLite}
+          title={staffLite ? 'ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد' : undefined}
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 ${
+            staffLite
+              ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+              : `cursor-pointer ${
+                  activeSubTab === 'pointage'
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`
           }`}
         >
-          <CheckSquare className="h-4 w-4" />
+          {staffLite ? <Lock className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
           نظام الحضور والغياب اليومي
         </button>
-        )}
 
         </div>
 

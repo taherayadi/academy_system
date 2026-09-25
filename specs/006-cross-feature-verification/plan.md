@@ -113,3 +113,107 @@ feature's files.
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | (none) | — | — |
+
+---
+
+## Revision B — Remarks alignment (`center-type-module-rules.md`)
+
+**Date**: 2026-09-25 | **Input**: the client's remarks file listing 6 numbered
+remarks on the original implementation.
+
+An implementation audit against the remarks file found **three gaps** (remarks 4,
+5, 6) and **two tightenings** (remarks 1, 3). Remarks 2 and the matrix are already
+satisfied verbatim by the shipped program. This revision adjusts the technical
+approach accordingly; it does not re-open the verified 001–005 scope.
+
+### Audit result per remark
+
+| # | Remark | Current state | Verdict |
+|---|--------|---------------|---------|
+| 1 | Hide «المسار الدراسي لآخر 3 سنوات» (section 5) for crèche/jardin | Only grade/établissement fields are gated by `showSchoolLevel` (001); the whole SECTION 5 block **still renders** | TIGHTEN — gate the section itself + print view + submitted-value stripping |
+| 2 | Menu by center type (crèche/jardin = 7 modules, no study tabs) | `hasStudyModules` + `hasCenterModule` filter the sidebar; composed tests C1 pass | SATISFIED — covered by existing tests |
+| 3 | Staff-lite: locked payroll visible with upgrade hint, pointage locked too | Payroll surfaces show «ميزة مقفلة» + «الذهاب إلى التجديد»; **pointage sub-tab hides its content but its tab button stays clickable** (dead empty panel) | TIGHTEN — disable/lock the pointage tab button itself |
+| 4 | Renewal: only center-type-compatible modules listed | `ADDON_MODULES` renders every addon for every center | **GAP** — add type compatibility filter with helper + tests |
+| 5 | Landing cards show «Available for: …» badges | Catalog has no per-module compatibility data at all | **GAP** — extend catalog + render badges from it |
+| 6 | Demo form live-validates type × module combo, informative not blocking | Form collects type and modules independently; no compatibility feedback | **GAP** — same helper, info banner, submission still allowed |
+
+### Technical approach (deltas)
+
+**Single new canonical helper** — compatibility is one concept used by three
+surfaces, so it lives next to the other two canonical utilities and is asserted
+single-definition by the same composed check:
+
+```text
+src/utils/centerType.ts   # extends the existing canonical file, no new file
++  moduleCenterTypes: Record<string, CenterType[]>   # which types each catalog module serves
++  isModuleCompatible(moduleKey, centerType): boolean # undefined/'' type → true (legacy passthrough)
++  incompatibleModules(keys, centerType): string[]    # used by renewal + demo form
++  SUPPORTED_TYPES_LABELS                             # fr/ar labels for badges and the remark text
+```
+
+Rules encoded (from the remarks matrix): the 4 study modules + the remaining
+non-core catalog addons are garderie/formation only; `cantine`, `transport`,
+`events`, `staff`, `activites`, `competences` serve all four types. Unknown or
+empty center type stays legacy-visible everywhere (existing passthrough rule,
+unbroken). Compatibility is **presentation + offer filtering only** — it never
+blocks submission (remark 6) and never mutates stored enabledModules (FR-010
+data-safety carries over unchanged).
+
+**Remark 1 (registration section)**: wrap the SECTION 5 block and the print
+«Academic History» block in `showSchoolLevel`; in `handleSubmit`, store
+`academicHistory` only when `showSchoolLevel` (mirroring the existing grade
+stripping at lines 434–435). Existing academicHistory data is untouched in the
+DB — hiding is rendering-level, reversible, FR-010-safe.
+
+**Remark 3 (pointage tab)**: in lite mode the pointage sub-tab button becomes
+`disabled` with the locked style + lock glyph; `activeSubTab` never enters
+`'pointage'`. Composed test flips from «tab label absent» to «tab present but
+disabled», keeping the 4× LOCKED_MESSAGE + upgrade-button assertions.
+
+**Remark 4 (renewal filter)**: `RenewalModule` receives `centerType` (App.tsx
+passes `currentCenter?.centerType` alongside `center`); its addon grid renders
+`ADDON_MODULES.filter(m => isModuleCompatible(m.key, centerType))`. Incompatible
+modules are **never offered** (remark is explicit); edge case: an existing
+enabledModules entry that is incompatible with the current type still shows as
+currently-enabled in the summary (displayed, not offered) so the center never
+loses sight of what it pays for — hiding that would contradict FR-010's
+no-data-disappearance rule.
+
+**Remark 5 (landing badges)**: every addon row on the landing simulator renders a
+small «Disponible : …» line from `moduleCenterTypes` (via the helper), styled as
+an inline badge list consistent with the existing card design; base modules
+(all-types) stay badge-free to keep the base card clean.
+
+**Remark 6 (demo form live validation)**: when a center type is selected and the
+selection contains incompatible modules, an informational banner (ℹ️ style,
+matching the existing form message styling) reads, in French:
+«ℹ️ Ce module n'est pas disponible pour les centres Crèche / Jardin d'enfants.
+Retirez-le ou choisissez Garderie / Formation pour le conserver.» — computed
+live from `incompatibleModules`. Non-blocking: the submit button stays enabled;
+nothing is stripped from the payload (the remark keeps the choice informative).
+
+**Tests** (own files, per-feature adjacency; composed re-check in 006's suites):
+1. `src/utils/centerType` — extend `centerType.test.ts`: matrix per remark table,
+   legacy passthrough, `incompatibleModules` ordering.
+2. `src/components/StudentRegistrationModule.test.tsx` — add crèche/jardin cases:
+   section 5 absent (form + print), formation case intact (regression), submit
+   strips academicHistory under crèche.
+3. `src/components/StaffManagementModule.test.tsx` — lite mode: pointage tab
+   rendered disabled, click does not open pointage panel; full mode unchanged.
+4. `src/components/RenewalModule.test.tsx` — crèche/formation filter cases;
+   incompatible-already-enabled shows as enabled; legacy/unknown type shows all.
+5. `src/components/LandingPage.smoke.test.tsx` — badges render per module;
+   remark-6 banner appears for crèche + study module and disappears when the
+   module is removed or the type flips; submission payload unchanged.
+6. `src/program.composed.test.tsx` — extend C1 walkthrough: pointage tab disabled
+   (not absent); add a composed crèche renewal render asserting no study modules
+   are offered.
+
+**Constitution Check (revision B)**: re-verified — no new routes (IV), no new
+endpoints/security surface (III), tenant context untouched (II), no migrations
+created here (I), every delta lands with its test (V). No violations.
+
+**Out of scope**: pricing/value changes, new modules, backend changes, blocking
+validation on the demo form. The remarks matrix's «Personnel / Staff» for all
+types is entitlement-gated as shipped (003) — type compatibility does not override
+entitlements.

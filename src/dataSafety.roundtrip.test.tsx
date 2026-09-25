@@ -185,14 +185,17 @@ describe('C7 — an entitlement upgrade reveals locked payroll records unchanged
     const { center, user } = makeProgram({ type: 'formation', enabledModules: ['scolaire', 'etude'] });
     await loginAs(center, user);
     await clickTab('إدارة الموظفين', 'فريق العمل والملفات');
-    // locked: no pointage sub-tab, payroll surfaces replaced by lock cards
-    expect(screen.queryByText(POINTAGE_TAB_LABEL)).toBeNull();
+    // locked: pointage sub-tab visible but disabled (remark 3), payroll surfaces
+    // replaced by lock cards
+    const lockedTab = screen.getByText(POINTAGE_TAB_LABEL).closest('button') as HTMLButtonElement;
+    expect(lockedTab.disabled).toBe(true);
     expect(screen.getAllByText(LOCKED_MESSAGE).length).toBeGreaterThanOrEqual(4);
 
     // the center buys the staff module mid-session
     await pushCenterUpdate({ ...center, enabledModules: ['scolaire', 'etude', 'staff'] });
     await waitFor(() => expect(screen.queryByText(LOCKED_MESSAGE)).toBeNull(), { timeout: 5000 });
-    expect(screen.getByText(POINTAGE_TAB_LABEL)).toBeTruthy();
+    const unlockedTab = screen.getByText(POINTAGE_TAB_LABEL).closest('button') as HTMLButtonElement;
+    expect(unlockedTab.disabled).toBe(false);
     // the roster record survived the locked period untouched
     expect(bodyText()).toContain('Mohamed Ali');
   });

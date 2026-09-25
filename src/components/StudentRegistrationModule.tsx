@@ -440,11 +440,19 @@ export default function StudentRegistrationModule({
       siblings,
       authorizedPersons,
       allergies,
-      academicHistory: {
-        nMinus1: { school: nMinus1School, grade: nMinus1Grade },
-        nMinus2: { school: nMinus2School, grade: nMinus2Grade },
-        nMinus3: { school: nMinus3School, grade: nMinus3Grade }
-      },
+      academicHistory: (() => {
+        // Le cursus scolaire est un artefact scolaire : non saisi pour
+        // crèche/jardin (remark 1). La section et le print sont masqués, mais
+        // l'historique déjà stocké n'est JAMAIS écrasé par une édition dans un
+        // centre non scolaire — masquer n'est pas détruire (FR-010) : seules
+        // les créations fraîches enregistrent un historique vide.
+        if (!showSchoolLevel && editingStudentId) return existing!.academicHistory;
+        return {
+          nMinus1: { school: showSchoolLevel ? nMinus1School : '', grade: showSchoolLevel ? nMinus1Grade : '' },
+          nMinus2: { school: showSchoolLevel ? nMinus2School : '', grade: showSchoolLevel ? nMinus2Grade : '' },
+          nMinus3: { school: showSchoolLevel ? nMinus3School : '', grade: showSchoolLevel ? nMinus3Grade : '' }
+        };
+      })(),
       registration: {
         date: regDate,
         location: regLocation,
@@ -1316,7 +1324,9 @@ export default function StudentRegistrationModule({
                   </div>
                 </div>
 
-                {/* SECTION 5: CURSUS SCOLAIRE (3 LAST YEARS) */}
+                {/* SECTION 5: CURSUS SCOLAIRE (3 LAST YEARS) — masquée pour
+                    crèche/jardin (remark 1) : sans objet à ces âges. */}
+                {showSchoolLevel && (
                 <div className="space-y-4 border-t border-slate-100 pt-6">
                   <h4 className="text-sm font-black text-brand-700 bg-brand-600/[0.06] p-2 rounded-lg flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
@@ -1361,6 +1371,7 @@ export default function StudentRegistrationModule({
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* SECTION 5: SERVICES SUBSCRIPTION */}
                 <div className="space-y-4 border-t border-slate-100 pt-6">
@@ -1747,6 +1758,7 @@ export default function StudentRegistrationModule({
                   </button>
                   <button
                     onClick={() => setPrintingRegistrationStudent(null)}
+                    title="إغلاق المعاينة"
                     className="p-2 hover:bg-slate-800 rounded-xl text-slate-400"
                   >
                     <X className="h-5 w-5" />
@@ -1865,7 +1877,9 @@ export default function StudentRegistrationModule({
                     </p>
                   </div>
 
-                  {/* Academic history - ROW 4 */}
+                  {/* Academic history - ROW 4 — masquée pour crèche/jardin
+                      (remark 1), comme la section du formulaire. */}
+                  {showSchoolLevel && (
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">4. المسار الدراسي (3 سنوات سابقة)</h3>
                     <div className="grid grid-cols-3 gap-2 text-[10px]">
@@ -1874,6 +1888,7 @@ export default function StudentRegistrationModule({
                       <div className="p-1 bg-white rounded border"><strong>N-3:</strong> {printingRegistrationStudent.academicHistory?.nMinus3?.school || 'غير مدون'} ({printingRegistrationStudent.academicHistory?.nMinus3?.grade || '-'})</div>
                     </div>
                   </div>
+                  )}
 
                   {/* Services - ROW 5 */}
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">

@@ -99,3 +99,76 @@ worthless).
 **Alternatives considered**: TODO-marking failures as known issues — rejected:
 contradicts the gates; weakening legacy tests to make composed ones pass —
 rejected: FR-006 forbids it explicitly.
+
+---
+
+# Revision B research — remarks alignment (`center-type-module-rules.md`)
+
+## R7 — Where does module × center-type compatibility live?
+
+**Decision**: Extend the existing canonical `src/utils/centerType.ts` with a
+`moduleCenterTypes` map (module key → served center types) plus
+`isModuleCompatible` / `incompatibleModules` helpers. No new file, no new
+catalog field.
+
+**Rationale**: The program already asserts single canonical definitions (T004,
+FR-015); adding a second compatibility source (e.g. a field on `PricedModule` in
+`pricing.ts`) would fork the concept between commercial catalog and type rules.
+The remarks matrix is a *type* rule, not a pricing rule, so it belongs with the
+type predicates. Three surfaces (renewal, landing cards, demo form) consume one
+map, keeping the coherence guarantee trivially testable. Unknown/empty type →
+compatible (legacy passthrough) preserves FR-004.
+
+**Alternatives considered**: a `centerTypes?: CenterType[]` field on
+`PricedModule` — rejected: couples type rules into the pricing catalog and makes
+the landing/renewal identity check carry semantics it doesn't need; per-surface
+hardcoded lists — rejected: three copies of the matrix, drift guaranteed;
+backend/column on centers — rejected: presentation-level concern, no schema
+change warranted, admin repo untouched.
+
+## R8 — Locking vs hiding the pointage sub-tab in staff-lite
+
+**Decision**: Keep the pointage sub-tab button visible but `disabled` with the
+locked style and a lock glyph in lite mode; the panel never opens.
+
+**Rationale**: Remark 3's principle is explicit for payroll: "show them as locked
+… rather than hiding them, so the value of upgrading is visible." The shipped
+behavior hides pointage's content but leaves a clickable dead tab — worse than
+either clean option. Aligning on visible-but-locked is consistent with the
+payroll treatment and turns an empty panel into an upgrade signal.
+
+**Alternatives considered**: hiding the tab entirely (current behavior) —
+rejected: contradicts the remark's visibility principle and leaves the dead-click
+bug; leaving clickable with a toast — rejected: an interactive control that does
+nothing but complain is a worse affordance than a disabled one.
+
+## R9 — Renewal offering vs. already-enabled incompatible modules
+
+**Decision**: The renewal *simulator* lists only compatible modules; an
+incompatible module already present in `enabledModules` still appears in the
+current-plan display (enabled, priced) but is never re-offered as an option.
+
+**Rationale**: Remark 4 says "incompatible modules are never offered" — offering
+is the simulator's job, not the current-plan summary's. Hiding an existing paid
+module from its own display would make a paid capability vanish without any
+change (contradicts FR-010's reversibility trust guarantee and confuses billing).
+
+**Alternatives considered**: filtering `enabledModules` itself in the display —
+rejected: data disappearance without a data change; stripping incompatible keys
+from the payload — rejected: 006 forbids silent data mutation outside explicit
+round-trips.
+
+## R10 — Demo-form compatibility feedback: informative, not blocking
+
+**Decision**: A live info banner (ℹ️, non-error styling) lists incompatible
+selections and suggests removal or a type switch; submit stays enabled and the
+payload is sent unmodified.
+
+**Rationale**: Remark 6's text is a directive: "Keep it informative rather than
+blocking: guide the choice instead of rejecting the submission outright." The
+provisioning flow (FR-012 round-trip) stays untouched.
+
+**Alternatives considered**: blocking submit — rejected: explicitly against the
+remark; silently removing incompatible modules from the selection — rejected:
+mutates the visitor's choice without consent, and the remark wants them to
+choose.

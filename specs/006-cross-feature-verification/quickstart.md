@@ -55,3 +55,43 @@ intact → add staff to the étude-only center → payroll history reappears unc
 All gates green at the combined state; W1–W4 behave exactly as described; zero
 regressions in the pre-existing suite; coordination items (admin-repo migrations
 scheduled, single canonical definitions) closed. The program is release-ready.
+
+---
+
+# Revision B walkthroughs — remarks alignment (`center-type-module-rules.md`)
+
+Run on the same dev servers as W1 (`npm run dev` + `npm run pages:dev`).
+
+**W5 — Registration age-appropriateness** (remark 1): log into the C1 crèche
+center → «تسجيل التلاميذ» → open the add-child form → SECTION 5
+«المسار الدراسي لآخر 3 سنوات» is absent entirely, sections renumber visually
+intact, submit succeeds → print the fiche: no «Academic History» block → repeat
+in a garden center (same result) → log into the formation center: the section is
+present and works (regression).
+
+**W6 — Staff-lite affordances** (remark 3): on the étude-without-staff center →
+«إدارة الموظفين» → the «نظام الحضور والغياب اليومي» sub-tab is visible but
+disabled with a lock glyph; clicking it does nothing and the profiles panel
+stays → payroll surfaces (paie, avances, congés) show «ميزة مقفلة» with
+«الذهاب إلى التجديد» → log into a staff-entitled center: the pointage sub-tab
+opens normally (regression).
+
+**W7 — Renewal compatibility filter** (remark 4): on the crèche center →
+«التجديد» → the simulator lists cantine, transport, events, staff, activites,
+competences — **no** étude/cours/revision/formations entries → the current-plan
+display still shows what the center already has enabled (nothing vanishes) →
+log into the formation center: all addons are offered (regression) →
+legacy/unknown-type center: all addons offered (passthrough).
+
+**W8 — Landing badges + demo guidance** (remarks 5+6): open the landing page →
+the pricing simulator's addon rows each carry a «Disponible : …» badge line
+(étude → Garderie, Formation; events → all four) → in the demo form select
+Crèche then toggle Étude: the ℹ️ banner appears live and the submit button stays
+enabled → remove Étude or switch the type to Garderie: banner disappears →
+submit with a crèche + étude selection still goes through (informative, not
+blocking).
+
+**Expected end state (revision B)**: W5–W8 behave exactly as described; all
+gates stay green with the new per-surface tests included; the compatibility
+matrix has a single definition in `src/utils/centerType.ts` asserted by the
+test suite.

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER_TYPES, hasSchoolLevel, hasStudyModules } from './centerType';
+import {
+  CENTER_TYPES,
+  hasSchoolLevel,
+  hasStudyModules,
+  moduleCenterTypes,
+  isModuleCompatible,
+  incompatibleModules,
+} from './centerType';
+import { ALL_MODULES } from './pricing';
 
 describe('CENTER_TYPES', () => {
   it('lists the four accepted types in order', () => {
@@ -42,5 +50,70 @@ describe('hasStudyModules', () => {
     expect(hasStudyModules(null)).toBe(true);
     expect(hasStudyModules('')).toBe(true);
     expect(hasStudyModules('invented-value')).toBe(true);
+  });
+});
+
+// ── Revision B (T017): module × center-type compatibility ─────────────────
+
+describe('moduleCenterTypes', () => {
+  it('covers every catalog key (no phantom gaps in either direction)', () => {
+    const catalogKeys = ALL_MODULES.map(m => m.key);
+    for (const key of catalogKeys) {
+      expect(moduleCenterTypes[key], `catalog key ${key} has no compatibility entry`).toBeTruthy();
+    }
+  });
+
+  it('matches the remarks matrix: study modules are garderie/formation only', () => {
+    for (const key of ['etude', 'coursParticuliers', 'revision', 'formations']) {
+      expect(isModuleCompatible(key, 'creche')).toBe(false);
+      expect(isModuleCompatible(key, 'jardin')).toBe(false);
+      expect(isModuleCompatible(key, 'garderie')).toBe(true);
+      expect(isModuleCompatible(key, 'formation')).toBe(true);
+    }
+  });
+
+  it('matches the remarks matrix: core addons serve all four types', () => {
+    for (const key of ['cantine', 'transport', 'events', 'staff', 'activites', 'competences']) {
+      for (const type of CENTER_TYPES) {
+        expect(isModuleCompatible(key, type), `${key} × ${type}`).toBe(true);
+      }
+    }
+  });
+
+  it('keeps base modules all-types', () => {
+    for (const key of ['scolaire', 'studentTimeSheets', 'finance']) {
+      for (const type of CENTER_TYPES) {
+        expect(isModuleCompatible(key, type), `${key} × ${type}`).toBe(true);
+      }
+    }
+  });
+
+  it('defaults to compatible for unknown/empty/legacy types (passthrough)', () => {
+    expect(isModuleCompatible('etude', undefined)).toBe(true);
+    expect(isModuleCompatible('etude', null)).toBe(true);
+    expect(isModuleCompatible('etude', '')).toBe(true);
+    expect(isModuleCompatible('etude', 'legacy-unknown')).toBe(true);
+  });
+
+  it('treats an unknown module key as incompatible with known types', () => {
+    expect(isModuleCompatible('phantom_key', 'creche')).toBe(false);
+    expect(isModuleCompatible('phantom_key', undefined)).toBe(true);
+  });
+});
+
+describe('incompatibleModules', () => {
+  it('returns incompatible keys in selection order', () => {
+    const selection = ['cantine', 'revision', 'etude', 'staff', 'coursParticuliers'];
+    expect(incompatibleModules(selection, 'creche')).toEqual(['revision', 'etude', 'coursParticuliers']);
+  });
+
+  it('returns an empty list when everything is compatible', () => {
+    expect(incompatibleModules(['cantine', 'events'], 'jardin')).toEqual([]);
+    expect(incompatibleModules([], 'creche')).toEqual([]);
+  });
+
+  it('never blocks for unknown/empty types (legacy passthrough)', () => {
+    expect(incompatibleModules(['etude', 'revision'], undefined)).toEqual([]);
+    expect(incompatibleModules(['etude', 'revision'], '')).toEqual([]);
   });
 });

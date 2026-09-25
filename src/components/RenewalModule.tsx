@@ -8,9 +8,10 @@ import {
 import { fetchPublicModulePricesApi, fetchRenewalRequestsApi, createRenewalRequestApi } from '../api';
 import type { CenterTenant, PlanHistoryEntry, RenewalRequest } from '../types';
 import {
-  ADDON_MODULES, BASE_MODULES, PLAN_TIERS, ANNUAL_DISCOUNT, isPlanUpgrade,
+  ALL_MODULES, ADDON_MODULES, BASE_MODULES, PLAN_TIERS, ANNUAL_DISCOUNT, isPlanUpgrade,
   derivePlanFromModules, modulesForPlan, modulesPrice, planLabel, totalForCycle
 } from '../utils/pricing';
+import { isModuleCompatible } from '../utils/centerType';
 import { daysUntil, formatDate, relativeDays } from '../utils/dates';
 import { useToast } from './Toast';
 
@@ -52,7 +53,7 @@ const BANK = {
  *      supérieure (Basic → Growth → Pro) ;
  *   4. l'historique de ses demandes et celui de ses plans.
  */
-export default function RenewalModule({ center }: { center?: CenterTenant | null }) {
+export default function RenewalModule({ center, centerType }: { center?: CenterTenant | null; centerType?: string | null }) {
   const toast = useToast();
 
   const [prices, setPrices] = useState<Record<string, number>>({});
@@ -69,6 +70,13 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
     const current = (center?.enabledModules as string[] | undefined) || [];
     return current.length > 0 ? current : modulesForPlan(currentPlan);
   });
+
+  // Remark 4: seuls les modules compatibles avec le type de centre sont
+  // proposés. Un module incompatible déjà activé (déjà payé) reste affiché
+  // sous la grille — jamais re-proposé, jamais masqué (research R9).
+  const compatibleAddons = ADDON_MODULES.filter(m => isModuleCompatible(m.key, centerType));
+  const incompatibleEnabled = ((center?.enabledModules as string[] | undefined) || [])
+    .filter(key => !isModuleCompatible(key, centerType));
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -149,7 +157,10 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
 
   // Choisir une offre charge son préréglage ; l'offre affichée est ensuite
   // recalculée à partir des modules réellement cochés.
-  const chooseTier = (key: string) => setSelected(modulesForPlan(key));
+  // Les préréglages d'offre sont des propositions comme les autres : ils
+  // passent par le même filtre de compatibilité (remark 4).
+  const chooseTier = (key: string) =>
+    setSelected(modulesForPlan(key).filter(mk => isModuleCompatible(mk, centerType)));
 
   const submit = async () => {
     setSubmitting(true);
@@ -228,7 +239,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
           <p className="mt-2 text-xl font-black text-slate-900">
             {((center?.enabledModules as string[] | undefined) || []).length}
           </p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">sur {BASE_MODULES.length + ADDON_MODULES.length} disponibles</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">sur {BASE_MODULES.length + compatibleAddons.length} disponibles</p>
         </div>
       </div>
 
@@ -291,7 +302,7 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
               <span className="shrink-0 text-[10px] font-black text-slate-400">Inclus</span>
             </div>
           ))}
-          {ADDON_MODULES.map(m => {
+          {compatibleAddons.map(m => {
             const on = selected.includes(m.key);
             return (
               <label
@@ -311,6 +322,20 @@ export default function RenewalModule({ center }: { center?: CenterTenant | null
                   {pricesReady ? `+${prices[m.key] ?? 0} TND` : pricingLoading ? '…' : '—'}
                 </span>
               </label>
+            );
+          })}
+          {/* Modules incompatibles avec le type mais déjà activés : affichés
+              (le centre les paie), jamais re-proposés (research R9). */}
+          {incompatibleEnabled.map(key => {
+            const mod = ALL_MODULES.find(m => m.key === key);
+            if (!mod) return null;
+            return (
+              <div key={key} className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">
+                  {mod.label} — reste actif
+                </span>
+                <span className="shrink-0 text-[10px] font-black text-amber-700">Actif</span>
+              </div>
             );
           })}
         </div>

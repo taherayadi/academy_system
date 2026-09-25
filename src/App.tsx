@@ -1369,7 +1369,7 @@ export default function App() {
               )}
 
               {activeTab === 'renewal' && (
-                <RenewalModule center={currentCenter} />
+                <RenewalModule center={currentCenter} centerType={currentCenter?.centerType} />
               )}
 
             </motion.div>

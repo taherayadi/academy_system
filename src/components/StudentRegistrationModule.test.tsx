@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudentRegistrationModule from './StudentRegistrationModule';
 import { Student } from '../types';
 
@@ -112,5 +112,69 @@ describe('StudentRegistrationModule type-aware fields', () => {
     renderModule({ centerType: 'formation', students: [makeStudent()] });
     expect(screen.getAllByText('Collège 7ème Année').length).toBeGreaterThan(0);
     expect(screen.getByText('كل المستويات')).toBeTruthy();
+  });
+});
+
+describe('StudentRegistrationModule remarks alignment — academic-history section (T019)', () => {
+  it('omits the whole academic-history section for a crèche (print + form)', async () => {
+    renderModule({ centerType: 'creche', students: [makeStudent()] });
+
+    // Print view: the «4. المسار الدراسي (3 سنوات سابقة)» block is absent.
+    fireEvent.click(screen.getByTitle('طباعة بطاقة التسجيل'));
+    expect(screen.queryByText('4. المسار الدراسي (3 سنوات سابقة)')).toBeNull();
+    fireEvent.click(screen.getByTitle('إغلاق المعاينة'));
+
+    // Add form: SECTION 5 is the services block, not the cursus scolaire.
+    await openAddForm();
+    expect(screen.queryByText('5. المسار الدراسي لآخر 3 سنوات')).toBeNull();
+    expect(screen.getByText(/5\. خدمات وموديولات السنتر/)).toBeTruthy();
+  });
+
+  it('keeps the academic-history section for a formation center (regression)', async () => {
+    renderModule({ centerType: 'formation', students: [makeStudent()] });
+
+    fireEvent.click(screen.getByTitle('طباعة بطاقة التسجيل'));
+    expect(screen.getAllByText(/المسار الدراسي \(3 سنوات سابقة\)/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByTitle('إغلاق المعاينة'));
+
+    await openAddForm();
+    expect(screen.getByText('5. المسار الدراسي لآخر 3 سنوات')).toBeTruthy();
+  });
+
+  it('strips academicHistory on submit for a crèche (fresh registration)', async () => {
+    const onAddStudent = vi.fn();
+    renderModule({ centerType: 'creche', onAddStudent });
+    await openAddForm();
+
+    fireEvent.change(screen.getByPlaceholderText('مثال: ياسين'), { target: { value: 'Yassine' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: الطرابلسي'), { target: { value: 'Trabelsi' } });
+
+    fireEvent.submit(document.querySelector('form')!);
+
+    expect(onAddStudent).toHaveBeenCalledTimes(1);
+    const saved = onAddStudent.mock.calls[0][0];
+    expect(saved.grade).toBe('');
+    expect(saved.academicHistory.nMinus1.school).toBe('');
+    expect(saved.academicHistory.nMinus1.grade).toBe('');
+  });
+
+  it('keeps stored academicHistory verbatim when editing under a crèche (FR-010)', async () => {
+    const onUpdateStudent = vi.fn();
+    const st = makeStudent({
+      academicHistory: {
+        nMinus1: { school: 'École A', grade: 'GS' },
+        nMinus2: { school: 'École B', grade: 'MS' },
+        nMinus3: { school: '', grade: '' }
+      }
+    });
+    renderModule({ centerType: 'creche', students: [st], onUpdateStudent });
+
+    fireEvent.click(screen.getByTitle('تعديل الفيش'));
+    fireEvent.submit(document.querySelector('form')!);
+
+    await waitFor(() => expect(onUpdateStudent).toHaveBeenCalled());
+    const saved = onUpdateStudent.mock.calls[0][0];
+    expect(saved.academicHistory.nMinus1.school).toBe('École A');
+    expect(saved.academicHistory.nMinus2.grade).toBe('MS');
   });
 });

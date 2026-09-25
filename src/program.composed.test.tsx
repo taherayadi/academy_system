@@ -197,9 +197,11 @@ describe('US1 — the crèche composed pass (C1)', { timeout: 30000 }, () => {
     expect(screen.queryByTitle('لم يُسنَد جدول توقيت بعد')).toBeNull();
     expect(screen.getAllByTitle(PAYMENT_ACTION).length).toBeGreaterThan(0);
 
-    // Staff — lite: roster CRUD present, pointage absent, payroll locked with upgrade path.
+    // Staff — lite: roster CRUD present, pointage tab locked (visible but
+    // disabled, remark 3), payroll locked with upgrade path.
     await clickTab('إدارة الموظفين', 'فريق العمل والملفات');
-    expect(screen.queryByText(POINTAGE_TAB_LABEL)).toBeNull();
+    const pointageTab = screen.getByText(POINTAGE_TAB_LABEL).closest('button') as HTMLButtonElement;
+    expect(pointageTab.disabled).toBe(true);
     expect(screen.getAllByText(LOCKED_MESSAGE).length).toBeGreaterThanOrEqual(4);
     expect(screen.getAllByText('الذهاب إلى التجديد').length).toBeGreaterThan(0);
 
@@ -207,6 +209,25 @@ describe('US1 — the crèche composed pass (C1)', { timeout: 30000 }, () => {
     await clickTab('الأنشطة والبرنامج', 'Motricité du matin');
     await clickTab('المهارات والكفاءات', 'الكتالوج');
     expect(screen.getByText('Vocabulaire')).toBeTruthy();
+  });
+
+  it('C1 — the crèche renewal simulator never offers study modules (composed)', async () => {
+    const { center, user } = makeProgram(CRECHE_COMPOSED_CONFIG);
+    await loginAs(center, user);
+    await clickTab('التجديد', 'Simulateur de plan');
+
+    // Remark 4: incompatible study addons are never offered as checkboxes…
+    for (const label of ['Étude Surveillée', 'Cours Particuliers', 'Révision Examens', 'Formations']) {
+      expect(screen.queryByRole('checkbox', { name: new RegExp(label) }), label).toBeNull();
+    }
+    // …while compatible addons and the base remain offered.
+    expect(screen.getByRole('checkbox', { name: /Cantine & Repas/ })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Activités & Planning/ })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Compétences & Skills/ })).toBeTruthy();
+
+    // The étude this center is already entitled to (pre-program list) stays
+    // displayed as active — never re-offered, never hidden (research R9).
+    expect(screen.getByText(/Étude Surveillée — reste actif/)).toBeTruthy();
   });
 
   it('falls back to the dashboard when the center type flips under a study tab (stale deep link)', async () => {
@@ -296,8 +317,10 @@ describe('US2 — legacy regression safety (C2/C3/C4)', { timeout: 30000 }, () =
     const { center, user } = makeProgram(FORMATION_CONFIG);
     await loginAs(center, user);
     await clickTab('إدارة الموظفين', 'فريق العمل والملفات');
-    // entitled to Étude but not to Staff → roster only, payroll locked
-    expect(screen.queryByText(POINTAGE_TAB_LABEL)).toBeNull();
+    // entitled to Étude but not to Staff → roster only, pointage tab locked,
+    // payroll surfaces locked
+    const pointageTab = screen.getByText(POINTAGE_TAB_LABEL).closest('button') as HTMLButtonElement;
+    expect(pointageTab.disabled).toBe(true);
     expect(screen.getAllByText(LOCKED_MESSAGE).length).toBeGreaterThanOrEqual(4);
   });
 });
