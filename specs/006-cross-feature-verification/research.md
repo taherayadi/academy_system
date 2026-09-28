@@ -420,3 +420,110 @@ FinanceModule test pins — the change is provably presentational.
 says «masquer» and greyed indicators still invite reading; a new explicit
 settings flag for indicator visibility — rejected: redundant with
 `mealOperatingMode`, which is already the mode of record.
+
+---
+
+# Revision E research — onglets Repas/Goûter (`remarques-onglets-repas-gouter.md`)
+
+Continues R1–R20 (revisions A–D). R21–R24 resolve the choices revision E's plan
+deltas depend on (tab state ownership, pointage placement, upsert semantics,
+per-service finance aggregation).
+
+## R21 — Tab state stays component-local and unshared
+
+**Decision**: each screen gets its own `useState<'repas' | 'gouter'>('repas')`
+sub-tab state (`MealsModule` `serviceTab`, FinanceModule inside the restaurant
+block) rendered as a two-button strip under the existing filters; no settings
+entry, no URL parameter, no cross-module sync.
+
+**Rationale**: the remarks ask for tabs as an on-screen reading order, not a
+preference: every visit starts on Repas, mirroring how the client numbered the
+sections (1.x → Repas, 2.x → Finance Goûter). Component-local state avoids
+touching `CenterSettings` (no persistence shape change, FR-010), avoids
+cross-tab synchronisation questions between two modules used by different
+roles, and keeps the diff presentational. Resetting to Repas on remount is the
+least-surprise default — the module already resets `searchTerm`/pages similarly.
+
+**Alternatives considered**: persisting the last tab in settings — rejected:
+invisible schema surface for zero client ask, and FR-010 discourages stored
+shape changes; a shared module-level tab store — rejected: couples two modules
+whose sections don't correspond one-to-one (MealsModule has a payment grid and
+pointage, Finance doesn't); URL query param — rejected: SPA internal state,
+breaks the route-inventory simplicity the constitution (IV) protects.
+
+## R22 — The daily pointage stays shared between both tabs
+
+**Decision**: the «Pointage اليوم» section renders **below** the two tab
+panels in `MealsModule`, outside both.
+
+**Rationale**: the remark's section lists (1.2's table and 2.1/2.2) never name
+the pointage, yet both tabs' «تسجيل الوجبة» rules are phrased **against** it
+(«l'élève est ajouté dans le Pointage», «si la ligne n'existe pas dans le
+Pointage…») — the client clearly treats it as the shared ledger both tabs
+write into. Putting it inside Repas would hide the ledger from the Goûter tab
+whose E5 button writes into it; duplicating it per tab invites divergent
+state. Shared-below keeps every rule verifiable at a glance from either tab.
+
+**Alternatives considered**: pointage inside the Repas tab only — rejected:
+breaks the E5 rule's verifiability from the Goûter tab; duplicated per tab —
+rejected: two grids over one date-scoped state (`selectedDate`, unit modal,
+expand state) would desync.
+
+## R23 — Service-scoped upsert for the Goûter «تسجيل الوجبة»
+
+**Decision**: add `ensureGouterAttendanceForDate(st, date, services)` to
+`mealLogic.ts` (pure, student-in/student-out): if any `gouter_*` attendance
+exists for `date`, return the student with the missing requested services
+appended (existing attendances — including lunch — untouched); otherwise
+append one attendance per requested service with the traiteur snapshot,
+`type: 'subscription'` when `getGouterStatusFor` says the month is paid,
+`'unit'` otherwise. `GouterConsumptionTable` exposes it through an optional
+`onMarkToday?(st, services)` prop rendered as a per-row «تسجيل الوجبة» button
+disabled once the student's gouter services all exist for the date.
+
+**Rationale**: the remark's two branches (create / update-same-line) are
+exactly an upsert keyed on `(student, date, service)` instead of the module's
+current date-only `getAttendance` guard — which is why no existing handler can
+express it: `handleMarkConsumption` hardcodes `service: 'lunch'` and
+`handleAddUnitServicesForStudent` refuses when *any* attendance exists that
+day (it would block «ajouter le Goûter» onto a lunch-only line, the remark's
+explicit example). A pure helper keeps the derivation testable without DOM
+(the revision-D pattern), reuses the existing `service` discriminator (no
+schema change), and the subscription/unit typing reuses the month-status
+machinery so the pay-unit buttons keep working.
+
+**Alternatives considered**: reusing `handleAddUnitServicesForStudent` after
+relaxing its guard — rejected: it forces `type: 'unit'` unconditionally and
+its all-or-nothing refusal would still need special-casing for the
+subscription case; two separate handlers (create vs append) — rejected: the
+branch is precisely what must be single-defined; storing a per-day attendance
+*line* object instead of per-service rows — rejected: a schema change
+violating the existing `service`-discriminated model and FR-010.
+
+## R24 — Per-service finance aggregation (cards, monthly table, Goûter grid)
+
+**Decision**: inside the `activeTab === 'restaurant'` block, split
+`attendances` into lunch (`!a.service \|\| a.service === 'lunch'`) and gouter
+lists before any card math; the 3.0.x cards and monthly table 3.1 (+ its
+day-expanded detail) aggregate lunch only; mirrored Goûter cards aggregate
+gouter attendances and `service === 'Goûter'` payments; a new
+`GouterMonthlyTable.tsx` fed by pure `computeGouterMonthly(students,
+schoolYear)` renders the Goûter monthly grid 3.3. Test pins: for the same
+data, Repas + Goûter totals sum to today's combined numbers.
+
+**Rationale**: today `restoStudents` counts every attendance regardless of
+`service` (the map at L2244 `subscriptionMeals`/`unitMeals` are
+service-agnostic), so the cards mix lunch and goûter — precisely what the
+remark's «une version par service» forbids. Splitting at the source (one
+filter per service feeding both cards and 3.1) is smaller and provably
+exhaustive (the sum invariant test) versus editing each card's filter
+independently. 3.1's title says «الوجبات المستهلكة» (meals) — the client
+explicitly scopes it «uniquement le Repas», so gouter rows move out of it and
+its day-detail, into the new grid. `computeGouterMonthly` stays pure per the
+FR-015 single-definition rule, mirroring `computeGouterRows`.
+
+**Alternatives considered**: keeping one table with a service column —
+rejected: the remark asks for two distinct components («sans aucune donnée du
+Repas»); computing Goûter cards from payments only — rejected: consumption
+counts come from attendances; relying on the month filter to separate —
+orthogonal: the mixing is cross-service, not cross-month.

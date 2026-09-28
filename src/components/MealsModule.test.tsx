@@ -79,6 +79,7 @@ describe('MealsModule — revision D remarks', () => {
         settings={settings}
       />
     );
+    fireEvent.click(screen.getByTestId('service-tab-repas'));
     const lunchCard = screen.getByText('متابعة استهلاك المشتركين شهرياً').closest('div.bg-white') as HTMLElement;
     expect(within(lunchCard).getByText('Lunch B')).toBeTruthy();
     expect(within(lunchCard).queryByText('Gouter B')).toBeNull();
@@ -95,6 +96,7 @@ describe('MealsModule — revision D remarks', () => {
         settings={settings}
       />
     );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
     const gouterCard = screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً').closest('div.bg-white') as HTMLElement;
     expect(within(gouterCard).getByText('Gouter B')).toBeTruthy();
     expect(within(gouterCard).getByText('لمجة الصباح')).toBeTruthy();
@@ -117,9 +119,11 @@ describe('MealsModule — revision D remarks', () => {
         settings={settings}
       />
     );
+    fireEvent.click(screen.getByTestId('service-tab-repas'));
     const lunchCard = screen.getByText('متابعة استهلاك المشتركين شهرياً').closest('div.bg-white') as HTMLElement;
-    const gouterCard = screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً').closest('div.bg-white') as HTMLElement;
     expect(within(lunchCard).getByText('Dual B')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    const gouterCard = screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً').closest('div.bg-white') as HTMLElement;
     expect(within(gouterCard).getByText('Dual B')).toBeTruthy();
   });
 
@@ -133,6 +137,8 @@ describe('MealsModule — revision D remarks', () => {
         settings={settings}
       />
     );
+    // The Goûter subscribers grid lives on the Goûter panel (revision E).
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
     expect(screen.queryByTitle('إلغاء الاشتراك في اللمجة')).toBeNull();
     expect(screen.getByTitle('تعديل نوع الاشتراك')).toBeTruthy();
   });
@@ -229,5 +235,126 @@ describe('MealsModule — revision D remarks', () => {
     expect(screen.getByRole('button', { name: 'إضافة الخدمات المحددة' })).toHaveProperty('disabled', true);
     fireEvent.click(screen.getByTestId('unit-service-toggle-lunch'));
     expect(screen.getByRole('button', { name: 'إضافة الخدمات المحددة' })).toHaveProperty('disabled', false);
+  });
+});
+
+describe('MealsModule — revision E (onglets Repas/Goûter)', () => {
+  it('remark E1: renders the two service tabs under the filters, Repas active by default', () => {
+    render(<MealsModule students={[lunchSubscribed]} mealPlans={[]} onUpdateStudents={vi.fn()} onUpdateMealPlans={vi.fn()} settings={settings} />);
+    expect(screen.getByTestId('service-tab-repas')).toBeTruthy();
+    expect(screen.getByTestId('service-tab-gouter')).toBeTruthy();
+    // Default view is Repas: lunch consumption visible, Goûter grid absent.
+    expect(screen.getByText('متابعة استهلاك المشتركين شهرياً')).toBeTruthy();
+    expect(screen.queryByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeNull();
+  });
+
+  it('remark E1: the Repas tab shows exactly the payment grid, day program and lunch consumption', () => {
+    render(<MealsModule students={[lunchSubscribed]} mealPlans={[]} onUpdateStudents={vi.fn()} onUpdateMealPlans={vi.fn()} settings={settings} />);
+    expect(screen.getByText(/شبكة مدفوعات المطعم/)).toBeTruthy();
+    expect(screen.getByText('برنامج وجبة اليوم:')).toBeTruthy();
+    expect(screen.getByText('متابعة استهلاك المشتركين شهرياً')).toBeTruthy();
+    // The Goûter sections are not in the Repas panel.
+    expect(screen.queryByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeNull();
+  });
+
+  it('remark E1: the Goûter tab shows exactly the subscribers grid and the Goûter consumption table', () => {
+    render(
+      <MealsModule
+        students={[lunchSubscribed, gouterOnlyFresh]}
+        mealPlans={[]}
+        onUpdateStudents={vi.fn()}
+        onUpdateMealPlans={vi.fn()}
+        settings={settings}
+      />
+    );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeTruthy();
+    expect(screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeTruthy();
+    // The Repas sections are not in the Goûter panel.
+    expect(screen.queryByText(/شبكة مدفوعات المطعم/)).toBeNull();
+    expect(screen.queryByText('برنامج وجبة اليوم:')).toBeNull();
+    expect(screen.queryByText('متابعة استهلاك المشتركين شهرياً')).toBeNull();
+  });
+
+  it('remark E1: the daily pointage stays shared below the tab panels on both tabs', () => {
+    render(<MealsModule students={[lunchSubscribed]} mealPlans={[]} onUpdateStudents={vi.fn()} onUpdateMealPlans={vi.fn()} settings={settings} />);
+    expect(screen.getByText(/Pointage اليوم/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText(/Pointage اليوم/)).toBeTruthy();
+  });
+
+  it('remark E4: «تسجيل الوجبة» on a lunch subscriber writes exactly one lunch attendance and no gouter attendance', async () => {
+    const onUpdate = vi.fn();
+    render(
+      <MealsModule
+        students={[lunchSubscribed]}
+        mealPlans={[]}
+        onUpdateStudents={onUpdate}
+        onUpdateMealPlans={vi.fn()}
+        settings={settings}
+      />
+    );
+    const lunchCard = screen.getByText('متابعة استهلاك المشتركين شهرياً').closest('div.bg-white') as HTMLElement;
+    fireEvent.click(within(lunchCard).getByRole('button', { name: 'تسجيل الوجبة' }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    const updated = onUpdate.mock.calls[0][0].find((s: Student) => s.id === 'st_lunch') as Student;
+    const thatDay = (updated.mealAttendances || []).filter(a => a.date === updated.mealAttendances![0].date);
+    expect(thatDay.map(a => a.service || 'lunch')).toEqual(['lunch']);
+  });
+
+  it('remark E5: the Goûter mark-today button creates a gouter-only line for an absent student', async () => {
+    const onUpdate = vi.fn();
+    render(
+      <MealsModule
+        students={[gouterOnlyFresh]}
+        mealPlans={[]}
+        onUpdateStudents={onUpdate}
+        onUpdateMealPlans={vi.fn()}
+        settings={settings}
+      />
+    );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    fireEvent.click(screen.getByTestId(`mark-today-${gouterOnlyFresh.id}`));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    const updated = onUpdate.mock.calls[0][0].find((s: Student) => s.id === gouterOnlyFresh.id) as Student;
+    const thatDay = (updated.mealAttendances || []).filter(a => a.date === updated.mealAttendances![0].date);
+    expect(thatDay.map(a => a.service || 'lunch')).toEqual(['gouter_matin']);
+  });
+
+  it('remark E5: the Goûter mark-today button appends goûter to an existing lunch-only line without duplicating it', async () => {
+    const dualLunch = student({
+      id: 'st_dual_e5',
+      firstName: 'DualE5',
+      enrolledServices: { ...baseServices, meals: true, gouterMatin: true },
+      mealSubscription: { mode: 'subscription', monthlyPrice: 150, unitPrice: 8, prepaidMeals: 0, consumedMealsCount: 0, active: true },
+      mealAttendances: [{ date: new Date().toISOString().split('T')[0], type: 'subscription', paid: true, service: 'lunch' }]
+    });
+    const onUpdate = vi.fn();
+    render(
+      <MealsModule
+        students={[dualLunch]}
+        mealPlans={[]}
+        onUpdateStudents={onUpdate}
+        onUpdateMealPlans={vi.fn()}
+        settings={settings}
+      />
+    );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    fireEvent.click(screen.getByTestId(`mark-today-${dualLunch.id}`));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    const updated = onUpdate.mock.calls[0][0].find((s: Student) => s.id === 'st_dual_e5') as Student;
+    const thatDay = (updated.mealAttendances || []).filter(a => a.date === new Date().toISOString().split('T')[0]);
+    expect(thatDay).toHaveLength(2);
+    expect(thatDay.filter(a => (a.service || 'lunch') === 'lunch')).toHaveLength(1);
+    expect(thatDay.filter(a => a.service === 'gouter_matin')).toHaveLength(1);
+  });
+
+  it('remark E1 (US2 regression): an unknown-type legacy render keeps every section present, merely regrouped', () => {
+    render(<MealsModule students={[lunchSubscribed, gouterOnlyFresh]} mealPlans={[]} onUpdateStudents={vi.fn()} onUpdateMealPlans={vi.fn()} settings={settings} />);
+    // Both panels reachable: the tabs only regroup — nothing disappears.
+    fireEvent.click(screen.getByTestId('service-tab-repas'));
+    expect(screen.getByText(/شبكة مدفوعات المطعم/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeTruthy();
   });
 });

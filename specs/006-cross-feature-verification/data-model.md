@@ -284,3 +284,63 @@ byte-identical between modes for the same data (pinned by test).
    exactly through state, persistence and every consumer.
 5. **Finance meal totals are mode-invariant** (extends FR-010): hiding
    traiteur indicators in-house changes no number anywhere.
+
+---
+
+## Revision E derived artifacts (tab reorganisation, `remarques-onglets-repas-gouter.md`)
+
+### Sub-tab state (component-local, unpersisted)
+
+Neither screen persists the selected tab: `MealsModule` holds
+`serviceTab: 'repas' | 'gouter'` (default `'repas'`); `FinanceModule` holds the
+same inside its restaurant block. `CenterSettings` is untouched (FR-010 — no
+stored shape change). Section→panel mapping:
+
+| Panel | MealsModule sections | FinanceModule (restaurant) sections |
+|---|---|---|
+| Repas | شبكة مدفوعات المطعم (1.1) · برنامج وجبة اليوم (1.2) · متابعة استهلاك المشتركين شهرياً (1.3) | cards 3.0.0–3.0.2 (Repas version) · تفاصيل استهلاك التلاميذ (lunch) · إجمالي الوجبات المستهلكة في كل شهر (3.1, Repas-only) |
+| Goûter | جدول المشتركين في خدمة اللمجة (2.1) · متابعة استهلاك مشتركي اللمجة شهرياً (2.2, with per-row «تسجيل الوجبة») | mirrored cards 3.0.x (Goûter version) · تفاصيل استهلاك التلاميذ — اللمجة (3.2) · new GouterMonthlyTable (3.3) |
+| Shared below tabs | Pointage اليوم (daily grid) | — (no equivalent; month/year filters stay shared above the tabs) |
+
+### Pure helpers added to `mealLogic.ts`
+
+- `academicMonthPrefix(month, schoolYear)` — the month→`YYYY-MM` map hoisted
+  from `MealsModule` (`getConsumedInMonth`, `getMonthConsumedTotal`) and two
+  inline `FinanceModule` maps; single definition (FR-015).
+- `ensureGouterAttendanceForDate(st, date, services)` — service-scoped upsert
+  (create-with-gouter-only / append-to-existing-line branches, no duplicates,
+  traiteur snapshot, subscription-vs-unit typing from `getGouterStatusFor`).
+- `computeGouterMonthly(students, schoolYear)` — per-month
+  `{ matin, soir, total }` consumption counts over `gouter_*` attendances,
+  feeding the new `GouterMonthlyTable` (3.3).
+
+### Modified derivations
+
+- `computeGouterRows` counts (`consumedMatin`, `consumedSoir`) and unpaid-unit
+  lists are **month-scoped** via `academicMonthPrefix` (the 3.2 bug fix);
+  payment-status math unchanged (it already filters payments by
+  `` `${month} (${schoolYear})` ``).
+- `FinanceModule` resto block splits attendances into lunch
+  (`!a.service || a.service === 'lunch'`) and gouter lists before card math;
+  cards 3.0.x and monthly table 3.1 (+ day-expanded detail) aggregate lunch
+  only; the Goûter cards mirror them over gouter attendances +
+  `service === 'Goûter'` payments.
+
+## Invariants added (revision E)
+
+1. **The daily pointage is the single shared ledger** (extends revision D's
+   disjointness invariant): both tabs' «تسجيل الوجبة» buttons write into it —
+   Repas writes lunch-only (never a `gouter_*` attendance), the Goûter button
+   writes gouter-only rows onto the same date's line without creating
+   duplicates.
+2. **Attendance upsert is service-scoped** (extends FR-006 immutability):
+   `ensureGouterAttendanceForDate` never modifies or removes an existing
+   attendance row; it only appends the missing `gouter_*` rows for the date.
+3. **Every consumption count is scoped by service and month** (extends
+   revision D's disjointness): the Goûter surfaces count only `gouter_*`
+   attendances within the selected academic month; 3.1 and its day-detail
+   count only lunch attendances; the Finance cards exist once per service
+   with disjoint inputs, and Repas + Goûter totals sum to the pre-split
+   combined numbers (pinned by test).
+4. **Tab state is ephemeral** (extends FR-010): no tab selection is persisted
+   anywhere; remounting any screen returns to the Repas tab.

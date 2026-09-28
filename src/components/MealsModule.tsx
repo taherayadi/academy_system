@@ -25,7 +25,7 @@ import {
   Cookie
 } from 'lucide-react';
 import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType } from '../types';
-import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent } from '../utils/mealLogic';
+import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent, ensureGouterAttendanceForDate, academicMonthPrefix } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -48,6 +48,9 @@ export default function MealsModule({
 }: MealsModuleProps) {
   const centerName = settings?.centerName || 'EduSphère';
   const toast = useToast();
+  // Revision E (remark E1): the «Repas»/«Goûter» service tabs under the
+  // filters. Component-local, ephemeral — remounting always returns to Repas.
+  const [serviceTab, setServiceTab] = useState<'repas' | 'gouter'>('repas');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDay, setSelectedDay] = useState<MealPlanDay['day']>(() => DAY_BY_INDEX[new Date().getDay()] || 'Lundi');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -308,11 +311,7 @@ export default function MealsModule({
   };
 
   const getConsumedInMonth = (st: Student, month: AcademicMonth): number => {
-    const [startYear, endYear] = schoolYear.split('/');
-    const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-    const num = mNum[month] ?? 9;
-    const year = num >= 9 ? startYear : endYear;
-    const prefix = `${year}-${String(num).padStart(2, '0')}`;
+    const prefix = academicMonthPrefix(month, schoolYear);
     return (st.mealAttendances || []).filter(a => a.type === 'subscription' && a.date.startsWith(prefix)).length;
   };
   // Revision D (remark M2): the lunch consumption table lists lunch subscribers
@@ -329,15 +328,35 @@ export default function MealsModule({
   // Total repas consumed in a given academic month (subscription + unit meals),
   // counting every student who took a repas that month (subscribed or daily).
   const getMonthConsumedTotal = (month: AcademicMonth): number => {
-    const [startYear, endYear] = schoolYear.split('/');
-    const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-    const num = mNum[month] ?? 9;
-    const year = num >= 9 ? startYear : endYear;
-    const prefix = `${year}-${String(num).padStart(2, '0')}`;
+    const prefix = academicMonthPrefix(month, schoolYear);
     return yearStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix)).length, 0);
   };
   const monthConsumedSummary = ACADEMIC_MONTHS.map(m => ({ month: m, count: getMonthConsumedTotal(m) }));
   const totalMealsConsumed = monthConsumedSummary.reduce((s, x) => s + x.count, 0);
+
+  // Revision E (remark E5): the Goûter consumption table's «تسجيل الوجبة»
+  // upserts the student's gouter services onto today's pointage line —
+  // creating it when absent, appending to an existing line otherwise.
+  const handleMarkGouterToday = (st: Student, services: MealServiceType[]) => {
+    if (!services.length) return;
+    const traiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
+      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
+      : 0;
+    // Reverse lookup (date → academic month) is the one direction the shared
+    // prefix map does not cover; keep it local.
+    const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
+    const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth() + 1;
+    const monthName = (Object.keys(mNum) as AcademicMonth[]).find(m => mNum[m] === dateMonth);
+    const updated = ensureGouterAttendanceForDate(st, selectedDate, services, {
+      month: monthName || 'Septembre',
+      schoolYear,
+      fees: settings ? getFeesForYear(settings, schoolYear) : null,
+      traiteurPrice
+    });
+    if (updated === st) return; // every service already marked for this date
+    onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+    toast.success('تم تسجيل اللمجة في نقطة اليوم.');
+  };
 
   const handleAddCustomYear = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1021,7 +1040,37 @@ export default function MealsModule({
         </div>
       </div>
 
-      {/* MEALS ACADEMIC MONTH GRID TABLE */}
+      {/* Revision E (remark E1): the two service tabs under the filters. The
+          daily pointage below stays shared between both panels. */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/70 flex items-center gap-2 no-print" role="tablist" aria-label="الخدمات">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={serviceTab === 'repas'}
+          data-testid="service-tab-repas"
+          onClick={() => setServiceTab('repas')}
+          className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+            serviceTab === 'repas' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+          }`}
+        >
+          🍽️ Repas
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={serviceTab === 'gouter'}
+          data-testid="service-tab-gouter"
+          onClick={() => setServiceTab('gouter')}
+          className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+            serviceTab === 'gouter' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+          }`}
+        >
+          🍪 Goûter
+        </button>
+      </div>
+
+      {/* MEALS ACADEMIC MONTH GRID TABLE (Repas panel) */}
+      {serviceTab === 'repas' && (
       <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <button
@@ -1158,8 +1207,10 @@ export default function MealsModule({
         )}
         </>)}
       </div>
+      )}
 
-      {/* GOUTER SUBSCRIBERS & PAYMENT GRID */}
+      {/* GOUTER SUBSCRIBERS & PAYMENT GRID (Goûter panel) */}
+      {serviceTab === 'gouter' && (
       <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
         <div className="p-5 border-b border-brand-600/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-brand-600/5 via-red-50 to-white">
           <button
@@ -1362,6 +1413,7 @@ export default function MealsModule({
           )}
         </>)}
       </div>
+      )}
 
       {/* Enroll Student Modal */}
       <AnimatePresence>
@@ -1769,7 +1821,8 @@ export default function MealsModule({
         )}
       </AnimatePresence>
 
-      {/* WEEKLY MEAL PLANNING TABS (Lundi -> Vendredi) */}
+      {/* WEEKLY MEAL PLANNING TABS (Lundi -> Samedi, Repas panel) */}
+      {serviceTab === 'repas' && (
       <div className="bg-white p-3 rounded-2xl border border-slate-200/70 flex items-center gap-2 overflow-x-auto no-print">
         <span className="text-xs font-bold text-slate-500 px-3 shrink-0">برنامج وجبة اليوم:</span>
         {WEEKDAYS.map(day => (
@@ -1786,8 +1839,10 @@ export default function MealsModule({
           </button>
         ))}
       </div>
+      )}
 
       {/* ACTIVE DAY DISH CARD */}
+      {serviceTab === 'repas' && (
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div className="space-y-1">
           <span className="text-xs font-bold text-brand-700">طبق يوم {ARABIC_WEEKDAYS[selectedDay]}</span>
@@ -1803,8 +1858,10 @@ export default function MealsModule({
           تعديل طبق يوم {ARABIC_WEEKDAYS[selectedDay]}
         </button>
       </div>
+      )}
 
-      {/* SUBSCRIBED STUDENTS CONSUMPTION COUNTER & ACTIONS */}
+      {/* SUBSCRIBED STUDENTS CONSUMPTION COUNTER & ACTIONS (Repas panel) */}
+      {serviceTab === 'repas' && (
       <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
         <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-slate-50/50">
           <div>
@@ -1984,9 +2041,12 @@ export default function MealsModule({
           </div>
         )}
       </div>
+      )}
 
       {/* Revision D (remark M2): dedicated Goûter consumption table — the
-          Goûter counterpart of the lunch consumption table above. */}
+          Goûter counterpart of the lunch consumption table above; hosts the
+          remark E5 «تسجيل الوجبة» upsert (Goûter panel). */}
+      {serviceTab === 'gouter' && (
       <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
         <div className="p-5 border-b border-brand-600/10 bg-brand-600/[0.03] flex items-center gap-2">
           <Cookie className="h-5 w-5 text-brand-600" />
@@ -2002,9 +2062,12 @@ export default function MealsModule({
             schoolYear={schoolYear}
             fees={settings ? getFeesForYear(settings, schoolYear) : null}
             onPayUnit={handlePayUnitService}
+            date={selectedDate}
+            onMarkToday={handleMarkGouterToday}
           />
         </div>
       </div>
+      )}
 
       {/* DATED DAILY MEAL & GOUTER LIST */}
       {(() => {

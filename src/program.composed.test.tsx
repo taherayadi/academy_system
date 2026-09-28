@@ -358,26 +358,71 @@ describe('US2 — legacy regression safety (C2/C3/C4)', { timeout: 30000 }, () =
     await loginAs(center, user);
     await clickTab('إدارة الوجبات', 'برنامج وجبة اليوم');
 
-    // Remark M1: the six day tabs including «السبت».
+    // Remark M1: the six day tabs including «السبت» (the Repas panel).
     for (const label of ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']) {
       const tabs = screen.getAllByRole('button', { name: label });
       expect(tabs.length, `day tab ${label}`).toBeGreaterThan(0);
     }
 
-    // Remark M2: the dedicated Goûter consumption table renders beside the lunch table.
-    expect(screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeTruthy();
+    // Revision E (remark E1): the two service tabs compose — the Repas panel
+    // (day program, lunch consumption) and the Goûter panel (subscribers grid,
+    // Goûter consumption table) with the pointage shared below both.
+    expect(screen.getByTestId('service-tab-repas')).toBeTruthy();
+    expect(screen.getByTestId('service-tab-gouter')).toBeTruthy();
     expect(screen.getByText('متابعة استهلاك المشتركين شهرياً')).toBeTruthy();
+    expect(screen.queryByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeNull();
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText('متابعة استهلاك مشتركي اللمجة شهرياً')).toBeTruthy();
+    expect(screen.queryByText('متابعة استهلاك المشتركين شهرياً')).toBeNull();
+    expect(screen.getByText(/Pointage اليوم/)).toBeTruthy();
 
     // Remark M3: the unit-meal modal gates its three toggles by subscription —
-    // all three start disabled before any candidate is selected.
+    // all three start disabled before any candidate is selected (modal button
+    // sits on the shared banner, reachable from the Goûter panel too).
     fireEvent.click(screen.getAllByRole('button', { name: /إضافة تلميذ بالوحدة/ })[0]);
     expect(document.querySelector('[data-testid="unit-service-toggle-lunch"]')).toHaveProperty('disabled', true);
     expect(document.querySelector('[data-testid="unit-service-toggle-gouter_matin"]')).toHaveProperty('disabled', true);
     expect(document.querySelector('[data-testid="unit-service-toggle-gouter_apres_midi"]')).toHaveProperty('disabled', true);
 
-    // Remark M4: the Goûter subscribers table keeps its edit-type action and no unenroll button.
+    // Remark M4: on the Goûter panel, the subscribers table keeps its
+    // edit-type action and no unenroll button.
     expect(screen.queryByTitle('إلغاء الاشتراك في اللمجة')).toBeNull();
     expect(screen.getAllByTitle('تعديل نوع الاشتراك').length).toBe(2);
+  });
+
+  it('C1 — the onglets Repas/Goûter compose on both screens through the App shell (revision E)', async () => {
+    const { center, user } = makeProgram({ ...CRECHE_COMPOSED_CONFIG, enabledModules: [...CRECHE_COMPOSED_CONFIG.enabledModules!, 'cantine'] });
+    await loginAs(center, user);
+
+    // Meals module: the two service tabs with their disjoint section sets.
+    await clickTab('إدارة الوجبات', 'برنامج وجبة اليوم');
+    expect(screen.getByTestId('service-tab-repas')).toBeTruthy();
+    expect(screen.getByTestId('service-tab-gouter')).toBeTruthy();
+    // Repas panel: payment grid + day program; no Goûter grid.
+    expect(screen.getByText(/شبكة مدفوعات المطعم/)).toBeTruthy();
+    expect(screen.queryByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeNull();
+    // Goûter panel: subscribers grid; no payment grid, no day program.
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeTruthy();
+    expect(screen.queryByText(/شبكة مدفوعات المطعم/)).toBeNull();
+    expect(screen.queryByText('برنامج وجبة اليوم:')).toBeNull();
+    // The pointage stays shared below the panels.
+    expect(screen.getByText(/Pointage اليوم/)).toBeTruthy();
+
+    // Finance module's Gestion-des-repas: the same two tabs with per-service
+    // cards and the Goûter-only monthly grid.
+    await clickTab('المنظومة المالية', 'إدارة المطعم');
+    fireEvent.click(screen.getAllByRole('button', { name: /إدارة المطعم/ })[0]);
+    expect(screen.getByTestId('service-tab-repas')).toBeTruthy();
+    expect(screen.getByTestId('service-tab-gouter')).toBeTruthy();
+    // Repas panel: synthesis cards; no Goûter detail.
+    expect(screen.getByText('إجمالي الاشتراكات')).toBeTruthy();
+    expect(screen.queryByTestId('finance-gouter-table')).toBeNull();
+    // Goûter panel: detail table + the new monthly grid 3.3.
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByTestId('finance-gouter-table')).toBeTruthy();
+    expect(screen.getByTestId('finance-gouter-monthly')).toBeTruthy();
+    expect(screen.queryByText(/تفاصيل استهلاك التلاميذ \(/)).toBeNull();
   });
 
   it('C2 — the legacy empty module list keeps the FULL staff module (no locks)', async () => {

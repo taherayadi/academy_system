@@ -22,7 +22,9 @@ import {
   Eye
 } from 'lucide-react';
 import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import { academicMonthPrefix } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
+import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -167,6 +169,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'all';
   });
   const [serviceFilter, setServiceFilter] = useState<string>('all');
+  // Revision E (remark 4): the «Repas»/«Goûter» tabs of the Gestion-des-repas
+  // tab. Component-local and ephemeral — remounting returns to Repas.
+  const [financeServiceTab, setFinanceServiceTab] = useState<'repas' | 'gouter'>('repas');
 
   // Custom Academic Years list
   const [customYears, setCustomYears] = useState<string[]>(DEFAULT_ACADEMIC_YEARS);
@@ -908,8 +913,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-brand-600" />
-            <label className="text-xs font-black text-slate-800">الشهر:</label>
+            <label className="text-xs font-black text-slate-800" htmlFor="finance-month-filter">الشهر:</label>
             <select
+              id="finance-month-filter"
               value={monthFilter}
               onChange={(e) => {
                 setMonthFilter(e.target.value);
@@ -2236,8 +2242,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             if (!datePrefix) return true;
             return a.date.startsWith(datePrefix);
           });
-          const subscriptionMeals = attendances.filter(a => a.type === 'subscription');
-          const unitMeals = attendances.filter(a => a.type === 'unit');
+          // Revision E (remarks 3.0.x/3.1): the Repas aggregation counts lunch
+          // attendances only — goûter rows are aggregated separately (the
+          // mirrored Goûter cards), never mixed into the Repas numbers.
+          const lunchAttendances = attendances.filter(a => !a.service || a.service === 'lunch');
+          const gouterAttendances = attendances.filter(a => a.service === 'gouter_matin' || a.service === 'gouter_apres_midi');
+          const subscriptionMeals = lunchAttendances.filter(a => a.type === 'subscription');
+          const unitMeals = lunchAttendances.filter(a => a.type === 'unit');
           const subPayments = (s.payments || []).filter(p => {
             if (p.service !== 'Repas') return false;
             if (schoolYearFilter !== 'all' && !p.month.includes(schoolYearFilter) && s.academicYear !== schoolYearFilter) return false;
@@ -2267,7 +2278,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             (isCurrentlyActive && grossPaid > totalRefunded)
           );
 
-          const allLunchMeals = attendances.filter(a => (!a.service || a.service === 'lunch'));
+          const allLunchMeals = lunchAttendances;
           const traiteurPriceOf = (a: typeof allLunchMeals[number]) =>
             a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
           // Real cost owed to the traiteur: every plate served, paid or not.
@@ -2279,8 +2290,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
           // Case C — prepaid subscription balance the student never consumed. The center only
           // acquires it when the admin clicks «Clôturer le mois»; until then this is an estimate.
-          const paidMeals = attendances.filter(a => a.paid).length;
-          const unpaidMeals = attendances.length - paidMeals;
+          const paidMeals = lunchAttendances.filter(a => a.paid).length;
+          const unpaidMeals = lunchAttendances.length - paidMeals;
           const unpaidSubscriptionMeals = subscriptionMeals.filter(a => !a.paid).length;
           const unpaidUnitMeals = unitMeals.filter(a => !a.paid).length;
           const subForfaitPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
@@ -2326,6 +2337,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalUnpaidMeals = restoStudents.reduce((sum, s) => sum + s.unpaidMeals, 0);
         const totalUnpaidSubMeals = restoStudents.reduce((sum, s) => sum + s.unpaidSubscriptionMeals, 0);
         const totalUnpaidUnitMeals = restoStudents.reduce((sum, s) => sum + s.unpaidUnitMeals, 0);
+        // Revision E (remark 3.0.x): the mirrored Goûter cards — gouter
+        // attendances and Goûter payments only, never the lunch numbers.
+        const gouterCardPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
+        const totalGouterConsumed = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
+          (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
+        ).length, 0);
+        const totalGouterSubscriptions = filteredPayments.filter(p => p.service === 'Goûter').reduce((sum, p) => sum + p.amountPaid, 0);
+        const totalGouterUnpaid = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
+          (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && !a.paid && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
+        ).length, 0);
         // Estimated forfait if the month were closed right now (preview before closing).
         const totalForfaitEstimate = restoStudents.reduce((sum, s) => sum + s.forfaitEstimate, 0);
         // Forfait actually acquired — snapshot from closed months only.
@@ -2344,7 +2365,58 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
         return (
           <div className="space-y-6">
-            {/* Summary Cards */}
+            {/* Revision E (remark 4): the two service tabs under the month/year
+                filters. Ephemeral, component-local state. */}
+            <div className="bg-white p-2 rounded-2xl border border-slate-200/70 flex items-center gap-2" role="tablist" aria-label="خدمات المطعم">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={financeServiceTab === 'repas'}
+                data-testid="service-tab-repas"
+                onClick={() => setFinanceServiceTab('repas')}
+                className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  financeServiceTab === 'repas' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+                }`}
+              >
+                🍽️ Repas
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={financeServiceTab === 'gouter'}
+                data-testid="service-tab-gouter"
+                onClick={() => setFinanceServiceTab('gouter')}
+                className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  financeServiceTab === 'gouter' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+                }`}
+              >
+                🍪 Goûter
+              </button>
+            </div>
+
+            {financeServiceTab === 'gouter' && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(totalGouterSubscriptions)} د.ت</div>
+              </div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الوجبات المستهلكة</div>
+                <div className="font-mono text-lg font-black text-brand-800">{totalGouterConsumed}</div>
+                <div className="text-[9px] text-brand-600 mt-1">لمجة الصباح + لمجة المساء</div>
+              </div>
+              <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
+                <div className="text-[10px] font-bold text-amber-700 mb-1">وجبات غير مدفوعة</div>
+                <div className="font-mono text-lg font-black text-amber-900">{totalGouterUnpaid}</div>
+                <div className="text-[9px] text-amber-600 mt-1">
+                  {totalGouterUnpaid > 0 ? 'لمجات بانتظار الخلاص' : 'كل اللمجات مدفوعة'}
+                </div>
+              </div>
+            </div>
+            )}
+
+            {/* Summary Cards (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
@@ -2381,6 +2453,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 </div>
               </div>
             </div>
+            )}
 
             {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure */}
             <div className="bg-gradient-to-r from-amber-50 via-amber-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
@@ -2469,8 +2542,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               )}
             </div>
 
-            {/* Goûter Summary in Tab 6 */}
-            {(() => {
+            {/* Goûter Summary in Tab 6 (Goûter panel) */}
+            {financeServiceTab === 'gouter' && (() => {
               // Attendance dates are ISO (YYYY-MM-DD); monthFilter is a French month name,
               // so it must be resolved to a calendar prefix before comparing.
               const gouterPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
@@ -2511,7 +2584,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               );
             })()}
 
-            {/* Students Table */}
+            {/* Students Table (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>
@@ -2595,8 +2669,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 </div>
               )}
             </div>
+            )}
 
-            {/* Monthly Meals Consumed Breakdown */}
+            {/* Monthly Meals Consumed Breakdown (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
               <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                 <div>
@@ -2611,11 +2687,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <div className="p-5">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {ACADEMIC_MONTHS.map(month => {
-                    const [startYear, endYear] = schoolYearFilter.split('/');
-                    const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-                    const num = mNum[month] ?? 9;
-                    const year = num >= 9 ? startYear : endYear;
-                    const prefix = `${year}-${String(num).padStart(2, '0')}`;
+                    const prefix = academicMonthPrefix(month, schoolYearFilter);
                     const count = filteredStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix)).length, 0);
                     return (
                       <button
@@ -2633,11 +2705,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 </div>
 
                 {consumedDetailMonth && (() => {
-                  const [startYear, endYear] = schoolYearFilter.split('/');
-                  const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-                  const num = mNum[consumedDetailMonth] ?? 9;
-                  const year = num >= 9 ? startYear : endYear;
-                  const prefix = `${year}-${String(num).padStart(2, '0')}`;
+                  const prefix = academicMonthPrefix(consumedDetailMonth, schoolYearFilter);
                   const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; service: MealServiceType; paid: boolean; isEnrolled: boolean }> = [];
                   filteredStudents.forEach(st => {
                     const enrolled = st.mealSubscription?.active === true || st.enrolledServices?.meals === true;
@@ -2756,9 +2824,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 })()}
               </div>
             </div>
+            )}
 
-            {/* Revision D (remark F2): the dedicated Goûter detail table —
-                the Goûter counterpart of the lunch detail table above. */}
+            {/* Revision D (remark F2) + revision E (remark 3.2): the dedicated
+                Goûter detail table — the Goûter panel's detail surface 3.2. */}
+            {financeServiceTab === 'gouter' && (
             <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5">
               <div className="p-5 border-b border-brand-600/10 bg-brand-600/[0.03] flex items-center gap-2">
                 <div>
@@ -2775,6 +2845,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 />
               </div>
             </div>
+            )}
+
+            {/* Revision E (remark 3.3): the Goûter-only monthly consumption
+                grid — the counterpart of the Repas monthly table. */}
+            {financeServiceTab === 'gouter' && (
+              <GouterMonthlyTable
+                students={filteredStudents}
+                schoolYear={schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter}
+              />
+            )}
           </div>
         );
       })()}

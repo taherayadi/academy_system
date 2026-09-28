@@ -102,3 +102,72 @@ describe('GouterConsumptionTable — the dedicated Goûter table (revision D, re
     expect(screen.getByText('Legacy B')).toBeTruthy();
   });
 });
+
+describe('GouterConsumptionTable — mark-today button (revision E, remark E5)', () => {
+  const matinStudent = student({
+    id: 'st_m',
+    firstName: 'Matin',
+    enrolledServices: { ...baseServices, gouterMatin: true }
+  });
+
+  it('renders a per-row «تسجيل الوجبة» button when onMarkToday + date are provided', () => {
+    render(
+      <GouterConsumptionTable students={[matinStudent]} month="Septembre" schoolYear="2026/2027" fees={fees} date="2026-09-14" onMarkToday={vi.fn()} />
+    );
+    expect(screen.getByTestId('mark-today-st_m')).toBeTruthy();
+  });
+
+  it('invokes onMarkToday with the student and his subscribed services', () => {
+    const both = student({
+      id: 'st_b',
+      firstName: 'Both',
+      enrolledServices: { ...baseServices, gouterMatin: true, gouterSoir: true, gouterBoth: true }
+    });
+    const onMarkToday = vi.fn();
+    render(
+      <GouterConsumptionTable
+        students={[matinStudent, both]}
+        month="Septembre"
+        schoolYear="2026/2027"
+        fees={fees}
+        date="2026-09-14"
+        onMarkToday={onMarkToday}
+      />
+    );
+    fireEvent.click(screen.getByTestId('mark-today-st_m'));
+    expect(onMarkToday).toHaveBeenCalledWith(matinStudent, ['gouter_matin']);
+    fireEvent.click(screen.getByTestId('mark-today-st_b'));
+    expect(onMarkToday).toHaveBeenLastCalledWith(both, ['gouter_matin', 'gouter_apres_midi']);
+  });
+
+  it('disables the button once every subscribed service exists for the date', () => {
+    const marked = student({
+      id: 'st_marked',
+      firstName: 'Marked',
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      mealAttendances: [{ date: '2026-09-14', type: 'subscription', paid: true, service: 'gouter_matin' }]
+    });
+    render(
+      <GouterConsumptionTable students={[marked]} month="Septembre" schoolYear="2026/2027" fees={fees} date="2026-09-14" onMarkToday={vi.fn()} />
+    );
+    expect(screen.getByTestId('mark-today-st_marked')).toHaveProperty('disabled', true);
+  });
+
+  it('stays enabled when the student\'s rows are on another date', () => {
+    const otherDay = student({
+      id: 'st_other',
+      firstName: 'Other',
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      mealAttendances: [{ date: '2026-09-10', type: 'subscription', paid: true, service: 'gouter_matin' }]
+    });
+    render(
+      <GouterConsumptionTable students={[otherDay]} month="Septembre" schoolYear="2026/2027" fees={fees} date="2026-09-14" onMarkToday={vi.fn()} />
+    );
+    expect(screen.getByTestId('mark-today-st_other')).toHaveProperty('disabled', false);
+  });
+
+  it('renders no mark-today button without the onMarkToday prop (Finance host unchanged)', () => {
+    render(<GouterConsumptionTable students={[matinStudent]} month="Septembre" schoolYear="2026/2027" fees={fees} />);
+    expect(screen.queryByTestId('mark-today-st_m')).toBeNull();
+  });
+});

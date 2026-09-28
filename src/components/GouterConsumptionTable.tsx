@@ -1,6 +1,6 @@
 import React from 'react';
-import { Student, CenterFeeSet, AcademicMonth } from '../types';
-import { computeGouterRows } from '../utils/mealLogic';
+import { Student, CenterFeeSet, AcademicMonth, MealServiceType } from '../types';
+import { computeGouterRows, gouterServicesForStudent } from '../utils/mealLogic';
 
 interface GouterConsumptionTableProps {
   students: Student[];
@@ -8,6 +8,11 @@ interface GouterConsumptionTableProps {
   schoolYear: string;
   fees: CenterFeeSet | null;
   onPayUnit?: (st: Student, service: 'gouter_matin' | 'gouter_apres_midi') => void;
+  /** Revision E (remark E5): when the host supplies the pointage date and a
+   *  callback, each row gains a «تسجيل الوجبة» button that upserts the
+   *  student's gouter services onto that date's pointage line. */
+  date?: string;
+  onMarkToday?: (st: Student, services: MealServiceType[]) => void;
 }
 
 /**
@@ -22,9 +27,12 @@ export default function GouterConsumptionTable({
   month,
   schoolYear,
   fees,
-  onPayUnit
+  onPayUnit,
+  date,
+  onMarkToday
 }: GouterConsumptionTableProps) {
   const rows = computeGouterRows(students, month, schoolYear, fees);
+  const hasMarkColumn = Boolean(date && onMarkToday);
 
   return (
     <div className="overflow-x-auto">
@@ -37,12 +45,13 @@ export default function GouterConsumptionTable({
             <th className="p-3 text-center">🥐 استهلاك الصباح</th>
             <th className="p-3 text-center">🍪 استهلاك المساء</th>
             <th className="p-3 text-center">خلاص بالوحدة</th>
+            {hasMarkColumn && <th className="p-3 text-center">تسجيل الوجبة</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">
+              <td colSpan={hasMarkColumn ? 7 : 6} className="p-8 text-center text-slate-400 font-bold">
                 لا يوجد مشتركون في خدمة اللمجة.
               </td>
             </tr>
@@ -100,6 +109,34 @@ export default function GouterConsumptionTable({
                     )}
                   </div>
                 </td>
+                {hasMarkColumn && (() => {
+                  const services = gouterServicesForStudent(row.student);
+                  const allMarked = date
+                    ? services.every(service =>
+                        (row.student.mealAttendances || []).some(
+                          a => a.date === date && (a.service || 'lunch') === service
+                        )
+                      )
+                    : false;
+                  return (
+                    <td className="p-3 text-center">
+                      <button
+                        type="button"
+                        data-testid={`mark-today-${row.student.id}`}
+                        disabled={allMarked}
+                        onClick={() => date && onMarkToday?.(row.student, services)}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[10px] ${
+                          allMarked
+                            ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-default'
+                            : 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer'
+                        }`}
+                        title={allMarked ? 'سجلت لمجته لهذا التاريخ' : 'تسجيل اللمجة في نقطة اليوم'}
+                      >
+                        تسجيل الوجبة
+                      </button>
+                    </td>
+                  );
+                })()}
               </tr>
             ))
           )}

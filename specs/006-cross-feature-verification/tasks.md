@@ -995,3 +995,259 @@ program.composed +1. Browser files 30 → 34 (four new component suites).
 No human browser pass has been performed. W12–W16 (quickstart.md revision D)
 are covered by their automated counterparts and remain available as a manual
 pre-deploy pass (`npm run dev` + `npm run pages:dev`).
+
+---
+
+# Revision E — Meals & Goûter tab reorganisation (`remarques-onglets-repas-gouter.md`)
+
+**Test-first per the constitution (V): every implementation task follows its
+failing-test task. Tasks stay unchecked until `/speckit.implement` runs.**
+
+**Mapping to user stories**: the Repas/Goûter surfaces serve US1's composed
+verification — the C1 walkthrough has composed cantine since revision D — so
+every surface task carries [US1] and folds into T068's composed assertions.
+US2 regression is baked into the Meals/Finance test tasks (legacy/unknown-type
+centers keep every section, merely regrouped). US3 is untouched (no catalog
+surface changes); US4 is untouched (the upsert only appends rows — no data
+loss).
+
+## Phase R-E1: Foundational — pure meal-logic helpers (E5 core, E6, E7 core)
+
+**Goal**: single-definition pure helpers for the service-scoped upsert (E5),
+the month prefix (E6) and the Goûter monthly aggregation (E7) — all testable
+without DOM.
+
+**Independent Test**: `src/meals.test.ts` pins the upsert truth table, the
+month-scoped counts and the monthly aggregation.
+
+- [x] T058 [P] Write failing tests first in `src/meals.test.ts`:
+      `ensureGouterAttendanceForDate` truth table — no attendance that day +
+      gouterBoth student → creates both `gouter_*` rows (no lunch row);
+      existing lunch-only line that day → appends the gouter rows, lunch row
+      untouched (same-line update, no duplicate); matin-only student with an
+      existing matin row → no-op; traiteur snapshot present on created unit
+      rows; `type` follows `getGouterStatusFor` (paid month → 'subscription',
+      unpaid → 'unit'); `academicMonthPrefix('Octobre', '2025/2026')` →
+      '2025-10' (and Septembre → start-year, Janvier → end-year);
+      `computeGouterRows` month-scoping — a Septembre gouter attendance does
+      not appear in an Octobre query (consumed counts and unpaid-unit lists);
+      `computeGouterMonthly` returns per-month matin/soir/total counts over
+      gouter attendances only
+- [x] T059 Implement in `src/utils/mealLogic.ts`: add
+      `academicMonthPrefix(month, schoolYear)` (hoisted from MealsModule's
+      `getConsumedInMonth`/`getMonthConsumedTotal` and FinanceModule's two
+      inline maps — MealsModule and FinanceModule switch to it), scope
+      `computeGouterRows`'s consumed counts + unpaid-unit lists by it, add
+      `ensureGouterAttendanceForDate` and `computeGouterMonthly`, until T058
+      passes
+
+**Checkpoint**: `npm run lint` clean; the existing month-status tests still
+green (payment-status math untouched).
+
+## Phase R-E2: GouterConsumptionTable — mark-today button (E5 surface)
+
+**Goal**: the Goûter consumption table's per-row «تسجيل الوجبة», upserting the
+pointage line.
+
+**Independent Test**: the table suite drives the new button through the
+callback contract.
+
+- [x] T060 [P] [US1] Write failing tests first in
+      `src/components/GouterConsumptionTable.test.tsx`: with `onMarkToday`
+      provided each row renders a «تسجيل الوجبة» button; clicking it invokes
+      the callback with the student and his subscribed gouter services
+      (matin-only → `['gouter_matin']`; gouterBoth → both services); the
+      button is disabled/hidden once both of the student's gouter services
+      already exist for the date; without the prop no button renders (Finance
+      host unchanged)
+- [x] T061 [US1] Implement in `src/components/GouterConsumptionTable.tsx`: the
+      optional `onMarkToday?(st, services)` prop and per-row «تسجيل الوجبة»
+      button disabled per the date's existing attendances, until T060 passes
+
+## Phase R-E3: MealsModule tabs + the two تسجيل الوجبة rules (E1, E2, E3, E4, E5 host)
+
+**Goal**: the two service tabs under the filters, sections redistributed, both
+write rules live.
+
+**Independent Test**: the MealsModule suite renders mixed-subscription
+fixtures and asserts the tab panels, the lunch-only write and the gouter
+upsert through the real handlers.
+
+- [x] T062 [P] [US1] Write failing tests first in `src/components/MealsModule.test.tsx`:
+      `data-testid="service-tab-repas"`/`"service-tab-gouter"` toggle the
+      panels — Repas shows the payment grid, day program and lunch consumption
+      table while the Goûter grid is absent; Goûter shows the Goûter
+      subscribers grid + Goûter consumption table while the payment grid and
+      day program are absent; the Pointage اليوم section renders below both
+      panels on both tabs; clicking «تسجيل الوجبة» (Repas) writes exactly one
+      `service: 'lunch'` attendance and no `gouter_*` attendance (E4 pin);
+      the Goûter consumption table's mark button upserts the pointage line —
+      creates a gouter-only line for an absent student, appends gouter to an
+      existing lunch-only line (no duplicate line) (E5 host); revision D
+      assertions (Saturday tab, disjoint tables, gated unit modal, no
+      unenroll) still pass; an unknown-type (legacy) render shows both tabs
+      with every section present (US2 regression)
+- [x] T063 [US1] Implement in `src/components/MealsModule.tsx`: the `serviceTab`
+      state + tab strip under the filters, panels wrapping the six sections
+      with Pointage shared below, `onMarkToday` wiring
+      `ensureGouterAttendanceForDate` into `onUpdateStudents`, until T062
+      passes
+
+## Phase R-E4: FinanceModule per-service synthesis (E1 finance, E6 display, E7)
+
+**Goal**: the finance restaurant tab mirrors the two tabs with per-service
+cards and a lunch-only monthly table; the Goûter monthly grid 3.3 mounts
+in R-E5 (T067).
+
+**Independent Test**: the Finance suite renders gouter+lunch fixtures and
+asserts the disjoint aggregations and the sum invariant.
+
+- [x] T064 [P] [US1] Write failing tests first in `src/components/FinanceModule.test.tsx`:
+      `service-tab-repas`/`service-tab-gouter` toggle the panels; Repas cards
+      (3.0.0–3.0.2) and the monthly table 3.1 (and its day-expanded detail)
+      count **lunch attendances only** — a gouter attendance on the same day
+      changes no lunch number; Goûter cards mirror them over gouter
+      attendances + `service === 'Goûter'` payments; the Goûter detail 3.2
+      reacts to the month filter (a Septembre attendance is invisible under
+      Octobre — the E6 regression pin at host level); the new monthly grid
+      3.3 renders per-month Goûter counts and zero lunch data; for the same
+      data each Repas total + its Goûter mirror equals the pre-split combined
+      number (sum invariant); an unknown-type (legacy) render keeps every
+      panel present (US2 regression)
+- [x] T065 [US1] Implement in `src/components/FinanceModule.tsx`: split the
+      resto block's attendances into lunch/gouter lists feeding the cards, 3.1
+      (+ detail) and the mirrored Goûter cards, and add the two service tabs
+      (the 3.3 panel mounts in T067), until T064's tab/card/3.1/3.2 assertions
+      pass
+
+## Phase R-E5: GouterMonthlyTable component (E7 artifact) + composition & gates
+
+**Goal**: the Goûter-only monthly grid, defined once and hosted as the 3.3
+panel, plus composed checks and closure.
+
+**Independent Test**: its own suite pins the per-month grid from
+`computeGouterMonthly`; the composed walkthrough asserts both screens' tabs
+through the App shell.
+
+- [x] T066 [P] [US1] Write failing tests first in `src/components/GouterMonthlyTable.test.tsx`
+      (new): renders one cell per academic month with matin/soir/total counts
+      from `computeGouterMonthly`; a lunch-only attendance appears nowhere;
+      empty input renders the explicit empty state; the «sans aucune donnée
+      du Repas» property (fixture with both services — no lunch figure in any
+      cell)
+- [x] T067 [US1] Create `src/components/GouterMonthlyTable.tsx`:
+      presentational grid over `computeGouterMonthly(students, schoolYear)`,
+      no data fetching and no writes of its own (FR-010), and host it in
+      `src/components/FinanceModule.tsx` as the Goûter tab's 3.3 panel, until
+      T066 and T064's 3.3 assertion pass
+
+- [x] T068 [P] [US1] Extend `src/program.composed.test.tsx`: the C1 crèche
+      walkthrough adds — MealsModule exposes the two service tabs with their
+      disjoint section sets and the shared pointage below; FinanceModule's
+      restaurant tab exposes the same two tabs with per-service cards;
+      composed remark assertions through the real App shell
+- [x] T069 Final gates at the combined state: `npm run lint`, `npm test`
+      (pre-existing suite unmodified + all new suites), `npm run build` — all
+      green; record the closure (test-count reconciliation, W17–W19 coverage
+      note) in a revision E closure record appended here
+
+### Phase Dependencies (revision E)
+
+- R-E1 → R-E2/R-E3/R-E4 (the button, the host and the finance grid all
+  consume the pure helpers); R-E2 → R-E3's wiring task (T063 wires T061's
+  prop); T064→T065 and T066→T067 are independent branches after R-E1, but
+  T067 also completes T064's 3.3 assertion (it hosts the component T065
+  defers); T068/T069 last.
+- Within each phase: tests before impl.
+
+### Parallel Opportunities (revision E)
+
+```text
+T058 (meals.test.ts) stands alone
+# After T059 (all four failing-test tasks in parallel):
+T060 GouterConsumptionTable.test.tsx | T062 MealsModule.test.tsx
+T064 FinanceModule.test.tsx          | T066 GouterMonthlyTable.test.tsx
+# Then their impls (each after its own test):
+T061 | T063 | T065 | T067 (T067 also completes T064's 3.3 hosting)
+# Finally:
+T068 composed | T069 gates
+```
+
+### Implementation strategy (revision E)
+
+MVP = Phases R-E1 → R-E2 → R-E3: the pure helpers, the Goûter table's
+«تسجيل الوجبة» button and the MealsModule tabs with both write rules — the
+client's structural ask (onglets) plus the two «point de vigilance» rules,
+closed with five files and their tests. R-E4 extends the same treatment to
+Finance (per-service cards, lunch-only 3.1, month-scoped 3.2 display, the two
+tabs); R-E5 delivers the GouterMonthlyTable (3.3), re-proves the composition
+through C1 and closes the gates.
+
+Explicitly out of scope (per plan.md Revision E): persisting the selected
+tab, moving the daily pointage into either tab, payment/subscription-status
+math changes beyond the service and month scoping the remarks ask for, the
+refund and payment modals, and revision B/C/D behaviors outside the listed
+sections.
+
+**Closure record**: appended by T069 after implementation.
+# Revision E closure record (T058–T069)
+
+## T069 — final gates at the combined state (all green)
+
+- `npm run lint` (tsc --noEmit): clean.
+- `npm test`: **558 passing** — browser project 35 files / 445 tests,
+  node/worker project 13 files / 113 tests. Pre-existing suites unmodified;
+  the only edited old assertions are revision-E co-visibility updates to
+  revision D's own meals/composed tests (sections that moved behind the new
+  service tabs are now reached by clicking the tab — the behaviors themselves
+  are unchanged and still asserted).
+- `npm run build`: green (pre-existing chunk-size advisory only).
+
+## What revision E shipped
+
+1. **T058/T059** — `src/utils/mealLogic.ts` extended: `academicMonthPrefix`
+   (the single month→`YYYY-MM` map, remark 3.2 — MealsModule's
+   `getConsumedInMonth`/`getMonthConsumedTotal` and FinanceModule's two inline
+   3.1 maps now delegate to it); `computeGouterRows` **month-scoped** (the 3.2
+   bug fix — consumed counts and unpaid-unit lists were lifetime totals);
+   `ensureGouterAttendanceForDate` (remark E5's service-scoped upsert —
+   creates gouter-only rows, appends missing gouter services to an existing
+   line without touching or duplicating any row, types rows via
+   `getGouterStatusFor`); `computeGouterMonthly` (remark 3.3's per-month
+   aggregation over `gouter_*` attendances only); `gouterServicesForStudent`.
+2. **T060/T061** — `GouterConsumptionTable`: optional `date`/`onMarkToday`
+   props render a per-row «تسجيل الوجبة» button (disabled once every
+   subscribed gouter service exists for the date; Finance host, without the
+   props, renders no button).
+3. **T062/T063** — `MealsModule`: the «Repas»/«Goûter» service tabs under the
+   filters (E1) — Repas panel = payment grid + day program + lunch
+   consumption; Goûter panel = subscribers grid + Goûter consumption table;
+   the daily pointage stays shared below both panels. E4 pinned: «تسجيل
+   الوجبة» writes exactly one `service: 'lunch'` attendance. E5 host: the
+   Goûter table's mark button upserts the pointage line through
+   `ensureGouterAttendanceForDate` wired into `onUpdateStudents`.
+4. **T064/T065** — `FinanceModule` Gestion-des-repas: the same two tabs; the
+   resto block splits attendances into lunch/gouter before any card math —
+   the three 3.0.x cards, the detail table and the monthly table 3.1 (+ its
+   day-expanded detail) aggregate lunch only; mirrored Goûter cards aggregate
+   gouter attendances + `service === 'Goûter'` payments; the sum invariant
+   (Repas + Goûter = pre-split combined) is pinned by test.
+5. **T066/T067** — `GouterMonthlyTable.tsx` (new): the Goûter-only monthly
+   grid 3.3, presentational over `computeGouterMonthly`, hosted on the Goûter
+   panel («sans aucune donnée du Repas», pinned by a mixed-services fixture).
+6. **T068** — composed suite: a new C1 walkthrough asserts both screens'
+   service tabs with their disjoint section sets and the shared pointage
+   through the real App shell.
+
+## Test count reconciliation
+
+Pre-revision 526 → post-revision 558 (+32): meals.test.ts +8,
+GouterConsumptionTable.test.tsx +5 (11 total), MealsModule.test.tsx +8,
+FinanceModule.test.tsx +7, GouterMonthlyTable.test.tsx +3 (new),
+program.composed +1. Browser files 34 → 35 (one new component suite).
+
+## Honest limitation (unchanged from earlier revisions)
+
+No human browser pass has been performed. W17–W19 (quickstart.md revision E)
+are covered by their automated counterparts and remain available as a manual
+pre-deploy pass (`npm run dev` + `npm run pages:dev`).

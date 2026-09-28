@@ -468,6 +468,130 @@ surfaces), every delta lands with its test (V). No violations.
 
 **Out of scope**: pricing/value changes, new modules or routes, backend/API
 changes, attendance-schema changes (the `service` discriminator already
-exists), changes to the lunch table's own behaviors beyond its feed list, and
-any change to module visibility (revision B/C territory stays frozen).
+exists), changes to the lunch table's own behaviors beyond its feed list, andany change to module visibility (revision B/C territory stays frozen).
 
+---
+
+# Revision E — Meals & Goûter tab reorganisation (`remarques-onglets-repas-gouter.md`)
+
+**Date**: 2026-09-28 | **Input**: the client's technical remarks on the onglets
+(tabs) layout of the Repas/Goûter surfaces — **Module Repas** (3 asks) and
+**Module Finance ▸ Section Repas** (3 asks). The audit maps them onto 7 plan
+items: one structural tab ask per screen (E1), two pure regroupings (E2, E3),
+two write-behavior rules on the «تسجيل الوجبة» buttons (E4, E5) and two
+data-correctness points the grouping exposes (E6, E7).
+
+### Audit result per remark
+
+| # | Remark | Current state (verified in code) | Verdict |
+|---|--------|----------------------------------|---------|
+| E1 (asks 1+4) | Add «Repas»/«Goûter» tabs under the filters, in MealsModule and in Finance ▸ Gestion des repas | `MealsModule` renders one flat stack — payment grid (L1034), Goûter subscribers grid (L1174), day program (L1774), lunch consumption (L1811), Goûter consumption (L1994), daily pointage (L2020) — with no tab state (full `useState` audit L51–100). `FinanceModule`'s `activeTab === 'restaurant'` block (L2213) likewise stacks cards, Goûter strip, lunch detail, monthly table and Goûter detail | **GAP** — a component-local sub-tab state in each screen; sections redistributed, none deleted |
+| E2 (ask 2) | «Repas» tab groups: شبكة مدفوعات المطعم (1.1), برنامج وجبة اليوم (1.2), متابعة استهلاك المشتركين شهرياً (1.3) | All three sections exist and, after revision D, the consumption table is fed the explicit lunch predicate (`mealSubscription.active === true`) — already disjoint from the Goûter surfaces | **SATISFIED once E1 lands** — regrouping only, no behavior change |
+| E3 (ask 3) | «Goûter» tab groups: جدول المشتركين في خدمة اللمجة (2.1), متابعة استهلاك مشتركي اللمجة شهرياً (2.2) | Both exist (revision D) and are fed gouter-only predicates (gouter flags → `computeGouterRows`) | **SATISFIED once E1 lands** — regrouping only |
+| E4 (ask 2 rule) | «تسجيل الوجبة» adds the student to the Pointage with **only** Plat repas (Déjeuner) ticked; Goûter stays unticked | `handleMarkConsumption` (L379) appends exactly one `{ date, service: 'lunch', type: subscription\|unit }` attendance and never a `gouter_*` attendance; the pointage grid renders one badge per attendance row, so only Déjeuner shows | **SATISFIED** — pin with a regression test so the tab move cannot regress it |
+| E5 (ask 3 rule) | The Goûter section's «تسجيل الوجبة»: line absent from the Pointage → create it with only Goûter ticked; line present (e.g. Repas ticked) → update the same line by adding Goûter, no duplicate | No such button exists in the Goûter surfaces. `getAttendance` (L182) dedupes on `date` alone and `handleAddUnitServicesForStudent` refuses when it matches — a naive add is either blocked or would have to duplicate the line | **GAP** — per-row «تسجيل الوجبة» in `GouterConsumptionTable` + a service-scoped upsert `ensureGouterAttendanceForDate` in `mealLogic.ts` |
+| E6 (ask 6, point 3.2) | «تفاصيل استهلاك التلاميذ — اللمجة (Goûter)»: the month filter must actually filter the displayed data | `computeGouterRows` (`mealLogic.ts` L116–120) counts attendances with **no date filter at all** — the `month` prop drives only the payment status, so consumed counts and unpaid-unit actions are lifetime totals and ignore the selected month | **GAP (bug)** — scope the counts and unpaid-unit lists by the academic month prefix; revision-D tests pinned single-month fixtures, which masked this |
+| E7 (asks 5+6, points 3.0.x/3.1/3.3) | Cards 3.0.0–3.0.2 in two versions (Repas + Goûter); monthly table 3.1 Repas-only; a new Goûter-only monthly component 3.3 | The three cards (FinanceModule L2350–2362) aggregate lunch **and** goûter attendances (`attendances` is unfiltered on service); the monthly table 3.1 (L2603) counts every `mealAttendances` entry and its day-expanded detail (L2660) mixes وجبة غداء and لمجة rows; no Goûter monthly component exists | **GAP** — split the aggregation per service; scope 3.1 + its detail to lunch; new `GouterMonthlyTable` fed by a pure `computeGouterMonthly` |
+
+Verdicts: two regroupings that E1 makes satisfied (E2, E3), one behavior pin
+(E4) and four real gaps (E1, E5, E6, E7). No remark needs a schema migration,
+a new route or a backend change; the tab state stays component-local (nothing
+persisted).
+
+### Technical approach (deltas)
+
+**E1 — sub-tabs under the filters, both screens.** `MealsModule`: add
+`const [serviceTab, setServiceTab] = useState<'repas' \| 'gouter'>('repas')`
+and render two tab buttons («Repas» / «Goûter») in a strip directly under the
+existing filter bar (search + school year stay shared above the tabs, so both
+tabs read the same student set). **Repas** panel = payment grid, day program,
+lunch consumption table; **Goûter** panel = Goûter subscribers grid + Goûter
+consumption table; the **daily pointage stays a shared section below the tab
+panels** — the remark lists it in neither tab, and both tabs' buttons write
+into it. `FinanceModule`: the same two buttons inside the
+`activeTab === 'restaurant'` block under the month/year filters — **Repas**
+panel = the three synthesis cards + lunch detail + monthly table 3.1;
+**Goûter** panel = the mirrored cards + Goûter detail 3.2 + the new Goûter
+monthly grid 3.3 (the existing Goûter summary strip stays as the Goûter panel
+header). `data-testid="service-tab-repas"` / `"service-tab-gouter"` on both
+screens for the suites.
+
+**E2+E3 — regrouping only.** Sections move between panels verbatim; no feed,
+predicate or handler changes. Revision D's disjoint-predicate facts carry over
+unchanged (lunch = `mealSubscription.active === true`; Goûter = any `gouter*`
+flag).
+
+**E4 — pin the Repas button's write shape.** No handler change: a regression
+test asserts clicking «تسجيل الوجبة» adds exactly one `service: 'lunch'`
+attendance and no `gouter_*` attendance — the guard the client's «point de
+vigilance» asks for, cheapest expressed as a test around the existing
+`handleMarkConsumption`.
+
+**E5 — Goûter pointage upsert.** New pure helper in `mealLogic.ts`:
+`ensureGouterAttendanceForDate(st, date, services)` — if the student has any
+`gouter_*` attendance on `date`, return the student with the missing ticked
+services appended (existing rows, including lunch, untouched; no duplicates);
+otherwise append one `gouter_*` attendance per requested service with the
+traiteur snapshot, `type: 'subscription'` when the month's Goûter status is
+paid (reusing `getGouterStatusFor`) and `'unit'` otherwise (payable via the
+existing pay-unit buttons). The requested services derive from the row's
+gouter flags (matin-only → `gouter_matin`; both → both). Host side:
+`GouterConsumptionTable` gains an optional `onMarkToday?(st, services)` prop
+rendered as a per-row «تسجيل الوجبة» button, disabled once all the student's
+gouter services exist for the date; `MealsModule` wires it to
+`onUpdateStudents`. The existing date-only `getAttendance` guard is why a
+service-scoped helper is needed — it would wrongly block the "add Goûter to a
+lunch-only line" case the remark explicitly requires.
+
+**E6 — month-scoped Goûter counts.** Hoist the academic month→`YYYY-MM`
+prefix map (currently duplicated in `getConsumedInMonth`,
+`getMonthConsumedTotal` and two FinanceModule inline maps) into
+`mealLogic.ts` as `academicMonthPrefix(month, schoolYear)`; `computeGouterRows`
+scopes its consumed counts and unpaid-unit lists by it. The monthly
+payment-status math (payments already filter on `` `${month} (${schoolYear})` ``)
+is untouched. The Finance Goûter detail 3.2 inherits the fix for free — its
+«point de vigilance» is the same bug seen through the host.
+
+**E7 — per-service finance aggregation.** In the resto block, split
+`attendances` into `lunchAttendances` (`!a.service \|\| a.service === 'lunch'`)
+and `gouterAttendances` before any card math: the Repas cards (3.0.x) and the
+monthly table 3.1 (+ its day-expanded detail) aggregate lunch only; the Goûter
+cards mirror them over gouter attendances and `service === 'Goûter'` payments
+(the strip already computes that total). New component
+`GouterMonthlyTable.tsx` fed by a pure `computeGouterMonthly(students,
+schoolYear)` in `mealLogic.ts` renders the per-month matin/soir/total grid —
+the Goûter counterpart of 3.1, «sans aucune donnée du Repas». For the same
+data, Repas + Goûter totals sum to today's combined numbers (pinned by test —
+no attendance double-counted or lost).
+
+**Tests** (adjacent per-feature files; composed re-checks in 006 suites):
+1. `src/meals.test.ts` — `ensureGouterAttendanceForDate` truth table (create
+   with gouter only; append to an existing lunch line; no duplicates; traiteur
+   snapshot; type per payment status), month-scoped `computeGouterRows` (a
+   Septembre attendance does not count in an Octobre query),
+   `computeGouterMonthly` per-month totals.
+2. `src/components/GouterConsumptionTable.test.tsx` — the «تسجيل الوجبة»
+   button: renders with the prop, invokes the host with the subscribed
+   services, disabled when both services exist; consumed counts react to the
+   month prop.
+3. `src/components/MealsModule.test.tsx` — the two service tabs with their
+   disjoint section sets and the shared pointage; «تسجيل الوجبة» (Repas) writes
+   lunch-only (E4); the Goûter mark button upserts the pointage line (E5 host).
+4. `src/components/FinanceModule.test.tsx` — service tabs; Repas cards + 3.1 +
+   detail count lunch only; Goûter cards + new grid count gouter only; 3.2
+   reacts to the month filter; per-tab totals sum to the pre-split combined
+   numbers.
+5. `src/program.composed.test.tsx` — C1 crèche walkthrough adds: both screens
+   expose the two tabs with their disjoint section sets (composed remark
+   assertions through the real App shell).
+
+**Constitution Check (revision E)**: re-verified — no new routes (IV), no new
+endpoints and no security surface change (III), tenant context untouched (II),
+no migrations (I: tab state is component-local; every derivation stays in the
+existing students/settings JSON surfaces), every delta lands with its test
+(V). No violations.
+
+**Out of scope**: persisting the selected tab, moving the daily pointage into
+either tab (it stays shared), changing any payment/subscription-status math
+beyond the service and month scoping the remarks ask for, the refund and
+payment modals, and revision B/C/D behaviors outside the listed sections.

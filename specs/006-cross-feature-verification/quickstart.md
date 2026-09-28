@@ -182,3 +182,41 @@ mode for the same data → switch back: indicators return.
 gates stay green with the new meals/settings/finance suites; no schema change,
 no route change, no rounding anywhere; revision B/C states (module visibility,
 planner bands, renewal derivation) untouched.
+
+---
+
+## Revision E walkthroughs — onglets Repas/Goûter (`remarques-onglets-repas-gouter.md`)
+
+**W17 — Module Repas tabs (asks 1–3)**: open the meals module → under the
+name/school-year filters a two-button strip shows **Repas** (active) and
+**Goûter** → on Repas see exactly شبكة مدفوعات المطعم, برنامج وجبة اليوم and
+متابعة استهلاك المشتركين شهرياً (no Goûter grid) → click «تسجيل الوجبة» on a
+lunch subscriber: the student appears in the shared Pointage with **only**
+Plat repas ticked, Goûter unticked → switch to Goûter: exactly جدول المشتركين
+في خدمة اللمجة and متابعة استهلاك مشتركي اللمجة شهرياً (no payment grid, no
+day program) → the Pointage اليوم section stays visible below both panels.
+
+**W18 — Goûter mark-today upsert (asks 3 + point 2.2's button)**: in the
+Goûter tab click the per-row «تسجيل الوجبة» of a goûter-only student absent
+from today's pointage → a new line appears with only Goûter ticked (Repas
+untouched) → click the button of a student whose line already exists with
+Repas ticked → **the same line** gains Goûter; no second line is created →
+the button disables once all the student's gouter services exist for the date
+→ unpaid subscription-type marks stay payable via the existing unit buttons.
+
+**W19 — Finance ▸ Gestion des repas: per-service synthesis (asks 4–6)**: in
+the restaurant tab, under the month/year filters, the two service tabs appear
+→ **Repas**: cards 3.0.0–3.0.2 show lunch-only numbers, the monthly table 3.1
+counts only lunch meals and its day-expanded detail lists only وجبة غداء rows
+→ **Goûter**: the mirrored cards show Goûter-only numbers (payments +
+gouter attendances), the Goûter detail table 3.2 respects the selected month
+(a Septembre-only attendance never shows under Octobre), and the new monthly
+grid 3.3 shows per-month Goûter consumption with zero lunch data → for the
+same dataset, each Repas card + its Goûter mirror equals the pre-split
+combined number.
+
+**Expected end state (revision E)**: W17–W19 behave exactly as described; the
+month-scoped Goûter counts fix the 3.2 «point de vigilance» everywhere the
+table is hosted; all gates stay green with the extended suites; no schema, no
+route, no rounding; revision B/C/D behaviors outside the listed sections
+untouched.
