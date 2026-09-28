@@ -3,6 +3,7 @@ import AdvertisementCarousel from './AdvertisementCarousel';
 import AdvertisementInterstitial from './AdvertisementInterstitial';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
 import { ALL_MODULES, ADDON_MODULES, BASE_MODULES, BASE_KEYS, modulesPrice } from '../utils/pricing';
+import { isModuleCompatible, incompatibleModules, CENTER_TYPES, CENTER_TYPE_LABELS } from '../utils/centerType';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
   GraduationCap,
@@ -95,7 +96,7 @@ const MOCK_BARS = [
   { m: 'Déc', v: 68 }, { m: 'Jan', v: 58 }, { m: 'Fév', v: 88 }
 ];
 
-export default function LandingPage({ onOpenLogin, centerName = 'System Academy' }: LandingPageProps) {
+export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: LandingPageProps) {
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
   const [selectedModules, setSelectedModules] = useState<string[]>([...BASE_KEYS]);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
@@ -125,7 +126,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     const root = document.documentElement;
     root.lang = 'fr';
     root.dir = 'ltr';
-    document.title = 'System Academy — Gestion académique pour centres : étude, suivi scolaire, finance';
+    document.title = 'EduSphère — Gestion académique pour centres : étude, suivi scolaire, finance';
     return () => {
       root.lang = 'ar';
       root.dir = 'rtl';
@@ -151,7 +152,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
-  const [centerType, setCenterType] = useState<'jardin' | 'formation' | ''>('');
+  const [centerType, setCenterType] = useState<'jardin' | 'creche' | 'garderie' | 'formation' | ''>('');
   const [fullName, setFullName] = useState('');
   const [academyName, setAcademyName] = useState('');
   const [email, setEmail] = useState('');
@@ -168,6 +169,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
   // FAQ
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  // Remark 5 : chaque carte module affiche les types de centres qu'il sert.
+  const compatibleTypesFor = (key: string) => CENTER_TYPES.filter(t => isModuleCompatible(key, t));
+  // Remark 6 : validation live informative — jamais bloquante — de la
+  // combinaison type × modules (le payload part tel quel).
+  const incompatibleSelected = useMemo(
+    () => incompatibleModules(selectedModules, centerType || undefined),
+    [selectedModules, centerType]
+  );
 
   // Sticky selection bar visibility
   const [showBar, setShowBar] = useState(false);
@@ -345,8 +355,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
     { key: 'info', label: 'Plus d’infos' }
   ];
 
-  const centerTypes: { key: 'jardin' | 'formation'; label: string; hint: string }[] = [
+  const centerTypes: { key: 'jardin' | 'creche' | 'garderie' | 'formation'; label: string; hint: string }[] = [
     { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
+    { key: 'creche', label: 'Crèche', hint: 'Petite enfance · 0–3 ans' },
+    { key: 'garderie', label: 'Garderie', hint: 'Garderie périscolaire' },
     { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
   ];
 
@@ -1180,6 +1192,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-black text-slate-900 leading-snug">{mod.label}</div>
                           <div className="text-[11px] font-semibold text-slate-500 leading-snug">{mod.description}</div>
+                          {/* Remark 5 : éligibilité visible avant l'engagement.
+                              Une seule chaîne texte — les libellés de types ne
+                              collisionnent pas avec les radios du formulaire. */}
+                          <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                            Disponible : {compatibleTypesFor(mod.key).map(t => CENTER_TYPE_LABELS[t].fr).join(' · ')}
+                          </div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
                           <div className={`text-sm font-black ${on ? 'text-brand-600' : 'text-slate-900'}`}>+{priceLabel(mod.price)}</div>
@@ -1592,6 +1610,20 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
                   </div>
                 </div>
 
+                {/* Remark 6 : remarque en temps réel, informative et non
+                    bloquante — on guide le choix, on ne refuse pas l'envoi. */}
+                {centerType && incompatibleSelected.length > 0 && (
+                  <div role="note" className="mb-5 p-4 rounded-2xl border border-sky-200 bg-sky-50">
+                    <p className="text-xs font-bold text-sky-800 text-center">
+                      ℹ️ {incompatibleSelected
+                        .map(key => ALL_MODULES.find(m => m.key === key)?.label || key)
+                        .join(', ')}{' '}
+                      n'est pas disponible pour les centres Crèche et Jardin d'enfants.
+                      Vous pouvez le retirer ou choisir Garderie / Formation pour le conserver.
+                    </p>
+                  </div>
+                )}
+
                 {savedLeadCount > 0 && !formSubmitted && (
                   <div role="status" className="mb-5 p-4 rounded-2xl border border-brand-600/30 bg-brand-600/[0.05]">
                     <p className="text-xs font-bold text-slate-700 text-center">
@@ -1766,7 +1798,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'System Academy'
 
           <div className="pt-7 border-t border-slate-200/70 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-slate-500 text-xs font-bold">
-              © {new Date().getFullYear()} System Academy. Tous droits réservés.
+              © {new Date().getFullYear()} EduSphère. Tous droits réservés.
             </p>
             <p className="text-slate-500 text-xs font-bold">Conçu en Tunisie 🇹🇳</p>
           </div>

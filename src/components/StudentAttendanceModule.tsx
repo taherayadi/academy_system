@@ -9,12 +9,15 @@ import {
   Users
 } from 'lucide-react';
 import { Student, StudentAttendanceRecord, StudentAttendanceStatus } from '../types';
+import { hasSchoolLevel } from '../utils/centerType';
 import { useToast } from './Toast';
 
 interface StudentAttendanceModuleProps {
   students: Student[];
   attendance: StudentAttendanceRecord[];
   onUpdateAttendance: (records: StudentAttendanceRecord[]) => void;
+  /** Revision C (remark 1): crèche/jardin hide the « كل المستويات » grade filter. */
+  centerType?: string;
 }
 
 function localDateString(date = new Date()): string {
@@ -35,7 +38,7 @@ function dateLabel(date: string): string {
   });
 }
 
-export default function StudentAttendanceModule({ students, attendance, onUpdateAttendance }: StudentAttendanceModuleProps) {
+export default function StudentAttendanceModule({ students, attendance, onUpdateAttendance, centerType }: StudentAttendanceModuleProps) {
   const toast = useToast();
   const [selectedDate, setSelectedDate] = useState(localDateString);
   const [search, setSearch] = useState('');
@@ -232,14 +235,16 @@ export default function StudentAttendanceModule({ students, attendance, onUpdate
               className="w-full pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-brand-600"
             />
           </label>
-          <select
-            value={gradeFilter}
-            onChange={event => setGradeFilter(event.target.value)}
-            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
-          >
-            <option value="">كل المستويات</option>
-            {gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}
-          </select>
+          {hasSchoolLevel(centerType) && (
+            <select
+              value={gradeFilter}
+              onChange={event => setGradeFilter(event.target.value)}
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
+            >
+              <option value="">كل المستويات</option>
+              {gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}
+            </select>
+          )}
         </div>
 
         {filteredStudents.length === 0 ? (

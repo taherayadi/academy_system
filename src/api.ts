@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill } from './types';
 
 
 const API_BASE = '/api';
@@ -83,6 +83,9 @@ export interface DatabaseState {
   studentTimeSheets: StudentTimeSheet[];
   formations: Formation[];
   events: SchoolEvent[];
+  activities: Activity[];
+  skills: Skill[];
+  skillEvaluations: SkillEvaluation[];
 }
 
 
@@ -271,6 +274,28 @@ export async function fetchEventsApi(): Promise<SchoolEvent[]> {
 }
 
 
+// ─── Activités & Planning / Compétences & Skills ───────────────────────
+
+export async function saveActivities(activities: Activity[]): Promise<void> {
+  return putDomain('/activities', activities, 'تعذر حفظ بيانات الأنشطة.');
+}
+
+
+export async function fetchActivitiesApi(): Promise<Activity[]> {
+  return getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.');
+}
+
+
+export async function saveSkills(doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }): Promise<void> {
+  return putDomain('/skills', doc, 'تعذر حفظ بيانات المهارات.');
+}
+
+
+export async function fetchSkillsApi(): Promise<{ catalog: Skill[]; evaluations: SkillEvaluation[] }> {
+  return getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.');
+}
+
+
 export async function saveMealForfaitClosures(closures: MealForfaitClosure[]): Promise<void> {
   return putDomain('/meal-forfait-closures', closures, 'تعذر حفظ بيانات إغلاقات الوجبات.');
 }
@@ -328,7 +353,9 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     revisionSeances,
     studentTimeSheets,
     formations,
-    events
+    events,
+    activities,
+    skills
   ] = await Promise.all([
     getDomain<CenterSettings>('/settings', 'تعذر تحميل إعدادات المنظومة.'),
     getDomain<Student[]>('/students', 'تعذر تحميل بيانات التلاميذ.'),
@@ -343,11 +370,16 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     getDomain<RevisionSeance[]>('/revision-seances', 'تعذر تحميل بيانات حصص المراجعة.'),
     getDomain<StudentTimeSheet[]>('/student-timesheets', 'تعذر تحميل جداول التوقيت.'),
     getDomain<Formation[]>('/formations', 'تعذر تحميل بيانات التكوينات.'),
-    fetchEventsApi()
+    fetchEventsApi(),
+    getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.'),
+    getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.')
   ]);
 
   return {
     settings,
+    activities: activities || [],
+    skills: skills?.catalog || [],
+    skillEvaluations: skills?.evaluations || [],
     students: students || [],
     staff: staff || [],
     slots: slots || [],

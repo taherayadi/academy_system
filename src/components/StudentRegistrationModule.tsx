@@ -26,6 +26,7 @@ import {
   Cookie
 } from 'lucide-react';
 import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
+import { hasSchoolLevel } from '../utils/centerType';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { capitalizeFirst } from '../utils/format';
@@ -43,6 +44,8 @@ interface StudentRegistrationModuleProps {
   sidebarCollapsed?: boolean;
   /** Center subscription: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
+  /** Center type ('jardin' | 'creche' | 'garderie' | 'formation') — hides school-level artifacts when absent. */
+  centerType?: string;
 }
 
 const emptyParent = (): ParentInfo => ({
@@ -86,10 +89,14 @@ export default function StudentRegistrationModule({
   setOpenAddFormTrigger,
   hideRestrictedModules,
   sidebarCollapsed,
-  enabledModules
+  enabledModules,
+  centerType
 }: StudentRegistrationModuleProps) {
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
+  // School-bearing surfaces (grade / établissement) exist only for school types;
+  // unknown/empty keeps legacy visibility.
+  const showSchoolLevel = hasSchoolLevel(centerType);
 
   // Subscription gating: a student can only be enrolled in services included in the
   // center's plan (undefined = all modules, legacy compat).
@@ -422,8 +429,10 @@ export default function StudentRegistrationModule({
       lastName: lastName.trim(),
       birthDate,
       birthPlace,
-      grade,
-      etablissement: etablissement.trim() || undefined,
+      // Le niveau est un artefact scolaire : vide pour crèche/jardin (jamais
+      // supprimé côté données existantes — les éditions y accèdent encore).
+      grade: showSchoolLevel ? grade : '',
+      etablissement: showSchoolLevel ? (etablissement.trim() || undefined) : undefined,
       mother,
       father,
       parentalSituation,
@@ -431,11 +440,19 @@ export default function StudentRegistrationModule({
       siblings,
       authorizedPersons,
       allergies,
-      academicHistory: {
-        nMinus1: { school: nMinus1School, grade: nMinus1Grade },
-        nMinus2: { school: nMinus2School, grade: nMinus2Grade },
-        nMinus3: { school: nMinus3School, grade: nMinus3Grade }
-      },
+      academicHistory: (() => {
+        // Le cursus scolaire est un artefact scolaire : non saisi pour
+        // crèche/jardin (remark 1). La section et le print sont masqués, mais
+        // l'historique déjà stocké n'est JAMAIS écrasé par une édition dans un
+        // centre non scolaire — masquer n'est pas détruire (FR-010) : seules
+        // les créations fraîches enregistrent un historique vide.
+        if (!showSchoolLevel && editingStudentId) return existing!.academicHistory;
+        return {
+          nMinus1: { school: showSchoolLevel ? nMinus1School : '', grade: showSchoolLevel ? nMinus1Grade : '' },
+          nMinus2: { school: showSchoolLevel ? nMinus2School : '', grade: showSchoolLevel ? nMinus2Grade : '' },
+          nMinus3: { school: showSchoolLevel ? nMinus3School : '', grade: showSchoolLevel ? nMinus3Grade : '' }
+        };
+      })(),
       registration: {
         date: regDate,
         location: regLocation,
@@ -596,6 +613,7 @@ export default function StudentRegistrationModule({
           </div>
         </div>
 
+        {showSchoolLevel && (
         <div className="flex items-center gap-3 w-full md:w-auto">
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <select
@@ -610,6 +628,7 @@ export default function StudentRegistrationModule({
             {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
+        )}
       </div>
 
       {/* Students list cards */}
@@ -625,9 +644,11 @@ export default function StudentRegistrationModule({
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-1.5">
+                    {showSchoolLevel && (
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-700 bg-brand-600/[0.06] border border-brand-600/20 px-2.5 py-0.5 rounded-md">
                       {st.grade}
                     </span>
+                    )}
                     <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                       {st.academicYear || getCurrentAcademicYear()}
                     </span>
@@ -861,8 +882,11 @@ export default function StudentRegistrationModule({
                       />
                     </div>
                     <div>
+                      {showSchoolLevel && (
+                      <>
                       <label className="text-xs font-bold text-slate-600 block mb-1">المستوى الدراسي *</label>
                       <select
+                        required={showSchoolLevel}
                         value={grade} onChange={(e) => setGrade(e.target.value)}
                         className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer appearance-none pr-8 focus:outline-none focus:ring-1 focus:ring-brand-600"
                         style={{
@@ -874,8 +898,12 @@ export default function StudentRegistrationModule({
                       >
                         {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
+                      </>
+                      )}
                     </div>
                     <div>
+                      {showSchoolLevel && (
+                      <>
                       <label className="text-xs font-bold text-slate-600 block mb-1">المؤسسة التعليمية (المعهد / الإعدادية / الابتدائية)</label>
                       <div className="flex gap-2">
                         <select
@@ -927,6 +955,8 @@ export default function StudentRegistrationModule({
                             إضافة
                           </button>
                         </div>
+                      )}
+                      </>
                       )}
                     </div>
                   </div>
@@ -1294,7 +1324,9 @@ export default function StudentRegistrationModule({
                   </div>
                 </div>
 
-                {/* SECTION 5: CURSUS SCOLAIRE (3 LAST YEARS) */}
+                {/* SECTION 5: CURSUS SCOLAIRE (3 LAST YEARS) — masquée pour
+                    crèche/jardin (remark 1) : sans objet à ces âges. */}
+                {showSchoolLevel && (
                 <div className="space-y-4 border-t border-slate-100 pt-6">
                   <h4 className="text-sm font-black text-brand-700 bg-brand-600/[0.06] p-2 rounded-lg flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
@@ -1339,6 +1371,7 @@ export default function StudentRegistrationModule({
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* SECTION 5: SERVICES SUBSCRIPTION */}
                 <div className="space-y-4 border-t border-slate-100 pt-6">
@@ -1580,7 +1613,7 @@ export default function StudentRegistrationModule({
               <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div>
                   <span className="text-[10px] font-bold text-brand-600 bg-brand-600/20 px-2.5 py-1 rounded-md">
-                    بطاقة تلميذ — {selectedStudent.grade}
+                    بطاقة تلميذ{showSchoolLevel && selectedStudent.grade ? ` — ${selectedStudent.grade}` : ''}
                   </span>
                   <h3 className="text-2xl font-black mt-1.5">
                     {selectedStudent.firstName} {selectedStudent.lastName}
@@ -1725,6 +1758,7 @@ export default function StudentRegistrationModule({
                   </button>
                   <button
                     onClick={() => setPrintingRegistrationStudent(null)}
+                    title="إغلاق المعاينة"
                     className="p-2 hover:bg-slate-800 rounded-xl text-slate-400"
                   >
                     <X className="h-5 w-5" />
@@ -1760,7 +1794,9 @@ export default function StudentRegistrationModule({
                       <p><span className="text-slate-500">اللقب والاسم:</span> <strong>{printingRegistrationStudent.lastName} {printingRegistrationStudent.firstName}</strong></p>
                       <p><span className="text-slate-500">تاريخ الميلاد:</span> <strong>{printingRegistrationStudent.birthDate || 'غير محدد'}</strong></p>
                       <p><span className="text-slate-500">مكان الميلاد:</span> <strong>{printingRegistrationStudent.birthPlace || 'تونس'}</strong></p>
+                      {showSchoolLevel && (
                       <p><span className="text-slate-500">المستوى الدراسي:</span> <strong>{printingRegistrationStudent.grade}</strong></p>
+                      )}
                     </div>
                     {printingRegistrationStudent.allergies && (
                       <p className="mt-1 text-[11px]"><span className="text-slate-500">الحساسيات والاحتياطات الطبية:</span> <strong className="text-red-700">{printingRegistrationStudent.allergies}</strong></p>
@@ -1841,7 +1877,9 @@ export default function StudentRegistrationModule({
                     </p>
                   </div>
 
-                  {/* Academic history - ROW 4 */}
+                  {/* Academic history - ROW 4 — masquée pour crèche/jardin
+                      (remark 1), comme la section du formulaire. */}
+                  {showSchoolLevel && (
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">
                     <h3 className="font-black text-sm mb-2 text-slate-900 border-b border-slate-300 pb-1">4. المسار الدراسي (3 سنوات سابقة)</h3>
                     <div className="grid grid-cols-3 gap-2 text-[10px]">
@@ -1850,6 +1888,7 @@ export default function StudentRegistrationModule({
                       <div className="p-1 bg-white rounded border"><strong>N-3:</strong> {printingRegistrationStudent.academicHistory?.nMinus3?.school || 'غير مدون'} ({printingRegistrationStudent.academicHistory?.nMinus3?.grade || '-'})</div>
                     </div>
                   </div>
+                  )}
 
                   {/* Services - ROW 5 */}
                   <div className="p-3 bg-slate-100 rounded border border-slate-300">

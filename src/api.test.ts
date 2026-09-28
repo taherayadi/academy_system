@@ -111,12 +111,16 @@ describe('saveDatabase', () => {
 // fetchDatabase (concurrent domain load)
 // ---------------------------------------------------------------------------
 describe('fetchDatabase', () => {
-  it('calls all 14 domain endpoints concurrently', async () => {
-    const responses = Array.from({ length: 14 }, () => jsonResponse([]));
+  it('calls all 16 domain endpoints concurrently', async () => {
+    // settings + 14 list domains return arrays; /skills returns a document
+    const responses = [
+      ...Array.from({ length: 15 }, () => jsonResponse([])),
+      jsonResponse({ catalog: [], evaluations: [] })
+    ];
     mockFetch.mockImplementation(() => Promise.resolve(responses.shift()));
 
     const db = await fetchDatabase();
-    expect(mockFetch).toHaveBeenCalledTimes(14);
+    expect(mockFetch).toHaveBeenCalledTimes(16);
     expect(db.students).toEqual([]);
     expect(db.staff).toEqual([]);
     expect(db.settings).toEqual([]);
