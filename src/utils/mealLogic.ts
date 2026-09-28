@@ -308,10 +308,13 @@ export function ensureGouterAttendanceForDate(
   if (missing.length === 0) return st;
   const snapshotTraiteurPrice = opts?.traiteurPrice ?? 0;
   let type: 'subscription' | 'unit' = 'unit';
+  let paid = false;
   if (opts?.month) {
-    type = getGouterStatusFor(st, opts.month, opts.schoolYear, opts.fees ?? null).status === 'paid'
-      ? 'subscription'
-      : 'unit';
+    // Feature 008 follow-up: when the month is settled, the marked meal is a
+    // covered subscription meal — write paid=true so it never renders as an
+    // unpaid meal (the pre-fix rows read type='subscription', paid=false).
+    paid = getGouterStatusFor(st, opts.month, opts.schoolYear, opts.fees ?? null).status === 'paid';
+    type = paid ? 'subscription' : 'unit';
   }
   return {
     ...st,
@@ -321,7 +324,7 @@ export function ensureGouterAttendanceForDate(
         date,
         service,
         type,
-        paid: false,
+        paid,
         ...(snapshotTraiteurPrice !== 0 ? { traiteurPrice: snapshotTraiteurPrice } : {})
       }))
     ]

@@ -331,6 +331,22 @@ describe('Meal logic (revision E — onglets Repas/Goûter)', () => {
       expect(unitRow.paid).toBe(false);
       expect(unitRow.traiteurPrice).toBe(4.5);
     });
+
+    it('marks subscription rows paid when the month is settled (feature 008 fix)', async () => {
+      const logic = await import('./utils/mealLogic');
+      const gouterFees = { fraisGouterMatinMensuel: 15 } as unknown as import('./types').CenterFeeSet;
+      const paidSt = makeStudent({
+        enrolledServices: { ...baseServices, gouterMatin: true },
+        payments: [{ id: 'p1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: 15 }]
+      });
+      const updated = logic.ensureGouterAttendanceForDate(paidSt, '2025-10-06', ['gouter_matin'], {
+        month: 'Octobre', schoolYear: '2025/2026', fees: gouterFees, traiteurPrice: 4.5
+      });
+      const subRow = (updated.mealAttendances || []).find(a => a.date === '2025-10-06' && a.service === 'gouter_matin')!;
+      expect(subRow.type).toBe('subscription');
+      // The row must not render as an unpaid meal — paid follows the type.
+      expect(subRow.paid).toBe(true);
+    });
   });
 
   describe('computeGouterMonthly — remark 3.3 (Goûter-only monthly grid)', () => {

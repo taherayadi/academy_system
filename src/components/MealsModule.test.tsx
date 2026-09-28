@@ -397,6 +397,30 @@ describe('MealsModule — Goûter paid-status cross-surface agreement (feature 0
     expect(screen.getByText(/Payé \(15 د.ت\)/)).toBeTruthy();
   });
 
+  it('FR-009: mark-today writes a paid subscription row when the month is settled', async () => {
+    const onUpdate = vi.fn();
+    render(
+      <MealsModule
+        students={[paidGouterStudent]}
+        mealPlans={[]}
+        onUpdateStudents={onUpdate}
+        onUpdateMealPlans={vi.fn()}
+        settings={feesSettings}
+      />
+    );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    fireEvent.click(screen.getByTestId(`mark-today-${paidGouterStudent.id}`));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    const today = new Date().toISOString().split('T')[0];
+    const updated = onUpdate.mock.calls[0][0].find((s: Student) => s.id === paidGouterStudent.id) as Student;
+    const row = (updated.mealAttendances || []).find(a => a.date === today && a.service === 'gouter_matin');
+    expect(row).toBeTruthy();
+    expect(row!.type).toBe('subscription');
+    // The reported anomaly: subscription rows written with paid=false render
+    // as unpaid meals everywhere — paid must follow the settled month.
+    expect(row!.paid).toBe(true);
+  });
+
   it('FR-009: the daily-grid mark path treats the paid month as subscription (hasPaid true)', async () => {
     const logic = await import('../utils/mealLogic');
     // Sanity pin on the shared computation the day grid consumes.
