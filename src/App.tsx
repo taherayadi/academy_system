@@ -84,7 +84,9 @@ export default function App() {
   // Always start logged out so the app requires login on every launch.
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
-  const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
+  // The application opens on the login page; the landing remains reachable
+  // via LoginScreen's « back to landing » action.
+  const [authView, setAuthView] = useState<'landing' | 'login'>('login');
 
 
   const [isBootLoading, setIsBootLoading] = useState(true);
@@ -114,7 +116,7 @@ export default function App() {
     setCurrentUser(null);
     setCurrentCenter(null);
     clearSessionUser();
-    setAuthView('landing');
+    setAuthView('login');
     toast.info('تم تسجيل الخروج.');
   };
 

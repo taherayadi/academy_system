@@ -65,8 +65,7 @@ async function loginAs(center: CenterTenant) {
   vi.mocked(verifyPassword).mockResolvedValue({ user, center });
 
   render(<App />);
-  // Landing → login screen (the login view's back button also matches /connexion/)
-  fireEvent.click(screen.getAllByRole('button', { name: /connexion/i })[0]);
+  // The application opens directly on the login screen.
   await screen.findByText('كلمة السر');
 
   fireEvent.change(screen.getByPlaceholderText('example@gmail.com'), { target: { value: 'admin@test.tn' } });
