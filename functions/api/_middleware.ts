@@ -1,12 +1,13 @@
-import { Env, validateSession, json } from './_lib';
-import { isDeploymentRole } from './_deployment';
+import { Env, json } from './_lib';
 
-// Deny unknown routes before the SPA fallback; never proxy to the other backend.
-export const ROUTES: Record<string, readonly string[]> = {"/api/advertisements/active": ["GET"], "/api/activities": ["GET", "PUT"], "/api/auth/login": ["POST"], "/api/auth/logout": ["POST"], "/api/auth/me": ["GET"], "/api/auth/password": ["POST"], "/api/center-logo": ["POST"], "/api/centers": ["GET"], "/api/courses": ["GET", "PUT"], "/api/demo-requests": ["POST"], "/api/events": ["GET", "PUT"], "/api/expenses": ["GET", "POST", "PUT", "DELETE"], "/api/external-students": ["GET", "PUT"], "/api/formations": ["GET", "PUT"], "/api/meal-forfait-closures": ["GET", "POST", "PUT"], "/api/meals": ["GET", "PUT"], "/api/public-pricing": ["GET"], "/api/pubnub-grant": ["GET"], "/api/renewal-requests": ["GET", "POST"], "/api/revision-seances": ["GET", "PUT"], "/api/sessions": ["GET", "PUT"], "/api/skills": ["GET", "PUT"], "/api/settings": ["GET", "PUT"], "/api/slots": ["GET", "PUT"], "/api/staff": ["GET", "POST", "PUT", "DELETE"], "/api/state": ["GET", "PUT"], "/api/student-attendance": ["GET", "PUT"], "/api/student-time-sheets": ["GET", "PUT"], "/api/student-timesheets": ["GET", "PUT"], "/api/students": ["GET", "POST", "PUT", "DELETE"], "/api/timesheets": ["GET", "PUT"], "/api/upload-logo": ["POST"]};
-const PUBLIC = new Set(["POST /api/auth/login", "POST /api/auth/logout", "POST /api/demo-requests", "GET /api/public-pricing", "GET /api/advertisements/active"]);
+// Deny unknown routes before the SPA fallback. This deployment is the public
+// landing only: three public routes, nothing authenticated. The route/method
+// inventory must stay in exact sync with the files in functions/api/.
+export const ROUTES: Record<string, readonly string[]> = {"/api/advertisements/active": ["GET"], "/api/demo-requests": ["POST"], "/api/public-pricing": ["GET"]};
+const PUBLIC = new Set(["GET /api/advertisements/active", "POST /api/demo-requests", "GET /api/public-pricing"]);
 
 export const onRequest: PagesFunction<Env> = async (context) => {
-  const { request, env } = context;
+  const { request } = context;
   const url = new URL(request.url);
   const methods = ROUTES[url.pathname];
   if (!methods) return json({ error: 'Not found' }, 404);
@@ -20,12 +21,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (!['GET', 'HEAD'].includes(request.method) && origin && origin !== url.origin) {
     return json({ error: 'Untrusted origin' }, 403);
   }
-  if (!PUBLIC.has(`${request.method} ${url.pathname}`)) {
-    const session = await validateSession(env.DB, request);
-    if (!session) return json({ error: 'Unauthorized' }, 401);
-    if (!isDeploymentRole(session.role)) return json({ error: 'Forbidden' }, 403);
-    context.data.session = session;
-  }
+  // Every route here is public by design — no session validation exists.
   const response = await context.next();
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'no-store');
@@ -35,11 +31,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Content Security Policy - allow only trusted sources
   headers.set('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' https://*.pndsn.com",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://ik.imagekit.io",
     "font-src 'self'",
-    "connect-src 'self' https://*.pndsn.com wss://*.pndsn.com",
+    "connect-src 'self'",
     "frame-src 'none'",
     "object-src 'none'",
     "base-uri 'self'",

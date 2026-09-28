@@ -1,435 +1,88 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveEventsApi, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
-import { normalizeSettings, normalizeFeeSet } from './types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { submitDemoRequestApi, fetchPublicModulePricesApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
 
-// ---------------------------------------------------------------------------
-// Mock fetch globally
-// ---------------------------------------------------------------------------
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
-
-function jsonResponse(data: unknown, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(data),
-  };
-}
+const fetchMock = vi.fn();
 
 beforeEach(() => {
-  mockFetch.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+  __resetActiveAdsCacheForTests();
 });
 
-// ---------------------------------------------------------------------------
-// UnauthorizedError
-// ---------------------------------------------------------------------------
-describe('UnauthorizedError', () => {
-  it('has correct name and message', () => {
-    const err = new UnauthorizedError();
-    expect(err.name).toBe('UnauthorizedError');
-    expect(err.message).toContain('صلاحية الجلسة');
-  });
-
-  it('is an instance of Error', () => {
-    expect(new UnauthorizedError()).toBeInstanceOf(Error);
-  });
+afterEach(() => {
+  fetchMock.mockReset();
+  vi.unstubAllGlobals();
 });
 
-// ---------------------------------------------------------------------------
-// saveStudents (representative of all saveX functions)
-// ---------------------------------------------------------------------------
-describe('saveStudents', () => {
-  it('sends PUT with students body', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const students = [{ id: 's1', firstName: 'Test' }];
-    await saveStudents(students as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/students');
-    expect(opts.method).toBe('PUT');
-    expect(opts.body).toBe(JSON.stringify(students));
-  });
-
-  it('throws on non-ok response', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ error: 'DB error' }, 500));
-    await expect(saveStudents([])).rejects.toThrow('DB error');
-  });
-
-  it('throws UnauthorizedError on 401', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}, 401));
-    await expect(saveStudents([])).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
-  it('uses Arabic error message when server returns no error field', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}, 500));
-    await expect(saveStudents([])).rejects.toThrow('تعذر حفظ بيانات التلاميذ');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// All save domain functions use the same pattern, verify each route
-// ---------------------------------------------------------------------------
-describe('save domain functions route paths', () => {
-  const cases: [string, (data: any) => Promise<void>][] = [
-    ['/api/students', saveStudents],
-    ['/api/staff', saveStaff],
-    ['/api/slots', saveSlots],
-    ['/api/courses', saveCourses],
-    ['/api/sessions', saveSessions],
-    ['/api/meals', saveMealPlans],
-    ['/api/expenses', saveExpenses],
-    ['/api/timesheets', saveTimesheets],
-    ['/api/external-students', saveExternalStudents],
-    ['/api/revision-seances', saveRevisionSeances],
-    ['/api/student-timesheets', saveStudentTimeSheets],
-    ['/api/formations', saveFormations],
-    ['/api/events', saveEventsApi],
-    ['/api/settings', saveSettings],
-  ];
-
-  it.each(cases)('saveX sends to %s', async (path, fn) => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    await fn([] as any);
-    expect(mockFetch.mock.calls[0][0]).toBe(path);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// saveDatabase (full state PUT)
-// ---------------------------------------------------------------------------
-describe('saveDatabase', () => {
-  it('sends PUT to /api/state', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const state = { students: [], staff: [] } as any;
-    await saveDatabase(state);
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/state');
-    expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// fetchDatabase (concurrent domain load)
-// ---------------------------------------------------------------------------
-describe('fetchDatabase', () => {
-  it('calls all 16 domain endpoints concurrently', async () => {
-    // settings + 14 list domains return arrays; /skills returns a document
-    const responses = [
-      ...Array.from({ length: 15 }, () => jsonResponse([])),
-      jsonResponse({ catalog: [], evaluations: [] })
-    ];
-    mockFetch.mockImplementation(() => Promise.resolve(responses.shift()));
-
-    const db = await fetchDatabase();
-    expect(mockFetch).toHaveBeenCalledTimes(16);
-    expect(db.students).toEqual([]);
-    expect(db.staff).toEqual([]);
-    expect(db.settings).toEqual([]);
-    expect(db.slots).toEqual([]);
-    expect(db.courses).toEqual([]);
-    expect(db.sessions).toEqual([]);
-    expect(db.mealPlans).toEqual([]);
-    expect(db.expenses).toEqual([]);
-    expect(db.timesheets).toEqual([]);
-    expect(db.externalStudents).toEqual([]);
-    expect(db.revisionSeances).toEqual([]);
-    expect(db.studentTimeSheets).toEqual([]);
-    expect(db.formations).toEqual([]);
-    expect(db.events).toEqual([]);
-  });
-
-  it('throws UnauthorizedError if any endpoint returns 401', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}, 401));
-    await expect(fetchDatabase()).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Session token persistence (HttpOnly cookie migration - no localStorage token)
-// ---------------------------------------------------------------------------
-describe('session token', () => {
-  beforeEach(() => {
-    localStorage.removeItem('tc_center_token');
-  });
-
-  it('handles login response and does NOT persist bearer token in localStorage (security)', async () => {
-    const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
-    mockFetch.mockResolvedValue(jsonResponse({ user, token: 'tok123' }));
-    const result = await loginRequest('a@b.com', 'pass');
-    expect(result.user).toEqual(user);
-    // Security: Token is NOT stored in localStorage (cookie-driven auth)
-    expect(localStorage.getItem('tc_center_token')).toBeNull();
-    expect(getSessionToken()).toBeNull();
-  });
-
-  it('does not crash when login returns no token', async () => {
-    const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
-    mockFetch.mockResolvedValue(jsonResponse({ user }));
-    const result = await loginRequest('a@b.com', 'pass');
-    expect(result.user).toEqual(user);
-    expect(getSessionToken()).toBeNull();
-  });
-
-  it('clears token via setSessionToken(null)', () => {
-    localStorage.setItem('tc_center_token', 'abc');
-    setSessionToken(null);
-    expect(getSessionToken()).toBeNull();
-  });
-
-  it('sends Authorization Bearer header on authed requests if legacy token present', async () => {
-    localStorage.setItem('tc_center_token', 'secret-token');
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    await saveStudents([]);
-    const opts = mockFetch.mock.calls[0][1];
-    expect(opts.headers.Authorization).toBe('Bearer secret-token');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// loginRequest
-// ---------------------------------------------------------------------------
-describe('loginRequest', () => {
-  it('sends POST to /api/auth/login', async () => {
-    const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
-    mockFetch.mockResolvedValue(jsonResponse({ user }));
-    const result = await loginRequest('a@b.com', 'pass');
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
-    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
-    expect(result.user).toEqual(user);
-  });
-
-  it('throws on server error', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ error: 'Bad credentials' }, 401));
-    await expect(loginRequest('x', 'y')).rejects.toThrow('Bad credentials');
-  });
-
-  it('throws generic error when server returns no error message', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}, 500));
-    await expect(loginRequest('x', 'y')).rejects.toThrow('خطأ في تسجيل الدخول');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Atomic Entity Mutators (Concurrent-safe)
-// ---------------------------------------------------------------------------
-describe('Atomic Entity Mutators', () => {
-  it('createStudentApi sends POST with student payload', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const student = { id: 'st_123', firstName: 'Yassine' };
-    await createStudentApi(student as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/students');
-    expect(opts.method).toBe('POST');
-    expect(opts.body).toBe(JSON.stringify(student));
-  });
-
-  it('updateStudentApi sends PUT with single student payload', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const student = { id: 'st_123', firstName: 'Mariem' };
-    await updateStudentApi(student as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/students');
-    expect(opts.method).toBe('PUT');
-    expect(opts.body).toBe(JSON.stringify(student));
-  });
-
-  it('deleteStudentApi sends DELETE with query param id', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    await deleteStudentApi('st_123');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/students?id=st_123');
-    expect(opts.method).toBe('DELETE');
-  });
-
-  it('createStaffApi sends POST with staff payload', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const staff = { id: 'stf_1', firstName: 'Ahmed' };
-    await createStaffApi(staff as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/staff');
-    expect(opts.method).toBe('POST');
-  });
-
-  it('updateStaffApi sends PUT with staff payload', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const staff = { id: 'stf_1', firstName: 'Ahmed Updated' };
-    await updateStaffApi(staff as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/staff');
-    expect(opts.method).toBe('PUT');
-  });
-
-  it('deleteStaffApi sends DELETE with query param id', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    await deleteStaffApi('stf_1');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/staff?id=stf_1');
-    expect(opts.method).toBe('DELETE');
-  });
-
-  it('createExpenseApi sends POST with expense payload', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    const exp = { id: 'exp_1', amount: 150 };
-    await createExpenseApi(exp as any);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/expenses');
-    expect(opts.method).toBe('POST');
-  });
-
-  it('deleteExpenseApi sends DELETE with query param id', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
-    await deleteExpenseApi('exp_1');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe('/api/expenses?id=exp_1');
-    expect(opts.method).toBe('DELETE');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Step 3: Adaptive Cantine (Traiteur vs In-house Kitchen) & Goûter
-// ---------------------------------------------------------------------------
-describe('Step 3: Adaptive Cantine & Goûter', () => {
-  it('normalizes settings with in_house_kitchen mealOperatingMode', () => {
-    const raw = {
-      centerName: 'Al-Najah',
-      mealOperatingMode: 'in_house_kitchen',
-      fees: {
-        fraisAbonnementRepas: 180,
-        fraisParRepas: 9,
-        fraisGouterMatinMensuel: 30,
-        fraisGouterMatinUnitaire: 2,
-        fraisGouterSoirMensuel: 30,
-        fraisGouterSoirUnitaire: 2
-      }
-    };
-    const normalized = normalizeSettings(raw);
-    expect(normalized.mealOperatingMode).toBe('in_house_kitchen');
-    expect(normalized.fees.fraisAbonnementRepas).toBe(180);
-    expect(normalized.fees.fraisParRepas).toBe(9);
-    expect(normalized.fees.fraisGouterMatinMensuel).toBe(30);
-    expect(normalized.fees.fraisGouterMatinUnitaire).toBe(2);
-    expect(normalized.fees.fraisGouterSoirMensuel).toBe(30);
-    expect(normalized.fees.fraisGouterSoirUnitaire).toBe(2);
-  });
-
-  it('normalizes settings with external_traiteur mode as default', () => {
-    const raw = { centerName: 'Test Academy' };
-    const normalized = normalizeSettings(raw);
-    expect(normalized.mealOperatingMode).toBe('external_traiteur');
-  });
-
-  it('normalizes snake_case fees for Goûter from API/DB', () => {
-    const rawFees = {
-      frais_gouter_matin_mensuel: 25,
-      frais_gouter_matin_unitaire: 1.5,
-      frais_gouter_soir_mensuel: 35,
-      frais_gouter_soir_unitaire: 2.5,
-    };
-    const feeSet = normalizeFeeSet(rawFees);
-    expect(feeSet.fraisGouterMatinMensuel).toBe(25);
-    expect(feeSet.fraisGouterMatinUnitaire).toBe(1.5);
-    expect(feeSet.fraisGouterSoirMensuel).toBe(35);
-    expect(feeSet.fraisGouterSoirUnitaire).toBe(2.5);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// SaaS Platform & Demo Requests
-// ---------------------------------------------------------------------------
-describe('SaaS Platform API', () => {
-  it('submitDemoRequestApi sends POST to /api/demo-requests', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true, id: 'req_1' }));
+describe('submitDemoRequestApi', () => {
+  it('POSTs the payload to /api/demo-requests', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 201 }));
     await submitDemoRequestApi({
       requestType: 'trial',
-      fullName: 'Directeur Test',
-      academyName: 'Academie Test',
-      email: 'test@academy.tn',
-      phone: '98000000',
+      fullName: 'Test User',
+      academyName: 'Test Academy',
+      email: 'test@test.tn',
+      phone: '20123456',
+      centerType: 'creche',
+      requestedModules: ['scolaire', 'studentTimeSheets', 'finance']
     });
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
-    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.academyName).toBe('Academie Test');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/demo-requests');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.centerType).toBe('creche');
+    expect(body.requestedModules).toContain('scolaire');
   });
 
-  it('fetchPublicModulePricesApi calls the public pricing endpoint', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ schoolYear: '2026/2027', prices: [{ module_key: 'scolaire', price: 25 }] }));
+  it('surfaces server error messages', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'boom' }), { status: 400 }));
+    await expect(submitDemoRequestApi({
+      requestType: 'trial', fullName: 'a', academyName: 'b', email: 'c', phone: 'd'
+    })).rejects.toThrow('boom');
+  });
+});
+
+describe('fetchPublicModulePricesApi', () => {
+  it('maps pricing rows into a module-key price map', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      schoolYear: '2026/2027',
+      prices: [
+        { module_key: 'scolaire', price: 20 },
+        { module_key: 'studentTimeSheets', price: 0 },
+        { module_key: 'finance', price: 20 }
+      ]
+    }), { status: 200 }));
     const prices = await fetchPublicModulePricesApi();
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/public-pricing');
-    expect(prices.scolaire).toBe(25);
+    expect(prices).toEqual({ scolaire: 20, studentTimeSheets: 0, finance: 20 });
   });
 
-  it('fetchCentersApi calls GET /api/centers', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ centers: [{ id: 'c1', name: 'Centre 1' }] }));
-    const centers = await fetchCentersApi();
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
-    expect(centers[0].name).toBe('Centre 1');
+  it('propagates API failures', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'nope' }), { status: 500 }));
+    await expect(fetchPublicModulePricesApi()).rejects.toThrow('nope');
   });
 });
 
-// ---------------------------------------------------------------------------
-// fetchActiveAdvertisementsApi — request dedupe + TTL cache
-// 3 surfaces (2 carousels + interstitial) × StrictMode used to fire 6 identical
-// requests per page load; the module cache must collapse them to one.
-// ---------------------------------------------------------------------------
-describe('fetchActiveAdvertisementsApi dedupe', () => {
-  beforeEach(() => {
-    __resetActiveAdsCacheForTests();
-    mockFetch.mockReset();
-  });
+describe('fetchActiveAdvertisementsApi', () => {
+  it('queries by location and deduplicates concurrent/serial requests', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ advertisements: [{ id: 'ad1' }] }), { status: 200 }));
 
-  const ads = [{ id: 'a1', title: 'Pub' }];
-
-  it('collapses concurrent calls with the same key into one network request', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
-
-    const [r1, r2, r3] = await Promise.all([
-      fetchActiveAdvertisementsApi('public_landing'),
-      fetchActiveAdvertisementsApi('public_landing'),
-      fetchActiveAdvertisementsApi('public_landing')
+    const [a, b] = await Promise.all([
+      fetchActiveAdvertisementsApi('landing_page'),
+      fetchActiveAdvertisementsApi('landing_page')
     ]);
+    expect(a).toEqual([{ id: 'ad1' }]);
+    expect(b).toEqual([{ id: 'ad1' }]);
+    // One network call despite two callers (cache + in-flight dedup).
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/advertisements/active?location=landing_page');
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(r1).toEqual(ads);
-    expect(r2).toEqual(ads);
-    expect(r3).toEqual(ads);
+    // Cache expiry forces a refetch.
+    __resetActiveAdsCacheForTests();
+    await fetchActiveAdvertisementsApi('landing_page');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('serves repeated calls from cache within the TTL window', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
-
-    await fetchActiveAdvertisementsApi('public_landing');
-    await fetchActiveAdvertisementsApi('public_landing');
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('distinguishes cache keys by location and centerId', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
-
-    await fetchActiveAdvertisementsApi('public_landing');
-    await fetchActiveAdvertisementsApi('center_admin', 'c9');
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('never caches failures — the next call retries the network', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('خطأ في جلب الإعلانات.'));
-    await expect(fetchActiveAdvertisementsApi('public_landing')).rejects.toThrow();
-
-    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
-    const result = await fetchActiveAdvertisementsApi('public_landing');
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(result).toEqual(ads);
+  it('propagates API failures', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'ads down' }), { status: 500 }));
+    await expect(fetchActiveAdvertisementsApi('landing_page')).rejects.toThrow('ads down');
   });
 });
-
-

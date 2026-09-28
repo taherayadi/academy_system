@@ -1,20 +1,8 @@
-const API_BASE = '/api';
+// Landing-only error reporting. Errors are reported to the console only —
+// the backend log-ingest endpoint belongs to the center application and has
+// no route in this deployment.
 
-let enabled = true;
-
-function send(level: 'INFO' | 'WARN' | 'ERROR', message: string, extra?: string) {
-  if (!enabled) return;
-  try {
-    fetch(`${API_BASE}/logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ level, message, extra })
-    }).catch(() => {});
-  } catch {
-    // logging must never crash the app
-  }
-}
+let installed = false;
 
 export const clientLogger = {
   info(message: string) {
@@ -31,13 +19,8 @@ export const clientLogger = {
       extra = String(err);
     }
     console.error(`[CLIENT ERROR] ${message}${extra ? '\n' + extra : ''}`);
-    send('ERROR', message, extra);
-  },
-  disable() { enabled = false; },
-  enable() { enabled = true; }
+  }
 };
-
-let installed = false;
 
 export function installGlobalHandlers() {
   if (installed || typeof window === 'undefined') return;

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "EduSphère \u2014 center-only frontend and Cloudflare Pages API",
+  "description": "EduSphère \u2014 public landing (product info, pricing, ads, demo requests) and Cloudflare Pages API",
   "author": "Taher Ayadi",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -19,22 +19,17 @@
     "test:node": "vitest run --config vitest.config.node.ts"
   },
   "dependencies": {
-    "@fontsource/cairo": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
-    "bcryptjs": "^3.0.3",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "pdfjs-dist": "^4.10.38",
-    "pubnub": "^13.0.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260816.1",
-    "@fontsource/cairo": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@testing-library/jest-dom": "^7.0.1",
