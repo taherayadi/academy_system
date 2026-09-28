@@ -104,7 +104,13 @@ export function getGouterStatusFor(
   if (total === 0) total = 30;
 
   const payments = (st.payments || []).filter(p => p.service === 'Goûter' && p.month === `${month} (${schoolYear})`);
-  const paidAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+  // Feature 008 (FR-007/FR-009): refund-shaped records — the refund writers
+  // emit month-labelled records with negative amountPaid — must not drag the
+  // settled sum below the required threshold. Net them out of what was paid
+  // (a refund deducts from what was settled; it is not money never paid), so
+  // a settled month with a refund record still reads paid and 'advance'
+  // semantics are preserved. Discounts unchanged.
+  const paidAmount = payments.filter(p => !p.refund).reduce((sum, p) => sum + p.amountPaid, 0);
   const discount = payments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
   const effectiveRequired = Math.max(0, total - discount);
   return {

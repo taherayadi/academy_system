@@ -672,18 +672,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // --- Metric cards ---
   // Card: Total revenue for the school year (NOT affected by the month filter).
   // Repas contributes only its CENTER share (margin), not the traiteur part.
-  const repasBenefitYear = (() => {
-    if (!settings) return 0;
-    let totalPlates = 0;
-    const yearStudents = students.filter(st => schoolYearFilter === 'all' || (st.academicYear || getCurrentAcademicYear()) === schoolYearFilter);
-    for (const s of yearStudents) {
-      totalPlates += (s.mealAttendances || []).filter(a => a.paid).length;
-    }
-    const f = getFeesForYear(settings, getCurrentAcademicYear());
-    return totalPlates * (f.fraisParRepas - f.prixPlatTraiteur) + calcForfaitAcquis({ monthFilter: 'all', schoolYear: schoolYearFilter });
-  })();
+  // Feature 008 (FR-002): the annual total excludes BOTH restaurant services —
+  // Repas AND Goûter — each having its own dedicated section (the client's
+  // «doublon» argument). The former repasBenefitYear term (plates × margin +
+  // forfait) is deleted. Pending cheques keep deriving from the same list.
   const yearNonRepasPayments = allPaymentsMerged.filter(p =>
-    (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter) && p.service !== 'Repas'
+    (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter) && p.service !== 'Repas' && p.service !== 'Goûter'
   );
   const yearPendingChequeTotal = yearNonRepasPayments
     .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
@@ -694,7 +688,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const yearTotalRevenue = yearNonRepasPayments.reduce((sum, p) => {
     const rec = p as any;
     return sum + (rec.centerShare ?? p.amountPaid);
-  }, 0) + repasBenefitYear - yearPendingChequeTotal;
+  }, 0) - yearPendingChequeTotal;
 
   // Annual inscription/subscription payments. Selected only by school year — never by month:
   // the total stays the same whatever the month filter.
@@ -741,8 +735,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       }, 0);
     return gross - pending;
   })();
-  // Card: Repas revenue for the selected period — only the CENTER share (margin).
-  const repasRevenueFiltered = filteredRestoCenterBenefit;
+  // Feature 008 (FR-001): the «إيرادات المطعم» card is removed — restaurant
+  // revenue is followed exclusively in the dedicated Repas/Goûter section.
+  // (filteredRestoCenterBenefit remains: the period net figure consumes it.)
   // Card: Formation revenue for the selected period.
   const formationRevenueFiltered = filteredPayments
     .filter(p => p.service === 'Formation')
@@ -970,14 +965,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <p className="text-2xl font-black text-brand-700 font-mono">{fmt(revenueSansRepas)} د.ت</p>
           <span className="text-[10px] text-brand-600 font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
         </div>
-
-        {canteenEnabled && !hideRestrictedModules && (
-          <div className="bg-brand-600/[0.06] p-5 rounded-3xl border border-brand-600/20 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-brand-700 block">إيرادات المطعم</span>
-            <p className="text-2xl font-black text-brand-600 font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-brand-700/80 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
-          </div>
-        )}
 
         {formationsEnabled && !hideRestrictedModules && (
           <div className="bg-brand-600/5 p-5 rounded-3xl border border-brand-600/20 shadow-lg shadow-slate-900/5 space-y-1">
@@ -2439,11 +2426,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     : 'كل الوجبات مدفوعة'}
                 </div>
               </div>
+              {!isInHouseKitchen && (
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
                 <div className="font-mono text-lg font-black text-red-900">{traiteurCost > 0 ? `${fmt(traiteurCost)} د.ت` : '0.000 د.ت'}</div>
                 <div className="text-[9px] text-red-600 mt-1">{traiteurCost > 0 ? `${totalPlatesConsumed} وجبة` : (isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : 'لا توجد مصاريف traiteur')}</div>
               </div>
+              )}
+              {!isInHouseKitchen && (
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">ربح السنتر من الوجبات</div>
                 <div className="font-mono text-lg font-black text-brand-800">{fmt(centerBenefit)} د.ت</div>
@@ -2452,6 +2442,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   {totalForfaitUnused > 0 && ` + فرفي ${fmt(totalForfaitUnused)} د.ت`}
                 </div>
               </div>
+              )}
             </div>
             )}
 
@@ -2521,6 +2512,33 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     )}
                   </div>
                 )}
+                {/* Feature 008 (FR-006): per-student forfait detail. Before
+                    closure it lists the live estimate of every student holding
+                    a balance; after closure it shows the persisted snapshot
+                    items — the frozen source of truth. */}
+                <div className="w-full bg-white/80 rounded-xl border border-amber-200/80 p-3">
+                  <div className="text-[10px] font-bold text-amber-700 mb-2">تفصيل الفرفي حسب التلميذ</div>
+                  {(() => {
+                    const forfaitRows = activeClosure
+                      ? (activeClosure.items ?? []).map(i => ({ name: i.studentName, amount: i.amount }))
+                      : restoStudents
+                          .filter(s => s.forfaitEstimate > 0)
+                          .map(s => ({ name: s.name, amount: s.forfaitEstimate }));
+                    if (forfaitRows.length === 0) {
+                      return <div className="text-[10px] text-slate-500 font-bold">لا يوجد تلميذ برصيد فرفي غير مُستهلك في هذا الشهر.</div>;
+                    }
+                    return (
+                      <ul className="flex flex-col gap-1">
+                        {forfaitRows.map((row, idx) => (
+                          <li key={activeClosure ? `closed_${idx}` : `live_${idx}`} className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
+                            <span>{row.name}</span>
+                            <span className="font-mono text-amber-800">{fmt(row.amount)} د.ت</span>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
             )}

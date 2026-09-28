@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup, fireEvent } from '@testing-library/react';
 import FinanceModule from './FinanceModule';
-import { Student, CenterSettings, initialStudentFeeSet } from '../types';
+import { Student, CenterSettings, initialStudentFeeSet, getCurrentAcademicYear } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -300,5 +300,167 @@ describe('FinanceModule — US3 source-level Repas isolation (feature 007)', () 
     // lunch 2 + gouter 1 = 3 combined; Repas cell shows 2, Goûter cell shows 1.
     expect(repasSept).toContain('2');
     expect(gouterSept).toContain('1');
+  });
+});
+
+describe('FinanceModule — US1 general-view de-double-counting (feature 008)', () => {
+  const year = getCurrentAcademicYear();
+  const pay = (id: string, service: string, amount: number, monthLabel = `Octobre (${year})`) =>
+    student({
+      id,
+      firstName: service,
+      lastName: 'Payer',
+      enrolledServices: { ...baseServices, meals: service === 'Repas' },
+      payments: [{ id: `p_${id}`, service, month: monthLabel, amountPaid: amount }]
+    });
+
+  const suiviPayer = pay('st_suivi', 'Suivi', 100);
+  const etudePayer = pay('st_etude', 'Étude', 80);
+  const repasPayer = pay('st_repas', 'Repas', 120);
+  const gouterPayer = pay('st_gouter_p', 'Goûter', 60);
+
+  const readAnnualTotal = () => {
+    const label = screen.getByText('الإيرادات الكلية (السنة)');
+    return label.parentElement?.textContent ?? '';
+  };
+
+  it('never renders the «إيرادات المطعم» card (FR-001)', () => {
+    renderFinance('external_traiteur', [suiviPayer, repasPayer, gouterPayer]);
+    expect(screen.queryByText('إيرادات المطعم')).toBeNull();
+  });
+
+  it('excludes Repas and Goûter from the annual total (FR-002)', () => {
+    renderFinance('external_traiteur', [suiviPayer, etudePayer, repasPayer, gouterPayer]);
+    const text = readAnnualTotal();
+    // Suivi 100 + Étude 80 = 180; Repas 120 and Goûter 60 must not leak in.
+    expect(text).toContain('180');
+    expect(text).not.toContain('240');
+    expect(text).not.toContain('300');
+    expect(text).not.toContain('360');
+  });
+
+  it('keeps the annual total invariant when restaurant data mutates (FR-002)', () => {
+    renderFinance('external_traiteur', [suiviPayer, etudePayer, repasPayer, gouterPayer]);
+    const before = readAnnualTotal();
+    cleanup();
+    // Mutate the restaurant data: double the Repas payment, drop the Goûter one.
+    const bigRepas = pay('st_repas', 'Repas', 240);
+    renderFinance('external_traiteur', [suiviPayer, etudePayer, bigRepas]);
+    expect(readAnnualTotal()).toBe(before);
+  });
+
+  it('keeps the other revenue cards byte-identical (FR-003)', () => {
+    const readCardTexts = () => {
+      const grab = (label: string) =>
+        screen.getByText(label).parentElement?.textContent ?? '';
+      const texts = {
+        annualInscriptions: grab('التسجيلات السنوية (كل الفترات)'),
+        sansRepas: screen.getByText('المقبوضات بدون المطعم').parentElement?.textContent ?? '',
+        cheques: grab('مبالغ الشيكات القادمة')
+      };
+      return texts;
+    };
+    renderFinance('external_traiteur', [suiviPayer, etudePayer, repasPayer, gouterPayer]);
+    const before = readCardTexts();
+    cleanup();
+    const bigRepas = pay('st_repas', 'Repas', 240);
+    renderFinance('external_traiteur', [suiviPayer, etudePayer, bigRepas]);
+    expect(readCardTexts()).toEqual(before);
+  });
+});
+
+describe('FinanceModule — US2 kitchen mode + closure detail (feature 008)', () => {
+  const prepaidStudent = student({
+    id: 'st_prepaid',
+    firstName: 'Prepaid',
+    lastName: 'Balance',
+    enrolledServices: { ...baseServices, meals: true },
+    mealSubscription: { mode: 'subscription', monthlyPrice: 150, unitPrice: 8, prepaidMeals: 0, consumedMealsCount: 0, active: true },
+    mealAttendances: [{ date: '2026-09-14', type: 'subscription', paid: true, service: 'lunch' }],
+    payments: [{ id: 'p_prepaid', service: 'Repas', month: `Septembre (${getCurrentAcademicYear()})`, amountPaid: 150 }]
+  });
+
+  const plainStudent = student({
+    id: 'st_plain',
+    firstName: 'Plain',
+    lastName: 'Eater',
+    enrolledServices: { ...baseServices, meals: true },
+    mealSubscription: { mode: 'subscription', monthlyPrice: 150, unitPrice: 8, prepaidMeals: 0, consumedMealsCount: 0, active: true },
+    mealAttendances: [{ date: '2026-09-14', type: 'subscription', paid: true, service: 'lunch' }]
+  });
+
+  it('hides the traiteur-share and meal-benefit cards in in-house mode (FR-004)', () => {
+    renderFinance('in_house_kitchen', [prepaidStudent]);
+    expect(screen.queryByText('حصة الـ Traiteur')).toBeNull();
+    expect(screen.queryByText('ربح السنتر من الوجبات')).toBeNull();
+    // The other synthesis cards remain (mode-invariant figures).
+    expect(screen.getByText('إجمالي الاشتراكات')).toBeTruthy();
+    expect(screen.getByText('إجمالي الوجبات المستهلكة')).toBeTruthy();
+  });
+
+  it('keeps both cards in external-traiteur mode (FR-004 regression)', () => {
+    renderFinance('external_traiteur', [prepaidStudent]);
+    // The label also appears as the lunch-table column header (<th>) —
+    // assert on the synthesis card, which renders as a div.
+    expect(screen.getAllByText('حصة الـ Traiteur').some(el => el.tagName === 'DIV')).toBe(true);
+    expect(screen.getByText('ربح السنتر من الوجبات')).toBeTruthy();
+  });
+
+  it('shows the per-student forfait list before closing and after closure (FR-006)', () => {
+    const onUpdateClosures = vi.fn();
+    renderFinance('external_traiteur', [prepaidStudent, plainStudent], { onUpdateMealForfaitClosures: onUpdateClosures });
+    // Before closure: the live estimate list shows the balance holder only.
+    const forfaitCard = screen.getByText(/الفرفي المكتسب/).closest('div.bg-gradient-to-r') as HTMLElement;
+    expect(within(forfaitCard).getByText(/Prepaid Balance/)).toBeTruthy();
+    expect(within(forfaitCard).queryByText(/Plain Eater/)).toBeNull();
+    // The current month (Septembre of the academic year) is finished on/after
+    // October — closure may or may not be enabled depending on 'today'; when
+    // closable, click and verify the snapshot-driven list.
+    const closeBtn = within(forfaitCard).queryByText(/إغلاق شهر/) as HTMLButtonElement | null;
+    if (closeBtn && !closeBtn.disabled) {
+      fireEvent.click(closeBtn);
+      expect(onUpdateClosures).toHaveBeenCalled();
+      // After closure the list reflects the persisted snapshot.
+      expect(within(forfaitCard).getByText(/Prepaid Balance/)).toBeTruthy();
+    }
+  });
+
+  it('shows the explicit empty message when no student holds a balance', () => {
+    renderFinance('external_traiteur', [plainStudent]);
+    const forfaitCard = screen.getByText(/الفرفي المكتسب/).closest('div.bg-gradient-to-r') as HTMLElement;
+    expect(within(forfaitCard).getByText(/لا يوجد تلميذ/)).toBeTruthy();
+  });
+});
+
+describe('FinanceModule — Goûter status cross-surface agreement (feature 008)', () => {
+  // The same paid-month fixture as MealsModule.test.tsx's feature-008
+  // describe: frais 15 = paid 15, a day goûter attendance seeded — both
+  // surfaces must agree (FR-009) through the one shared status computation.
+  // The fee-aware settings override the zero-fee default helper (the monthly
+  // required total must come from fraisGouterMatinMensuel = 15).
+  const paidGouterStudent = student({
+    id: 'st_fin_gouter_paid008',
+    firstName: 'PaidGouter',
+    lastName: 'Month',
+    enrolledServices: { ...baseServices, gouterMatin: true },
+    payments: [
+      { id: 'p_fin_paid008', service: 'Goûter', month: `Septembre (${getCurrentAcademicYear()})`, amountPaid: 15 },
+      { id: 'r_fin_paid008', service: 'Goûter', month: `Septembre (${getCurrentAcademicYear()})`, amountPaid: -5, refund: true }
+    ],
+    mealAttendances: [{ date: '2026-09-14', type: 'subscription', paid: true, service: 'gouter_matin' }]
+  });
+
+  const gouterSettings = {
+    centerName: 'Test Center',
+    mealOperatingMode: 'external_traiteur',
+    fees: { ...initialStudentFeeSet, fraisGouterMatinMensuel: 15 }
+  } as unknown as CenterSettings;
+
+  it('FR-009: the settled Goûter month renders مسدد on the finance Goûter table', () => {
+    renderFinance('external_traiteur', [paidGouterStudent], { settings: gouterSettings });
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    const table = screen.getByTestId('finance-gouter-table');
+    expect(within(table).getByText('PaidGouter Month')).toBeTruthy();
+    expect(within(table).getByText('مسدد')).toBeTruthy();
   });
 });

@@ -440,3 +440,71 @@ describe('Meal logic (revision E — onglets Repas/Goûter)', () => {
     });
   });
 });
+
+describe('getGouterStatusFor — settled months, refunds and over-match (feature 008)', () => {
+  const baseServices = { etude: true, suivi: true, library: false, meals: false };
+  const makeStudent = (overrides: Record<string, unknown>) =>
+    ({ id: 'st_x', firstName: 'A', lastName: 'B', grade: 'G', enrolledServices: { ...baseServices }, ...overrides }) as unknown as Student;
+  const fees = { fraisGouterMatinMensuel: 15 } as unknown as import('./types').CenterFeeSet;
+
+  it('reads a settled Goûter month (non-refund payments covering the effective total) as paid', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [{ id: 'p1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: 15 }]
+    });
+    expect(logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees).status).toBe('paid');
+  });
+
+  it('keeps a settled month paid when a refund-shaped record nets out (the anomaly repro)', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [
+        { id: 'p1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: 15 },
+        { id: 'r1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: -5, refund: true }
+      ]
+    });
+    expect(logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees).status).toBe('paid');
+  });
+
+  it('never over-matches: a Repas payment in the same month leaves the Goûter month unpaid', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [{ id: 'p1', service: 'Repas', month: 'Octobre (2025/2026)', amountPaid: 15 }]
+    });
+    expect(logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees).status).toBe('unpaid');
+  });
+
+  it('never over-matches: a Goûter payment for another month leaves this month unpaid', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [{ id: 'p1', service: 'Goûter', month: 'Novembre (2025/2026)', amountPaid: 15 }]
+    });
+    expect(logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees).status).toBe('unpaid');
+  });
+
+  it('keeps the advance semantics for a partially covered month', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [{ id: 'p1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: 8 }]
+    });
+    const status = logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees);
+    expect(status.status).toBe('advance');
+    expect(status.remaining).toBe(7);
+  });
+
+  it('keeps discount handling unchanged: a discounted settled month reads paid', async () => {
+    const logic = await import('./utils/mealLogic');
+    const st = makeStudent({
+      enrolledServices: { ...baseServices, gouterMatin: true },
+      payments: [{ id: 'p1', service: 'Goûter', month: 'Octobre (2025/2026)', amountPaid: 12, discount: 3 }]
+    });
+    const status = logic.getGouterStatusFor(st, 'Octobre', '2025/2026', fees);
+    expect(status.effectiveRequired).toBe(12);
+    expect(status.status).toBe('paid');
+  });
+});

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import MealsModule from './MealsModule';
-import { Student, CenterSettings } from '../types';
+import { Student, CenterSettings, initialStudentFeeSet } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -356,5 +356,72 @@ describe('MealsModule — revision E (onglets Repas/Goûter)', () => {
     expect(screen.getByText(/شبكة مدفوعات المطعم/)).toBeTruthy();
     fireEvent.click(screen.getByTestId('service-tab-gouter'));
     expect(screen.getByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeTruthy();
+  });
+});
+
+describe('MealsModule — Goûter paid-status cross-surface agreement (feature 008)', () => {
+  const feesSettings = {
+    centerName: 'Test Center',
+    fees: { ...initialStudentFeeSet, fraisGouterMatinMensuel: 15 }
+  } as unknown as CenterSettings;
+
+  // One shared paid-month fixture: a settled Goûter month (frais 15 = paid 15)
+  // plus a refund-shaped record (the anomaly's repro) and day goûter
+  // attendances — both surfaces must agree through the shared computation.
+  const paidGouterStudent = student({
+    id: 'st_gouter_paid008',
+    firstName: 'PaidGouter',
+    enrolledServices: { ...baseServices, gouterMatin: true },
+    payments: [
+      { id: 'p_paid008', service: 'Goûter', month: 'Septembre (2026/2027)', amountPaid: 15 },
+      { id: 'r_paid008', service: 'Goûter', month: 'Septembre (2026/2027)', amountPaid: -5, refund: true }
+    ],
+    mealAttendances: [
+      { date: '2026-09-14', type: 'subscription', paid: true, service: 'gouter_matin' },
+      { date: '2026-09-15', type: 'unit', paid: false, service: 'gouter_matin' }
+    ]
+  });
+
+  it('FR-009: a settled Goûter month with a refund record shows the paid mark on the monthly grid', () => {
+    render(
+      <MealsModule
+        students={[paidGouterStudent]}
+        mealPlans={[]}
+        onUpdateStudents={vi.fn()}
+        onUpdateMealPlans={vi.fn()}
+        settings={feesSettings}
+      />
+    );
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.getByText(/جدول المشتركين في خدمة اللمجة - Goûter/)).toBeTruthy();
+    expect(screen.getByText(/Payé \(15 د.ت\)/)).toBeTruthy();
+  });
+
+  it('FR-009: the daily-grid mark path treats the paid month as subscription (hasPaid true)', async () => {
+    const logic = await import('../utils/mealLogic');
+    // Sanity pin on the shared computation the day grid consumes.
+    expect(logic.getGouterStatusFor(paidGouterStudent, 'Septembre', '2026/2027', feesSettings.fees).status).toBe('paid');
+    // The student must hold an attendance dated today to appear in the day grid.
+    const today = new Date().toISOString().split('T')[0];
+    const gridStudent = { ...paidGouterStudent, mealAttendances: [...(paidGouterStudent.mealAttendances || []), { date: today, type: 'unit' as const, paid: false, service: 'lunch' as const }] };
+    const onUpdate = vi.fn();
+    render(
+      <MealsModule
+        students={[gridStudent]}
+        mealPlans={[]}
+        onUpdateStudents={onUpdate}
+        onUpdateMealPlans={vi.fn()}
+        settings={feesSettings}
+      />
+    );
+    // Day grid: mark the goûter for today — the paid month must write a
+    // subscription-type, paid=true attendance (hasPaidGouter true).
+    fireEvent.click(screen.getByRole('button', { name: '+ لمجة صباح' }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    const updated = onUpdate.mock.calls[0][0].find((s: Student) => s.id === paidGouterStudent.id) as Student;
+    const row = (updated.mealAttendances || []).find(a => a.date === today && a.service === 'gouter_matin');
+    expect(row).toBeTruthy();
+    expect(row!.type).toBe('subscription');
+    expect(row!.paid).toBe(true);
   });
 });

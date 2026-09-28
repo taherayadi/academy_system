@@ -447,6 +447,22 @@ describe('US2 — legacy regression safety (C2/C3/C4)', { timeout: 30000 }, () =
     expect(screen.queryByText(/تفاصيل استهلاك اللمجة في شهر/)).toBeNull();
   });
 
+  it('C1 — the Repas onglet respects the kitchen mode through the App shell (feature 008)', async () => {
+    // C1 is crèche; the finance general view must not render the restaurant
+    // card, and the Repas onglet (traiteur mode in this config) keeps its
+    // traiteur cards (FR-001/FR-004 composed pins).
+    const { center, user } = makeProgram({ ...CRECHE_COMPOSED_CONFIG, enabledModules: [...CRECHE_COMPOSED_CONFIG.enabledModules!, 'cantine'] });
+    await loginAs(center, user);
+    await clickTab('المنظومة المالية', 'إدارة المطعم');
+    // General view: the restaurant revenue card is gone (FR-001).
+    expect(screen.queryByText('إيرادات المطعم')).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: /إدارة المطعم/ })[0]);
+    // Repas onglet (external traiteur): both cards render — the label also
+    // appears as the lunch-table <th>, so assert on the div variant.
+    expect(screen.getAllByText('حصة الـ Traiteur').some(el => el.tagName === 'DIV')).toBe(true);
+    expect(screen.getByText('ربح السنتر من الوجبات')).toBeTruthy();
+  });
+
   it('C2 — the legacy empty module list keeps the FULL staff module (no locks)', async () => {
     const { center, user } = makeProgram(LEGACY_PASSTHROUGH_CONFIG);
     await loginAs(center, user);
