@@ -373,4 +373,70 @@ describe('Meal logic (revision E — onglets Repas/Goûter)', () => {
       expect(logic.gouterServicesForStudent(makeStudent({}))).toEqual([]);
     });
   });
+
+  describe('isLunchAttendance — the shared lunch predicate (feature 007)', () => {
+    it('classifies lunch rows (with or without an explicit service) as lunch', async () => {
+      const logic = await import('./utils/mealLogic');
+      expect(logic.isLunchAttendance({ date: '2026-09-01', type: 'subscription', paid: true, service: 'lunch' } as never)).toBe(true);
+      expect(logic.isLunchAttendance({ date: '2026-09-01', type: 'unit', paid: false } as never)).toBe(true);
+    });
+
+    it('classifies goûter rows as non-lunch', async () => {
+      const logic = await import('./utils/mealLogic');
+      expect(logic.isLunchAttendance({ date: '2026-09-01', type: 'subscription', paid: true, service: 'gouter_matin' } as never)).toBe(false);
+      expect(logic.isLunchAttendance({ date: '2026-09-01', type: 'unit', paid: false, service: 'gouter_apres_midi' } as never)).toBe(false);
+    });
+  });
+
+  describe('computeGouterMonthDetail — the Goûter day drilldown (feature 007)', () => {
+    it('groups the month\'s gouter attendances by date ascending with full row context', async () => {
+      const logic = await import('./utils/mealLogic');
+      const both = makeStudent({
+        firstName: 'Sami',
+        lastName: 'BenAli',
+        grade: 'GS2',
+        enrolledServices: { ...baseServices, gouterMatin: true, gouterSoir: true, gouterBoth: true },
+        mealAttendances: [
+          { date: '2026-10-06', type: 'subscription', paid: true, service: 'gouter_apres_midi' },
+          { date: '2026-10-02', type: 'unit', paid: false, service: 'gouter_matin' },
+          { date: '2026-10-06', type: 'unit', paid: false, service: 'gouter_matin' }
+        ]
+      });
+      const detail = logic.computeGouterMonthDetail([both], 'Octobre', '2026/2027');
+      expect(detail.map(d => d.date)).toEqual(['2026-10-02', '2026-10-06']);
+      expect(detail[1].rows).toHaveLength(2);
+      const matinRow = detail[1].rows.find(r => r.service === 'gouter_matin')!;
+      expect(matinRow.studentName).toBe('Sami BenAli');
+      expect(matinRow.grade).toBe('GS2');
+      expect(matinRow.type).toBe('unit');
+      expect(matinRow.paid).toBe(false);
+      const soirRow = detail[1].rows.find(r => r.service === 'gouter_apres_midi')!;
+      expect(soirRow.type).toBe('subscription');
+      expect(soirRow.paid).toBe(true);
+    });
+
+    it('never includes lunch rows — filtering happens at the source', async () => {
+      const logic = await import('./utils/mealLogic');
+      const st = makeStudent({
+        enrolledServices: { ...baseServices, meals: true, gouterSoir: true },
+        mealAttendances: [
+          { date: '2026-10-06', type: 'subscription', paid: true, service: 'lunch' },
+          { date: '2026-10-06', type: 'unit', paid: false, service: 'gouter_apres_midi' }
+        ]
+      });
+      const detail = logic.computeGouterMonthDetail([st], 'Octobre', '2026/2027');
+      expect(detail).toHaveLength(1);
+      expect(detail[0].rows).toHaveLength(1);
+      expect(detail[0].rows[0].service).toBe('gouter_apres_midi');
+    });
+
+    it('returns an empty array for a consumption-free month', async () => {
+      const logic = await import('./utils/mealLogic');
+      const st = makeStudent({
+        enrolledServices: { ...baseServices, gouterSoir: true },
+        mealAttendances: [{ date: '2026-09-14', type: 'unit', paid: false, service: 'gouter_apres_midi' }]
+      });
+      expect(logic.computeGouterMonthDetail([st], 'Février', '2026/2027')).toEqual([]);
+    });
+  });
 });

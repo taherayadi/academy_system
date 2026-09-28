@@ -197,12 +197,70 @@ export function computeGouterMonthly(students: Student[], schoolYear: string): G
     for (const st of students) {
       for (const a of st.mealAttendances || []) {
         if (!a.date.startsWith(prefix)) continue;
-        if ((a.service || 'lunch') === 'gouter_matin') matin += 1;
+        if (isLunchAttendance(a)) continue;
+        if (a.service === 'gouter_matin') matin += 1;
         else if (a.service === 'gouter_apres_midi') soir += 1;
       }
     }
     return { month, matin, soir, total: matin + soir };
   });
+}
+
+// — Feature 007 (US3): the single lunch predicate every Repas-side
+// aggregation filters through — attendances without an explicit service are
+// legacy lunch rows. —
+export function isLunchAttendance(a: MealAttendance): boolean {
+  return !a.service || a.service === 'lunch';
+}
+
+// — Feature 007 (US2): the Goûter month detail behind the monthly grid's
+// day drilldown — the gouter attendances of one academic month, grouped by
+// date ascending. Lunch rows are excluded at the source (never rendered).
+// Pure and presentational-free (FR-015): the component maps service
+// discriminators to labels. —
+export interface GouterMonthDetailRow {
+  date: string;
+  studentName: string;
+  grade: string;
+  service: MealServiceType;
+  type: 'subscription' | 'unit';
+  paid: boolean;
+}
+
+export interface GouterMonthDayGroup {
+  date: string;
+  rows: GouterMonthDetailRow[];
+}
+
+export function computeGouterMonthDetail(
+  students: Student[],
+  month: AcademicMonth,
+  schoolYear: string
+): GouterMonthDayGroup[] {
+  const prefix = academicMonthPrefix(month, schoolYear);
+  const byDate = new Map<string, GouterMonthDetailRow[]>();
+  for (const st of students) {
+    for (const a of st.mealAttendances || []) {
+      if (!a.date.startsWith(prefix)) continue;
+      if (isLunchAttendance(a)) continue;
+      const service = a.service;
+      if (service !== 'gouter_matin' && service !== 'gouter_apres_midi') continue;
+      const row: GouterMonthDetailRow = {
+        date: a.date,
+        studentName: `${st.firstName} ${st.lastName}`,
+        grade: st.grade,
+        service,
+        type: a.type,
+        paid: !!a.paid
+      };
+      const rows = byDate.get(a.date);
+      if (rows) rows.push(row);
+      else byDate.set(a.date, [row]);
+    }
+  }
+  return Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, rows]) => ({ date, rows }));
 }
 
 // — Remark 3 (E5): the goûter services a student is subscribed to, in the

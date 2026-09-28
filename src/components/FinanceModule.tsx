@@ -22,7 +22,7 @@ import {
   Eye
 } from 'lucide-react';
 import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
-import { academicMonthPrefix } from '../utils/mealLogic';
+import { academicMonthPrefix, isLunchAttendance } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
@@ -2245,8 +2245,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           // Revision E (remarks 3.0.x/3.1): the Repas aggregation counts lunch
           // attendances only — goûter rows are aggregated separately (the
           // mirrored Goûter cards), never mixed into the Repas numbers.
-          const lunchAttendances = attendances.filter(a => !a.service || a.service === 'lunch');
-          const gouterAttendances = attendances.filter(a => a.service === 'gouter_matin' || a.service === 'gouter_apres_midi');
+          const lunchAttendances = attendances.filter(isLunchAttendance);
+          const gouterAttendances = attendances.filter(a => !isLunchAttendance(a));
           const subscriptionMeals = lunchAttendances.filter(a => a.type === 'subscription');
           const unitMeals = lunchAttendances.filter(a => a.type === 'unit');
           const subPayments = (s.payments || []).filter(p => {
@@ -2455,7 +2455,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
             )}
 
-            {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure */}
+            {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure.
+                Feature 007 (FR-001): Repas-only — hidden on the Goûter onglet. */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-gradient-to-r from-amber-50 via-amber-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-2">
                 <span className="text-xl">🔒</span>
@@ -2521,9 +2523,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 )}
               </div>
             </div>
+            )}
 
             {/* Pricing Info — Revision D (remark F1): traiteur-share indicators
-                are external-traiteur artifacts; hidden in in-house kitchen mode. */}
+                are external-traiteur artifacts; hidden in in-house kitchen mode.
+                Feature 007 (FR-002): Repas-only — hidden on the Goûter onglet. */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-wrap items-center gap-6 text-xs font-bold">
               <span className="text-slate-500">سعر الوجبة:</span>
               <span className="font-mono text-brand-700">{fmt(prixPlat)} د.ت</span>
@@ -2541,48 +2546,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-brand-700">👨‍🍳 مطبخ داخلي — بدون وسيط</span>
               )}
             </div>
+            )}
 
-            {/* Goûter Summary in Tab 6 (Goûter panel) */}
-            {financeServiceTab === 'gouter' && (() => {
-              // Attendance dates are ISO (YYYY-MM-DD); monthFilter is a French month name,
-              // so it must be resolved to a calendar prefix before comparing.
-              const gouterPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
-              const countGouter = (service: MealServiceType) => filteredStudents.reduce(
-                (sum, s) => sum + (s.mealAttendances || []).filter(a => {
-                  if (gouterPrefix && !a.date.startsWith(gouterPrefix)) return false;
-                  return a.service === service;
-                }).length, 0);
-              const gouterPaymentsTotal = filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0);
-              const gouterMatinCount = countGouter('gouter_matin');
-              const gouterSoirCount = countGouter('gouter_apres_midi');
-              const gouterSubscribersCount = filteredStudents.filter(s => s.enrolledServices?.gouterMatin || s.enrolledServices?.gouterSoir || s.enrolledServices?.gouterBoth).length;
-
-              return (
-                <div className="bg-gradient-to-r from-brand-600/5 via-red-50 to-white p-4 rounded-2xl border border-brand-600/20 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🍪</span>
-                    <div>
-                      <h4 className="font-extrabold text-brand-800">مداخيل واستهلاك خدمة اللمجة (Goûter)</h4>
-                      <p className="text-[11px] text-brand-700 font-medium">مجموع التلاميذ المشتركين في اللمجة: <strong>{gouterSubscribersCount}</strong> تلميذ</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-brand-600/20 text-center">
-                      <span className="text-[10px] text-brand-600 block font-bold">مداخيل اللمجة</span>
-                      <span className="font-mono font-black text-brand-800 text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
-                    </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-brand-600/20 text-center">
-                      <span className="text-[10px] text-brand-600 block font-bold">لمجة الصباح 🥐</span>
-                      <span className="font-mono font-black text-brand-800 text-sm">{gouterMatinCount}</span>
-                    </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-brand-600/20 text-center">
-                      <span className="text-[10px] text-brand-600 block font-bold">لمجة المساء 🍪</span>
-                      <span className="font-mono font-black text-brand-800 text-sm">{gouterSoirCount}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Feature 007 (FR-003): the old «مداخيل واستهلاك خدمة اللمجة»
+                summary strip is removed — its figures were Goûter-tab-only,
+                duplicated the mirrored cards' totals, and group C forbids
+                relocating goûter data to the Repas tab (research R1). */}
 
             {/* Students Table (Repas panel) */}
             {financeServiceTab === 'repas' && (
@@ -2687,8 +2656,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <div className="p-5">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {ACADEMIC_MONTHS.map(month => {
+                    // Feature 007 (FR-011): lunch-only at the aggregation source —
+                    // goûter rows on the same days must not inflate the Repas cells.
                     const prefix = academicMonthPrefix(month, schoolYearFilter);
-                    const count = filteredStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix)).length, 0);
+                    const count = filteredStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix) && isLunchAttendance(a)).length, 0);
                     return (
                       <button
                         key={month}
@@ -2710,7 +2681,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   filteredStudents.forEach(st => {
                     const enrolled = st.mealSubscription?.active === true || st.enrolledServices?.meals === true;
                     (st.mealAttendances || []).forEach(a => {
-                      if (a.date.startsWith(prefix)) {
+                      // Feature 007 (FR-011/FR-012): lunch-only at the row-
+                      // collection source — no goûter record can reach a
+                      // Repas day panel regardless of display state.
+                      if (a.date.startsWith(prefix) && isLunchAttendance(a)) {
                         rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, service: a.service || 'lunch', paid: !!a.paid, isEnrolled: enrolled });
                       }
                     });

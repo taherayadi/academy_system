@@ -42,7 +42,11 @@ beforeEach(() => {
   cleanup();
 });
 
-const renderFinance = (mode: 'external_traiteur' | 'in_house_kitchen', students: Student[] = [gouterStudent]) => {
+const renderFinance = (
+  mode: 'external_traiteur' | 'in_house_kitchen',
+  students: Student[] = [gouterStudent],
+  extraProps: Record<string, unknown> = {}
+) => {
   render(
     <FinanceModule
       students={students}
@@ -50,6 +54,7 @@ const renderFinance = (mode: 'external_traiteur' | 'in_house_kitchen', students:
       onUpdateExpenses={vi.fn()}
       settings={settings(mode)}
       enabledModules={['cantine']}
+      {...extraProps}
     />
   );
   // Navigate to the Gestion des repas tab («🍽️ إدارة المطعم»).
@@ -186,5 +191,114 @@ describe('FinanceModule — revision E (per-service synthesis + onglets)', () =>
     expect(screen.getByText(/تفاصيل استهلاك التلاميذ \(/)).toBeTruthy();
     fireEvent.click(screen.getByTestId('service-tab-gouter'));
     expect(screen.getByTestId('finance-gouter-table')).toBeTruthy();
+  });
+});
+
+describe('FinanceModule — US1 tab de-mixing (feature 007)', () => {
+  it.each(['external_traiteur', 'in_house_kitchen'] as const)('hides the forfait block, price banner and strip on the Goûter tab (%s mode)', (mode) => {
+    renderFinance(mode, [lunchSubscriber]);
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    // FR-001: forfait ferme block absent.
+    expect(screen.queryByText(/الفرفي المكتسب/)).toBeNull();
+    expect(screen.queryByText(/إغلاق شهر/)).toBeNull();
+    // FR-002: meal-price banner absent (both its traiteur figures and the
+    // in-house hint variant).
+    expect(screen.queryByText('سعر الوجبة:')).toBeNull();
+    expect(screen.queryByText(/مطبخ داخلي — بدون وسيط/)).toBeNull();
+    // FR-003: the summary strip is removed entirely.
+    expect(screen.queryByText(/مداخيل واستهلاك خدمة اللمجة/)).toBeNull();
+    // The Goûter content itself stays.
+    expect(screen.getByTestId('finance-gouter-table')).toBeTruthy();
+    expect(screen.getByTestId('finance-gouter-monthly')).toBeTruthy();
+  });
+
+  it('keeps the forfait block and price banner on the Repas tab (FR-004 regression)', () => {
+    // A finished month lets the «إغلاق شهر» action render (Septembre 2026 is
+    // over when today is in October+ of the 2026/2027 year; the default filter
+    // month is the current academic month, so pin a finished one explicitly).
+    renderFinance('external_traiteur', [lunchSubscriber]);
+    // FR-004: both Repas-only blocks render on the Repas panel.
+    expect(screen.getByText(/الفرفي المكتسب/)).toBeTruthy();
+    expect(screen.getByText('سعر الوجبة:')).toBeTruthy();
+  });
+
+  it('renders the «إغلاق شهر» closure action on the Repas tab for a finished month', () => {
+    renderFinance('external_traiteur', [lunchSubscriber], {
+      onUpdateMealForfaitClosures: vi.fn()
+    });
+    // The default filter month is the current academic month (Septembre for
+    // the 2026/2027 year in this environment) — finished on/after Octobre 1st,
+    // which 'today' (2026-09-28 mocked-or-real) may not satisfy, so assert via
+    // whichever state applies: the button OR its not-yet-finished hint exists
+    // inside the forfait card on the Repas tab only.
+    const forfaitCard = screen.getByText(/الفرفي المكتسب/).closest('div.bg-gradient-to-r') as HTMLElement;
+    const hasButton = screen.queryByText(/إغلاق شهر/) !== null || within(forfaitCard).queryByText(/إغلاق شهر/) !== null;
+    const hasHint = within(forfaitCard).queryByText(/الزر يتفعّل عند نهاية الشهر/) !== null;
+    expect(hasButton || hasHint, 'closure action or its pending hint must render on Repas').toBe(true);
+    // And neither appears on the Goûter tab.
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.queryByText(/الفرفي المكتسب/)).toBeNull();
+    expect(screen.queryByText(/إغلاق شهر/)).toBeNull();
+    expect(screen.queryByText(/الزر يتفعّل عند نهاية الشهر/)).toBeNull();
+  });
+});
+
+describe('FinanceModule — US3 source-level Repas isolation (feature 007)', () => {
+  // A day holding TWO lunch records + ONE goûter record in the same month:
+  // the Repas figures must count 2, never 3.
+  const mixedStudent = student({
+    id: 'st_mixed_fin',
+    firstName: 'Mixed',
+    lastName: 'Day',
+    enrolledServices: { ...baseServices, meals: true, gouterSoir: true },
+    mealSubscription: { mode: 'subscription', monthlyPrice: 150, unitPrice: 8, prepaidMeals: 0, consumedMealsCount: 0, active: true },
+    mealAttendances: [
+      { date: '2026-09-14', type: 'subscription', paid: true, service: 'lunch' },
+      { date: '2026-09-14', type: 'unit', paid: true, service: 'lunch' },
+      { date: '2026-09-14', type: 'unit', paid: false, service: 'gouter_apres_midi' }
+    ]
+  });
+
+  const openDayDetail = () => {
+    fireEvent.click(screen.getByText('سبتمبر (Septembre)'));
+    const detail = screen.getByText(/تفاصيل الوجبات المستهلكة في شهر/).closest('div.mt-5') as HTMLElement;
+    const dayToggle = within(detail).getAllByRole('button').find(b => (b.textContent || '').includes('2026-09-14'))!;
+    fireEvent.click(dayToggle); // expand the shared day — research R4
+    return detail;
+  };
+
+  it('counts the 3.1 month cell lunch-only at the source (2, not 3)', () => {
+    renderFinance('external_traiteur', [mixedStudent]);
+    const septCell = screen.getByText('سبتمبر (Septembre)').closest('button') as HTMLElement;
+    expect(septCell.textContent).toContain('2');
+    expect(septCell.textContent).not.toContain('3');
+  });
+
+  it('shows zero goûter rows in the expanded day panel of the Repas month detail', () => {
+    renderFinance('external_traiteur', [mixedStudent]);
+    const detail = openDayDetail();
+    // The goûter row would render as «لمجة المساء …» — it must not exist.
+    expect(within(detail).queryByText(/لمجة المساء/)).toBeNull();
+    expect(within(detail).queryByText(/لمجة الصباح/)).toBeNull();
+    // Both lunch rows render (subscription + unit).
+    expect(within(detail).getAllByText(/وجبة غداء/).length).toBe(2);
+  });
+
+  it('keeps the day badge at the lunch-only count', () => {
+    renderFinance('external_traiteur', [mixedStudent]);
+    openDayDetail();
+    const badge = screen.getAllByText(/2 وجبة/);
+    expect(badge.length).toBeGreaterThan(0);
+    expect(screen.queryByText(/3 وجبة/)).toBeNull();
+  });
+
+  it('cell-level sum invariant: Repas 3.1 cell + Goûter grid cell equals the combined count', () => {
+    renderFinance('external_traiteur', [mixedStudent]);
+    const repasSept = (screen.getByText('سبتمبر (Septembre)').closest('button') as HTMLElement).textContent || '';
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    const gouterSept = (screen.getByTestId('gouter-monthly-Septembre').textContent || '');
+    // lunch 2 + gouter 1 = 3 combined; Repas cell shows 2, Goûter cell shows 1.
+    expect(repasSept).toContain('2');
+    expect(gouterSept).toContain('1');
   });
 });

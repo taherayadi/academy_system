@@ -425,6 +425,28 @@ describe('US2 — legacy regression safety (C2/C3/C4)', { timeout: 30000 }, () =
     expect(screen.queryByText(/تفاصيل استهلاك التلاميذ \(/)).toBeNull();
   });
 
+  it('C1 — the finance Goûter onglet de-mixing composes through the App shell (feature 007)', async () => {
+    const { center, user } = makeProgram({ ...CRECHE_COMPOSED_CONFIG, enabledModules: [...CRECHE_COMPOSED_CONFIG.enabledModules!, 'cantine'] });
+    await loginAs(center, user);
+    await clickTab('المنظومة المالية', 'إدارة المطعم');
+    fireEvent.click(screen.getAllByRole('button', { name: /إدارة المطعم/ })[0]);
+
+    // Repas tab: the forfait block and the price banner remain (FR-004).
+    expect(screen.getByText(/الفرفي المكتسب/)).toBeTruthy();
+    expect(screen.getByText('سعر الوجبة:')).toBeTruthy();
+
+    // Goûter tab: both Repas-only blocks are gone (FR-001/002) and the
+    // monthly grid is interactive (FR-005/006) — a month click opens the
+    // day-grouped detail.
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+    expect(screen.queryByText(/الفرفي المكتسب/)).toBeNull();
+    expect(screen.queryByText('سعر الوجبة:')).toBeNull();
+    fireEvent.click(screen.getByTestId('gouter-monthly-Septembre'));
+    expect(screen.getByText(/تفاصيل استهلاك اللمجة في شهر/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'إغلاق' }));
+    expect(screen.queryByText(/تفاصيل استهلاك اللمجة في شهر/)).toBeNull();
+  });
+
   it('C2 — the legacy empty module list keeps the FULL staff module (no locks)', async () => {
     const { center, user } = makeProgram(LEGACY_PASSTHROUGH_CONFIG);
     await loginAs(center, user);
