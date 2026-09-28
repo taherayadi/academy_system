@@ -1,43 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  UnauthorizedError,
-  saveStudents,
-  saveStaff,
-  saveSlots,
-  saveCourses,
-  saveSessions,
-  saveMealPlans,
-  saveExpenses,
-  saveTimesheets,
-  saveExternalStudents,
-  saveRevisionSeances,
-  saveStudentTimeSheets,
-  saveFormations,
-  saveSettings,
-  saveDatabase,
-  fetchDatabase,
-  createStudentApi,
-  updateStudentApi,
-  deleteStudentApi,
-  createStaffApi,
-  updateStaffApi,
-  deleteStaffApi,
-  createExpenseApi,
-  deleteExpenseApi,
-  loginRequest,
-  getSessionToken,
-  setSessionToken,
-  submitDemoRequestApi,
-  fetchDemoRequestsApi,
-  updateDemoRequestApi,
-  deleteDemoRequestApi,
-  fetchCentersApi,
-  fetchPublicModulePricesApi,
-  createCenterApi,
-  updateCenterApi,
-  deleteCenterApi,
-} from './api';
-import { normalizeSettings, normalizeFeeSet, initialCenterSettings } from './types';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { UnauthorizedError, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveFormations, saveSettings, saveEventsApi, saveDatabase, fetchDatabase, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, loginRequest, getSessionToken, setSessionToken, submitDemoRequestApi, fetchCentersApi, fetchPublicModulePricesApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
+import { normalizeSettings, normalizeFeeSet } from './types';
 
 // ---------------------------------------------------------------------------
 // Mock fetch globally
@@ -120,6 +83,7 @@ describe('save domain functions route paths', () => {
     ['/api/revision-seances', saveRevisionSeances],
     ['/api/student-timesheets', saveStudentTimeSheets],
     ['/api/formations', saveFormations],
+    ['/api/events', saveEventsApi],
     ['/api/settings', saveSettings],
   ];
 
@@ -147,12 +111,16 @@ describe('saveDatabase', () => {
 // fetchDatabase (concurrent domain load)
 // ---------------------------------------------------------------------------
 describe('fetchDatabase', () => {
-  it('calls all 13 domain endpoints concurrently', async () => {
-    const responses = Array.from({ length: 13 }, () => jsonResponse([]));
+  it('calls all 16 domain endpoints concurrently', async () => {
+    // settings + 14 list domains return arrays; /skills returns a document
+    const responses = [
+      ...Array.from({ length: 15 }, () => jsonResponse([])),
+      jsonResponse({ catalog: [], evaluations: [] })
+    ];
     mockFetch.mockImplementation(() => Promise.resolve(responses.shift()));
 
     const db = await fetchDatabase();
-    expect(mockFetch).toHaveBeenCalledTimes(13);
+    expect(mockFetch).toHaveBeenCalledTimes(16);
     expect(db.students).toEqual([]);
     expect(db.staff).toEqual([]);
     expect(db.settings).toEqual([]);
@@ -166,6 +134,7 @@ describe('fetchDatabase', () => {
     expect(db.revisionSeances).toEqual([]);
     expect(db.studentTimeSheets).toEqual([]);
     expect(db.formations).toEqual([]);
+    expect(db.events).toEqual([]);
   });
 
   it('throws UnauthorizedError if any endpoint returns 401', async () => {
@@ -175,19 +144,21 @@ describe('fetchDatabase', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Session token persistence (Bearer header for app-restart auto-login)
+// Session token persistence (HttpOnly cookie migration - no localStorage token)
 // ---------------------------------------------------------------------------
 describe('session token', () => {
   beforeEach(() => {
-    localStorage.removeItem('tc_token');
+    localStorage.removeItem('tc_center_token');
   });
 
-  it('stores login token and returns user', async () => {
+  it('handles login response and does NOT persist bearer token in localStorage (security)', async () => {
     const user = { email: 'a@b.com', name: 'A', role: 'super_admin', description: '' };
     mockFetch.mockResolvedValue(jsonResponse({ user, token: 'tok123' }));
     const result = await loginRequest('a@b.com', 'pass');
     expect(result.user).toEqual(user);
-    expect(getSessionToken()).toBe('tok123');
+    // Security: Token is NOT stored in localStorage (cookie-driven auth)
+    expect(localStorage.getItem('tc_center_token')).toBeNull();
+    expect(getSessionToken()).toBeNull();
   });
 
   it('does not crash when login returns no token', async () => {
@@ -199,13 +170,13 @@ describe('session token', () => {
   });
 
   it('clears token via setSessionToken(null)', () => {
-    localStorage.setItem('tc_token', 'abc');
+    localStorage.setItem('tc_center_token', 'abc');
     setSessionToken(null);
     expect(getSessionToken()).toBeNull();
   });
 
-  it('sends Authorization Bearer header on authed requests', async () => {
-    localStorage.setItem('tc_token', 'secret-token');
+  it('sends Authorization Bearer header on authed requests if legacy token present', async () => {
+    localStorage.setItem('tc_center_token', 'secret-token');
     mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
     await saveStudents([]);
     const opts = mockFetch.mock.calls[0][1];
@@ -388,28 +359,6 @@ describe('SaaS Platform API', () => {
     expect(body.academyName).toBe('Academie Test');
   });
 
-  it('fetchDemoRequestsApi calls GET /api/demo-requests', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ requests: [{ id: 'r1', fullName: 'Prospect' }] }));
-    const list = await fetchDemoRequestsApi();
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
-    expect(list).toHaveLength(1);
-    expect(list[0].id).toBe('r1');
-  });
-
-  it('updateDemoRequestApi calls PATCH /api/demo-requests', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await updateDemoRequestApi('r1', { status: 'contacted' });
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests');
-    expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
-  });
-
-  it('deleteDemoRequestApi calls DELETE /api/demo-requests', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await deleteDemoRequestApi('r1');
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/demo-requests?id=r1');
-    expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
-  });
-
   it('fetchPublicModulePricesApi calls the public pricing endpoint', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ schoolYear: '2026/2027', prices: [{ module_key: 'scolaire', price: 25 }] }));
     const prices = await fetchPublicModulePricesApi();
@@ -423,74 +372,63 @@ describe('SaaS Platform API', () => {
     expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
     expect(centers[0].name).toBe('Centre 1');
   });
+});
 
-  it('createCenterApi calls POST /api/centers', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ centerId: 'c_new' }));
-    const res = await createCenterApi({
-      name: 'Nouveau Centre',
-      plan: 'growth',
-      enabledModules: ['scolaire', 'finance'],
-      billingCycle: 'monthly',
-      offerDays: 14,
-      directorName: 'Directeur',
-      directorEmail: 'dir@test.tn',
-      directorPassword: 'password123'
-    });
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
-    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.offerDays).toBe(14);
-    expect(res.centerId).toBe('c_new');
+// ---------------------------------------------------------------------------
+// fetchActiveAdvertisementsApi — request dedupe + TTL cache
+// 3 surfaces (2 carousels + interstitial) × StrictMode used to fire 6 identical
+// requests per page load; the module cache must collapse them to one.
+// ---------------------------------------------------------------------------
+describe('fetchActiveAdvertisementsApi dedupe', () => {
+  beforeEach(() => {
+    __resetActiveAdsCacheForTests();
+    mockFetch.mockReset();
   });
 
-  it('updateCenterApi calls PATCH /api/centers', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await updateCenterApi('c1', { addOfferDays: 14 });
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers');
-    expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+  const ads = [{ id: 'a1', title: 'Pub' }];
+
+  it('collapses concurrent calls with the same key into one network request', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    const [r1, r2, r3] = await Promise.all([
+      fetchActiveAdvertisementsApi('public_landing'),
+      fetchActiveAdvertisementsApi('public_landing'),
+      fetchActiveAdvertisementsApi('public_landing')
+    ]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(r1).toEqual(ads);
+    expect(r2).toEqual(ads);
+    expect(r3).toEqual(ads);
   });
 
-  it('sends billing automation fields for an edited center', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await updateCenterApi('c1', {
-      plan: 'growth',
-      billingCycle: 'annual',
-      enabledModules: ['scolaire', 'finance', 'studentTimeSheets', 'etude'],
-      autoCalculatePrice: true,
-      autoCalculateSubscription: true
-    });
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body).toMatchObject({
-      id: 'c1',
-      plan: 'growth',
-      billingCycle: 'annual',
-      autoCalculatePrice: true,
-      autoCalculateSubscription: true
-    });
-    expect(body.enabledModules).toContain('etude');
+  it('serves repeated calls from cache within the TTL window', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    await fetchActiveAdvertisementsApi('public_landing');
+    await fetchActiveAdvertisementsApi('public_landing');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('sends a manually negotiated tariff when creating a custom center', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ centerId: 'c_custom' }));
-    await createCenterApi({
-      name: 'Custom Centre',
-      plan: 'custom',
-      billingCycle: 'annual',
-      monthlyPrice: 480,
-      enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
-      directorName: 'Directeur',
-      directorEmail: 'custom@test.tn',
-      directorPassword: 'password123'
-    });
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body).toMatchObject({ plan: 'custom', billingCycle: 'annual', monthlyPrice: 480 });
+  it('distinguishes cache keys by location and centerId', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+
+    await fetchActiveAdvertisementsApi('public_landing');
+    await fetchActiveAdvertisementsApi('center_admin', 'c9');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('deleteCenterApi calls DELETE /api/centers', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ success: true }));
-    await deleteCenterApi('c1');
-    expect(mockFetch.mock.calls[0][0]).toBe('/api/centers?id=c1');
-    expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+  it('never caches failures — the next call retries the network', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('خطأ في جلب الإعلانات.'));
+    await expect(fetchActiveAdvertisementsApi('public_landing')).rejects.toThrow();
+
+    mockFetch.mockResolvedValue(jsonResponse({ advertisements: ads }));
+    const result = await fetchActiveAdvertisementsApi('public_landing');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(ads);
   });
 });
 

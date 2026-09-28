@@ -6,7 +6,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const staff = await readStaff(context.env.DB, centerId);
     return json(staff);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر قراءة بيانات الإطار التربوي.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر قراءة بيانات الإطار التربوي.' }, 500);
   }
 };
 
@@ -20,7 +21,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await createSingleStaff(context.env.DB, staffMember, centerId);
     return json({ ok: true, staff: staffMember });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر إضافة عضو الإطار.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر إضافة عضو الإطار.' }, 500);
   }
 };
 
@@ -38,7 +40,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
     return json({ error: 'بيانات عضو الإطار غير صالحة.' }, 400);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر تعديل بيانات عضو الإطار.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر تعديل بيانات عضو الإطار.' }, 500);
   }
 };
 
@@ -57,6 +60,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     await deleteSingleStaff(context.env.DB, id, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حذف عضو الإطار.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حذف عضو الإطار.' }, 500);
   }
 };

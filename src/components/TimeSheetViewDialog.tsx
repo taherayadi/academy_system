@@ -30,8 +30,8 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
         {/* Header */}
         <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#257C86]/20 rounded-xl">
-              <Clock className="h-5 w-5 text-[#3A93A0]" />
+            <div className="p-2 bg-brand-600/20 rounded-xl">
+              <Clock className="h-5 w-5 text-brand-500" />
             </div>
             <div>
               <h3 className="text-sm font-black">{timeSheet.establishmentName} — {timeSheet.schoolYear}</h3>
@@ -44,7 +44,7 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
           </div>
           <div className="flex items-center gap-2">
             {studentName && (
-              <span className="px-3 py-1 bg-[#257C86]/20 text-[#3A93A0] rounded-lg text-[11px] font-bold">
+              <span className="px-3 py-1 bg-brand-600/20 text-brand-500 rounded-lg text-[11px] font-bold">
                 {studentName}
               </span>
             )}
@@ -69,7 +69,7 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
                 {TIMESHEET_DAYS.map(day => (
                   <th
                     key={day}
-                    className="p-3 bg-[#257C86] text-white text-xs font-black text-center"
+                    className="p-3 bg-brand-600 text-white text-xs font-black text-center"
                   >
                     {day}
                   </th>
@@ -91,9 +91,9 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
                       {/* Time slot label */}
                       <td className="p-3 border border-slate-200 text-right">
                         <div className="flex items-center gap-1.5">
-                          <Clock className="h-3 w-3 text-[#257C86] shrink-0" />
+                          <Clock className="h-3 w-3 text-brand-600 shrink-0" />
                           <div>
-                            <p className="text-[11px] font-black text-[#14464E]">{slotLabel}</p>
+                            <p className="text-[11px] font-black text-brand-800">{slotLabel}</p>
                           </div>
                         </div>
                       </td>
@@ -104,8 +104,8 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
                         return (
                           <td key={day} className="p-2 border border-slate-200 text-center">
                             {match ? (
-                              <div className="mx-auto w-full h-full min-h-[36px] flex items-center justify-center bg-[#257C86]/10 border border-[#257C86]/30 rounded-lg">
-                                <span className="text-[#257C86] text-lg">✓</span>
+                              <div className="mx-auto w-full h-full min-h-[36px] flex items-center justify-center bg-brand-600/10 border border-brand-600/30 rounded-lg">
+                                <span className="text-brand-600 text-lg">✓</span>
                               </div>
                             ) : (
                               <div className="mx-auto w-full h-full min-h-[36px] flex items-center justify-center">
@@ -125,8 +125,8 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
           {/* Legend */}
           <div className="mt-4 flex items-center gap-4 text-[10px] font-bold text-slate-500">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 bg-[#257C86]/10 border border-[#257C86]/30 rounded flex items-center justify-center">
-                <span className="text-[#257C86] text-[8px]">✓</span>
+              <div className="w-3 h-3 bg-brand-600/10 border border-brand-600/30 rounded flex items-center justify-center">
+                <span className="text-brand-600 text-[8px]">✓</span>
               </div>
               <span>حصة مجدولة</span>
             </div>

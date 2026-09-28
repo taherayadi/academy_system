@@ -1,183 +1,70 @@
-# System Academy
+# System Academy — Center & Landing
 
-A full-stack, web-based management application for student tutoring centers, built for the Tunisian education system.
+This repository contains **only the public landing page and the center application**.
 
-## Overview
+- Landing: product information, public pricing, advertisements and demo/trial request submission.
+- Center workspace: students, academic tracking, attendance, courses, meals, staff, transport, finance, settings and backups.
+- Center subscription: view the current subscription and submit/view its own renewal requests.
 
-System Academy is a Cloudflare Pages application backed by a Cloudflare D1 (SQLite) database. It manages every aspect of a student tutoring center — student enrollment, grade tracking, meal planning, staff payroll, course scheduling, and AI-powered data analysis.
+The SaaS administration console and its management APIs live in
+[`taherayadi/academy_system_admin`](https://github.com/taherayadi/academy_system_admin).
+There is no platform dashboard, platform navigation, center-account reset, pricing editor,
+invoice administration, advertisement editor or renewal approval endpoint here.
 
-## Key Features
+## Architecture
 
-### Student Management
-- Full student profiles: name, birth date, grade, parent information (mother & father), siblings, authorized persons, allergies, academic history
-- Electronic signatures for registration confirmation
-- AI-powered PDF import from scanned registration forms (Google Gemini)
-- Service enrollment: Suivi, Étude, Library, and Meals per student
+React 19 + Vite + Cloudflare Pages Functions, bound to the existing shared D1 database
+`academy-system-v2` as `DB`. The two applications are separate deployments, not a runtime mode switch.
+Browser requests use relative `/api` URLs and never call the admin backend directly.
 
-### Étude Module
-- Weekly time-slot scheduling (Monday–Saturday)
-- Teacher assignment per slot
-- Student enrollment per slot with attendance tracking
-- Extra-hours detection outside the teacher's regular schedule
-
-### Academic Tracking (Suivi Scolaire)
-- Track grades per trimester per subject
-- Tunisian curriculum: Arabic, French, Math, Physics, SVT, English, IT, Philosophy, History-Geography, Economics
-- Devoir 1, Devoir 2, and Synthèse grades
-- Average calculations and at-risk student identification
-
-### External Courses & Revision Sessions
-- External teacher management (subject, grade level, monthly fee)
-- Per-session attendance and payment tracking
-- Teacher share vs. center share revenue split
-- Global student register shared across all courses
-
-### Meals Module
-- Weekly meal plan editor (Monday–Friday)
-- Subscription or unit payment modes
-- Daily attendance tracking and dish popularity analysis
-
-### Finance
-- Student payment ledger with receipt generation
-- Service-based income breakdown (Suivi, Étude, Library, Meals, Courses, Revision, Assurance, Inscription)
-- Expense tracking by category
-- Cheque payment management with cashing status
-- Monthly financial summaries
-
-### Staff Management
-- Employee profiles, contract type, CNSS number, salary, subjects
-- Weekly schedule, monthly timesheets, leave & advance workflows
-- Payslip generation with CNSS deductions, bonus, extra hours
-
-### Data Analysis (AI-Powered)
-- Center performance per school year, trimester, month
-- Per-service income breakdown with visual bars
-- AI-generated insights (Google Gemini)
-
-### Settings & Administration
-- Configurable fee structure per academic year
-- Center information (name, phone, city)
-- Gemini API key configuration
-- JSON backup export/import
-- Multi-user authentication (Super Admin / Restricted Admin)
-
-## Tech Stack
-
-| Layer | Technology |
+| Boundary | This application |
 |---|---|
-| **Hosting** | Cloudflare Pages |
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS 4 |
-| **UI** | Lucide React icons, Motion animations |
-| **Database** | Cloudflare D1 (SQLite) |
-| **AI** | Google Gemini API |
-| **API** | Cloudflare Pages Functions |
-| **Testing** | Vitest |
+| Roles | `admin`, `super_admin`, `restricted_admin` (all center roles) |
+| Session table | `center_sessions` |
+| Host-only cookie | `tc_center_session` |
+| Client storage | `tc_center_user`, `tc_center_token` |
+| Current center | Determined from authenticated user/session, never a query parameter |
+| Realtime subscription | Exact read-only `center.{id}` channel |
 
-## Project Structure
+`platform_super_admin` cannot log in here. Unknown API routes return 404; removed methods
+(e.g. PATCH/DELETE `/api/centers`) return 405. Legacy `tc_session`/`sessions` credentials
+are intentionally not accepted after the split. Users must log in again.
 
-```
-system_academy/
-├── functions/            # Cloudflare Pages Functions (API + D1 access)
-│   └── api/              # Route handlers + _lib.ts data layer
-├── migrations/           # D1 SQL migrations (0001_init.sql = full schema)
-├── src/
-│   ├── components/       # Feature modules (Dashboard, Finance, Staff, etc.)
-│   ├── utils/            # AI helpers, logging, formatting
-│   ├── App.tsx           # Root state management
-│   ├── api.ts            # API client
-│   └── types.ts          # TypeScript interfaces & helpers
-└── wrangler.toml         # Cloudflare config (Pages + D1 binding)
-```
+## Development
 
-## Running Locally
+Node **22.13+** (Node 22 recommended; SQLite integration tests use `node:sqlite`).
 
-### Prerequisites
-- Node.js (suggested 18+ LTS)
-- A Cloudflare account with D1 + Pages
-
-### Install
-```bash
-npm install
-```
-
-### Development
-```bash
-npm run dev
-```
-
-### Pages Functions dev (local)
-```bash
-npm run pages:dev
-```
-
-### Database migrations
-```bash
-npm run d1:migrate:local    # apply to local D1
-npm run d1:migrate          # apply to remote D1
-```
-
-### Tests
-```bash
+```sh
+npm ci
+npm run dev          # frontend, port 3000, /api proxy → 8788
+npm run pages:dev    # separate terminal, Pages Functions on 8788
+npm run lint
 npm test
+npm run build
 ```
 
-## Realtime live sync (PubNub) & polling fallback
+For local Pages development build first (`npm run build`). Add server secrets to ignored
+`.dev.vars`; client configuration belongs in ignored `.env`. See `.env.example`.
+Optional: `IMAGEKIT_PRIVATE_KEY`, `PUBNUB_PUBLISH_KEY`, `PUBNUB_SUBSCRIBE_KEY`,
+`PUBNUB_SECRET_KEY`; client PubNub subscribe key is `VITE_PUBNUB_SUBSCRIBE_KEY`.
+No private key belongs in a `VITE_` variable.
 
-Subscription events (renewal accepted/refused, plan changes, center edits, new
-renewal requests) reach the center app and the platform dashboard in ~2 seconds
-through **PubNub pub/sub** instead of waiting for the polling cycle. Messages
-are **"refetch" signals only**: on receipt every client re-runs the same
-fetch/snapshot/toast handlers it already had — pushed payloads are never
-trusted.
+## Database migrations and deployment
 
-### Architecture
+**The admin repository is the sole owner of all shared database migrations**, including
+historical migrations 0001–0034 and the new `0035_separate_application_sessions.sql`.
+Migrations were moved, not applied or used to delete live data. Do not reset the database
+or replay historical migrations against an existing deployment.
 
-| Piece | Role |
-|---|---|
-| `functions/api/_pubnub.ts` | Server-side helper: `publish()` (REST, plain `fetch`) and `grantToken()` (PAM v3 token signed with the secret key via Web Crypto HMAC-SHA256). Silent no-op (console.warn, never throws) when keys are missing. |
-| `GET /api/pubnub-grant` | Returns a short-TTL token scoped to the caller: a center gets **read on `center.{ownId}` only**, a platform admin **read on `platform`**. Answers `{ enabled: false }` when the key set is absent. |
-| `src/realtime/pubnubClient.ts` | Browser client: fetches the grant, subscribes (one shared PubNub connection per tab), refreshes the token halfway through its TTL, and exposes an `active`/`fallback` state. |
-| `src/hooks/usePubNubSync.ts` | React hook: invokes the existing handler on each signal. While its state is `active` the consumer pauses polling. |
-| `src/hooks/useLiveSync.ts` | **Polling fallback — unchanged.** Automatically resumed whenever PubNub is not `active`. |
+Follow [DEPLOYMENT_SPLIT.md](DEPLOYMENT_SPLIT.md) to deploy the two applications together.
+`wrangler.toml` retains the existing center Pages project and D1 binding. No changes have
+been made to production services by editing this repository.
 
-Publish points (fire-and-forget via `context.waitUntil`, can never fail the
-request): `POST /api/renewal-requests` → `platform`; `PATCH
-/api/renewal-requests` (approved AND rejected, both the direct and the
-skipApply/modal path) → `center.{id}` + `platform`; `POST /api/center-plans`
-(every action that mutates the center: set-plan, add-trial, remove-plan, …) →
-`center.{id}` + `platform`; `POST`/`PATCH /api/centers` → `center.{id}` +
-`platform`.
+## Security scope
 
-### How the fallback works
-
-- **Keys present, PubNub healthy** — messages trigger refetches (~2 s end-to-end),
-  polling is paused (zero polling traffic).
-- **Keys missing / grant refused / PubNub disconnects** — the hook flips to
-  `fallback` and the existing `useLiveSync` polling (30 s cadence, 5 s while a
-  request is pending) takes over transparently. Without keys the app behaves
-  exactly as before this feature, with zero console errors.
-
-### Where to get keys & where to set them
-
-1. Create a free account at [admin.pubnub.com](https://admin.pubnub.com/) and
-   copy the key set's **Publish / Subscribe / Secret** keys.
-2. **Server** — Cloudflare Dashboard → **Workers & Pages → (the Pages project)
-   → Settings → Environment variables** → add `PUBNUB_PUBLISH_KEY`,
-   `PUBNUB_SUBSCRIBE_KEY`, `PUBNUB_SECRET_KEY` — **set them for both
-   Production and Preview**. Read only via the `env` bindings in
-   `functions/api/_lib.ts` (`Env` interface). **Never** put the values in
-   `wrangler.toml [vars]` (that file is committed). For local dev use a
-   gitignored `.dev.vars` file (see `.dev.vars.example`) with
-   `wrangler pages dev`.
-3. **Client** — same Dashboard path: add `VITE_PUBNUB_PUBLISH_KEY` and
-   `VITE_PUBNUB_SUBSCRIBE_KEY` (Production + Preview). Vite bakes them in at
-   build time and the code reads them only via `import.meta.env`. For local
-   dev use a gitignored `.env` file (see `.env.example`).
-
-> ⚠️ Never commit real keys anywhere in the repo — not in code, not in tests
-> (tests use fake `test-key` fixtures), not in docs. If a key ever leaks into
-> git history, rotate it in the PubNub dashboard.
-
-## License
-
-Private — internal use.
+Role/session/deployment separation is enforced on the backend, not only in navigation.
+Tests cover the fixed route inventory, foreign roles, cross-origin mutations, and real
+SQLite session-table isolation. The shared D1 binding is **not** database-level privilege
+isolation: both services are trusted database clients. Existing unrelated security-review
+findings (e.g. legacy bulk-write behavior) still require follow-up; this migration is not
+a certification that all historical vulnerabilities are fixed.

@@ -1,93 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  LayoutDashboard,
-  GraduationCap,
-  BookOpen,
-  Clock,
-  BookMarked,
-  Utensils,
-  DollarSign,
-  Users,
-  Bus,
-  Menu,
-  X,
-  Sparkles,
-  Settings as SettingsIcon,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  BookOpenCheck,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-  Award,
-  CalendarCheck,
-  ShieldCheck,
-  Building2,
-  Inbox,
-  Tags,
-  ImagePlus
-} from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { 
-  Student, 
-  StaffMember, 
-  EtudeSlot,
-  ExternalCourse, 
-  ExternalCourseSession, 
-  MealPlanDay, 
-  CenterExpense, 
-  TimesheetEntry,
-  CenterSettings,
-  ExternalStudentRegister,
-  RevisionSeance,
-  UserAccount,
-  StudentTimeSheet,
-  StudentAttendanceRecord,
-  Formation,
-  CenterTenant,
-  MealForfaitClosure,
-  initialCenterSettings,
-  initialStudentFeeSet,
-  APP_SUBJECTS,
-  getCurrentAcademicYear,
-  normalizeSettings,
-  normalizePaymentService
-} from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, initialCenterSettings, normalizeSettings } from './types';
 
-import { 
-  fetchDatabase, 
-  saveDatabase, 
-  saveStudents, 
-  saveStaff, 
-  saveSlots, 
-  saveCourses, 
-  saveSessions, 
-  saveMealPlans, 
-  saveExpenses, 
-  saveTimesheets, 
-  saveExternalStudents, 
-  saveRevisionSeances, 
-  saveStudentTimeSheets,
-  saveStudentAttendanceApi,
-  fetchStudentAttendanceApi,
-  saveFormations,
-  saveMealForfaitClosures,
-  fetchMealForfaitClosures,
-  saveSettings,
-  createStudentApi,
-  updateStudentApi,
-  deleteStudentApi,
-  createStaffApi,
-  updateStaffApi,
-  deleteStaffApi,
-  createExpenseApi,
-  deleteExpenseApi,
-  fetchCentersApi,
-  fetchRenewalRequestsApi,
-  UnauthorizedError 
-} from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -101,6 +18,9 @@ import EtudeModule from './components/EtudeModule';
 import ExternalCoursesModule from './components/ExternalCoursesModule';
 import SeanceRevisionModule from './components/SeanceRevisionModule';
 import FormationModule from './components/FormationModule';
+import EventsModule from './components/EventsModule';
+import ActivitiesModule from './components/ActivitiesModule';
+import CompetencesModule from './components/CompetencesModule';
 import LibraryModule from './components/LibraryModule';
 import MealsModule from './components/MealsModule';
 import FinanceModule from './components/FinanceModule';
@@ -111,19 +31,18 @@ import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
 import AdvertisementCarousel from './components/AdvertisementCarousel';
 import AdvertisementInterstitial from './components/AdvertisementInterstitial';
-import PlatformAdminDashboard from './components/PlatformAdminDashboard';
 import ConfirmDialog from './components/ConfirmDialog';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { useToast } from './components/Toast';
 import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAST_INTERVAL_MS } from './hooks/useLiveSync';
 import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
+import { hasStudyModules } from './utils/centerType';
 
 
-// Map sidebar tabs to SaaS module keys. A center admin only sees the tabs whose
-// module is enabled for their center (centers.enabled_modules, chosen by the
-// platform admin when creating the center or editing its modules).
-const TAB_MODULE: Record<string, string> = {
+// Map sidebar tabs to subscription modules enabled for the current center.
+// Exported for the 006 catalog-coherence cross-check (no phantom module keys).
+export const TAB_MODULE: Record<string, string> = {
   module1: 'scolaire',            // تسجيل التلاميذ
   module2: 'scolaire',            // المتابعة الدراسية
   studentTimeSheets: 'studentTimeSheets', // جداول التوقيت (Jd. Horaires)
@@ -131,11 +50,15 @@ const TAB_MODULE: Record<string, string> = {
   module4: 'coursParticuliers',   // الدروس الخصوصية
   module4b: 'revision',           // حصة مراجعة
   formations: 'formations',       // التكوينات والدورات
+  events: 'events',               // الفعاليات والخرجات
   module5: 'bibliotheque',        // المكتبة
   module6: 'cantine',             // إدارة الوجبات
   moduleBus: 'transport',         // خطة الحافلة
   module7: 'finance',             // المنظومة المالية
-  module8: 'staff'                // إدارة الموظفين
+  module8: 'staff',               // إدارة الموظفين
+  moduleActivities: 'activites', // الأنشطة والبرنامج
+  activites: 'activites',         // الأنشطة والبرنامج
+  competences: 'competences'      // المهارات والكفاءات
 };
 
 // Bibliothèque désactivée pour l'instant : masquée du menu centre.
@@ -163,7 +86,6 @@ export default function App() {
   const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
   const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
-  const isPlatformSuperAdmin = currentUser?.role === 'platform_super_admin';
 
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -175,11 +97,15 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: UserAccount, center?: CenterTenant | null) => {
+    if (!['admin', 'super_admin', 'restricted_admin'].includes(user.role)) {
+      clearSessionUser();
+      toast.error('هذا التطبيق مخصص لإدارة المركز فقط.');
+      return;
+    }
     setCurrentUser(user);
     if (center) setCurrentCenter(center);
     saveSessionUser(user);
-    // Platform super admin lands on the platform admin dashboard, center admins land on the center dashboard.
-    setActiveTab(user.role === 'platform_super_admin' ? 'platformAdmin' : 'dashboard');
+    setActiveTab('dashboard');
     setReloadKey(prev => prev + 1);
     toast.success(`مرحباً ${user.name}`);
   };
@@ -208,7 +134,7 @@ export default function App() {
     setCenterSyncFast(false);
   }, [currentUser?.email]);
   const syncCenterSubscription = useCallback(async () => {
-    if (!currentUser || isPlatformSuperAdmin) return;
+    if (!currentUser) return;
     try {
       const [centers, renewal] = await Promise.all([fetchCentersApi(), fetchRenewalRequestsApi()]);
       const fresh = (centers || [])[0] ?? null;
@@ -235,65 +161,78 @@ export default function App() {
       }
       // Network/D1 hiccup: stay silent, the next tick retries.
     }
-  }, [currentUser, isPlatformSuperAdmin, currentCenter]);
+  }, [currentUser, currentCenter]);
 
   // PubNub realtime — while it is `active` the polling below pauses, so a
   // decision lands in ~2 s with zero polling traffic; any PubNub failure
   // (missing keys, grant refused, disconnect) flips the state back and
   // polling resumes exactly as before.
   const centerRealtime = usePubNubSync(
-    !!currentUser && !isPlatformSuperAdmin,
+    !!currentUser,
     syncCenterSubscription,
     currentUser?.email
   );
   useLiveSync(
-    !!currentUser && !isPlatformSuperAdmin && centerRealtime !== 'active',
+    !!currentUser && centerRealtime !== 'active',
     syncCenterSubscription,
     centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
 
   const hideRestrictedModules = currentUser?.role === 'restricted_admin';
 
-  // ── SaaS module gating ──
+  // ── Center subscription gating ──
   // Only the modules enabled for the connected center are visible/accessible.
-  // Without center data (legacy default center, platform super admin) → all.
+  // Empty module lists retain the legacy center subscription behavior.
   const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
   const hasCenterModule = (tabId: string): boolean => {
     const moduleKey = TAB_MODULE[tabId];
     if (!moduleKey) return true; // dashboard / settings — always available
-    if (isPlatformSuperAdmin || centerModuleKeys.length === 0) return true;
+    if (centerModuleKeys.length === 0) return true;
+    // Staff-lite: étude-only centers keep the staff tab (roster only, payroll locked).
+    if (tabId === 'module8') return centerModuleKeys.includes('staff') || centerModuleKeys.includes('etude');
     return centerModuleKeys.includes(moduleKey);
   };
 
+  // Type gating: the four study tabs exist only for school-bearing centers.
+  // Unknown/empty type keeps legacy visibility (research R5).
+  const hasStudy = hasStudyModules(currentCenter?.centerType);
+
+  // Staff-lite (US5): a center subscribed to Étude but not to the Staff module
+  // still gets staff roster management, with all payroll surfaces locked.
+  // Legacy empty module lists keep the tab fully available (existing behavior).
+  const staffLite = centerModuleKeys.length > 0 && !centerModuleKeys.includes('staff');
+  const hasStaffOrEtude = centerModuleKeys.length === 0
+    || centerModuleKeys.includes('staff')
+    || centerModuleKeys.includes('etude');
+
+  // New Growth/Pro modules (US6/US7): gated on the center's enabled module list.
+  const hasActivitiesModule = hasCenterModule('activites');
+  const hasSkillsModule = hasCenterModule('competences');
+
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
-  const menuLogoSrc = isPlatformSuperAdmin || !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
+  const menuLogoSrc = !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
 
   useEffect(() => {
-    if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6')) {
+    if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6' || activeTab === 'module8')) {
       setActiveTab('module1');
     }
   }, [hideRestrictedModules, activeTab]);
 
   // If the active tab belongs to a module not enabled for this center (e.g. the
-  // platform admin changed the modules after login), fall back to the dashboard
-  // so a disabled module can never be opened.
+  // subscription modules changed after login), or to a study module hidden by
+  // the center type, fall back to the dashboard so a restricted module can
+  // never be opened — including via stale deep links.
   useEffect(() => {
-    if (currentUser && !isPlatformSuperAdmin && !hasCenterModule(activeTab)) {
+    if (currentUser && !hasCenterModule(activeTab)) {
       setActiveTab('dashboard');
     }
-  }, [currentUser, isPlatformSuperAdmin, currentCenter, activeTab]);
-
-  // Keep active tab in sync with user role
-  useEffect(() => {
-    if (isPlatformSuperAdmin && !activeTab.startsWith('platform')) {
-      setActiveTab('platformAdmin');
-    } else if (!isPlatformSuperAdmin && activeTab.startsWith('platform')) {
+    if (currentUser && !hasStudy && ['module3', 'module4', 'module4b', 'formations'].includes(activeTab)) {
       setActiveTab('dashboard');
     }
-  }, [isPlatformSuperAdmin, activeTab]);
+  }, [currentUser, currentCenter, activeTab, hasStudy]);
 
-  // Server-backed state (data lives in local SQLite via Express)
+  // Server-backed center state (Cloudflare D1)
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [slots, setSlots] = useState<EtudeSlot[]>([]);
@@ -308,17 +247,18 @@ export default function App() {
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceRecord[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
+  const [events, setEvents] = useState<SchoolEvent[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [skillsDoc, setSkillsDoc] = useState<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>({ catalog: [], evaluations: [] });
   // Meal "forfait ferme" closures — loaded separately from the main DB snapshot because
   // they live in their own tables and are only read by the finance module.
   const [mealForfaitClosures, setMealForfaitClosures] = useState<MealForfaitClosure[]>([]);
 
+  // Titre de l'espace de travail uniquement — la landing revendique le titre
+  // tant qu'elle est montée (française) et restaure « المركز » au démontage.
   useEffect(() => {
-    if (isPlatformSuperAdmin) {
-      document.title = 'إدارة المنصة | System Academy SaaS';
-    } else {
-      document.title = settings?.centerName || 'المركز';
-    }
-  }, [settings?.centerName, isPlatformSuperAdmin]);
+    if (currentUser) document.title = settings?.centerName || 'EduSphère';
+  }, [settings?.centerName, currentUser]);
 
   // Import confirmation state
   const [importPendingData, setImportPendingData] = useState<Record<string, unknown> | null>(null);
@@ -333,8 +273,9 @@ export default function App() {
     courses: ExternalCourse[]; sessions: ExternalCourseSession[]; mealPlans: MealPlanDay[];
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
-    studentAttendance: StudentAttendanceRecord[]; formations: Formation[];
-  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [] });
+    studentAttendance: StudentAttendanceRecord[]; formations: Formation[]; events: SchoolEvent[];
+    activities: Activity[]; skills: Skill[]; skillEvaluations: SkillEvaluation[];
+  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [], activities: [], skills: [], skillEvaluations: [] });
 
   // Serializes full-state PUTs so concurrent module updates never overwrite each other.
   const commitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -342,12 +283,6 @@ export default function App() {
   // Load full state from the local API on mount or when logged in
   useEffect(() => {
     if (!currentUser) {
-      setIsBootLoading(false);
-      return;
-    }
-
-    // Platform super admin does not manage a specific center's domain data
-    if (currentUser.role === 'platform_super_admin') {
       setIsBootLoading(false);
       return;
     }
@@ -372,7 +307,11 @@ export default function App() {
           revisionSeances: db.revisionSeances || [],
           studentTimeSheets: db.studentTimeSheets || [],
           studentAttendance: stateRef.current.studentAttendance || [],
-          formations: db.formations || []
+          formations: db.formations || [],
+          events: db.events || [],
+          activities: db.activities || [],
+          skills: db.skills || [],
+          skillEvaluations: db.skillEvaluations || []
         };
         setStudents(db.students || []);
         setStaff(db.staff || []);
@@ -386,6 +325,9 @@ export default function App() {
         setRevisionSeances(db.revisionSeances || []);
         setStudentTimeSheets(db.studentTimeSheets || []);
         setFormations(db.formations || []);
+        setEvents(db.events || []);
+        setActivities(db.activities || []);
+        setSkillsDoc({ catalog: db.skills || [], evaluations: db.skillEvaluations || [] });
         setSettings(db.settings);
       })
       .catch((err) => {
@@ -604,6 +546,21 @@ export default function App() {
     commitDomain(() => saveFormations(updated));
   };
 
+  const handleUpdateEvents = (updated: SchoolEvent[]) => {
+    setEvents(updated);
+    commitDomain(() => saveEventsApi(updated));
+  };
+
+  const handleUpdateActivities = (updated: Activity[]) => {
+    setActivities(updated);
+    commitDomain(() => saveActivities(updated));
+  };
+
+  const handleUpdateSkills = (doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }) => {
+    setSkillsDoc(doc);
+    commitDomain(() => saveSkills(doc));
+  };
+
   const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
@@ -646,6 +603,7 @@ export default function App() {
       studentTimeSheets: studentTimeSheets.length > 0 ? studentTimeSheets : (stateRef.current.studentTimeSheets || []),
       studentAttendance: studentAttendance.length > 0 ? studentAttendance : (stateRef.current.studentAttendance || []),
       formations: formations.length > 0 ? formations : (stateRef.current.formations || []),
+      events: events.length > 0 ? events : (stateRef.current.events || []),
       exportedAt: new Date().toISOString()
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
@@ -660,7 +618,8 @@ export default function App() {
   // Import database backup
   const VALID_COLLECTION_KEYS = [
     'students', 'staff', 'slots', 'courses', 'sessions', 'mealPlans',
-    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations'
+    'expenses', 'timesheets', 'externalStudents', 'revisionSeances', 'studentTimeSheets', 'studentAttendance', 'formations', 'events',
+    'activities', 'skills', 'skillEvaluations'
   ];
   const VALID_OBJECT_KEYS = ['settings'];
 
@@ -818,6 +777,22 @@ export default function App() {
       if (!validateArray(next.formations as unknown[], ['id', 'name'], 'التكوينات')) return;
       setFormations(next.formations as Formation[]);
     }
+    if (next.events !== undefined) {
+      if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
+      setEvents(next.events as SchoolEvent[]);
+    }
+    if (next.activities !== undefined) {
+      if (!validateArray(next.activities as unknown[], ['id', 'title'], 'الأنشطة')) return;
+      setActivities(next.activities as Activity[]);
+    }
+    if (next.skills !== undefined) {
+      if (!validateArray(next.skills as unknown[], ['id', 'label'], 'المهارات')) return;
+      setSkillsDoc(prev => ({ ...prev, catalog: next.skills as Skill[] }));
+    }
+    if (next.skillEvaluations !== undefined) {
+      if (!validateArray(next.skillEvaluations as unknown[], ['id', 'studentId', 'skillId'], 'تقييمات المهارات')) return;
+      setSkillsDoc(prev => ({ ...prev, evaluations: next.skillEvaluations as SkillEvaluation[] }));
+    }
 
     // Extract settings/fees from parsed payload
     const rawSettings = parsed.settings || (parsed.fees ? { fees: parsed.fees, feesByYear: parsed.feesByYear } : null) || (parsed.fraisAnnuelSuivi != null || parsed.frais_annuel_suivi != null ? parsed : null);
@@ -842,7 +817,11 @@ export default function App() {
       revisionSeances: next.revisionSeances !== undefined ? (next.revisionSeances as RevisionSeance[]) : revisionSeances,
       studentTimeSheets: next.studentTimeSheets !== undefined ? (next.studentTimeSheets as StudentTimeSheet[]) : studentTimeSheets,
       studentAttendance: next.studentAttendance !== undefined ? (next.studentAttendance as StudentAttendanceRecord[]) : (stateRef.current.studentAttendance || []),
-      formations: next.formations !== undefined ? (next.formations as Formation[]) : formations
+      formations: next.formations !== undefined ? (next.formations as Formation[]) : formations,
+      events: next.events !== undefined ? (next.events as SchoolEvent[]) : events,
+      activities: next.activities !== undefined ? (next.activities as Activity[]) : activities,
+      skills: next.skills !== undefined ? (next.skills as Skill[]) : skillsDoc.catalog,
+      skillEvaluations: next.skillEvaluations !== undefined ? (next.skillEvaluations as SkillEvaluation[]) : skillsDoc.evaluations
     };
 
     commitDomain(async () => {
@@ -866,6 +845,7 @@ export default function App() {
       setStudentTimeSheets(freshDb.studentTimeSheets || []);
       setStudentAttendance(freshAttendance);
       setFormations(freshDb.formations || []);
+      setEvents(freshDb.events || []);
       stateRef.current = { ...freshDb, studentAttendance: freshAttendance };
     });
 
@@ -881,7 +861,7 @@ export default function App() {
         <>
           <LandingPage
             onOpenLogin={() => setAuthView('login')}
-            centerName={settings?.centerName || 'Small Genious'}
+            centerName={settings?.centerName || 'EduSphère'}
           />
           <CloseConfirmDialog />
         </>
@@ -900,15 +880,15 @@ export default function App() {
     );
   }
 
-  if (isBootLoading || (!isPlatformSuperAdmin && !settings)) {
+  if (isBootLoading || (!settings)) {
     return (
       <>
         <div className="min-h-screen bg-[#FCFAF6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
           <div className="flex flex-col items-center gap-4">
-            <span className="w-16 h-16 rounded-2xl bg-[#257C86] shadow-md shadow-slate-900/10 overflow-hidden">
-              <img src={menuLogoSrc} alt={settings?.centerName || 'المركز'} className="center-logo-img w-full h-full object-cover" />
+            <span className="w-16 h-16 rounded-2xl bg-white shadow-md shadow-slate-900/10 overflow-hidden">
+              <img src={menuLogoSrc} alt={settings?.centerName || 'EduSphère'} className="center-logo-img w-full h-full object-cover" />
             </span>
-            <Loader2 className="h-6 w-6 text-[#257C86] animate-spin" />
+            <Loader2 className="h-6 w-6 text-brand-600 animate-spin" />
             <p className="text-xs font-bold text-slate-500">جارٍ تحميل البيانات...</p>
           </div>
         </div>
@@ -931,7 +911,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setReloadKey(k => k + 1)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white text-xs font-extrabold rounded-2xl transition cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-extrabold rounded-2xl transition cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />
               إعادة المحاولة
@@ -943,37 +923,29 @@ export default function App() {
     );
   }
 
-  // Platform super admin sees ONLY the SaaS platform management interface.
-  // Center admins (super_admin, admin, restricted_admin) see all center modules but NOT the platform management.
-  const menuItems = isPlatformSuperAdmin
-    ? [
-        { id: 'platformAdmin', label: 'الرئيسية · SaaS', icon: LayoutDashboard },
-        { id: 'platformCenters', label: 'المراكز والاشتراكات', icon: Building2 },
-        { id: 'platformRequests', label: 'طلبات التجربة', icon: Inbox },
-        { id: 'platformFinance', label: 'المالية (SaaS)', icon: DollarSign },
-        { id: 'platformPricing', label: 'الأسعار والوحدات', icon: Tags },
-        { id: 'platformAdvertisements', label: 'الإعلانات', icon: ImagePlus },
-        { id: 'platformRenewals', label: 'طلبات التجديد', icon: RefreshCw },
-      ]
-    : [
+  // This application contains only center navigation.
+  const menuItems = [
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-        !hideRestrictedModules && { id: 'studentTimeSheets', label: currentCenter?.centerType === 'jardin' ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
-        { id: 'module3', label: 'تأطير Étude', icon: Clock },
-        !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
-        !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
-        !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        !hideRestrictedModules && { id: 'studentTimeSheets', label: (currentCenter?.centerType === 'jardin' || currentCenter?.centerType === 'creche') ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
+        hasStudy && { id: 'module3', label: 'تأطير Étude', icon: Clock },
+        hasStudy && !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
+        hasStudy && !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
+        hasStudy && !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        { id: 'events', label: 'الفعاليات والخرجات', icon: Calendar },
+        hasActivitiesModule && { id: 'activites', label: 'الأنشطة والبرنامج', icon: PuzzleIcon },
+        hasSkillsModule && { id: 'competences', label: 'المهارات والكفاءات', icon: BrainIcon },
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
-        { id: 'module8', label: 'إدارة الموظفين', icon: Users },
+        hasStaffOrEtude && !hideRestrictedModules && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
         { id: 'renewal', label: 'التجديد', icon: RefreshCw },
       ].filter(Boolean) as { id: string; label: string; icon: any }[];
 
-  // SaaS gating: keep only the tabs allowed for this center's subscription.
+  // Subscription gating: keep only the tabs allowed for this center's subscription.
   const visibleMenuItems = menuItems.filter(item => hasCenterModule(item.id));
 
 
@@ -983,12 +955,12 @@ export default function App() {
       {/* MOBILE HEADER */}
       <header className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/70 text-slate-900 p-4 flex justify-between items-center shadow-sm no-print">
         <div className="flex items-center gap-2">
-          <span className="w-10 h-10 rounded-xl bg-[#257C86] shadow-md shadow-slate-900/10 shrink-0 overflow-hidden">
-            <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+          <span className="w-10 h-10 rounded-xl bg-white shadow-sm shadow-slate-900/10 shrink-0 overflow-hidden">
+            <img src={menuLogoSrc} alt={(settings?.centerName || 'EduSphère')} className="center-logo-img w-full h-full object-cover" />
           </span>
           <div>
-            <h1 className="font-black text-sm text-slate-900">{isPlatformSuperAdmin ? 'إدارة المنصة (SaaS)' : (settings?.centerName || 'المركز')}</h1>
-            <span className="text-[10px] text-[#257C86] font-bold block">{currentUser.email}</span>
+            <h1 className="font-black text-sm text-slate-900">{(settings?.centerName || 'EduSphère')}</h1>
+            <span className="text-[10px] text-brand-600 font-bold block">{currentUser.email}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1000,7 +972,7 @@ export default function App() {
           </button>
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 bg-[#257C86]/10 text-[#257C86] rounded-lg cursor-pointer"
+            className="p-2 bg-brand-600/10 text-brand-600 rounded-lg cursor-pointer"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -1027,8 +999,8 @@ export default function App() {
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition text-right cursor-pointer ${
                     activeTab === item.id 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/25' 
-                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25' 
+                      : 'text-slate-500 hover:bg-brand-600/10 hover:text-brand-600'
                   }`}
                 >
                   <IconComp className="h-4 w-4 shrink-0" />
@@ -1047,13 +1019,13 @@ export default function App() {
           {/* Logo Brand */}
           <div className="flex items-center justify-between gap-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
-              <span className={`rounded-2xl bg-[#257C86] shadow-lg shadow-[#257C86]/30 ring-1 ring-white/40 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
-                <img src={menuLogoSrc} alt={isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} className="center-logo-img w-full h-full object-cover" />
+              <span className={`rounded-2xl bg-white shadow-md shadow-slate-900/10 ring-1 ring-slate-900/5 shrink-0 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-8 h-8' : 'w-12 h-12'}`}>
+                <img src={menuLogoSrc} alt={(settings?.centerName || 'EduSphère')} className="center-logo-img w-full h-full object-cover" />
               </span>
               {!sidebarCollapsed && (
                 <div className="min-w-0">
-                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{isPlatformSuperAdmin ? 'إدارة المنصة' : (settings?.centerName || 'المركز')}</h1>
-                  <span className="text-[11px] text-[#257C86] font-bold block truncate">{isPlatformSuperAdmin ? 'لوحة تحكم SaaS' : 'الإدارة والتأطير'}</span>
+                  <h1 className="font-black text-base text-slate-950 leading-tight truncate">{(settings?.centerName || 'EduSphère')}</h1>
+                  <span className="text-[11px] text-brand-600 font-bold block truncate">{'الإدارة والتأطير'}</span>
                 </div>
               )}
             </div>
@@ -1061,7 +1033,7 @@ export default function App() {
               <button
                 onClick={() => setSidebarCollapsed(true)}
                 title="طيّ القائمة"
-                className="p-1.5 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/10 rounded-lg transition cursor-pointer shrink-0"
+                className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition cursor-pointer shrink-0"
               >
                 <PanelLeftClose className="h-4 w-4" />
               </button>
@@ -1072,7 +1044,7 @@ export default function App() {
             <button
               onClick={() => setSidebarCollapsed(false)}
               title="توسيع القائمة"
-              className="w-full flex items-center justify-center p-1.5 text-slate-400 hover:text-[#257C86] hover:bg-[#257C86]/10 rounded-lg transition cursor-pointer"
+              className="w-full flex items-center justify-center p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-600/10 rounded-lg transition cursor-pointer"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
@@ -1092,8 +1064,8 @@ export default function App() {
                     sidebarCollapsed ? 'justify-center px-0' : ''
                   } ${
                     active 
-                      ? 'bg-[#257C86] text-white shadow-md shadow-[#257C86]/30' 
-                      : 'text-slate-500 hover:bg-[#257C86]/10 hover:text-[#257C86]'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' 
+                      : 'text-slate-500 hover:bg-brand-600/10 hover:text-brand-600'
                   }`}
                 >
                   <IconComp className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
@@ -1113,9 +1085,9 @@ export default function App() {
 
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-[#3A93A0] shadow-sm shadow-[#3A93A0]/50 shrink-0 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-brand-500 shadow-sm shadow-brand-500/50 shrink-0 animate-pulse"></span>
               <span className="text-xs font-bold text-slate-700">
-                {isPlatformSuperAdmin ? 'Super Admin SaaS' : (currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
+                {(currentUser?.role === 'super_admin' ? 'المدير العام' : 'Administrateur')}
               </span>
             </div>
           )}
@@ -1123,7 +1095,7 @@ export default function App() {
           <button
             onClick={handleLogout}
             title="Déconnexion"
-            className={`w-full flex items-center gap-2 px-3 py-2 bg-[#257C86]/10 hover:bg-[#257C86]/20 border border-[#257C86]/20 hover:border-[#257C86]/40 text-[#257C86] hover:text-[#1d6169] text-[11px] font-extrabold transition cursor-pointer group rounded-xl ${
+            className={`w-full flex items-center gap-2 px-3 py-2 bg-brand-600/10 hover:bg-brand-600/20 border border-brand-600/20 hover:border-brand-600/40 text-brand-600 hover:text-brand-700 text-[11px] font-extrabold transition cursor-pointer group rounded-xl ${
               sidebarCollapsed ? 'justify-center px-0' : ''
             }`}
           >
@@ -1132,7 +1104,7 @@ export default function App() {
           </button>
 
           {!sidebarCollapsed && (
-            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{isPlatformSuperAdmin ? 'System Academy SaaS' : (settings?.centerName || 'المركز')} © 2026</p>
+            <p className="text-[10px] text-slate-300 text-center font-bold pt-1">{(settings?.centerName || 'EduSphère')} © 2026</p>
           )}
         </div>
       </aside>
@@ -1143,7 +1115,7 @@ export default function App() {
           {/* Alerte abonnement — affichée dans TOUS les modules du centre,
               pas seulement sur le tableau de bord, avec un raccourci vers le
               module « Renouvellement ». */}
-          {!isPlatformSuperAdmin && currentCenter && (
+          {currentCenter && (
             <div className="mb-5">
               <SubscriptionStatusCard
                 subscription={{
@@ -1159,7 +1131,7 @@ export default function App() {
           )}
 
           {/* Publicité du centre — formats responsives (rectangle + interstitiel) */}
-          {!isPlatformSuperAdmin && currentCenter && (
+          {currentCenter && (
             <>
               {/* Rectangle responsive : toute la largeur dispo (1100 px max), hauteur fluide */}
               <AdvertisementCarousel location="center_admin" centerId={currentCenter.id} format="rectangle" className="mb-5" />
@@ -1207,6 +1179,7 @@ export default function App() {
                   onDeleteStudent={handleDeleteStudent}
                   hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
+                  centerType={currentCenter?.centerType}
                   enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
                 />
               )}
@@ -1219,6 +1192,7 @@ export default function App() {
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
                   studentTimeSheets={studentTimeSheets}
+                  centerType={currentCenter?.centerType}
                 />
               )}
 
@@ -1283,6 +1257,33 @@ export default function App() {
                   sidebarCollapsed={sidebarCollapsed}
                 />
               )}
+              {activeTab === 'events' && (
+                <EventsModule
+                  events={events}
+                  onUpdateEvents={handleUpdateEvents}
+                  students={students}
+                  settings={settings}
+                  sidebarCollapsed={sidebarCollapsed}
+                />
+              )}
+              {activeTab === 'activites' && (
+                <ActivitiesModule
+                  activities={activities}
+                  onUpdateActivities={handleUpdateActivities}
+                  staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
+                />
+              )}
+              {activeTab === 'competences' && (
+                <CompetencesModule
+                  catalog={skillsDoc.catalog}
+                  evaluations={skillsDoc.evaluations}
+                  onUpdateDoc={handleUpdateSkills}
+                  students={students}
+                  currentUserRole={currentUser?.role}
+                  staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
+                  canUseRoster={currentUser?.role !== 'restricted_admin'}
+                />
+              )}
 
               {LIBRARY_ENABLED && activeTab === 'module5' && (
                 <LibraryModule 
@@ -1324,7 +1325,9 @@ export default function App() {
                   courses={courses}
                   revisions={revisionSeances}
                   formations={formations}
+                  events={events}
                   onUpdateFormations={handleUpdateFormations}
+                  onUpdateEvents={handleUpdateEvents}
                   slots={slots}
                   hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
@@ -1345,6 +1348,8 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStaff={handleUpdateStaff}
                   onUpdateTimesheets={handleUpdateTimesheets}
+                  staffLite={staffLite}
+                  onGoToRenewal={() => setActiveTab('renewal')}
                 />
               )}
 
@@ -1364,31 +1369,9 @@ export default function App() {
               )}
 
               {activeTab === 'renewal' && (
-                <RenewalModule center={currentCenter} />
+                <RenewalModule center={currentCenter} centerType={currentCenter?.centerType} />
               )}
 
-              {activeTab.startsWith('platform') && (
-                <PlatformAdminDashboard
-                  page={
-                    activeTab === 'platformCenters' ? 'centers'
-                    : activeTab === 'platformRequests' ? 'requests'
-                    : activeTab === 'platformFinance' ? 'finance'
-                    : activeTab === 'platformPricing' ? 'pricing'
-                    : activeTab === 'platformRenewals' ? 'renewals'
-                    : activeTab === 'platformAdvertisements' ? 'advertisements'
-                    : 'overview'
-                  }
-                  onNavigate={(p) => setActiveTab(
-                    p === 'centers' ? 'platformCenters'
-                    : p === 'requests' ? 'platformRequests'
-                    : p === 'finance' ? 'platformFinance'
-                    : p === 'pricing' ? 'platformPricing'
-                    : p === 'renewals' ? 'platformRenewals'
-                    : p === 'advertisements' ? 'platformAdvertisements'
-                    : 'platformAdmin'
-                  )}
-                />
-              )}
             </motion.div>
           </AnimatePresence>
 
@@ -1404,7 +1387,7 @@ export default function App() {
               <span>
                 سيتم <strong>استبدال جميع البيانات الحالية</strong> بمحتوى ملف الباك اب.
                 <br /><br />
-                <span className="text-[#257C86] font-black">✓</span> تم إنشاء نسخة احتياطية تلقائية من البيانات الحالية قبل الاسترجاع.
+                <span className="text-brand-600 font-black">✓</span> تم إنشاء نسخة احتياطية تلقائية من البيانات الحالية قبل الاسترجاع.
               </span>
             }
             onConfirm={handleConfirmImport}

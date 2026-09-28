@@ -6,7 +6,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const slots = await readSlots(context.env.DB, centerId);
     return json(slots);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر قراءة بيانات الفترات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر قراءة بيانات الفترات.' }, 500);
   }
 };
 
@@ -20,6 +21,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await writeSlots(context.env.DB, slots, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حفظ بيانات الفترات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حفظ بيانات الفترات.' }, 500);
   }
 };

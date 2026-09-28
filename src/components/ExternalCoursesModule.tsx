@@ -51,7 +51,7 @@ export default function ExternalCoursesModule({
   sidebarCollapsed
 }: ExternalCoursesModuleProps) {
   const toast = useToast();
-  const centerName = settings?.centerName || 'المركز';
+  const centerName = settings?.centerName || 'EduSphère';
   const [selectedCourse, setSelectedCourse] = useState<ExternalCourse | null>(courses[0] || null);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
@@ -749,13 +749,13 @@ export default function ExternalCoursesModule({
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-           <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+           <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
                الدروس الخصوصية
              </span>
             <span className="text-xs text-slate-400 font-bold">الكورسات الخاصة بالسنتر</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-[#257C86]" />
+            <BookOpen className="h-6 w-6 text-brand-600" />
             الكورسات الخاصة مع أساتذة خارجيين
           </h2>
           <p className="text-slate-500 text-xs mt-1">
@@ -765,7 +765,7 @@ export default function ExternalCoursesModule({
 
         <button
           onClick={openAddCourse}
-          className="px-5 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-[#257C86]/20 flex items-center gap-2 cursor-pointer shrink-0"
+          className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-brand-600/20 flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="h-5 w-5" />
           إضافة كورس جديد
@@ -832,16 +832,16 @@ export default function ExternalCoursesModule({
                   onClick={() => { setSelectedCourse(c); setEnrolledPage(1); }}
                   className={`p-5 rounded-3xl border transition cursor-pointer ${
                     isSelected 
-                      ? 'bg-[#257C86]/[0.05] border-[#257C86]/20 shadow-sm' 
+                      ? 'bg-brand-600/[0.05] border-brand-600/20 shadow-sm' 
                       : 'bg-white border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-[10px] font-black uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md whitespace-nowrap">
+                      <span className="text-[10px] font-black uppercase text-brand-700 bg-brand-600/10 px-2 py-0.5 rounded-md whitespace-nowrap">
                         {c.trimester} — {c.schoolYear}
                       </span>
-                      <span className="block w-fit mt-1.5 text-[10px] font-black uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md">
+                      <span className="block w-fit mt-1.5 text-[10px] font-black uppercase text-brand-700 bg-brand-600/10 px-2 py-0.5 rounded-md">
                         {c.subject}
                       </span>
                       <h4 className="text-base font-black text-slate-900 mt-1.5">{c.gradeLevel}</h4>
@@ -875,8 +875,8 @@ export default function ExternalCoursesModule({
 
                   {/* Revenue Share badge */}
                   <div className="mt-3 p-2 bg-white rounded-xl border border-slate-200/70 flex justify-between text-[11px] font-bold">
-                    <span className="text-[#1e626b]">الأستاذ: {c.teacherShare} د.ت</span>
-                    <span className="text-[#1e626b]">مناب السنتر: {c.centerShare} د.ت</span>
+                    <span className="text-brand-700">الأستاذ: {c.teacherShare} د.ت</span>
+                    <span className="text-brand-700">مناب السنتر: {c.centerShare} د.ت</span>
                   </div>
                 </div>
               );
@@ -901,7 +901,7 @@ export default function ExternalCoursesModule({
             <div className="bg-white rounded-3xl p-6 border border-slate-200/70 space-y-4 shadow-lg shadow-slate-900/5">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
                 <div>
-                  <span className="text-xs font-bold text-[#1e626b] whitespace-nowrap">{selectedCourse.trimester} — {selectedCourse.schoolYear}</span>
+                  <span className="text-xs font-bold text-brand-700 whitespace-nowrap">{selectedCourse.trimester} — {selectedCourse.schoolYear}</span>
                   <h3 className="text-2xl font-black text-slate-900">{selectedCourse.gradeLevel} — {selectedCourse.subject}</h3>
                 </div>
               </div>
@@ -918,13 +918,13 @@ export default function ExternalCoursesModule({
                   <span className="text-slate-400 text-[10px] block font-bold">الاشتراك الشهري:</span>
                   <span className="font-extrabold text-slate-900">{(selectedCourse.teacherShare || 0) + (selectedCourse.centerShare || 0)} د.ت</span>
                 </div>
-                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
-                  <span className="text-[#1e626b] text-[10px] block font-bold">مناب الأستاذ:</span>
-                  <span className="font-black text-[#1e626b]">{selectedCourse.teacherShare} د.ت</span>
+                <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20">
+                  <span className="text-brand-700 text-[10px] block font-bold">مناب الأستاذ:</span>
+                  <span className="font-black text-brand-700">{selectedCourse.teacherShare} د.ت</span>
                 </div>
-                <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
-                  <span className="text-[#1e626b] text-[10px] block font-bold">مناب السنتر:</span>
-                  <span className="font-black text-[#1e626b]">{selectedCourse.centerShare} د.ت</span>
+                <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20">
+                  <span className="text-brand-700 text-[10px] block font-bold">مناب السنتر:</span>
+                  <span className="font-black text-brand-700">{selectedCourse.centerShare} د.ت</span>
                 </div>
               </div>
             </div>
@@ -935,7 +935,7 @@ export default function ExternalCoursesModule({
                 <button
                   type="button"
                   onClick={() => setEnrolledCollapsed(c => !c)}
-                  className="flex items-center gap-2 flex-row-reverse font-black text-slate-900 text-sm hover:text-[#257C86] cursor-pointer"
+                  className="flex items-center gap-2 flex-row-reverse font-black text-slate-900 text-sm hover:text-brand-600 cursor-pointer"
                 >
                   <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${enrolledCollapsed ? '' : 'rotate-180'}`} />
                   التلاميذ المسجلون ({selectedCourse.enrolledStudents.length})
@@ -948,14 +948,14 @@ export default function ExternalCoursesModule({
                       setExtYear(selectedCourse.schoolYear || getCurrentAcademicYear());
                       setIsExternalStudentModalOpen(true);
                     }}
-                    className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                   >
                     <UserPlus className="h-3.5 w-3.5" />
                     تلميذ خارجي
                   </button>
                   <button
                     onClick={() => setIsRegisterModalOpen(true)}
-                    className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                   >
                     <Users className="h-3.5 w-3.5" />
                     سجل التلاميذ الخارجيين
@@ -977,10 +977,10 @@ export default function ExternalCoursesModule({
                             <p className="font-black text-slate-900 flex items-center gap-1.5 flex-wrap">
                               {st.studentName}
                               {st.isExternal && (
-                                <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md text-[9px] font-black">خارجي</span>
+                                <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md text-[9px] font-black">خارجي</span>
                               )}
                               {st.assurancePaid ? (
-                                <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md text-[9px] font-black" title="التأمين المدرسي مدفوع">
+                                <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md text-[9px] font-black" title="التأمين المدرسي مدفوع">
                                   تأمين ✓ ({st.assuranceAmount || 50} د.ت)
                                 </span>
                               ) : st.isExternal ? (
@@ -994,7 +994,7 @@ export default function ExternalCoursesModule({
 
                           <button 
                             onClick={() => setStudentRemoval({ course: selectedCourse, studentName: st.studentName, studentId: st.studentId })}
-                            className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                            className="p-1 text-red-500 hover:bg-slate-100 rounded cursor-pointer"
                             title="إلغاء التسجيل"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1008,10 +1008,10 @@ export default function ExternalCoursesModule({
                           ) : (
                             <>
                               <div className="flex justify-between items-center font-bold">
-                                <span className="text-[#1e626b]">
+                                <span className="text-brand-700">
                                   🔄 الدورة {cycleState.completedCycleNumber} (الحصة {cycleState.completedSeanceInCycle}/4)
                                 </span>
-                                <span className={cycleState.completedCyclePaid >= cycleState.nextCycleTarget ? 'text-[#1e626b] font-black' : 'text-slate-700'}>
+                                <span className={cycleState.completedCyclePaid >= cycleState.nextCycleTarget ? 'text-brand-700 font-black' : 'text-slate-700'}>
                                   {cycleState.completedCyclePaid} / {cycleState.nextCycleTarget || selectedCourse.monthlyFee} د.ت
                                 </span>
                               </div>
@@ -1022,7 +1022,7 @@ export default function ExternalCoursesModule({
                                 </div>
                               )}
                               {cycleState.completedSeanceInCycle === 4 && cycleState.completedCyclePaid >= selectedCourse.monthlyFee && cycleState.completedPastDebt === 0 && (
-                                <span className="inline-block text-[9px] font-bold text-[#257C86]">✓ هذه الدورة مستوفاة بالكامل</span>
+                                <span className="inline-block text-[9px] font-bold text-brand-600">✓ هذه الدورة مستوفاة بالكامل</span>
                               )}
                             </>
                           )}
@@ -1039,7 +1039,7 @@ export default function ExternalCoursesModule({
                       type="button"
                       onClick={() => setEnrolledPage(p => Math.max(1, p - 1))}
                       disabled={enrolledPage === 1}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-[#1e626b] cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-brand-700 cursor-pointer"
                     >
                       السابق
                     </button>
@@ -1050,7 +1050,7 @@ export default function ExternalCoursesModule({
                       type="button"
                       onClick={() => setEnrolledPage(p => Math.min(Math.ceil(selectedCourse.enrolledStudents.length / 6), p + 1))}
                       disabled={enrolledPage >= Math.ceil(selectedCourse.enrolledStudents.length / 6)}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-[#1e626b] cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-brand-700 cursor-pointer"
                     >
                       التالي
                     </button>
@@ -1080,7 +1080,7 @@ export default function ExternalCoursesModule({
                   )}
                   <button
                     onClick={() => openNewSession(selectedCourse)}
-                    className="px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-2xl transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-2xl transition cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     <Calendar className="h-4 w-4 text-white" />
                     تسجيل حصّة حضور وتفقد
@@ -1102,7 +1102,7 @@ export default function ExternalCoursesModule({
                       <button
                         type="button"
                         onClick={() => setCollapsedCycles(p => ({ ...p, [cycNum]: !(p[cycNum] ?? true) }))}
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 font-black text-xs text-[#1e626b] cursor-pointer transition-colors"
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 font-black text-xs text-brand-700 cursor-pointer transition-colors"
                       >
                         <span className="flex items-center gap-2 flex-row-reverse">
                           <ChevronDown className={`h-4 w-4 transition-transform ${cycCollapsed ? '' : 'rotate-180'}`} />
@@ -1133,20 +1133,20 @@ export default function ExternalCoursesModule({
                           >
                             <ChevronDown className="h-4 w-4" />
                           </button>
-                          <span className="text-[#1e626b]">🗓️ تاريخ الحصة: {sess.date}</span>
+                          <span className="text-brand-700">🗓️ تاريخ الحصة: {sess.date}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {hasStatusMap && (
                             <span className="flex items-center gap-1.5 text-[10px]">
-                              <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg">✓ حاضر: {present}</span>
+                              <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg">✓ حاضر: {present}</span>
                               <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded-lg">✕ غائب: {absent}</span>
-                              <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg">خلّص الشهر: {paidMois}</span>
+                              <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg">خلّص الشهر: {paidMois}</span>
                             </span>
                           )}
                            <button
                              type="button"
                              onClick={() => openEditSession(sess)}
-                             className="px-2.5 py-1 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-lg text-[10px] font-black cursor-pointer flex items-center gap-1"
+                             className="px-2.5 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[10px] font-black cursor-pointer flex items-center gap-1"
                            >
                              <Edit3 className="h-3 w-3" />
                              تعديل الحصة
@@ -1175,16 +1175,16 @@ export default function ExternalCoursesModule({
                                   <span className="font-bold text-slate-800">{st.studentName}</span>
                                   <span className="flex items-center gap-1.5">
                                     {status === 'present' && (paidMonthEarlierInCycle(sess, st.studentId)
-                                      ? <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-black text-[10px]">✓ خلّص الشهر (سابقاً)</span>
+                                      ? <span className="px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-black text-[10px]">✓ خلّص الشهر (سابقاً)</span>
                                       : <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-black text-[10px]">غير مدفوع</span>)}
                                     {status === 'absent' && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-md font-black text-[10px]">✕ غائب</span>}
                                     {status === 'paie_mois' && (
                                       <span className="flex items-center gap-1">
-                                        <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-black text-[10px]">✓ خلّص الشهر {amt ? `(${amt} د.ت)` : ''}</span>
+                                        <span className="px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-black text-[10px]">✓ خلّص الشهر {amt ? `(${amt} د.ت)` : ''}</span>
                                         <button
                                           type="button"
                                           onClick={() => setPrintingMonthReceipt({ sess, studentId: st.studentId })}
-                                          className="p-1 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-md cursor-pointer transition"
+                                          className="p-1 bg-brand-600 hover:bg-brand-700 text-white rounded-md cursor-pointer transition"
                                           title="طباعة وصل خلاص الشهر"
                                         >
                                           <Printer className="h-3 w-3" />
@@ -1201,12 +1201,12 @@ export default function ExternalCoursesModule({
                         ) : (
                           <>
                             {Object.keys(sess.monthPaidMap || {}).length > 0 && (
-                              <div className="text-[10px] font-bold text-[#1e626b] bg-[#257C86]/[0.06] p-1.5 rounded">
+                              <div className="text-[10px] font-bold text-brand-700 bg-brand-600/[0.06] p-1.5 rounded">
                                 غير مدفوعي الشهر: {Object.entries(sess.monthPaidMap || {}).filter(([, p]) => !p).length} تلميذ
                               </div>
                             )}
                             {(sess.presentStudentIds || []).length > 0 && (
-                              <div className="text-[10px] font-bold text-[#1e626b] bg-[#257C86]/[0.06] p-1.5 rounded">
+                              <div className="text-[10px] font-bold text-brand-700 bg-brand-600/[0.06] p-1.5 rounded">
                                 الحاضرون ({sess.presentStudentIds.length}): {sess.presentStudentIds.map(id => nameOf(id)).join(', ')}
                               </div>
                             )}
@@ -1214,14 +1214,14 @@ export default function ExternalCoursesModule({
                         )
                       ) : (
                         sess.oneTimeStudents?.length > 0 && (
-                          <div className="text-[10px] font-bold text-[#1e626b] bg-[#257C86]/[0.06] p-1.5 rounded">
+                          <div className="text-[10px] font-bold text-brand-700 bg-brand-600/[0.06] p-1.5 rounded">
                             حضور مؤقت خارجي ({sess.oneTimeStudents.length}): {sess.oneTimeStudents.map(o => o.name).join(', ')}
                           </div>
                         )
                       )}
                       
                       {expanded && sess.oneTimeStudents?.length > 0 && (
-                        <div className="text-[10px] font-bold text-[#1e626b] bg-[#257C86]/[0.06] p-1.5 rounded">
+                        <div className="text-[10px] font-bold text-brand-700 bg-brand-600/[0.06] p-1.5 rounded">
                           حضور مؤقت خارجي ({sess.oneTimeStudents.length}): {sess.oneTimeStudents.map(o => o.name).join(', ')}
                         </div>
                       )}
@@ -1260,9 +1260,9 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-[#257C86]" />
+                  <BookOpen className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">
                     {editingCourseId ? 'تعديل الكورس' : 'إضافة كورس جديد'}
                   </h3>
@@ -1327,7 +1327,7 @@ export default function ExternalCoursesModule({
                     <button
                       type="button"
                       onClick={() => setIsAddingCourseSubject(!isAddingCourseSubject)}
-                      className="px-3 py-2 bg-[#257C86]/10 hover:bg-[#257C86]/20 text-[#1e626b] font-bold text-xs rounded-xl cursor-pointer shrink-0"
+                      className="px-3 py-2 bg-brand-600/10 hover:bg-brand-600/20 text-brand-700 font-bold text-xs rounded-xl cursor-pointer shrink-0"
                     >
                       إضافة مادة
                     </button>
@@ -1340,12 +1340,12 @@ export default function ExternalCoursesModule({
                         onChange={(e) => setNewCourseSubject(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCourseSubject(); } }}
                         placeholder="اسم المادة الجديدة..."
-                        className="flex-1 px-3 py-1.5 bg-white border border-[#257C86]/20 rounded-xl text-xs font-bold"
+                        className="flex-1 px-3 py-1.5 bg-white border border-brand-600/20 rounded-xl text-xs font-bold"
                       />
                       <button
                         type="button"
                         onClick={handleAddCourseSubject}
-                        className="px-3 py-1.5 bg-[#257C86] text-white font-bold text-xs rounded-xl cursor-pointer"
+                        className="px-3 py-1.5 bg-brand-600 text-white font-bold text-xs rounded-xl cursor-pointer"
                       >
                         إضافة
                       </button>
@@ -1375,21 +1375,21 @@ export default function ExternalCoursesModule({
 
                 {/* Financial Shares Configuration */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 space-y-3">
-                  <span className="text-xs font-bold text-[#1e626b] block">💰 تقسيم مستحقات الاشتراك الشهري</span>
+                  <span className="text-xs font-bold text-brand-700 block">💰 تقسيم مستحقات الاشتراك الشهري</span>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-bold text-[#1e626b] block mb-1">مناب الأستاذ (د.ت) *</label>
+                      <label className="text-[10px] font-bold text-brand-700 block mb-1">مناب الأستاذ (د.ت) *</label>
                       <input 
                         type="number" required value={teacherShare} onFocus={(e) => e.target.select()} onChange={(e) => setTeacherShare(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-white border border-[#257C86]/30 rounded-xl text-xs font-bold text-[#1e626b]"
+                        className="w-full px-3 py-2 bg-white border border-brand-600/30 rounded-xl text-xs font-bold text-brand-700"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-bold text-[#1e626b] block mb-1">مناب السنتر (د.ت) *</label>
+                      <label className="text-[10px] font-bold text-brand-700 block mb-1">مناب السنتر (د.ت) *</label>
                       <input 
                         type="number" required value={centerShare} onFocus={(e) => e.target.select()} onChange={(e) => setCenterShare(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-white border border-[#257C86]/20 rounded-xl text-xs font-bold text-[#1e626b]"
+                        className="w-full px-3 py-2 bg-white border border-brand-600/20 rounded-xl text-xs font-bold text-brand-700"
                       />
                     </div>
                   </div>
@@ -1405,7 +1405,7 @@ export default function ExternalCoursesModule({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer"
                   >
                     حفظ الكورس
                   </button>
@@ -1426,7 +1426,7 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-black">Pointage & خلاص الشهر — {selectedCourse.subject}</h3>
                   <p className="text-xs text-slate-300">الأستاذ: {selectedCourse.teacherName} {editingSessionId ? '— تعديل حصة' : ''}</p>
@@ -1443,7 +1443,7 @@ export default function ExternalCoursesModule({
               <form onSubmit={handleSaveSession} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
                 <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-2xl p-3">
                   <label className="flex items-center gap-2 flex-1 min-w-[240px] text-xs font-black text-slate-700 cursor-pointer">
-                    <Calendar className="h-4 w-4 text-[#257C86]" />
+                    <Calendar className="h-4 w-4 text-brand-600" />
                     تاريخ الحصّة *
                     <DateField 
                       required value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}
@@ -1480,7 +1480,7 @@ export default function ExternalCoursesModule({
                                 <td className="p-3 font-black text-slate-900">
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                      <span className={disabled ? 'text-slate-400' : att === 'absent' ? 'text-red-500' : 'text-[#257C86]'}>
+                                      <span className={disabled ? 'text-slate-400' : att === 'absent' ? 'text-red-500' : 'text-brand-600'}>
                                         {disabled ? '🔒' : att === 'absent' ? '✕' : '✓'}
                                       </span>
                                       <span className={disabled ? 'text-slate-400' : ''}>{st.studentName}</span>
@@ -1488,7 +1488,7 @@ export default function ExternalCoursesModule({
                                     </div>
                                     {!disabled && (
                                       <div className="flex flex-wrap items-center gap-1.5 text-[9px]">
-                                        <span className="px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-extrabold">
+                                        <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-extrabold">
                                           الدورة {cycleState.nextCycleNumber} (الحصة {cycleState.nextSeanceInCycle}/4)
                                         </span>
                                         {cycleState.nextPastDebt > 0 && (
@@ -1513,14 +1513,14 @@ export default function ExternalCoursesModule({
                                         <button
                                           type="button"
                                           onClick={() => setAttendanceMap({ ...attendanceMap, [st.studentId]: 'present' })}
-                                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'present' ? 'bg-[#257C86] text-white border-[#1e626b]' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-[#257C86]/[0.06]'}`}
+                                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'present' ? 'bg-brand-600 text-white border-brand-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-brand-600/[0.06]'}`}
                                         >
                                           حاضر
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => setAttendanceMap({ ...attendanceMap, [st.studentId]: 'absent' })}
-                                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'absent' ? 'bg-red-600 text-white border-red-600' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-red-50'}`}
+                                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${att === 'absent' ? 'bg-red-600 text-white border-red-600' : 'bg-slate-100 text-slate-600 border-slate-200 bg-brand-600/[0.06] hover:text-red-700'}`}
                                         >
                                           غائب
                                         </button>
@@ -1543,17 +1543,17 @@ export default function ExternalCoursesModule({
                                     </div>
                                   ) : monthPaidLockMap[st.studentId] ? (
                                     <div className="space-y-1">
-                                      <span className="inline-block px-2.5 py-1 rounded-xl text-[11px] font-black bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/30">
+                                      <span className="inline-block px-2.5 py-1 rounded-xl text-[11px] font-black bg-brand-600/10 text-brand-700 border border-brand-600/30">
                                         ✓ مدفوع الشهر (سابقاً)
                                       </span>
-                                      <div className="text-[9px] text-[#257C86] font-bold">{selectedCourse.monthlyFee} د.ت</div>
+                                      <div className="text-[9px] text-brand-600 font-bold">{selectedCourse.monthlyFee} د.ت</div>
                                     </div>
                                   ) : (
                                     <div className="space-y-1.5">
                                       <select
                                         value={pay}
                                         onChange={(e) => setPaymentModeMap({ ...paymentModeMap, [st.studentId]: e.target.value as SeanceStudentStatus })}
-                                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold border cursor-pointer bg-[#257C86]/[0.06] text-[#1e626b] border-[#257C86]/20"
+                                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold border cursor-pointer bg-brand-600/[0.06] text-brand-700 border-brand-600/20"
                                       >
                                         <option value="paie_mois">خلّص الشهر</option>
                                         <option value="present">حاضر (غير مدفوع)</option>
@@ -1569,17 +1569,17 @@ export default function ExternalCoursesModule({
                                                 const v = Number(e.target.value);
                                                 setSeanceAmountMap({ ...seanceAmountMap, [st.studentId]: v });
                                               }}
-                                              className="w-24 px-2 py-1 rounded-xl text-[11px] font-bold border border-[#257C86]/20 bg-[#257C86]/[0.06] text-[#1e626b] text-center"
+                                              className="w-24 px-2 py-1 rounded-xl text-[11px] font-bold border border-brand-600/20 bg-brand-600/[0.06] text-brand-700 text-center"
                                             />
                                             <span className="text-[10px] font-bold text-slate-500">د.ت</span>
                                           </div>
                                           {cycleState.nextPastDebt > 0 && (
-                                            <span className="text-[9px] font-bold text-[#1e626b]">
+                                            <span className="text-[9px] font-bold text-brand-700">
                                               (دين الدورة السابقة {cycleState.nextPastDebt} + الدورة الحالية {cycleState.nextCycleRemaining})
                                             </span>
                                           )}
                                           {cycleState.nextCycleRemaining > 0 && cycleState.nextPastDebt === 0 && (
-                                            <span className="text-[9px] font-bold text-[#1e626b]">
+                                            <span className="text-[9px] font-bold text-brand-700">
                                               (باقي {cycleState.nextCycleRemaining} د.ت من الدورة الحالية)
                                             </span>
                                           )}
@@ -1606,7 +1606,7 @@ export default function ExternalCoursesModule({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer"
                   >
                     {editingSessionId ? 'حفظ التعديلات' : 'تأكيد وتسجيل الحصّة'}
                   </button>
@@ -1627,9 +1627,9 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-[#257C86]" />
+                  <Users className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">سجل التلاميذ الخارجيين</h3>
                 </div>
                 <button
@@ -1691,8 +1691,8 @@ export default function ExternalCoursesModule({
                               disabled={alreadyEnrolled}
                               className={`px-3 py-1.5 rounded-xl text-[11px] font-black cursor-pointer flex items-center gap-1 ${
                                 alreadyEnrolled
-                                  ? 'bg-[#257C86]/10 text-[#1e626b] cursor-default'
-                                  : 'bg-[#257C86] hover:bg-[#1e626b] text-white'
+                                  ? 'bg-brand-600/10 text-brand-700 cursor-default'
+                                  : 'bg-brand-600 hover:bg-brand-700 text-white'
                               }`}
                             >
                               <UserPlus className="h-3.5 w-3.5" />
@@ -1702,14 +1702,14 @@ export default function ExternalCoursesModule({
                         </div>
 
                         <div className="flex items-center gap-3 text-xs">
-                          <span className={`px-2 py-0.5 rounded-md font-black ${reg.assurancePaid ? 'bg-[#257C86]/10 text-[#1e626b]' : 'bg-red-100 text-red-700'}`}>
+                          <span className={`px-2 py-0.5 rounded-md font-black ${reg.assurancePaid ? 'bg-brand-600/10 text-brand-700' : 'bg-red-100 text-red-700'}`}>
                             التأمين: {reg.assurancePaid ? `مدفوع (${reg.assuranceAmount} د.ت)` : 'غير مدفوع'}
                           </span>
                           {reg.assuranceDate && <span className="text-[10px] text-slate-400">تاريخ الخلاص: {reg.assuranceDate}</span>}
                           {reg.assurancePaid && (
                             <button
                               onClick={() => setPrintingAssuranceReceipt(reg)}
-                              className="px-2.5 py-1 bg-[#257C86] text-white rounded-lg font-black text-[11px] flex items-center gap-1 hover:bg-[#1e626b] transition cursor-pointer"
+                              className="px-2.5 py-1 bg-brand-600 text-white rounded-lg font-black text-[11px] flex items-center gap-1 hover:bg-brand-700 transition cursor-pointer"
                               title="طباعة وصل التأمين"
                             >
                               <Printer className="h-3.5 w-3.5" />
@@ -1729,7 +1729,7 @@ export default function ExternalCoursesModule({
                         type="button"
                         onClick={() => setRegisterPage(p => Math.max(1, p - 1))}
                         disabled={registerPage === 1}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-[#1e626b] cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-brand-700 cursor-pointer"
                       >
                         السابق
                       </button>
@@ -1740,7 +1740,7 @@ export default function ExternalCoursesModule({
                         type="button"
                         onClick={() => setRegisterPage(p => Math.min(Math.ceil(filteredRegister.length / 8), p + 1))}
                         disabled={registerPage >= Math.ceil(filteredRegister.length / 8)}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-[#1e626b] cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-black text-brand-700 cursor-pointer"
                       >
                         التالي
                       </button>
@@ -1776,12 +1776,12 @@ export default function ExternalCoursesModule({
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
               >
-                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+                <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                   <span className="font-bold text-sm">وصل خلاص التأمين المدرسي</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => window.print()}
-                      className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                     >
                       <Printer className="h-4 w-4" />
                       طباعة الوصل 🖨️
@@ -1803,9 +1803,9 @@ export default function ExternalCoursesModule({
                         <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {receiptNumber}</p>
                         {reg.assuranceDate && <p className="text-[10px] text-slate-400">تاريخ الخلاص: {reg.assuranceDate}</p>}
                       </div>
-                      <div className="text-left font-mono font-bold text-xs bg-[#257C86]/[0.06] p-2 rounded border border-[#257C86]/20">
+                      <div className="text-left font-mono font-bold text-xs bg-brand-600/[0.06] p-2 rounded border border-brand-600/20">
                         <p>الخدمة: <strong>التأمين المدرسي</strong></p>
-                        <p className="text-[11px] text-[#1e626b] mt-0.5">السنة: {reg.schoolYear || '—'}</p>
+                        <p className="text-[11px] text-brand-700 mt-0.5">السنة: {reg.schoolYear || '—'}</p>
                       </div>
                     </div>
 
@@ -1826,14 +1826,14 @@ export default function ExternalCoursesModule({
                           <span className="text-base font-black text-slate-900 font-mono">{reg.assuranceAmount || 0} د.ت</span>
                         </div>
 
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
-                          <span className="text-[10px] text-[#1e626b] block font-bold">المبلغ المقبوض:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">{reg.assuranceAmount || 0} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/30">
+                          <span className="text-[10px] text-brand-700 block font-bold">المبلغ المقبوض:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">{reg.assuranceAmount || 0} د.ت</span>
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-xl text-center">
-                        <span className="text-[11px] font-black text-[#1e626b]">✓ تم خلاص التأمين المدرسي السنوي — شكراً لكم</span>
+                      <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-xl text-center">
+                        <span className="text-[11px] font-black text-brand-700">✓ تم خلاص التأمين المدرسي السنوي — شكراً لكم</span>
                       </div>
                     </div>
 
@@ -1877,12 +1877,12 @@ export default function ExternalCoursesModule({
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
               >
-                <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+                <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                   <span className="font-bold text-sm">وصل خلاص الشهر</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => window.print()}
-                      className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                     >
                       <Printer className="h-4 w-4" />
                       طباعة الوصل 🖨️
@@ -1904,9 +1904,9 @@ export default function ExternalCoursesModule({
                         <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {receiptNumber}</p>
                         <p className="text-[10px] text-slate-400">تاريخ الحصة: {sess.date}</p>
                       </div>
-                      <div className="text-left font-mono font-bold text-xs bg-[#257C86]/[0.06] p-2 rounded border border-[#257C86]/20">
+                      <div className="text-left font-mono font-bold text-xs bg-brand-600/[0.06] p-2 rounded border border-brand-600/20">
                         <p>الخدمة: <strong>دروس خصوصية</strong></p>
-                        <p className="text-[11px] text-[#1e626b] mt-0.5">السنة: {selectedCourse.schoolYear || '—'}</p>
+                        <p className="text-[11px] text-brand-700 mt-0.5">السنة: {selectedCourse.schoolYear || '—'}</p>
                       </div>
                     </div>
 
@@ -1932,14 +1932,14 @@ export default function ExternalCoursesModule({
                           <span className="text-base font-black text-slate-900 font-mono">{selectedCourse.monthlyFee} د.ت</span>
                         </div>
 
-                        <div className="p-2.5 bg-[#257C86]/[0.06] rounded-xl border border-[#257C86]/30">
-                          <span className="text-[10px] text-[#1e626b] block font-bold">المبلغ المقبوض:</span>
-                          <span className="text-base font-black text-[#1e626b] font-mono">{amount} د.ت</span>
+                        <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/30">
+                          <span className="text-[10px] text-brand-700 block font-bold">المبلغ المقبوض:</span>
+                          <span className="text-base font-black text-brand-700 font-mono">{amount} د.ت</span>
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-xl text-center">
-                        <span className="text-[11px] font-black text-[#1e626b]">
+                      <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-xl text-center">
+                        <span className="text-[11px] font-black text-brand-700">
                           ✓ تم خلاص شهر الدورة {cycleNum} (الحصة {seanceInCycle}/4) — شكراً لكم
                         </span>
                       </div>
@@ -1973,9 +1973,9 @@ export default function ExternalCoursesModule({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <UserPlus className="h-5 w-5 text-[#257C86]" />
+                  <UserPlus className="h-5 w-5 text-brand-600" />
                   <div>
                     <h3 className="text-lg font-black">تسجيل تلميذ خارجي</h3>
                     <p className="text-xs text-slate-300">في الكورس: {selectedCourse.subject} — {selectedCourse.gradeLevel}</p>
@@ -2032,16 +2032,16 @@ export default function ExternalCoursesModule({
                   </select>
                 </div>
 
-                <label className="flex items-center gap-3 p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20 cursor-pointer">
+                <label className="flex items-center gap-3 p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={extAssurance}
                     onChange={(e) => setExtAssurance(e.target.checked)}
-                    className="h-4 w-4 accent-[#257C86]"
+                    className="h-4 w-4 accent-brand-600"
                   />
                   <div>
-                    <p className="text-xs font-black text-[#1e626b]">التأمين المدرسي السنوي</p>
-                    <p className="text-[10px] text-[#1e626b] font-bold">
+                    <p className="text-xs font-black text-brand-700">التأمين المدرسي السنوي</p>
+                    <p className="text-[10px] text-brand-700 font-bold">
                       المبلغ: {(settings ? getFeesForYear(settings, extYear || selectedCourse?.schoolYear || schoolYear).fraisAssuranceCoursExternes : 50)} د.ت — يُخلّص مرة واحدة للسنة
                     </p>
                   </div>
@@ -2057,7 +2057,7 @@ export default function ExternalCoursesModule({
                   <button
                     type="button"
                     onClick={handleEnrollExternalStudent}
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                   >
                     <UserPlus className="h-4 w-4" />
                     تسجيل في الكورس

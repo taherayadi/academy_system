@@ -1,11 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  loadSessionUser,
-  saveSessionUser,
-  clearLocalSession,
-} from './auth';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { loadSessionUser, saveSessionUser, clearLocalSession } from './auth';
 
-const SESSION_KEY = 'tc_user';
+const SESSION_KEY = 'tc_center_user';
 
 const mockUser = {
   email: 'test@example.com',
@@ -63,18 +59,18 @@ describe('auth session management', () => {
     });
   });
 
-  describe('platform_super_admin user role', () => {
-    it('supports saving and loading a platform_super_admin user', () => {
-      const platformAdminUser = {
-        email: 'platform@systemacademy.tn',
-        name: 'مدير المنصة الرئيسي',
-        role: 'platform_super_admin' as const,
-        description: 'إدارة المنصة SaaS فقط',
+  describe('restricted_admin user role', () => {
+    it('supports saving and loading a restricted_admin user', () => {
+      const restrictedUser = {
+        email: 'restricted@example.invalid',
+        name: 'مدير المركز',
+        role: 'restricted_admin' as const,
+        description: 'إدارة المركز',
       };
-      saveSessionUser(platformAdminUser);
+      saveSessionUser(restrictedUser);
       const loaded = loadSessionUser();
-      expect(loaded).toEqual(platformAdminUser);
-      expect(loaded?.role).toBe('platform_super_admin');
+      expect(loaded).toEqual(restrictedUser);
+      expect(loaded?.role).toBe('restricted_admin');
     });
   });
 });

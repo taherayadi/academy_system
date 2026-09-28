@@ -1,4 +1,6 @@
-import { Env, json, readBody, sha256Hex, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, DEFAULT_CENTER_ID, mapCenterRow, getCenterAccessState } from '../_lib';
+import { isDeploymentRole } from '../_deployment';
+import { Env, json, readBody, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, mapCenterRow, getCenterAccessState, getClientIp } from '../_lib';
+import { logAudit } from '../_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -20,6 +22,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const { email, password } = await readBody(request);
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanPassword = String(password || '').trim();
+    const ip = getClientIp(request);
 
     if (!cleanEmail || !cleanPassword) {
       return json({ error: 'أدخل البريد الإلكتروني وكلمة السر.' }, 400);
@@ -30,20 +33,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       .bind(cleanEmail)
       .first<any>();
 
-    if (!user) {
+    if (!user || !isDeploymentRole(user.role)) {
       // Return the same error as wrong password to prevent user enumeration.
+      logAudit(env, request, { email: cleanEmail, action: 'login_failure', details: 'invalid_user', ip }).catch(() => {});
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
-    const hash = await sha256Hex(cleanPassword);
-    if (hash !== user.password_hash) {
+    const isPasswordValid = await verifyPassword(cleanPassword, user.password_hash);
+    if (!isPasswordValid) {
+      logAudit(env, request, { email: cleanEmail, action: 'login_failure', details: 'wrong_password', ip }).catch(() => {});
       return json({ error: 'كلمة السر غير صحيحة' }, 401);
     }
 
     // Reset rate limits for this client IP on successful login.
     resetAuthRateLimit(env.DB, request).catch(() => {});
 
-    const centerId = user.center_id || DEFAULT_CENTER_ID;
+    const centerId = user.center_id || '';
+    if (!centerId) return json({ error: 'الحساب غير مرتبط بمركز.' }, 403);
     const centerRow = await env.DB
       .prepare('SELECT * FROM centers WHERE id = ?')
       .bind(centerId)
@@ -51,7 +57,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     // A platform account is tenant-independent. Center accounts, however,
     // must not receive a session after their trial or paid subscription ends.
-    if (user.role !== 'platform_super_admin' && centerRow) {
+    if (!centerRow) return json({ error: 'المركز غير موجود.' }, 403);
+    if (centerRow) {
       const accessState = getCenterAccessState(centerRow);
       if (accessState) {
         // Keep the platform card/status truthful after the first blocked login.
@@ -66,12 +73,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           suspended: 'تم تعليق هذا المركز. يرجى التواصل مع إدارة المنصة.',
           expired: 'انتهت صلاحية هذا المركز. يرجى التواصل مع إدارة المنصة.'
         };
+        logAudit(env, request, { email: cleanEmail, action: 'login_failure', details: `access_denied:${accessState}`, entityType: 'center', entityId: centerId, ip }).catch(() => {});
         return json({ error: messages[accessState] }, 403);
       }
     }
 
     // Create a server-side session and return it as an HttpOnly cookie.
     const token = await createSession(env.DB, cleanEmail, centerId);
+
+    logAudit(env, request, { email: cleanEmail, action: 'login_success', entityType: 'center', entityId: centerId, ip }).catch(() => {});
 
     // Opportunistically clean up expired sessions (fire-and-forget).
     purgeExpiredSessions(env.DB).catch(() => {});
@@ -83,6 +93,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('Cache-Control', 'no-store');
     headers.set('Set-Cookie', makeSessionCookie(token, request));
 
     return new Response(
@@ -103,6 +114,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       }
     );
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تسجيل الدخول.' }, 500);
+    return json({ error: 'خطأ في تسجيل الدخول.' }, 500);
   }
 };

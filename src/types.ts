@@ -1,16 +1,7 @@
-export type SaaSPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
+export type SubscriptionPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom';
+
 export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
 
-/** A plan change recorded to take effect at the end of the current period. */
-export interface ScheduledPlanChange {
-  id: string;
-  plan: string; // storage value: 'starter' (Basic) | 'growth' | 'pro' | 'custom'
-  billingCycle: 'monthly' | 'annual';
-  enabledModules: string[];
-  monthlyPrice: number | null;
-  applyAt: number | null; // eligible once subscription_ends_at passes
-  createdAt: number;
-}
 
 export type ModuleKey = 
   | 'scolaire' 
@@ -24,7 +15,10 @@ export type ModuleKey =
   | 'events' 
   | 'bibliotheque' 
   | 'studentTimeSheets' 
-  | 'staff';
+  | 'staff'
+  | 'activites'
+  | 'competences';
+
 
 export interface CenterTenant {
   id: string;
@@ -32,7 +26,7 @@ export interface CenterTenant {
   slug?: string;
   phoneNumber?: string;
   locationCity?: string;
-  plan: SaaSPlan;
+  plan: SubscriptionPlan;
   enabledModules: ModuleKey[] | string[];
   mealOperatingMode?: 'external_traiteur' | 'in_house_kitchen';
   status: CenterStatus;
@@ -40,35 +34,19 @@ export interface CenterTenant {
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';
   monthlyPrice?: number;
-  centerType?: string; // 'jardin' | 'formation'
+  // 'jardin' | 'creche' | 'garderie' | 'formation' — unknown/empty keeps legacy full-visibility
+  centerType?: string;
   logoUrl?: string; // ImageKit CDN URL — empty = default brand logo
   createdAt: number;
-  studentCount?: number;
-  adminEmail?: string;
-  scheduledPlan?: ScheduledPlanChange | null;
 }
 
-export interface DemoRequest {
-  id: string;
-  requestType: 'trial' | 'demo' | 'info';
-  fullName: string;
-  academyName: string;
-  email: string;
-  phone: string;
-  estimatedSize?: string;
-  requestedModules?: string[] | string;
-  centerType?: string; // 'jardin' | 'formation'
-  message?: string;
-  status: 'new' | 'contacted' | 'converted' | 'archived';
-  notes?: string;
-  createdAt: number;
-}
 
 export type AdvertisementLocation =
   | 'landing_page'
   | 'center_admin'
   | 'both' // visible on the landing page AND in the selected centers' dashboards
-  | string; // Allow custom locations
+  | string;
+ // Allow custom locations
 
 /**
  * Positions d'affichage — une annonce peut en cumuler plusieurs.
@@ -82,59 +60,25 @@ export type AdPositionId =
   | 'rectangle'
   | 'interstitial';
 
-export interface AdPositionSpec {
-  id: AdPositionId;
-  label: string;
-  size: string;
-  hint: string;
-}
-
-export const AD_POSITION_SPECS: AdPositionSpec[] = [
-  { id: 'rectangle', label: 'Rectangle', size: '1100×420 max', hint: 'Rectangle responsive — occupe toute la largeur disponible (jusqu’à 1100 px) avec une hauteur fluide de 220 à 420 px : compact sur mobile, large sur desktop.' },
-  { id: 'interstitial', label: 'Interstitiel', size: 'Plein écran', hint: 'Interstitiel — overlay responsive plein écran, fermable en un clic, avec compte à rebours.' },
-];
-
-export const AD_POSITION_IDS: string[] = AD_POSITION_SPECS.map(s => s.id);
 
 // L'interstitiel se rend en overlay plein écran (vitrine + tableaux de bord)
 // au lieu du carrousel standard.
 export const INTERSTITIAL_POSITION_ID = 'interstitial';
 
+
 export function hasInterstitialPosition(positions?: string[]): boolean {
   return (positions || []).includes(INTERSTITIAL_POSITION_ID);
 }
 
-export function adPositionLabel(id: string): string {
-  const spec = AD_POSITION_SPECS.find(s => s.id === id);
-  return spec ? `${spec.label} (${spec.size})` : id;
-}
-
-export interface PlatformAdvertisement {
-  id: string;
-  title: string;
-  dateStart: number;
-  dateEnd: number;
-  location: AdvertisementLocation;
-  imageUrls: string[]; // Array of ImageKit CDN URLs for carousel
-  linkUrl?: string;
-  priority: number;
-  isActive: boolean;
-  isPublished: boolean;
-  centerIds: string[]; // Selected center IDs
-  positions?: string[]; // AdPositionId list (empty = emplacements par défaut du carrousel)
-  createdBy?: string;
-  createdAt: number;
-  updatedAt: number;
-}
 
 export interface UserAccount {
   email: string;
   name: string;
-  role: 'super_admin' | 'restricted_admin' | 'platform_super_admin' | 'admin';
+  role: 'admin' | 'super_admin' | 'restricted_admin';
   description: string;
   centerId?: string;
-  isPlatformAdmin?: boolean;
 }
+
 
 export interface CenterFeeSet {
   fraisAnnuelSuivi: number;
@@ -154,7 +98,9 @@ export interface CenterFeeSet {
   fraisDeuxGoutersMensuel?: number;
 }
 
+
 export type MealOperatingMode = 'external_traiteur' | 'in_house_kitchen';
+
 
 export interface CenterSettings {
   centerName: string;
@@ -169,6 +115,7 @@ export interface CenterSettings {
   // Shared list of known etablissements (schools/establishments)
   etablissements?: string[];
 }
+
 
 export const initialCenterFeeSet: CenterFeeSet = {
   fraisAnnuelSuivi: 150,
@@ -187,6 +134,7 @@ export const initialCenterFeeSet: CenterFeeSet = {
   fraisGouterSoirUnitaire: 0,
   fraisDeuxGoutersMensuel: 0
 };
+
 
 // Default fees applied at student creation time
 export const initialStudentFeeSet: CenterFeeSet = {
@@ -207,6 +155,7 @@ export const initialStudentFeeSet: CenterFeeSet = {
   fraisDeuxGoutersMensuel: 0
 };
 
+
 // Shared default list of matières used across the whole app (Suivi notes devoirs, staff enseignant, cours)
 export const APP_SUBJECTS = [
   'الرياضيات (Mathématiques)',
@@ -221,8 +170,9 @@ export const APP_SUBJECTS = [
   'الإقتصاد والتصرف (Économie-Gestion)'
 ];
 
+
 export const initialCenterSettings: CenterSettings = {
-  centerName: 'المركز',
+  centerName: 'EduSphère',
   phoneNumber: '+216 71 000 000',
   locationCity: 'Sfax / تونس',
   mealOperatingMode: 'external_traiteur',
@@ -239,10 +189,29 @@ export const initialCenterSettings: CenterSettings = {
   subjects: APP_SUBJECTS
 };
 
+
 // Fixed academic year list shown in every year combobox (3 years before and after the current one)
 export const DEFAULT_ACADEMIC_YEARS = [
   '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
 ];
+
+
+/**
+ * Revision D (remark S1): decimal-tolerant money parsing for fee inputs.
+ * Accepts comma or dot decimals («2,5» → 2.5), keeps the historical
+ * leading-zero cleanup («02,5» → 2.5), and never rounds. Non-numeric → 0.
+ */
+export function parseDecimalFee(raw: string | number | null | undefined): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  const cleaned = (raw ?? '')
+    .toString()
+    .trim()
+    .replace(',', '.')
+    .replace(/^0+(\d)/, '$1');
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 
 export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | null): CenterFeeSet {
   const fb = fallback || {};
@@ -292,6 +261,7 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
   };
 }
 
+
 export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYear?: any): CenterSettings {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   
@@ -329,7 +299,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     : [...APP_SUBJECTS];
 
   return {
-    centerName: src.centerName || src.center_name || 'المركز',
+    centerName: src.centerName || src.center_name || 'EduSphère',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
     mealOperatingMode: src.mealOperatingMode || src.meal_operating_mode || 'external_traiteur',
@@ -338,6 +308,7 @@ export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYe
     subjects
   };
 }
+
 
 // Returns the fees to apply for a given academic year
 export function getFeesForYear(settings: CenterSettings | null | undefined, year: string): CenterFeeSet {
@@ -359,16 +330,15 @@ export function getFeesForYear(settings: CenterSettings | null | undefined, year
   return normalizeFeeSet(raw, settings.fees);
 }
 
-export type ServiceType = 'suivi' | 'etude' | 'externalCourse' | 'library' | 'meals';
-
-export type PaymentStatus = 'paid' | 'advance' | 'unpaid';
 
 export const ACADEMIC_MONTHS = [
   'Septembre', 'Octobre', 'Novembre', 'Décembre', 
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai'
 ] as const;
 
+
 export type AcademicMonth = typeof ACADEMIC_MONTHS[number];
+
 
 export const ARABIC_MONTHS: Record<string, string> = {
   'Septembre': 'سبتمبر',
@@ -385,6 +355,7 @@ export const ARABIC_MONTHS: Record<string, string> = {
   'Août': 'أوت'
 };
 
+
 export const ARABIC_ACADEMIC_MONTHS: Record<AcademicMonth, string> = {
   'Septembre': 'سبتمبر',
   'Octobre': 'أكتوبر',
@@ -397,17 +368,20 @@ export const ARABIC_ACADEMIC_MONTHS: Record<AcademicMonth, string> = {
   'Mai': 'ماي'
 };
 
+
 // Arabic month names indexed by JS Date month number (0 = January ... 11 = December)
 export const MONTH_BY_CALENDAR_INDEX: string[] = [
   'جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان',
   'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
 ];
 
+
 export function monthToArabic(monthStr: string): string {
   const match = Object.keys(ARABIC_MONTHS).find(key => monthStr.includes(key));
   if (!match) return monthStr;
   return monthStr.replace(match, ARABIC_MONTHS[match]);
 }
+
 
 // Map a real JS month index (0=January) to an academic index (0=Septembre ... 8=Mai).
 // Returns -1 when the real month is outside the academic calendar (Juin/Juillet/Août).
@@ -419,6 +393,7 @@ export function getCurrentAcademicIndex(): number {
   return map[real] ?? -1;
 }
 
+
 // Current academic year label (e.g. '2026/2027') based on today's date.
 // A new academic year starts in July, so August 2026 -> '2026/2027'.
 export function getCurrentAcademicYear(): string {
@@ -426,6 +401,7 @@ export function getCurrentAcademicYear(): string {
   const year = now.getFullYear();
   return now.getMonth() >= 6 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
 }
+
 
 export interface ParentInfo {
   name: string;
@@ -438,12 +414,14 @@ export interface ParentInfo {
   extraPhones?: string[];
 }
 
+
 export interface Sibling {
   id: string;
   name: string;
   age: number;
   grade: string;
 }
+
 
 export interface AuthorizedPerson {
   id: string;
@@ -452,10 +430,12 @@ export interface AuthorizedPerson {
   relation: string;
 }
 
+
 export interface AcademicHistoryEntry {
   school: string;
   grade: string;
 }
+
 
 export interface PaymentRecord {
   id: string;
@@ -463,7 +443,7 @@ export interface PaymentRecord {
   amountPaid: number;
   totalRequired: number;
   remainingBalance: number;
-  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Autres';
+  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Événements' | 'Autres';
   month: string; // e.g. "Octobre"
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
   method: 'Espèces' | 'Chèque' | 'Virement';
@@ -477,14 +457,6 @@ export interface PaymentRecord {
   refundOf?: string;      // id of the original payment being refunded
 }
 
-/** Stored payment.service must stay generic and independent of the center name. */
-export function normalizePaymentService(service: unknown, month?: unknown): PaymentRecord['service'] | string {
-  const legacyService = String(service ?? '').replace(/\s+/g, ' ').trim();
-  const isAnnual = String(month ?? '').startsWith('Annuel');
-  if (legacyService === 'Inscription') return 'Inscription Suivi';
-  if (legacyService === 'Bibliothèque' && isAnnual) return 'Inscription Bibliothèque';
-  return legacyService;
-}
 
 export interface MealSubscription {
   mode: 'subscription' | 'unit';
@@ -495,7 +467,9 @@ export interface MealSubscription {
   active: boolean;
 }
 
+
 export type MealServiceType = 'lunch' | 'gouter_matin' | 'gouter_apres_midi';
+
 
 /** One meal or snack served to a student on a specific date. */
 export interface MealAttendance {
@@ -508,12 +482,14 @@ export interface MealAttendance {
   traiteurPrice?: number;
 }
 
+
 export interface StudentRegistration {
   date: string;
   location: string;
   signedElectronically: boolean;
   signatureName?: string;
 }
+
 
 export interface Student {
   id: string;
@@ -590,29 +566,31 @@ export interface Student {
   timeSheetId?: string;
 }
 
+
 export interface SuiviSubjectGrade {
   devoir1?: number;  // devoir de contrôle n°1
   devoir2?: number;  // devoir de contrôle n°2 (Mathématiques uniquement)
   synthese?: number; // devoir de synthèse
 }
 
+
 export interface SuiviTrimester {
   trimester: 1 | 2 | 3;
   subjects: Record<string, SuiviSubjectGrade>; // subject name (e.g. "Mathématiques") -> grades
 }
+
 
 export interface SuiviNotes {
   schoolYear: string;
   trimesters: SuiviTrimester[];
 }
 
-// Backwards-compatible alias kept for any existing imports
-export const SUIVI_SUBJECTS = APP_SUBJECTS;
 
 // Returns the shared subject list used everywhere (from settings or default)
 export function getAppSubjects(settings?: CenterSettings): string[] {
   return settings?.subjects?.length ? settings.subjects : APP_SUBJECTS;
 }
+
 
 // Helper to detect the Mathématiques subject no matter its label format
 export function isMathSubject(subject: string): boolean {
@@ -620,9 +598,12 @@ export function isMathSubject(subject: string): boolean {
   return s === 'mathématiques' || s.includes('رياضيات') || s.includes('mathématiques');
 }
 
+
 export type StaffRole = 'enseignant' | 'encadrant' | 'administration' | 'agent_entretien' | 'cuisinier' | 'chauffeur_bus' | 'autre';
 
+
 export type StaffRequestStatus = 'en_attente' | 'approuve' | 'refuse';
+
 
 export interface LeaveRequest {
   id: string;
@@ -634,6 +615,7 @@ export interface LeaveRequest {
   status: StaffRequestStatus;
 }
 
+
 export interface StaffAdvance {
   id: string;
   staffId: string;
@@ -642,6 +624,7 @@ export interface StaffAdvance {
   reason: string;
   status: StaffRequestStatus;
 }
+
 
 export interface PaySlip {
   id: string;
@@ -666,6 +649,7 @@ export interface PaySlip {
   extraHoursAmount?: number;
 }
 
+
 export interface StaffPayment {
   id: string;
   month: string;
@@ -678,10 +662,12 @@ export interface StaffPayment {
   notes?: string;
 }
 
+
 export interface StaffScheduleSlot {
   day: string;      // 'Lundi' | 'Mardi' | ... | 'Samedi'
   slots: string[];  // e.g. ['08:00 - 12:00', '14:00 - 18:00']
 }
+
 
 export interface StaffMember {
   id: string;
@@ -708,6 +694,7 @@ export interface StaffMember {
   schedule?: StaffScheduleSlot[]; // Emploi du temps hebdomadaire
 }
 
+
 export interface TimesheetEntry {
   id: string;
   staffId: string;
@@ -721,21 +708,14 @@ export interface TimesheetEntry {
   extraHours?: number;  // supplementary hours (heures supplémentaires)
 }
 
-export const ETUDE_TIME_SLOTS = [
-  '08:00 - 10:00',
-  '10:00 - 12:00',
-  '14:00 - 16:00',
-  '16:00 - 18:00',
-  '18:00 - 20:00'
-] as const;
-
-export type TimeSlot = typeof ETUDE_TIME_SLOTS[number];
 
 export const ETUDE_DAYS = [
   'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'
 ] as const;
 
+
 export type EtudeDay = typeof ETUDE_DAYS[number];
+
 
 export interface EtudeSlot {
   id: string;
@@ -747,6 +727,7 @@ export interface EtudeSlot {
   enrolledStudentIds: string[];
   isExtra?: boolean; // Seance outside the teacher's weekly schedule → counted as additional hours
 }
+
 
 // Tunisian school levels (Primaire 1ère → 6ème, Collège 7ème → 9ème, Lycée 1ère → Bac)
 export const EXTERNAL_GRADE_LEVELS: { level: string; branches: string[] }[] = [
@@ -765,8 +746,6 @@ export const EXTERNAL_GRADE_LEVELS: { level: string; branches: string[] }[] = [
   { level: 'Baccalauréat', branches: [] }
 ];
 
-// Shared subject list used in course (1 matière/course) and enseignant selection
-export const COURSE_SUBJECTS = APP_SUBJECTS;
 
 // Build a grade list ("Primaire 1ère", ..., "Baccalauréat") for dropdowns — same labels as student fiche
 export function buildExternalGradeOptions(): { value: string; label: string }[] {
@@ -777,12 +756,16 @@ export function buildExternalGradeOptions(): { value: string; label: string }[] 
   return options;
 }
 
+
 export const EXTERNAL_GRADE_OPTIONS = buildExternalGradeOptions();
+
 
 // ─── Student TimeSheet ────────────────────────────────────────────────
 
 export const TIMESHEET_DAYS = ['الأثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] as const;
+
 export type TimesheetDay = typeof TIMESHEET_DAYS[number];
+
 
 export interface TimeSheetSlot {
   id?: string;
@@ -790,6 +773,7 @@ export interface TimeSheetSlot {
   startTime: string; // "08:00"
   endTime: string;   // "12:00"
 }
+
 
 export interface StudentTimeSheet {
   id: string;
@@ -803,7 +787,9 @@ export interface StudentTimeSheet {
   updatedAt: string;
 }
 
+
 export type StudentAttendanceStatus = 'present' | 'absent';
+
 
 /** Daily check-in record used by jardin centers (Pointage Élèves). */
 export interface StudentAttendanceRecord {
@@ -816,10 +802,12 @@ export interface StudentAttendanceRecord {
   updatedAt: string;
 }
 
+
 export const TIMESHEET_GRADES_NO_BRANCH = [
   'Primaire 1ère', 'Primaire 2ème', 'Primaire 3ème', 'Primaire 4ème', 'Primaire 5ème', 'Primaire 6ème',
   'Collège 7ème', 'Collège 8ème', 'Collège 9ème', 'Lycée 1ère'
 ];
+
 
 export const TIMESHEET_GRADES_2EME_BRANCHES = [
   'Lettres (آداب)',
@@ -827,6 +815,7 @@ export const TIMESHEET_GRADES_2EME_BRANCHES = [
   'Économie et Services (إقتصاد وخدمات)',
   'Technologies de l\'Informatique (تكنولوجيا المعلومات)',
 ];
+
 
 export const TIMESHEET_GRADES_3EME_BAC_BRANCHES = [
   'Lettres (آداب)',
@@ -838,6 +827,7 @@ export const TIMESHEET_GRADES_3EME_BAC_BRANCHES = [
   'Sport (رياضة)',
 ];
 
+
 export function getTimesheetBranches(grade: string): string[] {
   if (TIMESHEET_GRADES_NO_BRANCH.some(g => grade.includes(g))) return [];
   if (grade.includes('Primaire') || grade.includes('Collège')) return [];
@@ -846,9 +836,11 @@ export function getTimesheetBranches(grade: string): string[] {
   return [];
 }
 
+
 export function getTimeSlotsForDay(schedule: TimeSheetSlot[], day: TimesheetDay): TimeSheetSlot[] {
   return schedule.filter(s => s.day === day);
 }
+
 
 export interface ExternalCourseStudent {
   studentId: string;
@@ -860,6 +852,7 @@ export interface ExternalCourseStudent {
   assuranceDate?: string;
   enrolledAt?: string;         // date of enrollment in course
 }
+
 
 // Global register of external (hors-liste) students shared across all courses
 export interface ExternalRegistrationRecord {
@@ -874,6 +867,7 @@ export interface ExternalRegistrationRecord {
   notes?: string;
 }
 
+
 export interface ExternalAttendanceRecord {
   id: string;
   studentId: string;
@@ -882,6 +876,7 @@ export interface ExternalAttendanceRecord {
   date: string;
   status: 'present' | 'absent';
 }
+
 
 export interface ExternalStudentRegister {
   id: string;
@@ -897,6 +892,7 @@ export interface ExternalStudentRegister {
   createdAt: string;
 }
 
+
 export interface ExternalCourse {
   id: string;
   schoolYear: string;  // ex: "2026/2027"
@@ -911,8 +907,10 @@ export interface ExternalCourse {
   enrolledStudents: ExternalCourseStudent[];
 }
 
+
 // Per-seance status for an enrolled student in a given session
 export type SeanceStudentStatus = 'present' | 'absent' | 'paie_mois' | 'paie_seance';
+
 
 export interface ExternalCourseSession {
   id: string;
@@ -928,9 +926,10 @@ export interface ExternalCourseSession {
   periodName?: string; // e.g. "الثلاثي الأول" or month label for the session
 }
 
+
 export interface MealPlanDay {
   id: string;
-  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi';
+  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi' | 'Samedi'; // Revision D (remark M1): السبت added
   date: string;
   dishName: string;
   description: string;
@@ -940,6 +939,7 @@ export interface MealPlanDay {
     paidUnit: boolean;
   }[];
 }
+
 
 // "Forfait ferme" (Case C): when the admin closes a month (end of month), the paid
 // subscription balance not consumed by the student becomes center profit. The amounts
@@ -953,6 +953,7 @@ export interface MealForfaitClosureItem {
   amount: number;
 }
 
+
 export interface MealForfaitClosure {
   id: string;
   month: string;          // ex: 'Septembre'
@@ -960,6 +961,7 @@ export interface MealForfaitClosure {
   createdAt: string;      // ISO timestamp
   items: (MealForfaitClosureItem | null)[];
 }
+
 
 // A single "seance de revision" (one-time revision session with an external teacher).
 // Unlike a course, it has no monthly fee / cycles / assurance — just 1 session.
@@ -970,6 +972,7 @@ export interface RevisionSeanceStudent {
   paidSeance: boolean;  // did this student pay for the revision seance
   present: boolean;     // attendance status
 }
+
 
 export interface RevisionSeance {
   id: string;
@@ -985,10 +988,12 @@ export interface RevisionSeance {
   students: RevisionSeanceStudent[];
 }
 
+
 export interface FormationMatiere {
   id: string;
   subject: string;
 }
+
 
 export interface FormationStudent {
   id: string;
@@ -1014,6 +1019,7 @@ export interface FormationStudent {
   refundReason?: string;
 }
 
+
 export interface Formation {
   id: string;
   name: string;
@@ -1031,6 +1037,7 @@ export interface Formation {
   schedule?: FormationSeance[];
 }
 
+
 export interface FormationSeance {
   id: string;
   day: string;          // e.g. الأثنين
@@ -1043,7 +1050,9 @@ export interface FormationSeance {
   students?: string[];
 }
 
+
 export type StaffPayslip = PaySlip;
+
 
 export type ExpenseCategory = 
   | 'Télécom' 
@@ -1059,6 +1068,7 @@ export type ExpenseCategory =
   | 'المحاسبات' 
   | 'Autres';
 
+
 export interface CenterExpense {
   id: string;
   date: string;
@@ -1067,6 +1077,7 @@ export interface CenterExpense {
   description: string;
   receiptRef: string;
 }
+
 
 /**
  * Generate the next sequential receipt number for a given prefix.
@@ -1092,13 +1103,73 @@ export function generateReceiptNumber(students: Student[], prefix: string): stri
   return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }
 
+
+// ─── Activités & Planning (module « activites ») ─────────────────────────
+
+export type ActivityCategory = 'motricite' | 'art' | 'musique' | 'jeu';
+
+/** Planned activity in a center's weekly calendar (module Activités & Planning). */
+export interface Activity {
+  id: string;
+  /** Stampé côté serveur depuis la session — jamais pris du payload. */
+  centerId?: string;
+  title: string;
+  category: ActivityCategory;
+  /** 0–6 (Lun–Dim), requis quand `date` est absent ; ignoré si `date` présent. */
+  weekday?: number;
+  /** Date ISO unique (YYYY-MM-DD) — remplace `weekday` quand présent. */
+  date?: string;
+  timeStart: string; // HH:MM
+  timeEnd: string;   // HH:MM (> timeStart)
+  location?: string;
+  /** Classe/niveau — clé de groupement optionnelle. */
+  levelClass?: string;
+  /** Référence optionnelle au staff encadrant ; référence pendante tolérée. */
+  staffId?: string;
+  createdAt?: string;
+}
+
+// ─── Compétences & Skills (module « competences ») ────────────────────────
+
+export type SkillDomain = 'langage' | 'motricite' | 'social' | 'autonomie';
+
+export type SkillLevel = 'non_evalue' | 'emergent' | 'en_cours' | 'acquis';
+
+/** Catalog entry of observable skills, grouped by domain. */
+export interface Skill {
+  id: string;
+  centerId?: string;
+  domain: SkillDomain;
+  label: string;
+  /** Âge en mois, optionnel ; ageTo >= ageFrom quand les deux sont présents. */
+  ageFrom?: number;
+  ageTo?: number;
+  createdAt?: string;
+}
+
+/** A child's assessed level on one skill (latest save wins per pair). */
+export interface SkillEvaluation {
+  id: string;
+  centerId?: string;
+  studentId: string;
+  skillId: string;
+  level: SkillLevel;
+  /** Discriminateur : evaluatedByStaffId XOR evaluatedByName (jamais les deux). */
+  evaluatedByStaffId?: string;
+  evaluatedByName?: string;
+  evaluatedAt: string; // ISO date
+}
+
+
 // ─── Demandes de renouvellement (migration 0033) ──────────────────────────
 // Un centre demande soit le renouvellement de son offre actuelle (appliqué à
 // la fin de la période en cours), soit un passage à une offre supérieure
 // (Basic → Growth → Pro), appliqué dès l'acceptation par la plateforme.
 
 export type RenewalRequestKind = 'renewal' | 'upgrade';
+
 export type RenewalRequestStatus = 'pending' | 'approved' | 'rejected';
+
 
 export interface RenewalRequest {
   id: string;
@@ -1124,6 +1195,7 @@ export interface RenewalRequest {
   updatedAt: number;
 }
 
+
 /** Ligne de l'historique des plans d'un centre (table center_plan_history). */
 export interface PlanHistoryEntry {
   id: string;
@@ -1132,4 +1204,95 @@ export interface PlanHistoryEntry {
   amount: number | null;
   invoiceNumber: string | null;
   createdAt: number;
+}
+
+
+// ─── Événements & Sorties (الفعاليات والخرجات) ──────────────────────────────
+
+export type EventCategory = 'trip' | 'party' | 'workshop' | 'other';
+
+export type EventStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
+
+/** Qui participe à l'événement et à quel tarif. */
+export type EventParticipantType = 'student' | 'parent' | 'sibling' | 'external';
+
+export interface EventParticipant {
+  id: string;                        // 'prt_' + crypto.randomUUID()
+  participantName: string;
+  participantType: EventParticipantType;
+  /** Élève du centre auquel ce participant est rattaché (parent / fratrie). */
+  linkedStudentId?: string;
+  contactPhone: string;
+  amountPaid: number;
+  totalRequired: number;
+  remainingBalance: number;
+  /** Les événements n'acceptent que l'espèce et le chèque (pas de virement). */
+  paymentMethod?: 'Espèces' | 'Chèque';
+  chequeNumber?: string;
+  chequeDate?: string;               // YYYY-MM-DD
+  /** Réduction accordée sur le tarif du type de participant (dérive totalRequired). */
+  discount?: number;
+  /**
+   * Chèque encaissé par le module Finance. Un participant payé par chèque
+   * reste `paid: false` jusqu'à la validation du chèque côté Finance.
+   */
+  chequePaid?: boolean;
+  paid: boolean;
+  paidAt?: string;                   // ISO timestamp
+  attended: boolean;
+  notes?: string;
+  receiptNumber?: string;            // 'REC-EVT-001'
+}
+
+/** Nommé SchoolEvent (et non Event) : `Event` est déjà pris par le DOM. */
+export interface SchoolEvent {
+  id: string;                        // 'evt_' + crypto.randomUUID()
+  name: string;
+  description?: string;
+  category: EventCategory;
+  date: string;                      // YYYY-MM-DD
+  time?: string;                     // HH:MM
+  location: string;
+  priceStudent: number;
+  priceParent: number;
+  priceSibling: number;
+  priceExternal: number;
+  maxCapacity?: number;
+  busIncluded: boolean;
+  status: EventStatus;
+  schoolYear: string;
+  participants: EventParticipant[];
+  createdAt: string;                 // ISO timestamp
+}
+
+/** Tarif applicable à un type de participant. */
+export function eventPriceFor(evt: SchoolEvent, type: EventParticipantType): number {
+  switch (type) {
+    case 'student': return evt.priceStudent || 0;
+    case 'parent': return evt.priceParent || 0;
+    case 'sibling': return evt.priceSibling || 0;
+    default: return evt.priceExternal || 0;
+  }
+}
+
+/**
+ * Prochain numéro de reçu d'événement, en scannant tous les participants de
+ * tous les événements pour trouver le plus grand numéro `REC-EVT-` existant.
+ * Les reçus d'événements ne vivent pas dans student.payments, donc
+ * generateReceiptNumber() ne peut pas les voir.
+ */
+export function generateEventReceiptNumber(events: SchoolEvent[], prefix = 'REC-EVT-'): string {
+  let max = 0;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escaped}(\\d+)$`);
+  for (const evt of events) {
+    for (const p of evt.participants || []) {
+      const match = (p.receiptNumber || '').match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > max) max = num;
+      }
+    }
+  }
+  return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }

@@ -1,13 +1,13 @@
 import React from 'react';
 import { AlertTriangle, CalendarClock, RefreshCw, ShieldAlert } from 'lucide-react';
-import type { CenterStatus, SaaSPlan } from '../types';
+import type { CenterStatus, SubscriptionPlan } from '../types';
 import { daysUntil, formatDate } from '../utils/dates';
 
 export { daysUntil };
 
 export interface SubscriptionStatusInfo {
   status: CenterStatus;
-  plan?: SaaSPlan;
+  plan?: SubscriptionPlan;
   trialEndsAt?: number | null;
   subscriptionEndsAt?: number | null;
   billingCycle?: 'monthly' | 'annual';

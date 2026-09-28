@@ -6,7 +6,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const expenses = await readExpenses(context.env.DB, centerId);
     return json(expenses);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر قراءة بيانات المصروفات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر قراءة بيانات المصروفات.' }, 500);
   }
 };
 
@@ -20,7 +21,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await createSingleExpense(context.env.DB, expense, centerId);
     return json({ ok: true, expense });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر إضافة المصروف.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر إضافة المصروف.' }, 500);
   }
 };
 
@@ -34,7 +36,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     await writeExpenses(context.env.DB, expenses, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حفظ بيانات المصروفات.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حفظ بيانات المصروفات.' }, 500);
   }
 };
 
@@ -53,6 +56,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     await deleteSingleExpense(context.env.DB, id, centerId);
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'تعذر حذف المصروف.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'تعذر حذف المصروف.' }, 500);
   }
 };

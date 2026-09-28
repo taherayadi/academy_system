@@ -1,16 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  getClientIp,
-  json,
-  readBody,
-  sha256Hex,
-  getSessionToken,
-  isHttpsRequest,
-  makeSessionCookie,
-  clearSessionCookie,
-  mapCenterRow,
-  getCenterAccessState,
-} from './_lib';
+import { getClientIp, json, readBody, hashPassword, verifyPassword, getSessionToken, isHttpsRequest, makeSessionCookie, clearSessionCookie, mapCenterRow, getCenterAccessState } from './_lib';
 
 // ---------------------------------------------------------------------------
 // getClientIp
@@ -96,30 +85,32 @@ describe('readBody', () => {
 });
 
 // ---------------------------------------------------------------------------
-// sha256Hex
+// hashPassword & verifyPassword
 // ---------------------------------------------------------------------------
-describe('sha256Hex', () => {
-  it('produces correct SHA-256 for known input', async () => {
-    // SHA-256 of "hello" = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-    const hash = await sha256Hex('hello');
-    expect(hash).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+describe('hashPassword & verifyPassword', () => {
+  it('hashes and successfully verifies a correct password', async () => {
+    const pwd = 'TestPassword123!';
+    const hash = await hashPassword(pwd);
+    expect(hash).not.toBe(pwd);
+    expect(hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')).toBe(true);
+
+    const isValid = await verifyPassword(pwd, hash);
+    expect(isValid).toBe(true);
   });
 
-  it('produces correct hash for empty string', async () => {
-    const hash = await sha256Hex('');
-    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  it('rejects incorrect password during verification', async () => {
+    const hash = await hashPassword('correctPassword');
+    const isValid = await verifyPassword('wrongPassword', hash);
+    expect(isValid).toBe(false);
   });
 
-  it('returns 64-char hex string', async () => {
-    const hash = await sha256Hex('test123');
-    expect(hash).toHaveLength(64);
-    expect(/^[a-f0-9]+$/.test(hash)).toBe(true);
-  });
-
-  it('produces different hashes for different inputs', async () => {
-    const h1 = await sha256Hex('aaa');
-    const h2 = await sha256Hex('bbb');
-    expect(h1).not.toBe(h2);
+  it('produces different hashes with unique salts for identical passwords', async () => {
+    const pwd = 'commonPassword';
+    const hash1 = await hashPassword(pwd);
+    const hash2 = await hashPassword(pwd);
+    expect(hash1).not.toBe(hash2);
+    expect(await verifyPassword(pwd, hash1)).toBe(true);
+    expect(await verifyPassword(pwd, hash2)).toBe(true);
   });
 });
 
@@ -129,7 +120,7 @@ describe('sha256Hex', () => {
 describe('getSessionToken', () => {
   it('extracts token from Cookie header', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=abc123; other=xyz' },
+      headers: { Cookie: 'tc_center_session=abc123; other=xyz' },
     });
     expect(getSessionToken(req)).toBe('abc123');
   });
@@ -139,7 +130,7 @@ describe('getSessionToken', () => {
     expect(getSessionToken(req)).toBeNull();
   });
 
-  it('returns null when tc_session cookie not present', () => {
+  it('returns null when tc_center_session cookie not present', () => {
     const req = new Request('https://x.com', {
       headers: { Cookie: 'other=value' },
     });
@@ -148,21 +139,21 @@ describe('getSessionToken', () => {
 
   it('decodes URL-encoded token', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=hello%20world' },
+      headers: { Cookie: 'tc_center_session=hello%20world' },
     });
     expect(getSessionToken(req)).toBe('hello world');
   });
 
   it('handles cookie with empty value', () => {
     const req = new Request('https://x.com', {
-      headers: { Cookie: 'tc_session=; other=val' },
+      headers: { Cookie: 'tc_center_session=; other=val' },
     });
     expect(getSessionToken(req)).toBeNull();
   });
 
   it('works with lowercase "cookie" header', () => {
     const req = new Request('https://x.com');
-    req.headers.set('cookie', 'tc_session=token123');
+    req.headers.set('cookie', 'tc_center_session=token123');
     expect(getSessionToken(req)).toBe('token123');
   });
 });
@@ -200,12 +191,12 @@ describe('isHttpsRequest', () => {
 // makeSessionCookie
 // ---------------------------------------------------------------------------
 describe('makeSessionCookie', () => {
-  it('builds cookie with HttpOnly and SameSite=Lax', () => {
+  it('builds cookie with HttpOnly and SameSite=Strict', () => {
     const req = new Request('https://example.com');
     const cookie = makeSessionCookie('tok123', req);
-    expect(cookie).toContain('tc_session=tok123');
+    expect(cookie).toContain('tc_center_session=tok123');
     expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).toContain('SameSite=Strict');
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('Max-Age=');
   });
@@ -231,7 +222,7 @@ describe('clearSessionCookie', () => {
     const req = new Request('https://example.com');
     const cookie = clearSessionCookie(req);
     expect(cookie).toContain('Max-Age=0');
-    expect(cookie).toContain('tc_session=');
+    expect(cookie).toContain('tc_center_session=');
   });
 });
 

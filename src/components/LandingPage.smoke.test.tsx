@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
 import { submitDemoRequestApi } from '../api';
 
@@ -136,5 +136,161 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
         requestedModules: ['scolaire', 'studentTimeSheets', 'finance', 'cantine']
       }));
     });
+  });
+
+  it('shows an error with retry instead of fake success when the API fails', async () => {
+    const apiMock = vi.mocked(submitDemoRequestApi);
+    apiMock.mockClear();
+    apiMock.mockRejectedValueOnce(new Error('network down'));
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    fireEvent.click(screen.getByText('Jardin d’enfant'));
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    // The failure must be announced — never a success screen.
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/envoi a échoué/i);
+    expect(screen.queryByText(/Demande envoyée avec succès/i)).toBeNull();
+
+    // Retry succeeds → success screen, API called twice.
+    apiMock.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole('button', { name: /Réessayer/i }));
+    await screen.findByText(/Demande envoyée avec succès/i);
+    expect(apiMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers Crèche and Garderie as establishment types and submits creche', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    expect(screen.getByText('Crèche')).toBeTruthy();
+    expect(screen.getByText('Garderie')).toBeTruthy();
+
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByText('Crèche'));
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        centerType: 'creche'
+      }));
+    });
+  });
+
+  it('submits garderie as the selected center type', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    fillForm('20 123 456');
+    fireEvent.click(screen.getByText('Garderie'));
+    fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        centerType: 'garderie'
+      }));
+    });
+  });
+
+  it('resurfaces a previously saved offline lead and resends it (prefix)', async () => {
+    // Une visite précédente a échoué : une copie dort dans localStorage.
+    localStorage.setItem('academy_demo_requests', JSON.stringify([
+      { id: 'REQ-1', requestType: 'trial', fullName: 'Old Lead', academyName: 'Old Academy', email: 'old@test.tn', phone: '20123456', estimatedSize: '3 modules', requestedModules: ['scolaire', 'studentTimeSheets', 'finance'], message: '', submittedAt: new Date().toISOString() }
+    ]));
+    const apiMock = vi.mocked(submitDemoRequestApi);
+    apiMock.mockClear();
+    apiMock.mockResolvedValue(undefined);
+
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    // The banner appears (status role) and offers the resend.
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toMatch(/n'a pas pu partir/i);
+    fireEvent.click(screen.getByRole('button', { name: /Renvoyer maintenant/i }));
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        fullName: 'Old Lead',
+        phone: '20123456'
+      }));
+    });
+    // The saved copy is consumed after a successful resend.
+    await waitFor(() => {
+      expect(localStorage.getItem('academy_demo_requests')).toBeNull();
+    });
+    // Banner gone.
+    expect(screen.queryByText(/n'a pas pu partir/i)).toBeNull();
+  });
+});
+
+describe('LandingPage — module×type compatibility (T025, remarks 5+6)', () => {
+  /** The pricing addon row for a module label — the LAST aria-pressed toggle
+   *  (the hero features strip also carries the labels, but has no badge). */
+  function addonRow(label: string): HTMLElement {
+    const candidates = screen.getAllByText(label).map(el => el.closest('button'))
+      .filter((b): b is HTMLButtonElement => !!b && b.getAttribute('aria-pressed') !== null);
+    const btn = candidates[candidates.length - 1];
+    expect(btn, `no addon row for ${label}`).toBeTruthy();
+    return btn!;
+  }
+
+  it('shows a «Disponible : …» badge line on every addon row (remark 5)', () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    // étude → Garderie, Formation only.
+    const etude = addonRow('Étude Surveillée');
+    expect(within(etude).getByText(/Disponible\s*:\s*Garderie · Formation/)).toBeTruthy();
+
+    // events → all four types (order-agnostic: the badge is one text run).
+    const events = addonRow('Événements & Sorties');
+    const eventsText = within(events).getByText(/Disponible\s*:/).textContent || '';
+    for (const label of ["Jardin d'enfants", 'Crèche', 'Garderie', 'Formation']) {
+      expect(eventsText).toContain(label);
+    }
+
+    // Base rows stay badge-free: exactly the 10 addon rows carry a badge.
+    expect(screen.getAllByText(/Disponible\s*:/).length).toBe(10);
+  });
+
+  it('live-warns about incompatible selections without blocking submission (remark 6)', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    // No type selected yet → no banner even with an incompatible module.
+    clickModuleToggle('Étude Surveillée');
+    expect(screen.queryByText(/n'est pas disponible pour les centres/)).toBeNull();
+
+    // Selecting crèche lights the banner up, live.
+    fireEvent.click(screen.getByText('Crèche'));
+    const banner = await screen.findByText(/n'est pas disponible pour les centres/);
+    expect(banner.textContent).toContain('Étude Surveillée');
+
+    // Informative, not blocking: submit stays enabled and the payload is unmodified.
+    fillForm('20 123 456');
+    const submit = screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
+        centerType: 'creche',
+        requestedModules: expect.arrayContaining(['etude'])
+      }));
+    });
+  });
+
+  it('clears the banner when the module is removed or the type flips', async () => {
+    render(<LandingPage onOpenLogin={() => {}} />);
+
+    clickModuleToggle('Étude Surveillée');
+    fireEvent.click(screen.getByText('Crèche'));
+    await screen.findByText(/n'est pas disponible pour les centres/);
+
+    // Remove the module → banner clears.
+    clickModuleToggle('Étude Surveillée');
+    expect(screen.queryByText(/n'est pas disponible pour les centres/)).toBeNull();
+
+    // Re-add and flip the type to Garderie → banner clears too.
+    clickModuleToggle('Étude Surveillée');
+    fireEvent.click(screen.getByText('Garderie'));
+    expect(screen.queryByText(/n'est pas disponible pour les centres/)).toBeNull();
   });
 });

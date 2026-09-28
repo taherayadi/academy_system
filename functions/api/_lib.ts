@@ -1,4 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
+import { isDeploymentRole } from './_deployment';
 
 /**
  * Shared helpers for the Cloudflare Pages Functions.
@@ -90,7 +91,7 @@ function extractFeeValues(f: any): any {
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
   });
 }
 
@@ -103,13 +104,18 @@ export async function readBody<T = any>(request: Request): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Password hashing (WebCrypto)
+// Password hashing (bcrypt)
 // ---------------------------------------------------------------------------
 
-export async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+import * as bcrypt from 'bcryptjs';
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +162,7 @@ async function ensureRateLimitTable(db: D1Database): Promise<void> {
 export async function consumeAuthRateLimit(
   db: D1Database,
   request: Request,
-  prefix = 'auth',
+  prefix = 'center:auth',
   maxLimit = AUTH_RATE_LIMIT,
   windowMs = AUTH_RATE_WINDOW_MS
 ): Promise<{ allowed: true } | { allowed: false; retryAfterSec: number }> {
@@ -179,7 +185,7 @@ export async function consumeAuthRateLimit(
 export async function resetAuthRateLimit(db: D1Database, request: Request): Promise<void> {
   await ensureRateLimitTable(db);
   const ip = getClientIp(request);
-  await db.prepare('DELETE FROM rate_limits WHERE key = ?').bind('auth:' + ip).run();
+  await db.prepare('DELETE FROM rate_limits WHERE key = ?').bind('center:auth:' + ip).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -187,14 +193,14 @@ export async function resetAuthRateLimit(db: D1Database, request: Request): Prom
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_CENTER_ID = 'e1000000-0000-4000-8000-000000000001';
-const SESSION_COOKIE = 'tc_session';
+const SESSION_COOKIE = 'tc_center_session';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 let sessionsTableReady = false;
 export async function ensureSessionsTable(db: D1Database): Promise<void> {
   if (sessionsTableReady) return;
-  await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, center_id TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
-  try { await db.prepare('ALTER TABLE sessions ADD COLUMN center_id TEXT').run(); } catch {}
+  await db.prepare('CREATE TABLE IF NOT EXISTS center_sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, center_id TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)').run();
+  try { await db.prepare('ALTER TABLE center_sessions ADD COLUMN center_id TEXT').run(); } catch {}
   sessionsTableReady = true;
 }
 
@@ -211,7 +217,7 @@ export function getSessionToken(request: Request): string | null {
     const name = part.slice(0, eqIdx).trim();
     if (name === SESSION_COOKIE) {
       const val = part.slice(eqIdx + 1).trim();
-      return val ? decodeURIComponent(val) : null;
+      try { return val ? decodeURIComponent(val) : null; } catch { return null; }
     }
   }
   return null;
@@ -221,7 +227,7 @@ export async function createSession(db: D1Database, email: string, centerId: str
   await ensureSessionsTable(db);
   const token = crypto.randomUUID();
   const now = Date.now();
-  await db.prepare('INSERT INTO sessions (token, email, center_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').bind(token, email, centerId, now + SESSION_DURATION_MS, now).run();
+  await db.prepare('INSERT INTO center_sessions (token, email, center_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').bind(token, email, centerId, now + SESSION_DURATION_MS, now).run();
   return token;
 }
 
@@ -246,58 +252,48 @@ export async function validateSession(db: D1Database, request: Request): Promise
   const token = getSessionToken(request);
   if (!token) return null;
   await ensureSessionsTable(db);
-  const row = await db.prepare('SELECT s.email, s.token, COALESCE(s.center_id, u.center_id, ?) as center_id, u.role FROM sessions s LEFT JOIN users u ON s.email = u.email WHERE s.token = ? AND s.expires_at > ?')
-    .bind(DEFAULT_CENTER_ID, token, Date.now())
+  const row = await db.prepare('SELECT s.email, s.token, u.center_id as center_id, u.role FROM center_sessions s JOIN users u ON s.email = u.email WHERE s.token = ? AND s.expires_at > ? AND s.center_id = u.center_id')
+    .bind(token, Date.now())
     .first<{ email: string; token: string; center_id: string; role?: string }>();
-  if (!row) return null;
+  if (!row || !isDeploymentRole(row.role) || !row.center_id) return null;
 
-  // Platform accounts have no tenant subscription and must remain usable even
-  // when the default center is expired. Center accounts are checked on every
-  // authenticated request, not only during the login request.
-  if (row.role !== 'platform_super_admin') {
-    const center = await db.prepare('SELECT status, trial_ends_at, subscription_ends_at FROM centers WHERE id = ?')
-      .bind(row.center_id || DEFAULT_CENTER_ID)
-      .first<any>();
-    if (getCenterAccessState(center)) return null;
-  }
+  const center = await db.prepare('SELECT status, trial_ends_at, subscription_ends_at FROM centers WHERE id = ?')
+    .bind(row.center_id).first<any>();
+  if (!center || getCenterAccessState(center)) return null;
 
   return { email: row.email, token: row.token, centerId: row.center_id || DEFAULT_CENTER_ID, role: row.role };
 }
 
 export function getContextCenterId(context: any): string {
   const session = context?.data?.session;
-  return session?.centerId || DEFAULT_CENTER_ID;
+  if (!session?.centerId || !isDeploymentRole(session.role)) throw new Error('Missing center context');
+  return session.centerId;
 }
 
 export async function deleteSession(db: D1Database, token: string): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
+  await db.prepare('DELETE FROM center_sessions WHERE token = ?').bind(token).run();
 }
 
 export async function purgeExpiredSessions(db: D1Database): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Date.now()).run();
+  await db.prepare('DELETE FROM center_sessions WHERE expires_at < ?').bind(Date.now()).run();
 }
 
 export function makeSessionCookie(token: string, request: Request): string {
   const secure = isHttpsRequest(request) ? '; Secure' : '';
   const maxAge = Math.floor(SESSION_DURATION_MS / 1000);
-  return SESSION_COOKIE + '=' + token + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + maxAge + secure;
+  return SESSION_COOKIE + '=' + token + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=' + maxAge + secure;
 }
 
 export function clearSessionCookie(request: Request): string {
   const secure = isHttpsRequest(request) ? '; Secure' : '';
-  return SESSION_COOKIE + '=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' + secure;
+  return SESSION_COOKIE + '=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' + secure;
 }
 
 // ---------------------------------------------------------------------------
 // Role enforcement
 // ---------------------------------------------------------------------------
 
-export async function requireSuperAdmin(db: D1Database, email: string): Promise<void> {
-  const row = await db.prepare('SELECT role FROM users WHERE email = ?').bind(email).first<{ role: string }>();
-  if (!row || row.role !== 'super_admin') {
-    throw Object.assign(new Error('Acc\u00e8s refus\u00e9. Droits insuffisants.'), { status: 403 });
-  }
-}
+
 
 // ---------------------------------------------------------------------------
 // AppState interface
@@ -318,6 +314,7 @@ export interface AppState {
   studentTimeSheets: any[];
   formations: any[];
   mealForfaitClosures: any[];
+  events: any[];
 }
 
 // ===========================================================================
@@ -1175,16 +1172,367 @@ export async function writeFormations(db: D1Database, formations: any[], centerI
 }
 
 // ===========================================================================
+// EVENTS (Événements & Sorties)
+// ===========================================================================
+
+/**
+ * Lit les événements du centre. La table `events` est créée par la migration
+ * SQL appliquée manuellement dans Cloudflare D1 (dépôt admin propriétaire du
+ * schéma, aucune migration concurrente créée ici) : tant qu'elle n'est pas
+ * déployée, on renvoie une liste vide plutôt que de casser /api/state.
+ */
+export async function readEvents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM events WHERE center_id = ? ORDER BY date DESC').bind(centerId).all();
+    return (results || []).map((r: any) => ({
+      id: str(r.id),
+      name: str(r.name),
+      description: r.description == null ? undefined : str(r.description),
+      category: str(r.category) || 'other',
+      date: str(r.date),
+      time: r.time == null ? undefined : str(r.time),
+      location: str(r.location),
+      priceStudent: num(r.price_student),
+      priceParent: num(r.price_parent),
+      priceSibling: num(r.price_sibling),
+      priceExternal: num(r.price_external),
+      maxCapacity: r.max_capacity == null ? undefined : num(r.max_capacity),
+      busIncluded: bool(r.bus_included),
+      status: str(r.status) || 'planned',
+      schoolYear: str(r.school_year),
+      participants: parseJson<any[]>(r.participants, []),
+      createdAt: str(r.created_at)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function buildEventsStmts(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const stmts: D1PreparedStatement[] = [];
+  for (const e of events || []) {
+    if (!e || !e.id) continue;
+    stmts.push(db.prepare(
+      'INSERT INTO events (id, center_id, name, description, category, date, time, location, price_student, price_parent, price_sibling, price_external, max_capacity, bus_included, status, school_year, participants, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, category = excluded.category, date = excluded.date, time = excluded.time, location = excluded.location, price_student = excluded.price_student, price_parent = excluded.price_parent, price_sibling = excluded.price_sibling, price_external = excluded.price_external, max_capacity = excluded.max_capacity, bus_included = excluded.bus_included, status = excluded.status, school_year = excluded.school_year, participants = excluded.participants'
+    ).bind(
+      str(e.id), centerId, str(e.name), e.description ?? null, str(e.category) || 'other',
+      str(e.date), e.time ?? null, str(e.location),
+      num(e.priceStudent), num(e.priceParent), num(e.priceSibling), num(e.priceExternal),
+      e.maxCapacity == null || e.maxCapacity === '' ? null : num(e.maxCapacity),
+      e.busIncluded ? 1 : 0,
+      str(e.status) || 'planned', str(e.schoolYear),
+      JSON.stringify(e.participants || []),
+      str(e.createdAt || new Date().toISOString())
+    ));
+  }
+  return stmts;
+}
+
+/**
+ * Synchronisation par upsert : on insère/met à jour les événements reçus sans
+ * jamais vider la table. Un wipe complet (DELETE + réinsertion) a déjà détruit
+ * des événements existants quand le client envoyait un snapshot incomplet
+ * (ex. état local vide au login). Seules les lignes connues du client et
+ * absentes de son payload sont supprimées (suppression réelle depuis l'UI),
+ * et un payload vide n'efface rien.
+ * No-op silencieux si la table `events` n'existe pas encore (migration D1 pas
+ * encore appliquée) afin de ne jamais faire échouer l'enregistrement de l'état.
+ */
+export async function writeEvents(db: D1Database, events: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    // Dédupliquer par id : un seul upsert par événement.
+    const clean: any[] = [];
+    const seen = new Set<string>();
+    for (const e of events || []) {
+      if (!e || e.id == null || seen.has(String(e.id))) continue;
+      seen.add(String(e.id));
+      clean.push(e);
+    }
+
+    const stmts = buildEventsStmts(db, clean, centerId);
+
+    // D1 limite chaque requête à 100 paramètres liés : lots de 50 ids.
+    if (clean.length > 0) {
+      const ids = clean.map(e => String(e.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM events WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    }
+
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeEvents skipped (events table unavailable):', err);
+  }
+}
+
+// ===========================================================================
+// ACTIVITIES (Activités & Planning)
+// ===========================================================================
+
+const ACTIVITY_CATEGORIES = new Set(['motricite', 'art', 'musique', 'jeu']);
+
+/** Règles data-model : titre requis, catégorie de l'enum, timeStart < timeEnd, weekday 0–6 XOR date. */
+function isValidActivity(a: any): boolean {
+  if (!a || typeof a !== 'object') return false;
+  if (!str(a.title).trim()) return false;
+  if (!ACTIVITY_CATEGORIES.has(str(a.category))) return false;
+  const ts = str(a.timeStart);
+  const te = str(a.timeEnd);
+  if (!/^\d{1,2}:\d{2}$/.test(ts) || !/^\d{1,2}:\d{2}$/.test(te) || ts >= te) return false;
+  const hasDate = !!str(a.date);
+  if (!hasDate) {
+    const wd = Number(a.weekday);
+    if (!Number.isInteger(wd) || wd < 0 || wd > 6) return false;
+  }
+  return true;
+}
+
+/**
+ * Lit les activités du centre. Les tables sont créées par la migration SQL
+ * appliquée manuellement dans Cloudflare D1 (dépôt admin propriétaire du
+ * schéma) : tant qu'elle n'est pas déployée, on renvoie une liste vide.
+ */
+export async function readActivities(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM activities WHERE center_id = ? ORDER BY created_at, time_start').bind(centerId).all();
+    return (results || []).map((r: any) => ({
+      id: str(r.id),
+      centerId: str(r.center_id),
+      title: str(r.title),
+      category: str(r.category),
+      weekday: r.weekday == null ? undefined : num(r.weekday),
+      date: r.date == null ? undefined : str(r.date),
+      timeStart: str(r.time_start),
+      timeEnd: str(r.time_end),
+      location: r.location == null || str(r.location) === '' ? undefined : str(r.location),
+      levelClass: r.level_class == null || str(r.level_class) === '' ? undefined : str(r.level_class),
+      staffId: r.staff_id == null || str(r.staff_id) === '' ? undefined : str(r.staff_id),
+      createdAt: str(r.created_at)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function buildActivitiesStmts(db: D1Database, activities: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const stmts: D1PreparedStatement[] = [];
+  for (const a of activities || []) {
+    if (!a || !a.id || !isValidActivity(a)) continue;
+    stmts.push(db.prepare(
+      'INSERT OR REPLACE INTO activities (id, center_id, title, category, weekday, date, time_start, time_end, location, level_class, staff_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      str(a.id), centerId, str(a.title).trim(), str(a.category),
+      a.date ? null : Number(a.weekday),
+      str(a.date) || null,
+      str(a.timeStart), str(a.timeEnd),
+      str(a.location) || null, str(a.levelClass) || null, str(a.staffId) || null,
+      str(a.createdAt) || new Date().toISOString()
+    ));
+  }
+  return stmts;
+}
+
+export async function writeActivities(db: D1Database, activities: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    // Dédupliquer par id : un seul upsert par activité (premier gagne).
+    const clean: any[] = [];
+    const seen = new Set<string>();
+    for (const a of activities || []) {
+      if (!a || a.id == null || seen.has(String(a.id))) continue;
+      if (!isValidActivity(a)) continue; // lignes invalides ignorées, jamais écrites
+      seen.add(String(a.id));
+      clean.push(a);
+    }
+
+    const stmts = buildActivitiesStmts(db, clean, centerId);
+
+    if (clean.length > 0) {
+      const ids = clean.map(a => String(a.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM activities WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM activities WHERE center_id = ?').bind(centerId));
+    }
+
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeActivities skipped (activities table unavailable):', err);
+  }
+}
+
+// ===========================================================================
+// SKILLS (Compétences & Skills)
+// ===========================================================================
+
+const SKILL_DOMAINS = new Set(['langage', 'motricite', 'social', 'autonomie']);
+const SKILL_LEVELS = new Set(['non_evalue', 'emergent', 'en_cours', 'acquis']);
+
+function isValidSkill(s: any): boolean {
+  if (!s || typeof s !== 'object') return false;
+  if (!str(s.label).trim()) return false;
+  if (!SKILL_DOMAINS.has(str(s.domain))) return false;
+  const hasFrom = s.ageFrom != null && s.ageFrom !== '';
+  const hasTo = s.ageTo != null && s.ageTo !== '';
+  if (hasFrom && (!Number.isFinite(Number(s.ageFrom)) || Number(s.ageFrom) < 0)) return false;
+  if (hasTo && (!Number.isFinite(Number(s.ageTo)) || Number(s.ageTo) < 0)) return false;
+  if (hasFrom && hasTo && Number(s.ageTo) < Number(s.ageFrom)) return false;
+  return true;
+}
+
+/** Discriminateur : exactement un évaluateur (staff id XOR nom libre). */
+function isValidEvaluation(e: any): boolean {
+  if (!e || typeof e !== 'object') return false;
+  if (!str(e.studentId).trim() || !str(e.skillId).trim()) return false;
+  if (!SKILL_LEVELS.has(str(e.level))) return false;
+  if (!str(e.evaluatedAt).trim()) return false;
+  const byStaff = !!str(e.evaluatedByStaffId).trim();
+  const byName = !!str(e.evaluatedByName).trim();
+  return byStaff !== byName; // XOR strict
+}
+
+/**
+ * Lit le document compétences du centre (catalogue + évaluations). Tables
+ * créées par la migration admin ; renvoie un document vide tant qu'elles
+ * n'existent pas.
+ */
+export async function readSkills(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<{ catalog: any[]; evaluations: any[] }> {
+  try {
+    const [skillRows, evalRows] = await Promise.all([
+      db.prepare('SELECT * FROM skills WHERE center_id = ? ORDER BY domain, label').bind(centerId).all(),
+      db.prepare('SELECT * FROM skill_evaluations WHERE center_id = ?').bind(centerId).all()
+    ]);
+    return {
+      catalog: (skillRows.results || []).map((r: any) => ({
+        id: str(r.id),
+        centerId: str(r.center_id),
+        domain: str(r.domain),
+        label: str(r.label),
+        ageFrom: r.age_from == null ? undefined : num(r.age_from),
+        ageTo: r.age_to == null ? undefined : num(r.age_to),
+        createdAt: str(r.created_at)
+      })),
+      evaluations: (evalRows.results || []).map((r: any) => ({
+        id: str(r.id),
+        centerId: str(r.center_id),
+        studentId: str(r.student_id),
+        skillId: str(r.skill_id),
+        level: str(r.level),
+        evaluatedByStaffId: r.evaluated_by_staff_id == null || str(r.evaluated_by_staff_id) === '' ? undefined : str(r.evaluated_by_staff_id),
+        evaluatedByName: r.evaluated_by_name == null || str(r.evaluated_by_name) === '' ? undefined : str(r.evaluated_by_name),
+        evaluatedAt: str(r.evaluated_at)
+      }))
+    };
+  } catch {
+    return { catalog: [], evaluations: [] };
+  }
+}
+
+export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evaluations?: any[] }, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  try {
+    // 1. Catalogue valide de CETTE écriture — il définit ce qui survit.
+    const skills: any[] = [];
+    const seenSkills = new Set<string>();
+    for (const s of (doc && doc.catalog) || []) {
+      if (!s || s.id == null || seenSkills.has(String(s.id)) || !isValidSkill(s)) continue;
+      seenSkills.add(String(s.id));
+      skills.push(s);
+    }
+
+    // 2. Élèves du centre — une évaluation référençant un élève étranger est jetée.
+    let validStudentIds = new Set<string>();
+    try {
+      const { results } = await db.prepare('SELECT id FROM students WHERE center_id = ?').bind(centerId).all();
+      validStudentIds = new Set((results || []).map((r: any) => str(r.id)));
+    } catch { /* table students indisponible : pas de filtrage possible */ }
+
+    // 3. Évaluations valides, rattachées au catalogue de la même écriture
+    //    (cascade : suppression d'une compétence => ses évaluations tombent)
+    //    et à un élève du centre. Dédup (studentId, skillId) : la dernière gagne.
+    const evals: any[] = [];
+    const evalIndex = new Map<string, any>();
+    for (const e of (doc && doc.evaluations) || []) {
+      if (!e || e.id == null || !isValidEvaluation(e)) continue;
+      if (!seenSkills.has(String(e.skillId))) continue; // cascade catalog
+      if (validStudentIds.size > 0 && !validStudentIds.has(String(e.studentId))) continue; // isolation
+      evalIndex.set(`${String(e.studentId)}|${String(e.skillId)}`, e); // latest-save-wins
+    }
+    const seenEvalIds = new Set<string>();
+    for (const e of evalIndex.values()) {
+      if (seenEvalIds.has(String(e.id))) continue;
+      seenEvalIds.add(String(e.id));
+      evals.push(e);
+    }
+
+    const stmts: D1PreparedStatement[] = [];
+    for (const s of skills) {
+      stmts.push(db.prepare(
+        'INSERT OR REPLACE INTO skills (id, center_id, domain, label, age_from, age_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        str(s.id), centerId, str(s.domain), str(s.label).trim(),
+        s.ageFrom != null && s.ageFrom !== '' ? Number(s.ageFrom) : null,
+        s.ageTo != null && s.ageTo !== '' ? Number(s.ageTo) : null,
+        str(s.createdAt) || new Date().toISOString()
+      ));
+    }
+    for (const e of evals) {
+      stmts.push(db.prepare(
+        'INSERT OR REPLACE INTO skill_evaluations (id, center_id, student_id, skill_id, level, evaluated_by_staff_id, evaluated_by_name, evaluated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        str(e.id), centerId, str(e.studentId), str(e.skillId), str(e.level),
+        str(e.evaluatedByStaffId) || null, str(e.evaluatedByName) || null, str(e.evaluatedAt)
+      ));
+    }
+
+    // 4. Purge : compétences/évaluations absentes de l'écriture + évaluations
+    //    orphelines (compétence retirée) dans la même transaction logique.
+    if (skills.length > 0) {
+      const ids = skills.map(s => String(s.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM skills WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM skills WHERE center_id = ?').bind(centerId));
+    }
+    if (evals.length > 0) {
+      const ids = evals.map(e => String(e.id));
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        stmts.push(db.prepare(
+          `DELETE FROM skill_evaluations WHERE center_id = ? AND id NOT IN (${chunk.map(() => '?').join(',')})`
+        ).bind(centerId, ...chunk));
+      }
+    } else {
+      stmts.push(db.prepare('DELETE FROM skill_evaluations WHERE center_id = ?').bind(centerId));
+    }
+
+    for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+  } catch (err) {
+    console.error('writeSkills skipped (skills tables unavailable):', err);
+  }
+}
+
+// ===========================================================================
 // FULL STATE
 // ===========================================================================
 
 export async function readState(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<AppState> {
-  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures] = await Promise.all([
+  const [settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures, events] = await Promise.all([
     readSettings(db, centerId), readStudents(db, centerId), readStaff(db, centerId), readSlots(db, centerId), readCourses(db, centerId),
     readSessions(db, centerId), readMealPlans(db, centerId), readExpenses(db, centerId), readTimesheets(db, centerId),
-    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId), readMealForfaitClosures(db, centerId)
+    readExternalStudents(db, centerId), readRevisionSeances(db, centerId), readStudentTimeSheets(db, centerId), readFormations(db, centerId), readMealForfaitClosures(db, centerId),
+    readEvents(db, centerId)
   ]);
-  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures };
+  return { settings, students, staff, slots, courses, sessions, mealPlans, expenses, timesheets, externalStudents, revisionSeances, studentTimeSheets, formations, mealForfaitClosures, events };
 }
 
 export async function writeState(db: D1Database, state: AppState, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
@@ -1289,6 +1637,9 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
   for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
   for (let i = 0; i < allDataStmts.length; i += 500) await db.batch(allDataStmts.slice(i, i + 500));
   if (state.settings && typeof state.settings === 'object') await writeSettings(db, state.settings, centerId);
+  // Les événements sont écrits à part : si la table `events` n'est pas encore
+  // déployée, writeEvents() absorbe l'erreur sans faire échouer tout l'état.
+  if (Array.isArray(state.events)) await writeEvents(db, dedupe(state.events), centerId);
 }
 
 

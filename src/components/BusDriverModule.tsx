@@ -158,7 +158,7 @@ export default function BusDriverModule({
   studentTimeSheets,
   settings,
 }: BusDriverModuleProps) {
-  const centerName = settings?.centerName || 'المركز';
+  const centerName = settings?.centerName || 'EduSphère';
   const [selectedDay, setSelectedDay] = useState<TimesheetDay>(() => {
     const jsDay = new Date().getDay();
     if (jsDay >= 1 && jsDay <= 6) return DAY_NAMES_ORDER[jsDay - 1];
@@ -542,13 +542,13 @@ export default function BusDriverModule({
       {/* TOP HEADER & DRIVER SUMMARY CARD */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#257C86] text-white flex items-center justify-center shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-brand-600 text-white flex items-center justify-center shadow-md">
             <Bus className="h-7 w-7 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-black text-slate-800">مخطط حافلة النقل المدرسي</h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#257C86]/[0.05] text-[#1e626b] text-xs font-bold">
+              <span className="px-2.5 py-0.5 rounded-full bg-brand-600/[0.05] text-brand-700 text-xs font-bold">
                 Transport Scolaire
               </span>
             </div>
@@ -560,15 +560,15 @@ export default function BusDriverModule({
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           {busDriver ? (
-            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-2xl">
-              <div className="w-8 h-8 rounded-xl bg-[#257C86] text-white flex items-center justify-center font-bold text-sm">🚌</div>
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-brand-600/[0.06] border border-brand-600/20 rounded-2xl">
+              <div className="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm">🚌</div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-slate-400 font-bold">سائق الحافلة المعين:</span>
                   <span className="text-xs font-black text-slate-800">{busDriver.firstName} {busDriver.lastName}</span>
                 </div>
                 {busDriver.phone && (
-                  <a href={`tel:${busDriver.phone}`} className="text-xs font-mono font-black text-[#257C86] hover:underline flex items-center gap-1 mt-0.5" dir="ltr">
+                  <a href={`tel:${busDriver.phone}`} className="text-xs font-mono font-black text-brand-600 hover:underline flex items-center gap-1 mt-0.5" dir="ltr">
                     <Phone className="h-3 w-3" />
                     <span>{busDriver.phone}</span>
                   </a>
@@ -584,7 +584,7 @@ export default function BusDriverModule({
 
           <button
             onClick={handlePrintRoute}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 transition cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 transition cursor-pointer shrink-0"
           >
             <Printer className="h-4 w-4" />
             <span>طباعة ورقة المسار (Feuille de Route)</span>
@@ -602,7 +602,7 @@ export default function BusDriverModule({
                 key={day}
                 onClick={() => setSelectedDay(day)}
                 className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                  isSelected ? 'bg-[#257C86] text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  isSelected ? 'bg-brand-600 text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {day}
@@ -624,7 +624,7 @@ export default function BusDriverModule({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="بحث باسم التلميذ أو المؤسسة..."
-            className="w-full pr-10 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            className="w-full pr-10 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
         </div>
 
@@ -648,20 +648,20 @@ export default function BusDriverModule({
         <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
           <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
             <button onClick={() => setActiveView('trips')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'trips' ? 'bg-white text-[#257C86] shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'trips' ? 'bg-white text-brand-600 shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}>
               الرحلات المجمعة
             </button>
             <button onClick={() => setActiveView('etablissements')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'etablissements' ? 'bg-white text-[#257C86] shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${activeView === 'etablissements' ? 'bg-white text-brand-600 shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}>
               حسب المؤسسة
             </button>
           </div>
 
           <button
             onClick={openManualForm}
-            className="flex items-center gap-2 px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-xs rounded-xl shadow-md shadow-[#257C86]/25 transition cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-brand-600/25 transition cursor-pointer shrink-0"
           >
-            <PlusCircle className="h-4 w-4 text-[#257C86]" />
+            <PlusCircle className="h-4 w-4 text-brand-600" />
             <span>إضافة رحلة يدوية</span>
           </button>
         </div>
@@ -687,7 +687,7 @@ export default function BusDriverModule({
                 <span className="font-black text-amber-800">{studentName}</span>
                 <span className="text-amber-600">— {remark}</span>
                 <button onClick={() => restorePassenger(tripId, studentId)}
-                  className="text-[#257C86] hover:text-[#1e626b] font-bold cursor-pointer px-1 underline">إعادة</button>
+                  className="text-brand-600 hover:text-brand-700 font-bold cursor-pointer px-1 underline">إعادة</button>
               </div>
             ))}
           </div>
@@ -700,7 +700,7 @@ export default function BusDriverModule({
           <div className="space-y-4">
             {filteredTrips.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
-                <Bus className="h-12 w-12 mx-auto mb-3 opacity-40 text-[#257C86]" />
+                <Bus className="h-12 w-12 mx-auto mb-3 opacity-40 text-brand-600" />
                 <h3 className="text-base font-black text-slate-700">لا توجد رحلات مبرمجة ليوم {selectedDay}</h3>
                 <p className="text-xs text-slate-400 mt-1">تأكد من تسجيل المؤسسة التعليمية في بطاقات التلاميذ أو تعيين التايم شيت.</p>
               </div>
@@ -717,7 +717,7 @@ export default function BusDriverModule({
                   >
                     {/* Trip Card Header */}
                     <div className={`p-4 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${
-                      isToSchool ? 'bg-[#257C86]' : 'bg-[#1E5763]'
+                      isToSchool ? 'bg-brand-600' : 'bg-brand-700'
                     }`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center text-xl font-bold">
@@ -765,19 +765,19 @@ export default function BusDriverModule({
                     </div>
 
                     {/* Establishment Badges Bar */}
-                    <div className="bg-[#F7FAFA] px-4 py-2 border-b border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+                    <div className="bg-brand-50 px-4 py-2 border-b border-slate-100 flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-bold text-slate-500 text-[11px]">محطات المسار المبرمجة:</span>
                       {trip.etabGroups.map((grp) => (
                         <span key={grp.etablissement} className={`px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 ${
                           grp.count >= 2
-                            ? 'bg-[#257C86]/10 text-[#1e626b] border border-[#257C86]/20'
+                            ? 'bg-brand-600/10 text-brand-700 border border-brand-600/20'
                             : 'bg-white text-slate-700 border border-slate-200'
                         }`}>
-                          <School className="h-3.5 w-3.5 text-[#257C86]" />
+                          <School className="h-3.5 w-3.5 text-brand-600" />
                           <span>{grp.etablissement}</span>
-                          <span className="px-1.5 py-0.2 bg-[#257C86] text-white text-[10px] rounded-full">{grp.count}</span>
+                          <span className="px-1.5 py-0.2 bg-brand-600 text-white text-[10px] rounded-full">{grp.count}</span>
                           {grp.count >= 2 && (
-                            <span className="text-[10px] text-[#257C86] font-black mr-0.5">(مجموعة)</span>
+                            <span className="text-[10px] text-brand-600 font-black mr-0.5">(مجموعة)</span>
                           )}
                         </span>
                       ))}
@@ -800,14 +800,14 @@ export default function BusDriverModule({
                         <tbody className="divide-y divide-slate-100">
                           {trip.etabGroups.map((grp) => (
                             <React.Fragment key={grp.etablissement}>
-                              <tr className="bg-[#F0F7F8] border-y border-[#257C86]/20">
+                              <tr className="bg-brand-50 border-y border-brand-600/20">
                                 <td colSpan={7} className="py-2 px-3">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 font-black text-[#1e626b] text-xs">
-                                      <School className="h-4 w-4 text-[#257C86]" />
+                                    <div className="flex items-center gap-2 font-black text-brand-700 text-xs">
+                                      <School className="h-4 w-4 text-brand-600" />
                                       <span>{grp.etablissement}</span>
                                       {grp.count >= 2 && (
-                                        <span className="bg-[#257C86] text-white text-[10px] px-2 py-0.5 rounded-full font-black">
+                                        <span className="bg-brand-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black">
                                           نقل جماعي مشترك ({grp.count} تلاميذ)
                                         </span>
                                       )}
@@ -827,14 +827,14 @@ export default function BusDriverModule({
 
                                 return (
                                   <React.Fragment key={p.student.id}>
-                                    <tr className={`transition ${isBoarded ? 'bg-[#257C86]/[0.06]' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                                    <tr className={`transition ${isBoarded ? 'bg-brand-600/[0.06]' : isRemoving ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                                       <td className="p-3 text-center font-mono text-slate-400">{pIdx + 1}</td>
                                       <td className="p-3">
                                         <span className="font-black text-slate-900 text-xs block">
                                           {p.student.lastName} {p.student.firstName}
                                         </span>
                                         {p.isManual && (
-                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 text-[10px] font-black rounded-md">
+                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-brand-600/[0.05] text-brand-700 border border-brand-600/20 text-[10px] font-black rounded-md">
                                             ✏️ يدوي
                                           </span>
                                         )}
@@ -845,7 +845,7 @@ export default function BusDriverModule({
                                         </span>
                                       </td>
                                       <td className="p-3">
-                                        <span className="text-[#257C86] font-black flex items-center gap-1">
+                                        <span className="text-brand-600 font-black flex items-center gap-1">
                                           <School className="h-3.5 w-3.5" />
                                           {p.etablissement}
                                         </span>
@@ -857,7 +857,7 @@ export default function BusDriverModule({
                                           onClick={() => toggleBoarded(checkKey)}
                                           className={`px-3 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 mx-auto ${
                                             isBoarded
-                                              ? 'bg-[#257C86] text-white shadow-lg shadow-slate-900/5'
+                                              ? 'bg-brand-600 text-white shadow-lg shadow-slate-900/5'
                                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                           }`}
                                         >
@@ -870,7 +870,7 @@ export default function BusDriverModule({
                                           <button
                                             type="button"
                                             onClick={() => deleteManualPassenger(p.manualEntryId!, p.student.id)}
-                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                             title="حذف التلميذ اليدوي من هذه الرحلة"
                                           >
                                             <X className="h-4 w-4" />
@@ -879,7 +879,7 @@ export default function BusDriverModule({
                                           <button
                                             type="button"
                                             onClick={() => setEditingRemoval({ tripId: trip.id, studentId: p.student.id })}
-                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                             title="حذف التلميذ من هذه الرحلة اليوم"
                                           >
                                             <Trash2 className="h-4 w-4" />
@@ -945,13 +945,13 @@ export default function BusDriverModule({
                 <div key={etab} className="bg-white rounded-3xl border border-slate-200/70 p-5 shadow-lg shadow-slate-900/5 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-[#257C86]/10 flex items-center justify-center text-xl">🏫</div>
+                      <div className="w-10 h-10 rounded-2xl bg-brand-600/10 flex items-center justify-center text-xl">🏫</div>
                       <div>
                         <h4 className="font-black text-slate-900 text-sm">{etab}</h4>
                         <span className="text-[11px] text-slate-400 font-bold block">{distinctStudents.length} تلاميذ مسجلين</span>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-[#257C86]/10 text-[#257C86] rounded-xl text-xs font-black">
+                    <span className="px-3 py-1 bg-brand-600/10 text-brand-600 rounded-xl text-xs font-black">
                       {etabPassengers.length} تنقلات
                     </span>
                   </div>
@@ -998,8 +998,8 @@ export default function BusDriverModule({
               {/* Modal Header */}
               <div className="flex items-center justify-between p-5 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#257C86]/[0.05] text-[#257C86] flex items-center justify-center">
-                    <PlusCircle className="h-5 w-5 text-[#257C86]" />
+                  <div className="w-10 h-10 rounded-2xl bg-brand-600/[0.05] text-brand-600 flex items-center justify-center">
+                    <PlusCircle className="h-5 w-5 text-brand-600" />
                   </div>
                   <div>
                     <h3 className="font-black text-slate-900 text-sm">إضافة رحلة يدوية</h3>
@@ -1023,8 +1023,8 @@ export default function BusDriverModule({
                       onClick={() => setManualFormType('to_school')}
                       className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border ${
                         manualFormType === 'to_school'
-                          ? 'bg-[#257C86] text-white border-[#257C86]'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-[#257C86]/50'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-brand-600/50'
                       }`}
                     >
                       🏫 ذهاب — من {centerName} إلى المؤسسة
@@ -1033,8 +1033,8 @@ export default function BusDriverModule({
                       onClick={() => setManualFormType('to_center')}
                       className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border ${
                         manualFormType === 'to_center'
-                          ? 'bg-[#1E5763] text-white border-[#1E5763]'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-[#1E5763]/50'
+                          ? 'bg-brand-700 text-white border-brand-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-brand-700/50'
                       }`}
                     >
                       🏠 عودة — من المؤسسة إلى {centerName}
@@ -1049,7 +1049,7 @@ export default function BusDriverModule({
                     type="time"
                     value={manualFormTime}
                     onChange={(e) => setManualFormTime(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#257C86]/40"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
                     dir="ltr"
                   />
                 </div>
@@ -1059,7 +1059,7 @@ export default function BusDriverModule({
                   <label className="block text-xs font-black text-slate-700 mb-1.5">
                     اختر التلاميذ
                     {manualFormStudentIds.size > 0 && (
-                      <span className="mr-2 px-2 py-0.5 bg-[#257C86]/[0.05] text-[#1e626b] border border-[#257C86]/20 rounded-full text-[10px] font-black">
+                      <span className="mr-2 px-2 py-0.5 bg-brand-600/[0.05] text-brand-700 border border-brand-600/20 rounded-full text-[10px] font-black">
                         {manualFormStudentIds.size} محدد
                       </span>
                     )}
@@ -1071,7 +1071,7 @@ export default function BusDriverModule({
                       value={manualStudentSearch}
                       onChange={(e) => setManualStudentSearch(e.target.value)}
                       placeholder="بحث باسم التلميذ أو المؤسسة..."
-                      className="w-full pr-8 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                      className="w-full pr-8 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
                     />
                   </div>
                   <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-100">
@@ -1092,14 +1092,14 @@ export default function BusDriverModule({
                           <label
                             key={st.id}
                             className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition text-xs ${
-                              checked ? 'bg-[#257C86]/[0.06] border-r-4 border-r-[#257C86]' : 'hover:bg-slate-50'
+                              checked ? 'bg-brand-600/[0.06] border-r-4 border-r-brand-600' : 'hover:bg-slate-50'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleManualStudent(st.id)}
-                              className="w-4 h-4 accent-[#257C86] cursor-pointer shrink-0"
+                              className="w-4 h-4 accent-brand-600 cursor-pointer shrink-0"
                             />
                             <div className="flex-1 min-w-0">
                               <span className="font-black text-slate-900 block truncate">
@@ -1109,7 +1109,7 @@ export default function BusDriverModule({
                                 {st.grade} — {st.etablissement || 'مؤسسة غير محددة'}
                               </span>
                             </div>
-                            {checked && <CheckCircle2 className="h-4 w-4 text-[#257C86] shrink-0" />}
+                            {checked && <CheckCircle2 className="h-4 w-4 text-brand-600 shrink-0" />}
                           </label>
                         );
                       })
@@ -1129,9 +1129,9 @@ export default function BusDriverModule({
                 <button
                   onClick={submitManualTrip}
                   disabled={manualFormStudentIds.size === 0 || !manualFormTime}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#257C86] hover:bg-[#1e626b] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-[#257C86]/25"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-brand-600/25"
                 >
-                  <PlusCircle className="h-4 w-4 text-[#257C86]" />
+                  <PlusCircle className="h-4 w-4 text-brand-600" />
                   إضافة {manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}
                 </button>
               </div>

@@ -21,7 +21,10 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import { academicMonthPrefix, isLunchAttendance } from '../utils/mealLogic';
+import GouterConsumptionTable from './GouterConsumptionTable';
+import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
@@ -36,6 +39,8 @@ interface FinanceModuleProps {
   revisions?: RevisionSeance[];
   formations?: Formation[];
   onUpdateFormations?: (formations: Formation[]) => void;
+  onUpdateEvents?: (events: SchoolEvent[]) => void;
+  events?: SchoolEvent[];
   slots?: EtudeSlot[];
   hideRestrictedModules?: boolean;
   settings?: CenterSettings;
@@ -67,6 +72,7 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
   { value: 'Cours Particuliers', label: 'دروس خصوصية' },
   { value: 'Revision', label: 'حصة مراجعة' },
   { value: 'Formation', label: 'تكوينات' },
+  { value: 'Événements', label: 'فعاليات' },
   { value: 'Bibliothèque', label: 'مكتبة' },
   { value: 'Inscription Bibliothèque', label: 'تسجيل المكتبة' },
   { value: 'Repas', label: 'وجبات (Déjeuner)' },
@@ -122,15 +128,15 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], onUpdateFormations, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
-  const centerName = settings?.centerName || 'المركز';
+  const centerName = settings?.centerName || 'EduSphère';
 
   // enabledModules: undefined = all enabled (backward compat). Otherwise filter by list.
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
 
-  // Services attached to a SaaS module are hidden from every service list
+  // Services attached to a subscription module are hidden from every service list
   // (payment type filter, payment forms...) when the center's plan does not
   // include the module — e.g. no 'Repas' without the Cantine module.
   const SERVICE_MODULE: Record<string, string> = {
@@ -138,6 +144,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Cours Particuliers': 'coursParticuliers',
     'Revision': 'revision',
     'Formation': 'formations',
+    'Événements': 'events',
     'Bibliothèque': 'bibliotheque', 'Inscription Bibliothèque': 'bibliotheque',
     'Repas': 'cantine', 'Goûter': 'cantine',
     'Assurance': 'coursParticuliers' // تأمين الدروس الخصوصية (كراس خارجي)
@@ -162,6 +169,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return idx >= 0 ? ACADEMIC_MONTHS[idx] : 'all';
   });
   const [serviceFilter, setServiceFilter] = useState<string>('all');
+  // Revision E (remark 4): the «Repas»/«Goûter» tabs of the Gestion-des-repas
+  // tab. Component-local and ephemeral — remounting returns to Repas.
+  const [financeServiceTab, setFinanceServiceTab] = useState<'repas' | 'gouter'>('repas');
 
   // Custom Academic Years list
   const [customYears, setCustomYears] = useState<string[]>(DEFAULT_ACADEMIC_YEARS);
@@ -348,7 +358,42 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     })
   );
 
-  const allPaymentsMerged = [...allPayments, ...(hideRestrictedModules ? [] : externalPayments), ...(hideRestrictedModules ? [] : revisionPayments), ...(hideRestrictedModules ? [] : formationPayments)]
+  // Event/outing revenue: each participant who paid is reflected here as a
+  // PaymentRecord with service 'Événements'. This mirrors the Formation pattern:
+  // Finance reads from the domain data directly (events), no write-back to
+  // students is needed.
+  type EventPaymentRec = PaymentRecord & { studentName: string; studentGrade: string; studentYear: string; eventName: string };
+  const eventPayments: EventPaymentRec[] = (events || []).flatMap(ev =>
+    (ev.participants || []).filter(pt => (pt.amountPaid || 0) > 0).map(pt => {
+      const isCheque = pt.paymentMethod === 'Chèque';
+      const isPast = ev.date && ev.date < new Date().toISOString().split('T')[0];
+      return {
+        id: `event_${ev.id}_${pt.id}`,
+        date: ev.date || new Date().toISOString().split('T')[0],
+        amountPaid: pt.amountPaid,
+        totalRequired: pt.totalRequired,
+        remainingBalance: pt.remainingBalance,
+        service: 'Événements' as const,
+        month: `فعالية: ${ev.name} (${ev.schoolYear || '2026/2027'})`,
+        paymentType: 'full' as const,
+        // Un chèque événement reste « en attente » jusqu'à son encaissement
+        // dans l'onglet تحصيل الشيكات : il n'entre dans le revenu qu'une fois
+        // marqué chequePaid côté participant (mis à jour via onUpdateEvents).
+        method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
+        chequePaid: isCheque ? (pt.chequePaid === true ? true : undefined) : undefined,
+        receiptNumber: pt.receiptNumber || `EVT-${ev.id.slice(-4)}-${pt.id.slice(-4)}`,
+        notes: `فعالية: ${ev.name} - ${pt.participantType === 'student' ? 'تلميذ' : pt.participantType === 'parent' ? 'ولي أمر' : pt.participantType === 'sibling' ? 'أخ/أخت' : 'خارجي'}${pt.attended === false && isPast ? ' — غائب' : ''}`,
+        chequeNumber: pt.chequeNumber,
+        chequeDate: pt.chequeDate,
+        studentName: pt.participantName,
+        studentGrade: 'فعالية',
+        studentYear: ev.schoolYear || '2026/2027',
+        eventName: ev.name
+      };
+    })
+  );
+
+  const allPaymentsMerged = [...allPayments, ...(hideRestrictedModules ? [] : externalPayments), ...(hideRestrictedModules ? [] : revisionPayments), ...(hideRestrictedModules ? [] : formationPayments), ...(hideRestrictedModules ? [] : eventPayments)]
     .filter(p => !hideRestrictedModules || (p.service !== 'Repas' && p.service !== 'Cours Particuliers' && p.service !== 'Revision' && p.service !== 'Formation'));
 
   const paymentYearOf = (p: PaymentRecord) => {
@@ -569,6 +614,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Cours Particuliers': 'دروس خصوصية',
     'Revision': 'حصة مراجعة',
     'Formation': 'تكوينات ودورات',
+    'Événements': 'فعاليات',
     'Bibliothèque': 'مكتبة',
     'Inscription Bibliothèque': 'تسجيل المكتبة',
     'Repas': 'وجبات',
@@ -626,18 +672,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // --- Metric cards ---
   // Card: Total revenue for the school year (NOT affected by the month filter).
   // Repas contributes only its CENTER share (margin), not the traiteur part.
-  const repasBenefitYear = (() => {
-    if (!settings) return 0;
-    let totalPlates = 0;
-    const yearStudents = students.filter(st => schoolYearFilter === 'all' || (st.academicYear || getCurrentAcademicYear()) === schoolYearFilter);
-    for (const s of yearStudents) {
-      totalPlates += (s.mealAttendances || []).filter(a => a.paid).length;
-    }
-    const f = getFeesForYear(settings, getCurrentAcademicYear());
-    return totalPlates * (f.fraisParRepas - f.prixPlatTraiteur) + calcForfaitAcquis({ monthFilter: 'all', schoolYear: schoolYearFilter });
-  })();
+  // Feature 008 (FR-002): the annual total excludes BOTH restaurant services —
+  // Repas AND Goûter — each having its own dedicated section (the client's
+  // «doublon» argument). The former repasBenefitYear term (plates × margin +
+  // forfait) is deleted. Pending cheques keep deriving from the same list.
   const yearNonRepasPayments = allPaymentsMerged.filter(p =>
-    (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter) && p.service !== 'Repas'
+    (schoolYearFilter === 'all' || p.month.includes(schoolYearFilter) || p.studentYear === schoolYearFilter) && p.service !== 'Repas' && p.service !== 'Goûter'
   );
   const yearPendingChequeTotal = yearNonRepasPayments
     .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
@@ -648,7 +688,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const yearTotalRevenue = yearNonRepasPayments.reduce((sum, p) => {
     const rec = p as any;
     return sum + (rec.centerShare ?? p.amountPaid);
-  }, 0) + repasBenefitYear - yearPendingChequeTotal;
+  }, 0) - yearPendingChequeTotal;
 
   // Annual inscription/subscription payments. Selected only by school year — never by month:
   // the total stays the same whatever the month filter.
@@ -695,8 +735,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       }, 0);
     return gross - pending;
   })();
-  // Card: Repas revenue for the selected period — only the CENTER share (margin).
-  const repasRevenueFiltered = filteredRestoCenterBenefit;
+  // Feature 008 (FR-001): the «إيرادات المطعم» card is removed — restaurant
+  // revenue is followed exclusively in the dedicated Repas/Goûter section.
+  // (filteredRestoCenterBenefit remains: the period net figure consumes it.)
   // Card: Formation revenue for the selected period.
   const formationRevenueFiltered = filteredPayments
     .filter(p => p.service === 'Formation')
@@ -721,6 +762,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     CoursParticuliers: externalCenterTotal,
     Revision: revisionCenterTotal,
     Formation: filteredPayments.filter(p => p.service === 'Formation').reduce((s, p) => s + (p.refund ? -p.amountPaid : p.amountPaid), 0),
+    Événements: filteredPayments.filter(p => p.service === 'Événements').reduce((s, p) => s + p.amountPaid, 0),
     Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
     Gouter: filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0),
     Assurance: filteredPayments.filter(p => p.service === 'Assurance').reduce((s, p) => s + p.amountPaid, 0),
@@ -784,13 +826,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-           <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+           <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
                الميزانية، الإيرادات حسب الموديول، ومصاريف السنتر
              </span>
             <span className="text-xs text-slate-400 font-bold">التقرير المالي والمصروفات</span>
           </div>
            <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-             <DollarSign className="h-6 w-6 text-[#257C86]" />
+             <DollarSign className="h-6 w-6 text-brand-600" />
              الميزانية ومصاريف السنتر
            </h2>
            <p className="text-slate-500 text-xs mt-1">
@@ -800,9 +842,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
         <button
           onClick={() => setIsExpenseModalOpen(true)}
-          className="px-5 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-sm rounded-2xl transition shadow-md flex items-center gap-2 cursor-pointer shrink-0"
+          className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-sm rounded-2xl transition shadow-md flex items-center gap-2 cursor-pointer shrink-0"
         >
-          <Plus className="h-5 w-5 text-[#257C86]" />
+          <Plus className="h-5 w-5 text-brand-600" />
           إضافة مصاريف / فاتورة جديدة
         </button>
       </div>
@@ -811,13 +853,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 no-print">
         <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
           <span className="text-xs font-bold text-slate-500 block">إجمالي المقبوضات الكلي</span>
-          <p className="text-2xl font-black font-mono text-[#1e626b]">{fmt(grandTotalRevenueNet)} د.ت</p>
+          <p className="text-2xl font-black font-mono text-brand-700">{fmt(grandTotalRevenueNet)} د.ت</p>
           <span className="text-[10px] text-slate-400 font-bold block">المقبوضات الفعلية (نقداً + شيكات محصلة)</span>
         </div>
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
           <span className="text-xs font-bold text-slate-500 block">شيكات معلقة</span>
-          <p className="text-2xl font-black font-mono text-[#257C86]">{fmt(grandPendingChequeTotal)} د.ت</p>
+          <p className="text-2xl font-black font-mono text-brand-600">{fmt(grandPendingChequeTotal)} د.ت</p>
           <span className="text-[10px] text-slate-400 font-bold block">شيكات لم يتم تحصيلها بعد</span>
         </div>
 
@@ -829,7 +871,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
           <span className="text-xs font-bold text-slate-500 block">الصافي المالي الشامل</span>
-          <p className="text-2xl font-black font-mono text-[#257C86]">{fmt(grandTotalNet)} د.ت</p>
+          <p className="text-2xl font-black font-mono text-brand-600">{fmt(grandTotalNet)} د.ت</p>
           <span className="text-[10px] text-slate-400 font-bold block">الفارق الإجمالي للسنتر</span>
         </div>
 
@@ -844,7 +886,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       <div className="bg-white p-4 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col sm:flex-row gap-4 items-center justify-between no-print">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-[#257C86]" />
+            <Calendar className="h-4 w-4 text-brand-600" />
             <label className="text-xs font-black text-slate-800">السنة الدراسية:</label>
             <select
               value={schoolYearFilter}
@@ -855,7 +897,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 setExpensesPage(1);
                 setChequesPageByService({});
               }}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
             >
               <option value="all">جميع السنوات</option>
               {customYears.map(yr => (
@@ -865,9 +907,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-[#257C86]" />
-            <label className="text-xs font-black text-slate-800">الشهر:</label>
+            <Filter className="h-4 w-4 text-brand-600" />
+            <label className="text-xs font-black text-slate-800" htmlFor="finance-month-filter">الشهر:</label>
             <select
+              id="finance-month-filter"
               value={monthFilter}
               onChange={(e) => {
                 setMonthFilter(e.target.value);
@@ -876,7 +919,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 setExpensesPage(1);
                 setChequesPageByService({});
               }}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
             >
               <option value="all">جميع الأشهر</option>
               {FULL_CALENDAR_MONTHS.map(m => (
@@ -898,51 +941,43 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               setExpensesPage(1);
             }}
             placeholder="بحث بالتلميذ أو الوصل أو المرجع..."
-            className="w-full pr-9 pl-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+            className="w-full pr-9 pl-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
         </div>
       </div>
 
       {/* FILTERED METRIC CARDS (ACCORDING TO SELECTED FILTERS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
-        <div className="bg-[#257C86] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
+        <div className="bg-brand-600 p-5 rounded-3xl border border-white/20 shadow-lg shadow-brand-600/25 space-y-1">
           <span className="text-xs font-bold text-white/80 block">الإيرادات الكلية (السنة)</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(yearTotalRevenue)} د.ت</p>
           <span className="text-[10px] text-white/60 font-bold">كل الإيرادات دون فيلتر الشهر</span>
         </div>
 
-        <div className="bg-[#257C86]/[0.05] p-5 rounded-3xl border border-[#257C86]/25 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-[#1e626b] block">التسجيلات السنوية (كل الفترات)</span>
-          <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
-          <span className="text-[10px] text-[#1e626b] font-bold">تسجيلات سنوية — لا يتأثر بفيلتر الشهر</span>
+        <div className="bg-brand-600/[0.05] p-5 rounded-3xl border border-brand-600/25 shadow-lg shadow-slate-900/5 space-y-1">
+          <span className="text-xs font-bold text-brand-700 block">التسجيلات السنوية (كل الفترات)</span>
+          <p className="text-2xl font-black text-brand-600 font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
+          <span className="text-[10px] text-brand-700 font-bold">تسجيلات سنوية — لا يتأثر بفيلتر الشهر</span>
         </div>
 
-        <div className="bg-[#257C86]/[0.06] p-5 rounded-3xl border border-[#257C86]/20/80 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-[#1e626b] block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
-          <p className="text-2xl font-black text-[#1e626b] font-mono">{fmt(revenueSansRepas)} د.ت</p>
-          <span className="text-[10px] text-[#257C86] font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
+        <div className="bg-brand-600/[0.06] p-5 rounded-3xl border border-brand-600/20/80 shadow-lg shadow-slate-900/5 space-y-1">
+          <span className="text-xs font-bold text-brand-700 block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
+          <p className="text-2xl font-black text-brand-700 font-mono">{fmt(revenueSansRepas)} د.ت</p>
+          <span className="text-[10px] text-brand-600 font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
         </div>
-
-        {canteenEnabled && !hideRestrictedModules && (
-          <div className="bg-[#257C86]/[0.06] p-5 rounded-3xl border border-[#257C86]/20 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-[#1e626b] block">إيرادات المطعم</span>
-            <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(repasRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-[#1e626b]/80 font-bold">حصة السنتر فقط (هامش الوجبات + فورفاي غير مستهلك) — حسب الشهر</span>
-          </div>
-        )}
 
         {formationsEnabled && !hideRestrictedModules && (
-          <div className="bg-[#257C86]/5 p-5 rounded-3xl border border-[#257C86]/20 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-[#1e626b] block">التكوينات والدورات</span>
-            <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-[#257C86] font-bold">حسب الشهر</span>
+          <div className="bg-brand-600/5 p-5 rounded-3xl border border-brand-600/20 shadow-lg shadow-slate-900/5 space-y-1">
+            <span className="text-xs font-bold text-brand-700 block">التكوينات والدورات</span>
+            <p className="text-2xl font-black text-brand-600 font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
+            <span className="text-[10px] text-brand-600 font-bold">حسب الشهر</span>
           </div>
         )}
 
-        <div className="bg-[#257C86]/[0.06] p-5 rounded-3xl border border-[#257C86]/25 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-[#1e626b] block">مبالغ الشيكات القادمة</span>
-          <p className="text-2xl font-black text-[#257C86] font-mono">{fmt(allPendingChequeTotal)} د.ت</p>
-          <span className="text-[10px] text-[#1e626b] font-bold">كل الشيكات غير المحصلة (كل الفترات)</span>
+        <div className="bg-brand-600/[0.06] p-5 rounded-3xl border border-brand-600/25 shadow-lg shadow-slate-900/5 space-y-1">
+          <span className="text-xs font-bold text-brand-700 block">مبالغ الشيكات القادمة</span>
+          <p className="text-2xl font-black text-brand-600 font-mono">{fmt(allPendingChequeTotal)} د.ت</p>
+          <span className="text-[10px] text-brand-700 font-bold">كل الشيكات غير المحصلة (كل الفترات)</span>
         </div>
 
         <div className="bg-red-50/60 p-5 rounded-3xl border border-red-200/80 shadow-lg shadow-slate-900/5 space-y-1">
@@ -951,7 +986,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <span className="text-[10px] text-red-500 font-bold">فواتير الفترة المختارة</span>
         </div>
 
-        <div className="bg-[#257C86] p-5 rounded-3xl border border-white/20 shadow-lg shadow-[#257C86]/25 space-y-1">
+        <div className="bg-brand-600 p-5 rounded-3xl border border-white/20 shadow-lg shadow-brand-600/25 space-y-1">
           <span className="text-xs font-bold text-white/80 block">الصافي المالي للفترة</span>
           <p className="text-2xl font-black text-white font-mono">{fmt(netProfit)} د.ت</p>
           <span className="text-[10px] text-white/60 font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
@@ -963,7 +998,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'overview' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'overview' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           📊 لوحة التوزيع والإيرادات
@@ -971,7 +1006,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('studentLedger')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'studentLedger' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'studentLedger' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           🎓 بطاقة التلميذ المجمعة
@@ -979,7 +1014,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('history')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'history' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'history' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           🧾 سجل الخلاص الكامل
@@ -987,13 +1022,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('annualInscriptions')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'annualInscriptions' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/10 hover:text-[#1e626b]'
+            activeTab === 'annualInscriptions' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-brand-600/10 hover:text-brand-700'
           }`}
         >
           📌 سجل الخلاص السنوي
           {annualInscriptionPayments.length > 0 && (
             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              activeTab === 'annualInscriptions' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#257C86]'
+              activeTab === 'annualInscriptions' ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600'
             }`}>{annualInscriptionPayments.length}</span>
           )}
         </button>
@@ -1001,13 +1036,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('formations')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'formations' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/5 hover:text-[#1e626b]'
+              activeTab === 'formations' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-brand-600/5 hover:text-brand-700'
             }`}
           >
             🎓 سجل التكوينات
             {formationPayments.length > 0 && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                activeTab === 'formations' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#1e626b]'
+                activeTab === 'formations' ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-700'
               }`}>{formationPayments.length}</span>
             )}
           </button>
@@ -1016,13 +1051,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('externalCours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'externalCours' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/5 hover:text-[#1e626b]'
+              activeTab === 'externalCours' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-brand-600/5 hover:text-brand-700'
             }`}
           >
             🎒 الكورسات الخارجية
             {externalStudents.length > 0 && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                activeTab === 'externalCours' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#1e626b]'
+                activeTab === 'externalCours' ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-700'
               }`}>{externalStudents.length}</span>
             )}
           </button>
@@ -1031,7 +1066,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <button
             onClick={() => setActiveTab('restaurant')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-              activeTab === 'restaurant' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/[0.06] hover:text-[#1e626b]'
+              activeTab === 'restaurant' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
             }`}
           >
             🍽️ إدارة المطعم
@@ -1040,7 +1075,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('expenses')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'expenses' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'expenses' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           ⚡ مصاريف السنتر
@@ -1048,13 +1083,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <button
           onClick={() => setActiveTab('cheques')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-            activeTab === 'cheques' ? 'bg-[#257C86] text-white' : 'text-slate-600 hover:bg-[#257C86]/10 hover:text-[#1e626b]'
+            activeTab === 'cheques' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-brand-600/10 hover:text-brand-700'
           }`}
         >
           📋 التحصيل بالشيكات
           {pendingChequeCount > 0 && (
             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              activeTab === 'cheques' ? 'bg-white/20 text-white' : 'bg-[#257C86]/10 text-[#257C86]'
+              activeTab === 'cheques' ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600'
             }`}>{pendingChequeCount}</span>
           )}
         </button>
@@ -1070,48 +1105,54 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">1. المتابعة الدراسية:</span>
-                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Suivi)} د.ت</span>
+                <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Suivi)} د.ت</span>
               </div>
             {hasModule('etude') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">2. دراسات {centerName}:</span>
-                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Etude)} د.ت</span>
+                <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
               )}
               {!hideRestrictedModules && coursPartEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3. مناب السنتر من الكورسات الخاصة:</span>
-                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
                 </div>
               )}
               {!hideRestrictedModules && revisionsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ب. مناب السنتر من حصص المراجعة:</span>
-                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Revision)} د.ت</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Revision)} د.ت</span>
                 </div>
               )}
               {!hideRestrictedModules && formationsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ج. مداخيل التكوينات والدورات:</span>
-                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Formation)} د.ت</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Formation)} د.ت</span>
                 </div>
               )}
               {hasModule('bibliotheque') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">4. اشتراكات المكتبة:</span>
-                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
+                <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
               )}
               {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
-                <div className="p-3 bg-[#257C86]/5 rounded-2xl border border-[#257C86]/20 flex justify-between font-bold">
-                  <span className="text-[#1e626b]">4ب. مداخيل خدمة اللمجة (Goûter):</span>
-                  <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Gouter)} د.ت</span>
+                <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20 flex justify-between font-bold">
+                  <span className="text-brand-700">4ب. مداخيل خدمة اللمجة (Goûter):</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
                 </div>
               )}
               {hasModule('coursParticuliers') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">5. رسوم التأمين المدرسي (Assurance):</span>
-                <span className="font-mono text-[#1e626b] font-black">{fmt(revenueByService.Assurance)} د.ت</span>
+                <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Assurance)} د.ت</span>
+              </div>
+              )}
+              {hasModule('events') && (
+              <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
+                <span className="text-slate-700">5ب. مداخيل الفعاليات والخرجات:</span>
+                <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Événements)} د.ت</span>
               </div>
               )}
               {revenueByService.Refunds !== 0 && (
@@ -1208,21 +1249,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-4 font-mono text-slate-500">{st.academicYear || getCurrentAcademicYear()}</td>
                           <td className="p-4 text-slate-500">{st.grade}</td>
                           <td className="p-4">
-                            {hasSuiviPaid ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
+                            {hasSuiviPaid ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
                           </td>
                           {showEtudeCol && (
                             <td className="p-4">
-                              {hasTC ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                              {hasTC ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                           {showLibraryCol && (
                             <td className="p-4">
-                              {hasLib ? <span className="text-[#1e626b]">✓ منتظم</span> : <span className="text-slate-400">-</span>}
+                              {hasLib ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                           {showRepasCol && (
                             <td className="p-4">
-                              {hasMeal ? <span className="text-[#1e626b]">✓ مشترك</span> : <span className="text-slate-400">-</span>}
+                              {hasMeal ? <span className="text-brand-700">✓ مشترك</span> : <span className="text-slate-400">-</span>}
                             </td>
                           )}
                         </tr>
@@ -1313,7 +1354,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     setServiceFilter(e.target.value);
                     setHistoryPage(1);
                   }}
-                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#257C86] cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
                 >
                   <option value="all">جميع الخدمات</option>
                   {historyServiceOptions.map(svc => (
@@ -1351,11 +1392,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                             <td className="p-4 font-mono text-slate-600">{p.date}</td>
                             <td className="p-4 font-black text-slate-900">{p.studentName}</td>
-                            <td className="p-4 font-bold text-[#1e626b]">{paymentServiceLabel(p)}</td>
+                            <td className="p-4 font-bold text-brand-700">{paymentServiceLabel(p)}</td>
                             <td className="p-4 font-bold text-slate-700">{monthToArabic(p.month)}</td>
                             <td className="p-4">
                               {p.discount ? (
-                                <span className="text-[#1e626b] font-black font-mono">{fmt(p.discount)} د.ت</span>
+                                <span className="text-brand-700 font-black font-mono">{fmt(p.discount)} د.ت</span>
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
@@ -1364,7 +1405,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               {p.refund ? (
                                 <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                               ) : (
-                                <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
+                                <span className="text-brand-700">{fmt(p.amountPaid)} د.ت</span>
                               )}
                             </td>
                             <td className="p-4">
@@ -1375,14 +1416,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       } else {
                         const g = item.group;
                         return (
-                          <tr key={g.chequeNumber} className="hover:bg-[#257C86]/[0.05] transition">
+                          <tr key={g.chequeNumber} className="hover:bg-brand-600/[0.05] transition">
                             <td className="p-4 font-mono font-bold text-slate-500 text-[10px]">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
                             <td className="p-4 font-mono text-slate-600">{g.chequeDate || '-'}</td>
                             <td className="p-4 font-black text-slate-900 text-[11px]">{g.studentNames.join(', ')}</td>
                             <td className="p-4">
                               <div className="flex flex-wrap gap-1">
                                 {Array.from(new Set(g.payments.map(p => paymentServiceLabel(p)))).map(label => (
-                                  <span key={label} className="inline-flex px-1.5 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-bold text-[9px]">{label}</span>
+                                  <span key={label} className="inline-flex px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-bold text-[9px]">{label}</span>
                                 ))}
                               </div>
                             </td>
@@ -1399,16 +1440,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               })()}
                             </td>
                             <td className="p-4"><span className="text-slate-300">—</span></td>
-                            <td className="p-4 font-mono font-black text-[#1e626b]">{fmt(g.totalAmount)} د.ت</td>
+                            <td className="p-4 font-mono font-black text-brand-700">{fmt(g.totalAmount)} د.ت</td>
                             <td className="p-4">
                               <div className="flex items-center gap-1">
                                 {g.chequePaid ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                     <CheckCircle2 className="h-3 w-3" />
                                     شيك محصل
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                     <AlertCircle className="h-3 w-3" />
                                     شيك معلق
                                   </span>
@@ -1470,7 +1511,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <div className="text-left">
                 <p className="text-[11px] text-slate-500 font-bold">المجموع السنوي</p>
-                <p className="text-xl font-black text-[#257C86] font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
+                <p className="text-xl font-black text-brand-600 font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
               </div>
             </div>
 
@@ -1499,11 +1540,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                         <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
                         <td className="p-4 font-black text-slate-900">{p.studentName}</td>
-                        <td className="p-4 font-bold text-[#1e626b]">{paymentServiceLabel(p)}</td>
+                        <td className="p-4 font-bold text-brand-700">{paymentServiceLabel(p)}</td>
                         <td className="p-4 font-bold text-slate-700">{monthToArabic(p.month)}</td>
                         <td className="p-4">
                           {p.discount ? (
-                            <span className="text-[#1e626b] font-black font-mono">{fmt(p.discount)} د.ت</span>
+                            <span className="text-brand-700 font-black font-mono">{fmt(p.discount)} د.ت</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -1512,19 +1553,19 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           {p.refund ? (
                             <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                           ) : (
-                            <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
+                            <span className="text-brand-700">{fmt(p.amountPaid)} د.ت</span>
                           )}
                         </td>
                         <td className="p-4">
                           {p.method === 'Chèque' ? (
                             <div className="flex items-center gap-1">
                               {p.chequePaid === true ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                   <CheckCircle2 className="h-3 w-3" />
                                   شيك محصل
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                   <AlertCircle className="h-3 w-3" />
                                   شيك معلق
                                 </span>
@@ -1599,7 +1640,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <div className="text-left">
                 <p className="text-[11px] text-slate-500 font-bold">المجموع</p>
-                <p className="text-xl font-black text-[#257C86] font-mono">{fmt(formTotal)} د.ت</p>
+                <p className="text-xl font-black text-brand-600 font-mono">{fmt(formTotal)} د.ت</p>
               </div>
             </div>
 
@@ -1627,10 +1668,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                         <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
                         <td className="p-4 font-black text-slate-900">{p.studentName}</td>
-                        <td className="p-4 font-bold text-[#1e626b]">{p.formationName || p.notes || monthToArabic(p.month)}</td>
+                        <td className="p-4 font-bold text-brand-700">{p.formationName || p.notes || monthToArabic(p.month)}</td>
                         <td className="p-4">
                           {p.discount ? (
-                            <span className="text-[#1e626b] font-black font-mono">{fmt(p.discount)} د.ت</span>
+                            <span className="text-brand-700 font-black font-mono">{fmt(p.discount)} د.ت</span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -1639,19 +1680,19 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           {p.refund ? (
                             <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
                           ) : (
-                            <span className="text-[#1e626b]">{fmt(p.amountPaid)} د.ت</span>
+                            <span className="text-brand-700">{fmt(p.amountPaid)} د.ت</span>
                           )}
                         </td>
                         <td className="p-4">
                           {p.method === 'Chèque' ? (
                             <div className="flex items-center gap-1">
                               {p.chequePaid === true ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                   <CheckCircle2 className="h-3 w-3" />
                                   شيك محصل
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                                   <AlertCircle className="h-3 w-3" />
                                   شيك معلق
                                 </span>
@@ -1722,18 +1763,18 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           <div className="space-y-4 no-print">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-[#257C86]/5 p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
-                <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي التلاميذ الخارجيين</span>
-                <p className="text-xl font-black text-[#14464e]">{filteredExtStudents.length} تلميذ</p>
+              <div className="bg-brand-600/5 p-4 rounded-2xl border border-brand-600/20 space-y-1">
+                <span className="text-[11px] font-bold text-brand-700 block">إجمالي التلاميذ الخارجيين</span>
+                <p className="text-xl font-black text-brand-800">{filteredExtStudents.length} تلميذ</p>
               </div>
-              <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
-                <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي مداخيل الكورسات</span>
-                <p className="text-xl font-black text-[#1e626b] font-mono">{fmt(totalCoursePayments)} د.ت</p>
+              <div className="bg-brand-600/[0.06] p-4 rounded-2xl border border-brand-600/20 space-y-1">
+                <span className="text-[11px] font-bold text-brand-700 block">إجمالي مداخيل الكورسات</span>
+                <p className="text-xl font-black text-brand-700 font-mono">{fmt(totalCoursePayments)} د.ت</p>
               </div>
-              <div className="bg-[#257C86]/[0.06] p-4 rounded-2xl border border-[#257C86]/20 space-y-1">
-                <span className="text-[11px] font-bold text-[#1e626b] block">إجمالي التأمين المدرسي</span>
-                <p className="text-xl font-black text-[#1e626b] font-mono">{fmt(totalAssurance)} د.ت</p>
-                <span className="text-[10px] text-[#257C86] font-bold">{assurancePaidCount} مدفوع / {assuranceUnpaidCount} غير مدفوع</span>
+              <div className="bg-brand-600/[0.06] p-4 rounded-2xl border border-brand-600/20 space-y-1">
+                <span className="text-[11px] font-bold text-brand-700 block">إجمالي التأمين المدرسي</span>
+                <p className="text-xl font-black text-brand-700 font-mono">{fmt(totalAssurance)} د.ت</p>
+                <span className="text-[10px] text-brand-600 font-bold">{assurancePaidCount} مدفوع / {assuranceUnpaidCount} غير مدفوع</span>
               </div>
               <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-1">
                 <span className="text-[11px] font-bold text-slate-300 block">المجموع الكلي (دروس + تأمين)</span>
@@ -1743,7 +1784,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
             {/* Students Table */}
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
-              <div className="p-5 border-b border-slate-100 bg-[#257C86]/5 flex justify-between items-center">
+              <div className="p-5 border-b border-slate-100 bg-brand-600/5 flex justify-between items-center">
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                     🎒 سجل التلاميذ الخارجيين — الكورسات والتأمين
@@ -1782,17 +1823,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           c.enrolledStudents.some(s => s.studentId === reg.id)
                         );
                         return (
-                          <tr key={reg.id} className="hover:bg-[#257C86]/5 transition">
+                          <tr key={reg.id} className="hover:bg-brand-600/5 transition">
                             <td className="p-4 font-black text-slate-900">{reg.name}</td>
                             <td className="p-4 text-slate-600 font-bold">{reg.grade}</td>
                             <td className="p-4 font-mono text-slate-500">{reg.schoolYear || '—'}</td>
                             <td className="p-4 font-mono text-slate-500" dir="ltr">{reg.parentPhone || '—'}</td>
                             <td className="p-4">
                               {reg.assurancePaid ? (
-                                <div className="flex flex-col items-center text-center gap-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
+                                <div className="flex flex-col items-center text-center gap-0.5 bg-brand-600/10 text-brand-700 rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
                                   <span>✓ مدفوع — {fmt(reg.assuranceAmount)} د.ت</span>
                                   {reg.assuranceDate && (
-                                    <span className="text-[9px] font-bold text-[#257C86]">{reg.assuranceDate}</span>
+                                    <span className="text-[9px] font-bold text-brand-600">{reg.assuranceDate}</span>
                                   )}
                                 </div>
                               ) : (
@@ -1801,7 +1842,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                 </span>
                               )}
                             </td>
-                            <td className="p-4 font-mono font-black text-[#1e626b]">
+                            <td className="p-4 font-mono font-black text-brand-700">
                               {fmt(coursePaymentsTotal)} د.ت
                               {(reg.payments || []).length > 0 && (
                                 <span className="text-[10px] text-slate-400 font-normal block">{(reg.payments || []).length} دفعة</span>
@@ -1814,7 +1855,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   {enrolledCourses.map(c => (
-                                    <span key={c.id} className="block w-fit px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold text-center">
+                                    <span key={c.id} className="block w-fit px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-bold text-center">
                                       {c.subject} — {c.gradeLevel} ({c.schoolYear})
                                     </span>
                                   ))}
@@ -1830,8 +1871,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     <tfoot className="bg-slate-50 border-t border-slate-200">
                       <tr>
                         <td colSpan={4} className="p-4 font-black text-slate-700 text-xs">الإجماليات</td>
-                        <td className="p-4 font-mono font-black text-[#1e626b] text-xs">{fmt(totalAssurance)} د.ت</td>
-                        <td className="p-4 font-mono font-black text-[#1e626b] text-xs">{fmt(totalCoursePayments)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-brand-700 text-xs">{fmt(totalAssurance)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-brand-700 text-xs">{fmt(totalCoursePayments)} د.ت</td>
                         <td className="p-4 font-mono font-black text-slate-900 text-xs">{fmt(totalExtRevenue)} د.ت</td>
                         <td className="p-4"></td>
                       </tr>
@@ -1911,12 +1952,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         ) : (
                           paginatedDetailRows.map(row => (
                             <tr key={row.id} className={`transition ${
-                              row.isAssurance ? 'hover:bg-[#257C86]/[0.05] bg-[#257C86]/[0.06]/20' : 'hover:bg-slate-50/70'
+                              row.isAssurance ? 'hover:bg-brand-600/[0.05] bg-brand-600/[0.06]/20' : 'hover:bg-slate-50/70'
                             }`}>
                               <td className="p-4 font-mono text-slate-600">{row.date || '—'}</td>
                               <td className="p-4 font-black text-slate-900">{row.name}</td>
-                              <td className={`p-4 font-bold ${row.isAssurance ? 'text-[#1e626b]' : 'text-[#1e626b]'}`}>{row.courseName}</td>
-                              <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-[#1e626b]' : 'text-[#1e626b]'}`}>{fmt(row.amount)} د.ت</td>
+                              <td className={`p-4 font-bold ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{row.courseName}</td>
+                              <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{fmt(row.amount)} د.ت</td>
                               <td className="p-4 text-slate-600 font-bold">{row.method}</td>
                             </tr>
                           ))
@@ -1970,7 +2011,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               </div>
               <button
                 onClick={() => setIsExpenseModalOpen(true)}
-                className="px-3 py-1.5 bg-[#257C86] hover:bg-[#1e626b] text-white rounded-xl font-bold text-xs cursor-pointer"
+                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer"
               >
                 إضافة فاتورة جديدة
               </button>
@@ -1995,7 +2036,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     </tr>
                   ) : (
                     paginatedExpenses.map(exp => (
-                      <tr key={exp.id} className={`transition ${exp.id === 'traiteur-share-synthetic' || exp.id === 'revision-prof-share-synthetic' || exp.id === 'external-prof-share-synthetic' ? 'bg-[#257C86]/[0.05]' : 'hover:bg-slate-50/80'}`}>
+                      <tr key={exp.id} className={`transition ${exp.id === 'traiteur-share-synthetic' || exp.id === 'revision-prof-share-synthetic' || exp.id === 'external-prof-share-synthetic' ? 'bg-brand-600/[0.05]' : 'hover:bg-slate-50/80'}`}>
                         <td className="p-4 font-mono font-bold text-slate-500">{exp.receiptRef}</td>
                         <td className="p-4 font-mono text-slate-600">{exp.date}</td>
                         <td className="p-4 font-black text-red-700">{exp.id === 'traiteur-share-synthetic' ? 'حصة المطعم' : exp.id === 'revision-prof-share-synthetic' ? 'مناب الأستاذ (مراجعة)' : exp.id === 'external-prof-share-synthetic' ? 'مناب الأستاذ (كورسات)' : exp.category}</td>
@@ -2003,11 +2044,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         <td className="p-4 text-slate-600">{exp.description}</td>
                         <td className="p-4 text-center">
                           {exp.id === 'traiteur-share-synthetic' || exp.id === 'revision-prof-share-synthetic' || exp.id === 'external-prof-share-synthetic' ? (
-                            <span className="inline-flex items-center justify-center w-fit mx-auto px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-black">تحتسب تلقائياً</span>
+                            <span className="inline-flex items-center justify-center w-fit mx-auto px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-black">تحتسب تلقائياً</span>
                           ) : (
                             <button
                               onClick={() => setExpenseToDelete(exp)}
-                              className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition cursor-pointer"
+                              className="p-1.5 hover:bg-slate-100 rounded-lg text-red-500 transition cursor-pointer"
                               title="حذف المصروف"
                             >
                               <X className="h-4 w-4" />
@@ -2055,9 +2096,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-[#257C86]" />
+                  <DollarSign className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">تسجيل فاتورة / مصاريف للسنتر</h3>
                 </div>
 
@@ -2125,7 +2166,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
                   >
                     تسجيل المصروف
                   </button>
@@ -2188,8 +2229,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             if (!datePrefix) return true;
             return a.date.startsWith(datePrefix);
           });
-          const subscriptionMeals = attendances.filter(a => a.type === 'subscription');
-          const unitMeals = attendances.filter(a => a.type === 'unit');
+          // Revision E (remarks 3.0.x/3.1): the Repas aggregation counts lunch
+          // attendances only — goûter rows are aggregated separately (the
+          // mirrored Goûter cards), never mixed into the Repas numbers.
+          const lunchAttendances = attendances.filter(isLunchAttendance);
+          const gouterAttendances = attendances.filter(a => !isLunchAttendance(a));
+          const subscriptionMeals = lunchAttendances.filter(a => a.type === 'subscription');
+          const unitMeals = lunchAttendances.filter(a => a.type === 'unit');
           const subPayments = (s.payments || []).filter(p => {
             if (p.service !== 'Repas') return false;
             if (schoolYearFilter !== 'all' && !p.month.includes(schoolYearFilter) && s.academicYear !== schoolYearFilter) return false;
@@ -2219,7 +2265,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             (isCurrentlyActive && grossPaid > totalRefunded)
           );
 
-          const allLunchMeals = attendances.filter(a => (!a.service || a.service === 'lunch'));
+          const allLunchMeals = lunchAttendances;
           const traiteurPriceOf = (a: typeof allLunchMeals[number]) =>
             a.traiteurPrice !== undefined ? a.traiteurPrice : (isInHouseKitchen ? 0 : f.prixPlatTraiteur);
           // Real cost owed to the traiteur: every plate served, paid or not.
@@ -2231,8 +2277,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
           // Case C — prepaid subscription balance the student never consumed. The center only
           // acquires it when the admin clicks «Clôturer le mois»; until then this is an estimate.
-          const paidMeals = attendances.filter(a => a.paid).length;
-          const unpaidMeals = attendances.length - paidMeals;
+          const paidMeals = lunchAttendances.filter(a => a.paid).length;
+          const unpaidMeals = lunchAttendances.length - paidMeals;
           const unpaidSubscriptionMeals = subscriptionMeals.filter(a => !a.paid).length;
           const unpaidUnitMeals = unitMeals.filter(a => !a.paid).length;
           const subForfaitPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
@@ -2278,6 +2324,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalUnpaidMeals = restoStudents.reduce((sum, s) => sum + s.unpaidMeals, 0);
         const totalUnpaidSubMeals = restoStudents.reduce((sum, s) => sum + s.unpaidSubscriptionMeals, 0);
         const totalUnpaidUnitMeals = restoStudents.reduce((sum, s) => sum + s.unpaidUnitMeals, 0);
+        // Revision E (remark 3.0.x): the mirrored Goûter cards — gouter
+        // attendances and Goûter payments only, never the lunch numbers.
+        const gouterCardPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
+        const totalGouterConsumed = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
+          (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
+        ).length, 0);
+        const totalGouterSubscriptions = filteredPayments.filter(p => p.service === 'Goûter').reduce((sum, p) => sum + p.amountPaid, 0);
+        const totalGouterUnpaid = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
+          (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && !a.paid && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
+        ).length, 0);
         // Estimated forfait if the month were closed right now (preview before closing).
         const totalForfaitEstimate = restoStudents.reduce((sum, s) => sum + s.forfaitEstimate, 0);
         // Forfait actually acquired — snapshot from closed months only.
@@ -2296,19 +2352,70 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
         return (
           <div className="space-y-6">
-            {/* Summary Cards */}
+            {/* Revision E (remark 4): the two service tabs under the month/year
+                filters. Ephemeral, component-local state. */}
+            <div className="bg-white p-2 rounded-2xl border border-slate-200/70 flex items-center gap-2" role="tablist" aria-label="خدمات المطعم">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={financeServiceTab === 'repas'}
+                data-testid="service-tab-repas"
+                onClick={() => setFinanceServiceTab('repas')}
+                className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  financeServiceTab === 'repas' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+                }`}
+              >
+                🍽️ Repas
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={financeServiceTab === 'gouter'}
+                data-testid="service-tab-gouter"
+                onClick={() => setFinanceServiceTab('gouter')}
+                className={`px-5 py-2.5 rounded-xl font-extrabold text-xs transition cursor-pointer ${
+                  financeServiceTab === 'gouter' ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-brand-600/[0.06] hover:text-brand-700'
+                }`}
+              >
+                🍪 Goûter
+              </button>
+            </div>
+
+            {financeServiceTab === 'gouter' && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(totalGouterSubscriptions)} د.ت</div>
+              </div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الوجبات المستهلكة</div>
+                <div className="font-mono text-lg font-black text-brand-800">{totalGouterConsumed}</div>
+                <div className="text-[9px] text-brand-600 mt-1">لمجة الصباح + لمجة المساء</div>
+              </div>
+              <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
+                <div className="text-[10px] font-bold text-amber-700 mb-1">وجبات غير مدفوعة</div>
+                <div className="font-mono text-lg font-black text-amber-900">{totalGouterUnpaid}</div>
+                <div className="text-[9px] text-amber-600 mt-1">
+                  {totalGouterUnpaid > 0 ? 'لمجات بانتظار الخلاص' : 'كل اللمجات مدفوعة'}
+                </div>
+              </div>
+            </div>
+            )}
+
+            {/* Summary Cards (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
-                <div className="text-[10px] font-bold text-[#1e626b] mb-1">إجمالي الاشتراكات</div>
-                <div className="font-mono text-lg font-black text-[#14464e]">{fmt(totalSubscriptions)} د.ت</div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(totalSubscriptions)} د.ت</div>
                 {totalRefundedAll > 0 && (
                   <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalRefundedAll)} د.ت</div>
                 )}
               </div>
-              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
-                <div className="text-[10px] font-bold text-[#1e626b] mb-1">إجمالي الوجبات المستهلكة</div>
-                <div className="font-mono text-lg font-black text-[#14464e]">{totalPlatesConsumed}</div>
-                <div className="text-[9px] text-[#257C86] mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الوجبات المستهلكة</div>
+                <div className="font-mono text-lg font-black text-brand-800">{totalPlatesConsumed}</div>
+                <div className="text-[9px] text-brand-600 mt-1">اشتراكي: {totalSubMeals} | وحدات: {totalUnitMeals}</div>
               </div>
               <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100 text-center">
                 <div className="text-[10px] font-bold text-amber-700 mb-1">وجبات غير مدفوعة</div>
@@ -2319,22 +2426,29 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     : 'كل الوجبات مدفوعة'}
                 </div>
               </div>
+              {!isInHouseKitchen && (
               <div className="p-5 bg-red-50/50 rounded-2xl border border-red-100 text-center">
                 <div className="text-[10px] font-bold text-red-700 mb-1">حصة الـ Traiteur</div>
                 <div className="font-mono text-lg font-black text-red-900">{traiteurCost > 0 ? `${fmt(traiteurCost)} د.ت` : '0.000 د.ت'}</div>
                 <div className="text-[9px] text-red-600 mt-1">{traiteurCost > 0 ? `${totalPlatesConsumed} وجبة` : (isInHouseKitchen ? 'مطبخ داخلي بدون وسيط' : 'لا توجد مصاريف traiteur')}</div>
               </div>
-              <div className="p-5 bg-[#257C86]/[0.06]/50 rounded-2xl border border-[#257C86]/20 text-center">
-                <div className="text-[10px] font-bold text-[#1e626b] mb-1">ربح السنتر من الوجبات</div>
-                <div className="font-mono text-lg font-black text-[#14464e]">{fmt(centerBenefit)} د.ت</div>
-                <div className="text-[9px] text-[#257C86] mt-1">
+              )}
+              {!isInHouseKitchen && (
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">ربح السنتر من الوجبات</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(centerBenefit)} د.ت</div>
+                <div className="text-[9px] text-brand-600 mt-1">
                   {totalPaidMeals} وجبة مدفوعة = {fmt(totalPaidMargin)} د.ت
                   {totalForfaitUnused > 0 && ` + فرفي ${fmt(totalForfaitUnused)} د.ت`}
                 </div>
               </div>
+              )}
             </div>
+            )}
 
-            {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure */}
+            {/* Case C — «Forfait ferme»: unconsumed prepaid balance becomes center profit on closure.
+                Feature 007 (FR-001): Repas-only — hidden on the Goûter onglet. */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-gradient-to-r from-amber-50 via-amber-50 to-white p-4 rounded-2xl border border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-2">
                 <span className="text-xl">🔒</span>
@@ -2351,9 +2465,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   <span className="text-[10px] text-slate-500 block font-bold">تقدير غير مكتسب</span>
                   <span className="font-mono font-black text-slate-800 text-sm">{fmt(totalForfaitEstimate)} د.ت</span>
                 </div>
-                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
-                  <span className="text-[10px] text-[#257C86] block font-bold">مكتسب فعلياً</span>
-                  <span className="font-mono font-black text-[#14464e] text-sm">{fmt(totalForfaitUnused)} د.ت</span>
+                <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-brand-600/20 text-center">
+                  <span className="text-[10px] text-brand-600 block font-bold">مكتسب فعلياً</span>
+                  <span className="font-mono font-black text-brand-800 text-sm">{fmt(totalForfaitUnused)} د.ت</span>
                 </div>
                 {monthFilter !== 'all' && schoolYearFilter !== 'all' && (
                   <div className="flex flex-col items-center gap-1">
@@ -2398,64 +2512,67 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     )}
                   </div>
                 )}
+                {/* Feature 008 (FR-006): per-student forfait detail. Before
+                    closure it lists the live estimate of every student holding
+                    a balance; after closure it shows the persisted snapshot
+                    items — the frozen source of truth. */}
+                <div className="w-full bg-white/80 rounded-xl border border-amber-200/80 p-3">
+                  <div className="text-[10px] font-bold text-amber-700 mb-2">تفصيل الفرفي حسب التلميذ</div>
+                  {(() => {
+                    const forfaitRows = activeClosure
+                      ? (activeClosure.items ?? []).map(i => ({ name: i.studentName, amount: i.amount }))
+                      : restoStudents
+                          .filter(s => s.forfaitEstimate > 0)
+                          .map(s => ({ name: s.name, amount: s.forfaitEstimate }));
+                    if (forfaitRows.length === 0) {
+                      return <div className="text-[10px] text-slate-500 font-bold">لا يوجد تلميذ برصيد فرفي غير مُستهلك في هذا الشهر.</div>;
+                    }
+                    return (
+                      <ul className="flex flex-col gap-1">
+                        {forfaitRows.map((row, idx) => (
+                          <li key={activeClosure ? `closed_${idx}` : `live_${idx}`} className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
+                            <span>{row.name}</span>
+                            <span className="font-mono text-amber-800">{fmt(row.amount)} د.ت</span>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
+            )}
 
-            {/* Pricing Info */}
+            {/* Pricing Info — Revision D (remark F1): traiteur-share indicators
+                are external-traiteur artifacts; hidden in in-house kitchen mode.
+                Feature 007 (FR-002): Repas-only — hidden on the Goûter onglet. */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-wrap items-center gap-6 text-xs font-bold">
               <span className="text-slate-500">سعر الوجبة:</span>
-              <span className="font-mono text-[#1e626b]">{fmt(prixPlat)} د.ت</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-500">حصة الـ Traiteur:</span>
-              <span className="font-mono text-red-700">{fmt(prixTraiteur)} د.ت</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-500">ربح السنتر للوجبة:</span>
-              <span className="font-mono text-[#1e626b]">{fmt(centerMarginPerPlate)} د.ت</span>
+              <span className="font-mono text-brand-700">{fmt(prixPlat)} د.ت</span>
+              {!isInHouseKitchen && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500">حصة الـ Traiteur:</span>
+                  <span className="font-mono text-red-700">{fmt(prixTraiteur)} د.ت</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500">ربح السنتر للوجبة:</span>
+                  <span className="font-mono text-brand-700">{fmt(centerMarginPerPlate)} د.ت</span>
+                </>
+              )}
+              {isInHouseKitchen && (
+                <span className="text-brand-700">👨‍🍳 مطبخ داخلي — بدون وسيط</span>
+              )}
             </div>
+            )}
 
-            {/* Goûter Summary in Tab 6 */}
-            {(() => {
-              // Attendance dates are ISO (YYYY-MM-DD); monthFilter is a French month name,
-              // so it must be resolved to a calendar prefix before comparing.
-              const gouterPrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
-              const countGouter = (service: MealServiceType) => filteredStudents.reduce(
-                (sum, s) => sum + (s.mealAttendances || []).filter(a => {
-                  if (gouterPrefix && !a.date.startsWith(gouterPrefix)) return false;
-                  return a.service === service;
-                }).length, 0);
-              const gouterPaymentsTotal = filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0);
-              const gouterMatinCount = countGouter('gouter_matin');
-              const gouterSoirCount = countGouter('gouter_apres_midi');
-              const gouterSubscribersCount = filteredStudents.filter(s => s.enrolledServices?.gouterMatin || s.enrolledServices?.gouterSoir || s.enrolledServices?.gouterBoth).length;
+            {/* Feature 007 (FR-003): the old «مداخيل واستهلاك خدمة اللمجة»
+                summary strip is removed — its figures were Goûter-tab-only,
+                duplicated the mirrored cards' totals, and group C forbids
+                relocating goûter data to the Repas tab (research R1). */}
 
-              return (
-                <div className="bg-gradient-to-r from-[#257C86]/5 via-red-50 to-white p-4 rounded-2xl border border-[#257C86]/20 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🍪</span>
-                    <div>
-                      <h4 className="font-extrabold text-[#14464e]">مداخيل واستهلاك خدمة اللمجة (Goûter)</h4>
-                      <p className="text-[11px] text-[#1e626b] font-medium">مجموع التلاميذ المشتركين في اللمجة: <strong>{gouterSubscribersCount}</strong> تلميذ</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
-                      <span className="text-[10px] text-[#257C86] block font-bold">مداخيل اللمجة</span>
-                      <span className="font-mono font-black text-[#14464e] text-sm">{fmt(gouterPaymentsTotal)} د.ت</span>
-                    </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
-                      <span className="text-[10px] text-[#257C86] block font-bold">لمجة الصباح 🥐</span>
-                      <span className="font-mono font-black text-[#14464e] text-sm">{gouterMatinCount}</span>
-                    </div>
-                    <div className="px-3 py-1.5 bg-white/80 rounded-xl border border-[#257C86]/20 text-center">
-                      <span className="text-[10px] text-[#257C86] block font-bold">لمجة المساء 🍪</span>
-                      <span className="font-mono font-black text-[#14464e] text-sm">{gouterSoirCount}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Students Table */}
+            {/* Students Table (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>
@@ -2475,11 +2592,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <th className="p-3 text-center">وحدات</th>
                       <th className="p-3 text-center">المجموع</th>
                       <th className="p-3 text-center text-amber-700">غير مدفوعة</th>
-                      <th className="p-3 text-center text-[#1e626b]">المدفوع</th>
+                      <th className="p-3 text-center text-brand-700">المدفوع</th>
                       <th className="p-3 text-center text-red-600">المسترجع</th>
                       <th className="p-3 text-center text-amber-800">الفرفي</th>
-                      <th className="p-3 text-center text-[#1e626b]">حصة السنتر</th>
-                      <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
+                      {!isInHouseKitchen && (
+                        <>
+                          <th className="p-3 text-center text-brand-700">حصة السنتر</th>
+                          <th className="p-3 text-center text-red-700">حصة الـ Traiteur</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2494,26 +2615,30 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <td className="p-3 text-slate-600">{s.grade}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-[#257C86]/10 text-[#1e626b]' : s.isEnrolled ? 'bg-[#257C86]/10 text-[#1e626b]' : 'bg-slate-100 text-slate-700'
+                              s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-brand-600/10 text-brand-700' : s.isEnrolled ? 'bg-brand-600/10 text-brand-700' : 'bg-slate-100 text-slate-700'
                             }`}>
                               {s.isRefunded ? 'مسترجع' : s.isSubscribed ? 'مشترك' : s.isEnrolled ? 'لم يدفع الإشتراك' : 'وجبة منفردة'}
                             </span>
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{s.subscriptionMeals}</td>
-                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{s.unitMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-brand-700">{s.subscriptionMeals}</td>
+                          <td className="p-3 text-center font-mono font-bold text-brand-700">{s.unitMeals}</td>
                           <td className="p-3 text-center font-mono font-black text-slate-900">{s.totalMeals}</td>
                           <td className="p-3 text-center font-mono font-bold text-amber-700">{s.unpaidMeals > 0 ? s.unpaidMeals : '—'}</td>
-                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{fmt(s.grossPaid)} د.ت</td>
+                          <td className="p-3 text-center font-mono font-bold text-brand-700">{fmt(s.grossPaid)} د.ت</td>
                           <td className="p-3 text-center font-mono font-bold text-red-600">{s.totalRefunded > 0 ? `-${fmt(s.totalRefunded)} د.ت` : '—'}</td>
                           <td className="p-3 text-center font-mono font-bold">
                             {s.forfaitUnused > 0 ? (
-                              <span className="text-[#1e626b]">{fmt(s.forfaitUnused)} د.ت</span>
+                              <span className="text-brand-700">{fmt(s.forfaitUnused)} د.ت</span>
                             ) : s.forfaitEstimate > 0 ? (
                               <span className="text-slate-400" title="تقدير — يصبح مكتسباً بعد إغلاق الشهر">({fmt(s.forfaitEstimate)})</span>
                             ) : '—'}
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-[#1e626b]">{fmt(s.centerPart)} د.ت</td>
-                          <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
+                          {!isInHouseKitchen && (
+                            <>
+                              <td className="p-3 text-center font-mono font-bold text-brand-700">{fmt(s.centerPart)} د.ت</td>
+                              <td className="p-3 text-center font-mono font-bold text-red-700">{fmt(s.traiteurPart)} د.ت</td>
+                            </>
+                          )}
                         </tr>
                       ))
                     )}
@@ -2531,54 +2656,53 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 </div>
               )}
             </div>
+            )}
 
-            {/* Monthly Meals Consumed Breakdown */}
+            {/* Monthly Meals Consumed Breakdown (Repas panel) */}
+            {financeServiceTab === 'repas' && (
             <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
               <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-sm">إجمالي الوجبات المستهلكة في كل شهر</h3>
                   <p className="text-[11px] text-slate-500 mt-1">يُحتسب لكل شهر الوجبات المستهلكة بالاشتراك الشهري أو بالوجبة المنفردة</p>
                 </div>
-                <div className="bg-[#257C86]/10 border border-[#257C86]/20 rounded-2xl px-4 py-2 text-center">
-                  <span className="text-[10px] font-bold text-[#1e626b] block">الإجمالي الكلي</span>
-                  <span className="font-mono font-black text-[#1e626b] text-lg">{totalPlatesConsumed} وجبة</span>
+                <div className="bg-brand-600/10 border border-brand-600/20 rounded-2xl px-4 py-2 text-center">
+                  <span className="text-[10px] font-bold text-brand-700 block">الإجمالي الكلي</span>
+                  <span className="font-mono font-black text-brand-700 text-lg">{totalPlatesConsumed} وجبة</span>
                 </div>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {ACADEMIC_MONTHS.map(month => {
-                    const [startYear, endYear] = schoolYearFilter.split('/');
-                    const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-                    const num = mNum[month] ?? 9;
-                    const year = num >= 9 ? startYear : endYear;
-                    const prefix = `${year}-${String(num).padStart(2, '0')}`;
-                    const count = filteredStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix)).length, 0);
+                    // Feature 007 (FR-011): lunch-only at the aggregation source —
+                    // goûter rows on the same days must not inflate the Repas cells.
+                    const prefix = academicMonthPrefix(month, schoolYearFilter);
+                    const count = filteredStudents.reduce((sum, st) => sum + (st.mealAttendances || []).filter(a => a.date.startsWith(prefix) && isLunchAttendance(a)).length, 0);
                     return (
                       <button
                         key={month}
                         type="button"
                         onClick={() => setConsumedDetailMonth(month === consumedDetailMonth ? null : month)}
-                        className={`rounded-2xl border p-3 text-center transition cursor-pointer ${consumedDetailMonth === month ? 'bg-[#257C86]/10 border-[#257C86]/40 shadow-sm' : 'border-slate-200 bg-slate-50/60 hover:border-[#257C86]/30 hover:bg-[#257C86]/[0.06]'}`}
+                        className={`rounded-2xl border p-3 text-center transition cursor-pointer ${consumedDetailMonth === month ? 'bg-brand-600/10 border-brand-600/40 shadow-sm' : 'border-slate-200 bg-slate-50/60 hover:border-brand-600/30 hover:bg-brand-600/[0.06]'}`}
                       >
                         <p className="text-[10px] font-bold text-slate-500">{ARABIC_ACADEMIC_MONTHS[month]} ({month})</p>
                         <p className="font-mono font-black text-slate-900 text-xl mt-1">{count}</p>
-                        <p className="text-[10px] font-bold text-[#1e626b]">وجبة مستهلكة</p>
+                        <p className="text-[10px] font-bold text-brand-700">وجبة مستهلكة</p>
                       </button>
                     );
                   })}
                 </div>
 
                 {consumedDetailMonth && (() => {
-                  const [startYear, endYear] = schoolYearFilter.split('/');
-                  const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
-                  const num = mNum[consumedDetailMonth] ?? 9;
-                  const year = num >= 9 ? startYear : endYear;
-                  const prefix = `${year}-${String(num).padStart(2, '0')}`;
+                  const prefix = academicMonthPrefix(consumedDetailMonth, schoolYearFilter);
                   const rows: Array<{ date: string; studentName: string; grade: string; type: 'subscription' | 'unit'; service: MealServiceType; paid: boolean; isEnrolled: boolean }> = [];
                   filteredStudents.forEach(st => {
                     const enrolled = st.mealSubscription?.active === true || st.enrolledServices?.meals === true;
                     (st.mealAttendances || []).forEach(a => {
-                      if (a.date.startsWith(prefix)) {
+                      // Feature 007 (FR-011/FR-012): lunch-only at the row-
+                      // collection source — no goûter record can reach a
+                      // Repas day panel regardless of display state.
+                      if (a.date.startsWith(prefix) && isLunchAttendance(a)) {
                         rows.push({ date: a.date, studentName: `${st.firstName} ${st.lastName}`, grade: st.grade, type: a.type, service: a.service || 'lunch', paid: !!a.paid, isEnrolled: enrolled });
                       }
                     });
@@ -2592,7 +2716,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           تفاصيل الوجبات المستهلكة في شهر {ARABIC_ACADEMIC_MONTHS[consumedDetailMonth]} ({consumedDetailMonth})
                         </h4>
                         <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
+                          <span className="px-2.5 py-1 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-black">{sorted.length} وجبة / لمجة</span>
                           <button
                             type="button"
                             onClick={() => { setConsumedDetailMonth(null); setExpandedDays(new Set()); }}
@@ -2634,7 +2758,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                       <span className="text-[10px] font-bold text-slate-400">({dayRows.length} وجبة / لمجة)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-[#257C86]">{paidCount} مدفوعة</span>
+                                      <span className="text-[10px] font-bold text-brand-600">{paidCount} مدفوعة</span>
                                       {dayRows.filter(r => !r.paid && r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-amber-600">{dayRows.filter(r => !r.paid && r.isEnrolled).length} لم يدفعو الإشتراك</span>}
                                       {dayRows.filter(r => !r.paid && !r.isEnrolled).length > 0 && <span className="text-[10px] font-bold text-red-500">{dayRows.filter(r => !r.paid && !r.isEnrolled).length} غير مدفوعة</span>}
                                     </div>
@@ -2658,21 +2782,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                                   <td className="p-2.5 text-slate-500">{row.grade}</td>
                                                   <td className="p-2.5">
                                                     {row.service === 'gouter_matin' ? (
-                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
+                                                      <span className="px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-bold">
                                                         {row.type === 'subscription' ? 'لمجة الصباح (اشتراك)' : 'لمجة الصباح (منفردة)'}
                                                       </span>
                                                     ) : row.service === 'gouter_apres_midi' ? (
-                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
+                                                      <span className="px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-bold">
                                                         {row.type === 'subscription' ? 'لمجة المساء (اشتراك)' : 'لمجة المساء (منفردة)'}
                                                       </span>
                                                     ) : (
-                                                      <span className="px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-lg text-[10px] font-bold">
+                                                      <span className="px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-bold">
                                                         {row.type === 'subscription' ? 'وجبة غداء (اشتراك)' : 'وجبة غداء (منفردة)'}
                                                       </span>
                                                     )}
                                                   </td>
                                                   <td className="p-2.5 font-bold">
-                                                    {row.paid ? <span className="text-[#1e626b]">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
+                                                    {row.paid ? <span className="text-brand-700">مدفوع</span> : row.isEnrolled ? <span className="text-amber-600">لم يدفع الإشتراك</span> : <span className="text-red-600">غير مدفوع</span>}
                                                   </td>
                                                 </tr>
                                               ))}
@@ -2692,6 +2816,37 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 })()}
               </div>
             </div>
+            )}
+
+            {/* Revision D (remark F2) + revision E (remark 3.2): the dedicated
+                Goûter detail table — the Goûter panel's detail surface 3.2. */}
+            {financeServiceTab === 'gouter' && (
+            <div className="bg-white rounded-3xl border border-brand-600/20 overflow-hidden shadow-lg shadow-slate-900/5">
+              <div className="p-5 border-b border-brand-600/10 bg-brand-600/[0.03] flex items-center gap-2">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">تفاصيل استهلاك التلاميذ — اللمجة (Goûter)</h3>
+                  <p className="text-[11px] text-slate-400">الاستهلاك وخلاصات اللمجة (صباح/مساء) فقط — مفصولة عن جدول الغداء.</p>
+                </div>
+              </div>
+              <div className="p-4" data-testid="finance-gouter-table">
+                <GouterConsumptionTable
+                  students={filteredStudents}
+                  month={monthFilter === 'all' ? 'Septembre' : (monthFilter as AcademicMonth)}
+                  schoolYear={schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter}
+                  fees={settings ? getFeesForYear(settings, schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter) : null}
+                />
+              </div>
+            </div>
+            )}
+
+            {/* Revision E (remark 3.3): the Goûter-only monthly consumption
+                grid — the counterpart of the Repas monthly table. */}
+            {financeServiceTab === 'gouter' && (
+              <GouterMonthlyTable
+                students={filteredStudents}
+                schoolYear={schoolYearFilter === 'all' ? getCurrentAcademicYear() : schoolYearFilter}
+              />
+            )}
           </div>
         );
       })()}
@@ -2762,23 +2917,42 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             }
           }
 
+          // Also validate event participants if any payment is from Événements
+          if (events && onUpdateEvents) {
+            let eventsChanged = false;
+            const updatedEvents = events.map(ev => {
+              const updatedParticipants = (ev.participants || []).map(pt => {
+                const eventPayId = `event_${ev.id}_${pt.id}`;
+                if (paymentIds.has(eventPayId) || (pt.chequeNumber && pt.chequeNumber === cheque.chequeNumber)) {
+                  eventsChanged = true;
+                  return { ...pt, chequePaid: true, paid: (pt.remainingBalance || 0) <= 0, paidAt: pt.paidAt || new Date().toISOString() };
+                }
+                return pt;
+              });
+              return { ...ev, participants: updatedParticipants };
+            });
+            if (eventsChanged) {
+              onUpdateEvents(updatedEvents);
+            }
+          }
+
           toast.success(`تم تحصيل الشيك ${cheque.chequeNumber || ''} بنجاح - الإجمالي: ${fmt(cheque.totalAmount)} د.ت`);
         };
 
         return (
           <div className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 overflow-hidden">
-            <div className="p-5 bg-gradient-to-r from-[#257C86]/[0.06] to-white border-b border-[#257C86]/25">
+            <div className="p-5 bg-gradient-to-r from-brand-600/[0.06] to-white border-b border-brand-600/25">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-black text-[#1e626b] flex items-center gap-2">
+                  <h3 className="text-lg font-black text-brand-700 flex items-center gap-2">
                     <span className="text-2xl">📋</span>
                     تحصيل الشيكات
                   </h3>
-                  <p className="text-xs text-[#257C86] mt-1">قائمة الشيكات المعلقة - اضغط "تم التحصيل" عند استلام المبلغ</p>
+                  <p className="text-xs text-brand-600 mt-1">قائمة الشيكات المعلقة - اضغط "تم التحصيل" عند استلام المبلغ</p>
                 </div>
                 <div className="text-left">
-                  <p className="text-xs text-[#1e626b] font-bold">المبلغ الإجمالي المعلق</p>
-                  <p className="text-2xl font-black text-[#1e626b] font-mono">{fmt(totalPendingCheques)} د.ت</p>
+                  <p className="text-xs text-brand-700 font-bold">المبلغ الإجمالي المعلق</p>
+                  <p className="text-2xl font-black text-brand-700 font-mono">{fmt(totalPendingCheques)} د.ت</p>
                 </div>
               </div>
               <div className="mt-3">
@@ -2789,7 +2963,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     placeholder="بحث برقم الشيك..."
                     value={chequeSearch}
                     onChange={(e) => { setChequeSearch(e.target.value); setChequesPageByService({}); }}
-                    className="w-full pr-10 pl-4 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none focus:border-[#257C86] transition"
+                    className="w-full pr-10 pl-4 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none focus:border-brand-600 transition"
                   />
                 </div>
               </div>
@@ -2804,17 +2978,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               ) : (
                 <div className="space-y-4">
                   {groupedCheques.map((cheque, idx) => (
-                    <div key={cheque.chequeNumber || idx} className="border border-[#257C86]/20 rounded-2xl overflow-hidden">
-                      <div className="px-4 py-3 bg-[#257C86]/10 border-b border-[#257C86]/20 flex justify-between items-center">
+                    <div key={cheque.chequeNumber || idx} className="border border-brand-600/20 rounded-2xl overflow-hidden">
+                      <div className="px-4 py-3 bg-brand-600/10 border-b border-brand-600/20 flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <div>
-                            <p className="font-black text-[#1e626b] text-sm">شيك رقم: <span className="font-mono">{cheque.chequeNumber || 'بدون رقم'}</span></p>
-                            <p className="text-xs text-[#257C86]">{cheque.chequeDate || ''} — {cheque.payments.length} خدمة — الإجمالي: {fmt(cheque.totalAmount)} د.ت</p>
+                            <p className="font-black text-brand-700 text-sm">شيك رقم: <span className="font-mono">{cheque.chequeNumber || 'بدون رقم'}</span></p>
+                            <p className="text-xs text-brand-600">{cheque.chequeDate || ''} — {cheque.payments.length} خدمة — الإجمالي: {fmt(cheque.totalAmount)} د.ت</p>
                           </div>
                         </div>
                         <button
                           onClick={() => handleValidateChequeGroup(cheque)}
-                          className="px-4 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-bold text-xs rounded-xl transition shadow-sm cursor-pointer flex items-center gap-1.5"
+                          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl transition shadow-sm cursor-pointer flex items-center gap-1.5"
                         >
                           <CheckCircle2 className="h-4 w-4" />
                           تم التحصيل
@@ -2832,12 +3006,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           </thead>
                           <tbody className="divide-y divide-slate-200/70">
                             {cheque.payments.map((p) => (
-                              <tr key={p.id} className="hover:bg-[#257C86]/[0.05] transition">
+                              <tr key={p.id} className="hover:bg-brand-600/[0.05] transition">
                                 <td className="p-3 font-bold text-slate-900">{p.studentName}</td>
                                 <td className="p-3 text-center">
-                                  <span className="inline-flex px-2 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">{paymentServiceLabel(p)}</span>
+                                  <span className="inline-flex px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">{paymentServiceLabel(p)}</span>
                                 </td>
-                                <td className="p-3 text-center font-mono font-bold text-[#257C86]">{fmt(p.amountPaid)} د.ت</td>
+                                <td className="p-3 text-center font-mono font-bold text-brand-600">{fmt(p.amountPaid)} د.ت</td>
                                 <td className="p-3 text-center text-slate-600 font-bold">{monthToArabic(p.month)}</td>
                               </tr>
                             ))}
@@ -2870,10 +3044,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-5 bg-gradient-to-r from-[#257C86]/[0.06] to-white border-b border-[#257C86]/20 flex justify-between items-center">
+              <div className="p-5 bg-gradient-to-r from-brand-600/[0.06] to-white border-b border-brand-600/20 flex justify-between items-center">
                 <div>
-                  <h3 className="text-lg font-black text-[#1e626b]">تفاصيل الشيك</h3>
-                  <p className="text-xs text-[#257C86] mt-1">رقم الشيك: <span className="font-mono">{chequeDetailModal.chequeNumber || 'بدون رقم'}</span></p>
+                  <h3 className="text-lg font-black text-brand-700">تفاصيل الشيك</h3>
+                  <p className="text-xs text-brand-600 mt-1">رقم الشيك: <span className="font-mono">{chequeDetailModal.chequeNumber || 'بدون رقم'}</span></p>
                 </div>
                 <button onClick={() => setChequeDetailModal(null)} className="p-2 hover:bg-white/60 rounded-xl cursor-pointer"><X className="h-5 w-5 text-slate-600" /></button>
               </div>
@@ -2881,22 +3055,22 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">رقم الشيك</p>
-                    <p className="text-sm font-mono font-black text-[#1e626b]">{chequeDetailModal.chequeNumber || 'بدون رقم'}</p>
+                    <p className="text-sm font-mono font-black text-brand-700">{chequeDetailModal.chequeNumber || 'بدون رقم'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">تاريخ الشيك</p>
-                    <p className="text-sm font-mono font-black text-[#1e626b]">{chequeDetailModal.chequeDate || '-'}</p>
+                    <p className="text-sm font-mono font-black text-brand-700">{chequeDetailModal.chequeDate || '-'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">الحالة</p>
-                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-[#1e626b]' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
+                    <p className={`text-sm font-black ${chequeDetailModal.paid ? 'text-brand-700' : 'text-amber-700'}`}>{chequeDetailModal.paid ? 'شيك محصل' : 'شيك معلق'}</p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400">المبلغ الإجمالي</p>
-                    <p className="text-sm font-mono font-black text-[#257C86]">{fmt(chequeDetailModal.totalAmount)} د.ت</p>
+                    <p className="text-sm font-mono font-black text-brand-600">{fmt(chequeDetailModal.totalAmount)} د.ت</p>
                   </div>
                 </div>
-                <h4 className="font-black text-[#1e626b] text-sm mb-2">الخدمات المشمولة ({chequeDetailModal.payments.length})</h4>
+                <h4 className="font-black text-brand-700 text-sm mb-2">الخدمات المشمولة ({chequeDetailModal.payments.length})</h4>
                 <div className="overflow-x-auto">
                     <table className="min-w-[640px] w-full text-xs">
                       <thead>
@@ -2910,13 +3084,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {chequeDetailModal.payments.map((p: any) => (
-                          <tr key={p.id} className="hover:bg-[#257C86]/[0.05]">
+                          <tr key={p.id} className="hover:bg-brand-600/[0.05]">
                             <td className="p-2.5 font-bold text-slate-900">{p.studentName}</td>
                             <td className="p-2.5 text-center">
-                              <span className="inline-flex px-2 py-0.5 bg-[#257C86]/10 text-[#1e626b] rounded-md font-bold text-[10px]">{paymentServiceLabel(p)}</span>
+                              <span className="inline-flex px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-bold text-[10px]">{paymentServiceLabel(p)}</span>
                             </td>
                             <td className="p-2.5 text-center font-mono font-bold text-slate-500 text-[10px]">{p.receiptNumber || '-'}</td>
-                            <td className="p-2.5 text-center font-mono font-bold text-[#257C86]">{fmt(p.amountPaid)} د.ت</td>
+                            <td className="p-2.5 text-center font-mono font-bold text-brand-600">{fmt(p.amountPaid)} د.ت</td>
                             <td className="p-2.5 text-center text-slate-600 font-bold">{monthToArabic(p.month)}</td>
                           </tr>
                         ))}

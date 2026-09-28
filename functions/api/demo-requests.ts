@@ -1,7 +1,23 @@
-import { Env, json, readBody, validateSession } from './_lib';
+import { Env, json, readBody, consumeAuthRateLimit, getClientIp } from './_lib';
+import { logAudit } from './_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
+    const rateCheck = await consumeAuthRateLimit(env.DB, request, 'center:demo', 5, 15 * 60_000);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = (rateCheck as { retryAfterSec: number }).retryAfterSec;
+      return new Response(
+        JSON.stringify({ error: 'تم تقديم طلب مشابه مؤخرا. يرجى الانتظار.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Retry-After': String(retryAfterSec)
+          }
+        }
+      );
+    }
+
     const body = await readBody(request);
     const fullName = String(body.fullName || body.full_name || '').trim();
     const academyName = String(body.academyName || body.academy_name || '').trim();
@@ -21,6 +37,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     const id = 'REQ_' + Date.now() + '_' + crypto.randomUUID().slice(0, 8);
     const createdAt = Date.now();
+    const ip = getClientIp(request);
 
     await env.DB.prepare(`
       INSERT INTO demo_requests (
@@ -30,116 +47,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       id, fullName, academyName, email, phone, estimatedSize, requestedModules, message, requestType, centerType, createdAt
     ).run();
 
+    logAudit(env, request, { email, action: 'demo_request', entityType: 'demo_request', entityId: id, details: `type:${requestType},center:${centerType}`, ip }).catch(() => {});
+
     return json({ 
       success: true, 
       id, 
       message: 'تم تسجيل طلبك بنجاح! سيتصل بك فريقنا في أقرب وقت لتفعيل حساب المركز.' 
     }, 201);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تسجيل الطلب.' }, 500);
-  }
-};
-
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  try {
-    const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح لك بالوصول إلى لوحة المنصة.' }, 403);
-    }
-
-    const { results } = await env.DB.prepare(`
-      SELECT id, full_name, academy_name, email, phone, estimated_students, requested_modules, message, status, request_type, notes, center_type, created_at
-      FROM demo_requests
-      ORDER BY created_at DESC
-    `).all<any>();
-
-    const formatted = (results || []).map(r => {
-      let modules = [];
-      try {
-        modules = r.requested_modules ? JSON.parse(r.requested_modules) : [];
-      } catch {
-        modules = r.requested_modules ? [r.requested_modules] : [];
-      }
-      // Normalize the center type to 'jardin' | 'formation' | ''
-      // (the DB may contain variants like "jardin d'enfant", "Jardin", "Centre de formation"…)
-      const rawType = String(r.center_type || '').trim().toLowerCase();
-      const centerType = rawType.includes('jardin')
-        ? 'jardin'
-        : (rawType.includes('formation') || rawType.includes('centre')) ? 'formation' : '';
-      return {
-        id: r.id,
-        fullName: r.full_name,
-        academyName: r.academy_name,
-        email: r.email,
-        phone: r.phone,
-        estimatedSize: r.estimated_students,
-        requestedModules: modules,
-        message: r.message,
-        status: r.status,
-        requestType: r.request_type || 'trial',
-        centerType,
-        notes: r.notes || '',
-        createdAt: r.created_at
-      };
-    });
-
-    return json({ requests: formatted });
-  } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في جلب طلبات التجربة.' }, 500);
-  }
-};
-
-export const onRequestPatch: PagesFunction<Env> = async ({ env, request }) => {
-  try {
-    const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح.' }, 403);
-    }
-
-    const body = await readBody(request);
-    const id = String(body.id || '').trim();
-    if (!id) return json({ error: 'معرف الطلب مفقود.' }, 400);
-
-    const status = body.status ? String(body.status).trim() : null;
-    const notes = body.notes !== undefined ? String(body.notes).trim() : null;
-
-    // 'converted' is one-way: a request that already became a center can only
-    // be archived afterwards (never reopened, never converted a second time).
-    if (status) {
-      const current = await env.DB.prepare('SELECT status FROM demo_requests WHERE id = ?').bind(id).first<any>();
-      if (current && current.status === 'converted' && status !== 'converted' && status !== 'archived') {
-        return json({ error: 'تم تحويل هذا الطلب إلى مركز مسبقاً — يمكن أرشفته فقط.' }, 409);
-      }
-    }
-
-    if (status && notes !== null) {
-      await env.DB.prepare('UPDATE demo_requests SET status = ?, notes = ? WHERE id = ?').bind(status, notes, id).run();
-    } else if (status) {
-      await env.DB.prepare('UPDATE demo_requests SET status = ? WHERE id = ?').bind(status, id).run();
-    } else if (notes !== null) {
-      await env.DB.prepare('UPDATE demo_requests SET notes = ? WHERE id = ?').bind(notes, id).run();
-    }
-
-    return json({ success: true });
-  } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تحديث الطلب.' }, 500);
-  }
-};
-
-export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
-  try {
-    const session = await validateSession(env.DB, request);
-    if (!session || (session.role !== 'super_admin' && session.role !== 'platform_super_admin')) {
-      return json({ error: 'غير مصرح.' }, 403);
-    }
-
-    const url = new URL(request.url);
-    const id = url.searchParams.get('id');
-    if (!id) return json({ error: 'معرف الطلب مفقود.' }, 400);
-
-    await env.DB.prepare('DELETE FROM demo_requests WHERE id = ?').bind(id).run();
-    return json({ success: true });
-  } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في حذف الطلب.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في تسجيل الطلب.' }, 500);
   }
 };

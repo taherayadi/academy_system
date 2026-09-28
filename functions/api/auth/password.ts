@@ -1,4 +1,5 @@
-import { Env, json, readBody, sha256Hex, consumeAuthRateLimit } from '../_lib';
+import { Env, json, readBody, hashPassword, verifyPassword, consumeAuthRateLimit, validateSession, getClientIp } from '../_lib';
+import { logAudit } from '../_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -17,16 +18,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       );
     }
 
-    const { email, currentPassword, newPassword } = await readBody(request);
+    const session = await validateSession(env.DB, request);
+    if (!session) return json({ error: 'Unauthorized' }, 401);
+    const { currentPassword, newPassword } = await readBody(request);
+    const email = session.email;
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanCurrent = String(currentPassword || '').trim();
     const cleanNew = String(newPassword || '').trim();
+    const ip = getClientIp(request);
 
     if (!cleanEmail || !cleanCurrent || !cleanNew) {
       return json({ error: 'أدخل كلمة السر الحالية والجديدة.' }, 400);
     }
-    if (cleanNew.length < 4) {
-      return json({ error: 'كلمة السر الجديدة يجب أن تكون 4 أحرف على الأقل.' }, 400);
+    if (cleanNew.length < 12 || new TextEncoder().encode(cleanNew).length > 72) {
+      return json({ error: 'كلمة السر الجديدة يجب أن تكون 12 حرفاً على الأقل (72 بايت كحد أقصى).' }, 400);
     }
     if (cleanNew === cleanCurrent) {
       return json({ error: 'كلمة السر الجديدة مطابقة للحالية.' }, 400);
@@ -39,17 +44,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ error: 'الحساب غير موجود.' }, 404);
     }
 
-    const currentHash = await sha256Hex(cleanCurrent);
-    if (currentHash !== user.password_hash) {
+    const isCurrentValid = await verifyPassword(cleanCurrent, user.password_hash);
+    if (!isCurrentValid) {
       return json({ error: 'كلمة السر الحالية غير صحيحة.' }, 401);
     }
 
-    const newHash = await sha256Hex(cleanNew);
+    const newHash = await hashPassword(cleanNew);
     await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
       .bind(newHash, cleanEmail).run();
 
+    await env.DB.prepare('DELETE FROM center_sessions WHERE email = ?').bind(cleanEmail).run();
+    logAudit(env, request, { email: cleanEmail, action: 'password_change', entityType: 'user', entityId: cleanEmail, ip }).catch(() => {});
     return json({ ok: true });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطأ في تغيير كلمة السر.' }, 500);
+    console.error('Error:', err);
+    return json({ error: 'خطأ في تغيير كلمة السر.' }, 500);
   }
 };

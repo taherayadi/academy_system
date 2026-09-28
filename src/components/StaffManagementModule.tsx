@@ -19,6 +19,7 @@ import {
   X,
   BookOpen,
   CheckSquare,
+  Lock,
   FileCheck
 } from 'lucide-react';
 import { StaffMember, TimesheetEntry, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, StaffRole, StaffScheduleSlot, MONTH_BY_CALENDAR_INDEX, CenterSettings, CenterExpense, getAppSubjects, EtudeSlot, ETUDE_DAYS } from '../types';
@@ -37,6 +38,11 @@ interface StaffManagementModuleProps {
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   expenses?: CenterExpense[];
   onUpdateExpenses?: (expenses: CenterExpense[]) => void;
+  /** Staff-lite: the center has Étude but not the Staff module — roster CRUD only,
+   *  all payroll surfaces (pointage, payslips, advances, congés, schedule) locked. */
+  staffLite?: boolean;
+  /** Navigate to the renewal tab (used by the locked-feature upgrade card). */
+  onGoToRenewal?: () => void;
 }
 
 // Arabic month names -> month number (1-12)
@@ -116,11 +122,17 @@ export default function StaffManagementModule({
   settings,
   onUpdateSettings,
   expenses = [],
-  onUpdateExpenses
+  onUpdateExpenses,
+  staffLite = false,
+  onGoToRenewal
 }: StaffManagementModuleProps) {
    const toast = useToast();
-   const centerName = settings?.centerName || 'المركز';
-   const [activeSubTab, setActiveSubTab] = useState<'profiles' | 'pointage'>('profiles');
+   const centerName = settings?.centerName || 'EduSphère';
+   const [activeSubTab, setActiveSubTabState] = useState<'profiles' | 'pointage'>('profiles');
+   // Lite centers are pinned to the roster sub-tab — payroll is unreachable.
+   const setActiveSubTab = (tab: 'profiles' | 'pointage') => {
+     setActiveSubTabState(staffLite ? 'profiles' : tab);
+   };
    // selectedStaffId drives the detail view so that schedule/avance/leave changes persist automatically
    const [selectedStaffId, setSelectedStaffId] = useState<string | null>(staff[0]?.id || null);
    const selectedStaff = staff.find(s => s.id === selectedStaffId) || null;
@@ -699,13 +711,13 @@ const base = generatingPayslipStaff.baseSalary || 850;
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#257C86]/[0.06] text-[#1e626b] text-xs font-bold rounded-lg border border-[#257C86]/20">
+            <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               إدارة الموظفين والأساتذة
             </span>
             <span className="text-xs text-slate-400 font-bold">الموارد البشرية والمواد والحضور</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
-            <Users className="h-6 w-6 text-[#257C86]" />
+            <Users className="h-6 w-6 text-brand-600" />
             إدارة المعلمين والطاقم، نظام الحضور والغياب والأرشيف الشهري
           </h2>
           <p className="text-slate-500 text-xs mt-1">
@@ -715,7 +727,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
 
         <button
           onClick={openAddStaff}
-          className="px-5 py-3 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-[#257C86]/20 flex items-center gap-2 cursor-pointer shrink-0"
+          className="px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-sm rounded-2xl transition shadow-md shadow-brand-600/20 flex items-center gap-2 cursor-pointer shrink-0"
         >
           <Plus className="h-5 w-5" />
           إضافة موظف / أستاذ
@@ -728,7 +740,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
           onClick={() => setActiveSubTab('profiles')}
           className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'profiles' 
-              ? 'bg-[#257C86] text-white shadow-sm' 
+              ? 'bg-brand-600 text-white shadow-sm' 
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -736,15 +748,24 @@ const base = generatingPayslipStaff.baseSalary || 850;
           فريق العمل والملفات
         </button>
 
+        {/* Remark 3: the pointage sub-tab stays visible but locked in lite
+            mode — the value of upgrading remains discoverable, exactly like
+            the payroll surfaces below (masquer ≠ verrouiller). */}
         <button
           onClick={() => setActiveSubTab('pointage')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer ${
-            activeSubTab === 'pointage' 
-              ? 'bg-[#257C86] text-white shadow-sm' 
-              : 'text-slate-600 hover:bg-slate-100'
+          disabled={staffLite}
+          title={staffLite ? 'ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد' : undefined}
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 ${
+            staffLite
+              ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+              : `cursor-pointer ${
+                  activeSubTab === 'pointage'
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`
           }`}
         >
-          <CheckSquare className="h-4 w-4" />
+          {staffLite ? <Lock className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
           نظام الحضور والغياب اليومي
         </button>
 
@@ -776,13 +797,13 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     onClick={() => setSelectedStaffId(s.id)}
                     className={`p-4 rounded-3xl border transition cursor-pointer ${
                       isSelected 
-                        ? 'bg-[#257C86]/[0.05] border-[#257C86]/20 shadow-sm' 
+                        ? 'bg-brand-600/[0.05] border-brand-600/20 shadow-sm' 
                         : 'bg-white border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[10px] font-extrabold uppercase text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-extrabold uppercase text-brand-700 bg-brand-600/10 px-2 py-0.5 rounded-md">
                           {STAFF_ROLE_LABELS[s.role] || s.role}
                         </span>
                         <h4 className="text-base font-black text-slate-900 mt-1">{s.firstName} {s.lastName}</h4>
@@ -847,7 +868,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-4">
                   <div>
-                    <span className="text-xs font-bold text-[#1e626b] bg-[#257C86]/[0.06] px-2.5 py-1 rounded-md border border-[#257C86]/20">
+                    <span className="text-xs font-bold text-brand-700 bg-brand-600/[0.06] px-2.5 py-1 rounded-md border border-brand-600/20">
                       {STAFF_ROLE_LABELS[selectedStaff.role] || selectedStaff.role}
                     </span>
                     <h3 className="text-2xl font-black text-slate-900 mt-2">
@@ -871,20 +892,30 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     <span className="text-slate-400 text-[10px] block font-bold">رقم الـ CNSS:</span>
                     <span className="font-bold text-slate-800 font-mono">{selectedStaff.cnssNumber || 'لا يوجد'}</span>
                   </div>
-                  <div className="p-3 bg-[#257C86]/[0.06] rounded-2xl border border-[#257C86]/20">
-                    <span className="text-[#1e626b] text-[10px] block font-bold">المواد المدرسية:</span>
-                    <span className="font-bold text-[#1e626b]">{selectedStaff.subjects?.join(', ') || 'غير محدد'}</span>
+                  <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20">
+                    <span className="text-brand-700 text-[10px] block font-bold">المواد المدرسية:</span>
+                    <span className="font-bold text-brand-700">{selectedStaff.subjects?.join(', ') || 'غير محدد'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Emploi du temps Card */}
+              {/* Emploi du temps Card — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
                 <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#257C86]" />
+                  <Calendar className="h-4 w-4 text-brand-600" />
                   التوقيت الأسبوعي
                 </h4>
-                {selectedStaff.schedule && selectedStaff.schedule.length > 0 ? (
+                {staffLite && (
+                  <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                    <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                    {onGoToRenewal && (
+                      <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                        الذهاب إلى التجديد
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!staffLite && selectedStaff.schedule && selectedStaff.schedule.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {selectedStaff.schedule.map(sd => (
                       <div key={sd.day} className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
@@ -893,7 +924,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           <span className="text-[10px] text-slate-400 italic">راحة (يوم عطلة)</span>
                         ) : (
                           sd.slots.map((slot, i) => (
-                            <span key={i} className="block text-[10px] font-mono font-bold text-[#1e626b] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-lg px-2 py-0.5 mt-1">
+                            <span key={i} className="block text-[10px] font-mono font-bold text-brand-700 bg-brand-600/[0.06] border border-brand-600/20 rounded-lg px-2 py-0.5 mt-1">
                               {slot}
                             </span>
                           ))
@@ -906,13 +937,24 @@ const base = generatingPayslipStaff.baseSalary || 850;
                 )}
               </div>
 
-              {/* Leave Requests Management Card */}
+              {/* Leave Requests Management Card — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">طلبات الإجازات والرخص</h4>
                   <button
                     onClick={() => setIsLeaveModalOpen(true)}
-                    className="px-3 py-1.5 bg-[#257C86] text-white rounded-xl font-bold text-xs cursor-pointer"
+                    className="px-3 py-1.5 bg-brand-600 text-white rounded-xl font-bold text-xs cursor-pointer"
                   >
                     تقديم طلب إجازة جديد
                   </button>
@@ -943,7 +985,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             <>
                               <button
                                 onClick={() => handleUpdateLeaveStatus(req.id, 'approuve')}
-                                className="px-2.5 py-1 bg-[#257C86] text-white font-bold rounded-lg text-[10px]"
+                                className="px-2.5 py-1 bg-brand-600 text-white font-bold rounded-lg text-[10px]"
                               >
                                 موافقة ✓
                               </button>
@@ -956,7 +998,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             </>
                           )}
                           {req.status === 'approuve' && (
-                            <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-bold text-[10px]">
+                            <span className="px-2.5 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
                               مقبولة
                             </span>
                           )}
@@ -979,10 +1021,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
-              {/* Advance Requests (طلبات السلفة) */}
+              {/* Advance Requests (طلبات السلفة) — payroll surface, locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">طلبات السلفة</h4>
                   <button
@@ -1018,7 +1073,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             <>
                               <button
                                 onClick={() => handleUpdateAdvanceStatus(adv.id, 'approuve')}
-                                className="px-2.5 py-1 bg-[#257C86] text-white font-bold rounded-lg text-[10px]"
+                                className="px-2.5 py-1 bg-brand-600 text-white font-bold rounded-lg text-[10px]"
                               >
                                 موافقة ✓
                               </button>
@@ -1031,7 +1086,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             </>
                           )}
                           {adv.status === 'approuve' && (
-                            <span className="px-2.5 py-1 bg-[#257C86]/10 text-[#1e626b] rounded-lg font-black text-[10px] border border-[#257C86]/30">مقبول ✓</span>
+                            <span className="px-2.5 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-black text-[10px] border border-brand-600/30">مقبول ✓</span>
                           )}
                            {adv.status === 'refuse' && (
                             <span className="px-2.5 py-1 bg-red-100 text-red-800 rounded-lg font-black text-[10px] border border-red-300">مرفوض ✕</span>
@@ -1050,10 +1105,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
-              {/* Payslip history card (بعد التحقق: عرض وطباعة فقط) */}
+              {/* Payslip history card (بعد التحقق: عرض وطباعة فقط) — locked in lite mode */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-4">
+              {staffLite ? (
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 space-y-2">
+                  <p className="text-xs font-black text-amber-800">🔒 ميزة مقفلة — فعّل وحدة Personnel & Salaires من التجديد</p>
+                  {onGoToRenewal && (
+                    <button onClick={onGoToRenewal} className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs cursor-pointer">
+                      الذهاب إلى التجديد
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h4 className="font-black text-slate-900 text-sm">كشوف الأجر المؤكدة</h4>
                   <button
@@ -1064,7 +1132,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       setManualExtraHours(null);
                       setGeneratingPayslipStaff(selectedStaff);
                     }}
-                    className="px-3 py-1.5 bg-[#257C86] text-white rounded-xl font-bold text-xs cursor-pointer"
+                    className="px-3 py-1.5 bg-brand-600 text-white rounded-xl font-bold text-xs cursor-pointer"
                   >
                     إعداد بطاقة أجر جديدة
                   </button>
@@ -1084,7 +1152,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           <div key={ps.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center text-xs">
                             <div>
                               <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-[#257C86]" />
+                                <FileText className="h-4 w-4 text-brand-600" />
                                 <span className="font-bold text-slate-900">بطاقة أجر شهر {ps.month}</span>
                               </div>
                               <p className="text-[11px] text-slate-500 mt-1 font-mono">
@@ -1112,6 +1180,8 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     </div>
                   );
                 })()}
+                </>
+              )}
               </div>
 
             </div>
@@ -1129,12 +1199,12 @@ const base = generatingPayslipStaff.baseSalary || 850;
       )}
 
        {/* SUB TAB 2: POINTAGE CALENDRIER */}
-       {activeSubTab === 'pointage' && (
+       {activeSubTab === 'pointage' && !staffLite && (
          <div className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-6 no-print">
            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
              <div>
                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                 <CheckSquare className="h-5 w-5 text-[#257C86]" />
+                 <CheckSquare className="h-5 w-5 text-brand-600" />
                  سجل الحضور والغياب الشهري
                </h3>
                <p className="text-xs text-slate-500">اختر الشهر ثم اضغط على يوم لعرض وتسجيل الحضور.</p>
@@ -1174,12 +1244,12 @@ const base = generatingPayslipStaff.baseSalary || 850;
                  const congeCount = dayTs.filter(t => t.status === 'conge').length;
                  const isSelected = selectedCalendarDay === day;
                  cells.push(
-                   <button key={day} type="button" onClick={() => { setSelectedCalendarDay(day); setPointageDate(dateStr); }} className={`h-20 rounded-xl border text-xs flex flex-col items-center justify-center gap-0.5 cursor-pointer transition ${isSunday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-200 hover:bg-[#257C86]/[0.06]'} ${isSelected ? 'ring-2 ring-[#257C86] bg-[#257C86]/[0.06]' : ''}`}>
+                   <button key={day} type="button" onClick={() => { setSelectedCalendarDay(day); setPointageDate(dateStr); }} className={`h-20 rounded-xl border text-xs flex flex-col items-center justify-center gap-0.5 cursor-pointer transition ${isSunday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-200 hover:bg-brand-600/[0.06]'} ${isSelected ? 'ring-2 ring-brand-600 bg-brand-600/[0.06]' : ''}`}>
                      <span className={`font-black ${isSunday ? 'text-slate-400' : 'text-slate-900'}`}>{day}</span>
-                     {presentCount > 0 && <span className="text-[9px] bg-[#257C86]/10 text-[#1e626b] px-1 rounded-full">{presentCount}✓</span>}
+                     {presentCount > 0 && <span className="text-[9px] bg-brand-600/10 text-brand-700 px-1 rounded-full">{presentCount}✓</span>}
                      {absentCount > 0 && <span className="text-[9px] bg-red-100 text-red-700 px-1 rounded-full">{absentCount}✕</span>}
-                     {retardCount > 0 && <span className="text-[9px] bg-[#257C86]/10 text-[#1e626b] px-1 rounded-full">{retardCount}⏱</span>}
-                     {congeCount > 0 && <span className="text-[9px] bg-[#257C86]/10 text-[#1e626b] px-1 rounded-full">{congeCount}🏖</span>}
+                     {retardCount > 0 && <span className="text-[9px] bg-brand-600/10 text-brand-700 px-1 rounded-full">{retardCount}⏱</span>}
+                     {congeCount > 0 && <span className="text-[9px] bg-brand-600/10 text-brand-700 px-1 rounded-full">{congeCount}🏖</span>}
                      {!presentCount && !absentCount && !retardCount && !congeCount && day <= new Date().getDate() && calendarMonth === new Date().getMonth() && calendarYear === new Date().getFullYear() && <span className="text-[9px] text-slate-400">—</span>}
                    </button>
                  );
@@ -1220,20 +1290,20 @@ const base = generatingPayslipStaff.baseSalary || 850;
                                  <tr key={`${st.id}_${timeKey}`} className="hover:bg-slate-50/70 transition">
                                    <td className="p-3">
                                      <p className="font-black text-slate-900">{st.firstName} {st.lastName}</p>
-                                     <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#257C86] bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-md px-1.5 py-0.5 mt-0.5">
+                                     <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-brand-600 bg-brand-600/[0.06] border border-brand-600/20 rounded-md px-1.5 py-0.5 mt-0.5">
                                        {timeKey}
                                        {isExtra && (
-                                         <span className="text-[9px] font-black text-[#1e626b] bg-[#257C86]/5 border border-[#257C86]/20 rounded px-1 py-px not-italic">ساعات إضافية</span>
+                                         <span className="text-[9px] font-black text-brand-700 bg-brand-600/5 border border-brand-600/20 rounded px-1 py-px not-italic">ساعات إضافية</span>
                                        )}
                                      </span>
                                    </td>
                                    <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded text-[11px] uppercase">{roleLabel}</span></td>
                                    <td className="p-3 text-center">
                                      <div className="flex justify-center items-center gap-1">
-                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'present')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'present' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>✓</button>
-                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'absent')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'absent' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-red-50'}`}>✕</button>
-                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'retard')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'retard' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>⏱</button>
-                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'conge')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'conge' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>🏖</button>
+                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'present')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'present' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>✓</button>
+                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'absent')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'absent' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06] hover:text-red-700'}`}>✕</button>
+                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'retard')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'retard' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>⏱</button>
+                                       <button type="button" onClick={() => handleSetSeanceStatus(st.id, timeKey, 'conge')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${sp.status === 'conge' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>🏖</button>
                                      </div>
                                    </td>
                                    <td className="p-3 text-center">
@@ -1241,7 +1311,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                                        type="number" min={0} step="0.5" value={effExtra || ''}
                                        onChange={(e) => handleSetSeanceExtraHours(st.id, timeKey, e.target.value)}
                                        placeholder="0"
-                                       className="w-20 px-2 py-1 text-center bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-lg text-xs font-mono font-black text-[#1e626b] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                                       className="w-20 px-2 py-1 text-center bg-brand-600/[0.06] border border-brand-600/20 rounded-lg text-xs font-mono font-black text-brand-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                                      />
                                    </td>
                                    <td className="p-3"><input type="text" placeholder="..." value={currentP.notes} onChange={(e) => handleSetNotes(st.id, e.target.value)} className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px]" /></td>
@@ -1256,10 +1326,10 @@ const base = generatingPayslipStaff.baseSalary || 850;
                                 <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded text-[11px] uppercase">{roleLabel}</span></td>
                                <td className="p-3 text-center">
                                  <div className="flex justify-center items-center gap-1">
-                                   <button type="button" onClick={() => handleSetStatus(st.id, 'present')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'present' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>✓</button>
-                                   <button type="button" onClick={() => handleSetStatus(st.id, 'absent')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'absent' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-red-50'}`}>✕</button>
-                                   <button type="button" onClick={() => handleSetStatus(st.id, 'retard')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'retard' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>⏱</button>
-                                   <button type="button" onClick={() => handleSetStatus(st.id, 'conge')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'conge' ? 'bg-[#257C86] text-white' : 'bg-slate-100 text-slate-600 hover:bg-[#257C86]/[0.06]'}`}>🏖</button>
+                                   <button type="button" onClick={() => handleSetStatus(st.id, 'present')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'present' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>✓</button>
+                                   <button type="button" onClick={() => handleSetStatus(st.id, 'absent')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'absent' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06] hover:text-red-700'}`}>✕</button>
+                                   <button type="button" onClick={() => handleSetStatus(st.id, 'retard')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'retard' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>⏱</button>
+                                   <button type="button" onClick={() => handleSetStatus(st.id, 'conge')} className={`px-2 py-1 rounded-lg font-extrabold text-[10px] transition cursor-pointer ${currentP.status === 'conge' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-brand-600/[0.06]'}`}>🏖</button>
  </div>
                                 </td>
                                 <td className="p-3 text-center">
@@ -1267,7 +1337,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                                     type="number" min={0} step="0.5" value={currentP.extraHours || ''}
                                     onChange={(e) => handleSetHours(st.id, 'extraHours', e.target.value)}
                                     placeholder="0"
-                                    className="w-20 px-2 py-1 text-center bg-[#257C86]/[0.06] border border-[#257C86]/20 rounded-lg text-xs font-mono font-black text-[#1e626b] focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+                                    className="w-20 px-2 py-1 text-center bg-brand-600/[0.06] border border-brand-600/20 rounded-lg text-xs font-mono font-black text-brand-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
                                   />
                                 </td>
                                 <td className="p-3"><input type="text" placeholder="..." value={currentP.notes} onChange={(e) => handleSetNotes(st.id, e.target.value)} className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px]" /></td>
@@ -1278,7 +1348,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                    </table>
                  </div>
                  <div className="pt-3 flex justify-end">
-                    <button onClick={handleSaveDailyPointage} className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />حفظ</button>
+                    <button onClick={handleSaveDailyPointage} className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />حفظ</button>
                  </div>
                </div>
              </>
@@ -1296,9 +1366,9 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-[#257C86]" />
+                  <Users className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">
                     {editingStaffId ? 'تعديل بيانات موظف / أستاذ' : 'تسجيل موظف أو أستاذ جديد'}
                   </h3>
@@ -1351,17 +1421,17 @@ const base = generatingPayslipStaff.baseSalary || 850;
 
                 {/* SUBJECT SELECTION FOR TEACHERS */}
                 {role === 'enseignant' && (
-                  <div className="space-y-3 p-4 bg-[#257C86]/[0.05] rounded-2xl border border-[#257C86]/20">
+                  <div className="space-y-3 p-4 bg-brand-600/[0.05] rounded-2xl border border-brand-600/20">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-black text-[#1e626b] block flex items-center gap-1">
-                        <BookOpen className="h-4 w-4 text-[#257C86]" />
+                      <label className="text-xs font-black text-brand-700 block flex items-center gap-1">
+                        <BookOpen className="h-4 w-4 text-brand-600" />
                         مواد الأستاذ (اختيار مادة أو أكثر):
                       </label>
                       
                       <button
                         type="button"
                         onClick={() => setIsAddingSubject(!isAddingSubject)}
-                        className="text-[11px] font-bold text-[#1e626b] hover:text-[#1e626b] bg-[#257C86]/10 px-2 py-0.5 rounded cursor-pointer"
+                        className="text-[11px] font-bold text-brand-700 hover:text-brand-700 bg-brand-600/10 px-2 py-0.5 rounded cursor-pointer"
                       >
                         إضافة مادة جديدة
                       </button>
@@ -1374,12 +1444,12 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           value={newSubjectInput}
                           onChange={(e) => setNewSubjectInput(e.target.value)}
                           placeholder="اسم المادة جديدة..."
-                          className="flex-1 px-3 py-1.5 bg-white border border-[#257C86]/20 rounded-xl text-xs"
+                          className="flex-1 px-3 py-1.5 bg-white border border-brand-600/20 rounded-xl text-xs"
                         />
                         <button
                           type="button"
                           onClick={handleAddSubject}
-                          className="px-3 py-1.5 bg-[#257C86] text-white font-bold text-xs rounded-xl cursor-pointer"
+                          className="px-3 py-1.5 bg-brand-600 text-white font-bold text-xs rounded-xl cursor-pointer"
                         >
                           إضافة
                         </button>
@@ -1396,7 +1466,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             onClick={() => toggleSubjectSelection(sub)}
                             className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
                               isSelected
-                                ? 'bg-[#257C86] text-white border-[#257C86] shadow-lg shadow-slate-900/5'
+                                ? 'bg-brand-600 text-white border-brand-600 shadow-lg shadow-slate-900/5'
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                             }`}
                           >
@@ -1435,7 +1505,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                     <label className="text-xs font-bold text-slate-600 block mb-1">الراتب الأساسي (د.ت) *</label>
                     <input 
                       type="number" required value={baseSalary} onFocus={(e) => e.target.select()} onChange={(e) => setBaseSalary(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-[#1e626b]"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-brand-700"
                     />
                   </div>
 
@@ -1459,7 +1529,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
 
                 <div>
                     <h4 className="text-xs font-black text-slate-800 mb-2 flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-[#257C86]" />
+                      <Calendar className="h-4 w-4 text-brand-600" />
                       التوقيت الأسبوعي — يبدأ من 08:00 إلى 12:00 ومن 14:00 إلى 18:00
                     </h4>
                     <div className="space-y-2">
@@ -1492,14 +1562,14 @@ const base = generatingPayslipStaff.baseSalary || 850;
                               <button
                                 type="button"
                                 onClick={() => updateDaySlots(day, [...slots, '08:00 - 12:00'])}
-                                className="text-[10px] text-[#257C86] hover:bg-[#257C86]/[0.06] rounded-lg px-2 py-1 font-bold cursor-pointer border border-[#257C86]/20"
+                                className="text-[10px] text-brand-600 hover:bg-brand-600/[0.06] rounded-lg px-2 py-1 font-bold cursor-pointer border border-brand-600/20"
                               >
                                 حصة
                               </button>
                               <button
                                 type="button"
                                 onClick={() => updateDaySlots(day, slots.slice(0, -1))}
-                                className="text-[10px] text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 font-bold cursor-pointer border border-red-200"
+                                className="text-[10px] text-red-500 hover:bg-slate-100 rounded-lg px-2 py-1 font-bold cursor-pointer border border-red-200"
                               >
                                 − إزالة
                               </button>
@@ -1519,7 +1589,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer"
                   >
                     حفظ الموظف / الأستاذ
                   </button>
@@ -1540,9 +1610,9 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center shrink-0">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-[#257C86]" />
+                  <FileText className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">إعداد بطاقة الأجر</h3>
                 </div>
 
@@ -1587,7 +1657,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       <label className="text-xs font-bold text-slate-600 block mb-1">المنحة / الإضافة د.ت</label>
                       <input 
                         type="number" value={bonusAmount} onFocus={(e) => e.target.select()} onChange={(e) => setBonusAmount(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-[#1e626b]"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-brand-700"
                       />
                     </div>
 
@@ -1595,7 +1665,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       <label className="text-xs font-bold text-slate-600 block mb-1">ثمن الساعة الإضافية د.ت</label>
                       <input 
                         type="number" min="0" value={extraHourRate} onFocus={(e) => e.target.select()} onChange={(e) => setExtraHourRate(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-[#1e626b]"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-brand-700"
                       />
                     </div>
 
@@ -1624,7 +1694,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                         <span>خصم الغياب:</span>
                         <span className="font-mono text-red-600">-{autoDed.toFixed(2)} د.ت</span>
                       </div>
-                      <div className="flex justify-between text-[#1e626b] font-bold">
+                      <div className="flex justify-between text-brand-700 font-bold">
                         <span>الساعات الإضافية:</span>
                         <span className="font-mono">{((manualExtraHours !== null ? manualExtraHours : (att?.extraHours ?? 0))).toFixed(1)} ساعة</span>
                       </div>
@@ -1635,7 +1705,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           value={manualExtraHours === null ? '' : manualExtraHours}
                           placeholder={`تلقائي: ${((att?.extraHours ?? 0)).toFixed(1)} ساعة`}
                           onChange={(e) => setManualExtraHours(e.target.value === '' ? null : Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-white border border-[#257C86]/30 rounded-xl text-xs font-bold font-mono text-[#1e626b]"
+                          className="w-full px-3 py-2 bg-white border border-brand-600/30 rounded-xl text-xs font-bold font-mono text-brand-700"
                         />
                       </div>
                       <div>
@@ -1670,11 +1740,11 @@ const base = generatingPayslipStaff.baseSalary || 850;
                           <span>الراتب الأساسي:</span>
                           <span className="font-mono font-bold">{base} د.ت</span>
                         </div>
-                        <div className="px-3 py-2 flex justify-between text-[#1e626b] font-bold">
+                        <div className="px-3 py-2 flex justify-between text-brand-700 font-bold">
                           <span>المنح والمكافآت:</span>
                           <span className="font-mono">+{bonusAmount} د.ت</span>
                         </div>
-                        <div className="px-3 py-2 flex justify-between text-[#1e626b] font-bold">
+                        <div className="px-3 py-2 flex justify-between text-brand-700 font-bold">
                           <span>الساعات الإضافية:</span>
                           <span className="font-mono">+{extraAmt.toFixed(2)} د.ت</span>
                         </div>
@@ -1694,13 +1764,13 @@ const base = generatingPayslipStaff.baseSalary || 850;
                             <span className="font-mono">-{absenceDed.toFixed(2)} د.ت</span>
                           </div>
                         )}
-                        <div className="px-3 py-2.5 bg-[#257C86] text-white flex justify-between text-sm font-black">
+                        <div className="px-3 py-2.5 bg-brand-600 text-white flex justify-between text-sm font-black">
                           <span>الصافي الواجب دفعه:</span>
-                          <span className="font-mono text-[#257C86]">{netPrev.toFixed(2)} د.ت</span>
+                          <span className="font-mono text-brand-600">{netPrev.toFixed(2)} د.ت</span>
                         </div>
                       </div>
                       {alreadyValidated && (
-                        <div className="px-3 py-2 bg-[#257C86]/[0.06] text-[#1e626b] border-t border-[#257C86]/20 font-bold">
+                        <div className="px-3 py-2 bg-brand-600/[0.06] text-brand-700 border-t border-brand-600/20 font-bold">
                           ⚠️ بطاقة الأجر لشهر {payMonth} موجودة مسبقاً — عند التحقق لن تُضاف للمالية مجدداً، سيتم فقط عرضها وطباعتها.
                         </div>
                       )}
@@ -1718,7 +1788,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
                   >
                     التحقق وإضافة إلى المالية ثم الطباعة 🖨️
                   </button>
@@ -1739,12 +1809,12 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-4 bg-[#257C86] text-white flex justify-between items-center no-print">
+              <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
                 <span className="font-bold text-sm">كشف راتب رسمي</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#257C86] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="h-4 w-4" />
                     طباعة بطاقة الأجر 🖨️
@@ -1785,7 +1855,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       <span className="font-mono font-bold">{printedPayslip.baseSalary} د.ت</span>
                     </div>
 
-                    <div className="p-2 flex justify-between text-[#1e626b] font-bold">
+                    <div className="p-2 flex justify-between text-brand-700 font-bold">
                       <span>المنح والمكافآت:</span>
                       <span className="font-mono">+{printedPayslip.bonus} د.ت</span>
                     </div>
@@ -1802,7 +1872,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       const extraRate = printedPayslip.extraHourRate ?? 0;
                       const extraAmt = printedPayslip.extraHoursAmount ?? (extraH * extraRate);
                       return (
-                        <div className="p-2 flex justify-between text-[#1e626b] font-bold">
+                        <div className="p-2 flex justify-between text-brand-700 font-bold">
                           <span>الساعات الإضافية:</span>
                           <span className="font-mono">+{extraAmt.toFixed(2)} د.ت</span>
                         </div>
@@ -1820,9 +1890,9 @@ const base = generatingPayslipStaff.baseSalary || 850;
                       </div>
                     )}
 
-                    <div className="p-3 bg-[#257C86] text-white flex justify-between text-sm font-black">
+                    <div className="p-3 bg-brand-600 text-white flex justify-between text-sm font-black">
                       <span>الصافي الواجب دفعه:</span>
-                      <span className="font-mono text-[#257C86]">{printedPayslip.netSalary.toFixed(2)} د.ت</span>
+                      <span className="font-mono text-brand-600">{printedPayslip.netSalary.toFixed(2)} د.ت</span>
                     </div>
                   </div>
                 </div>
@@ -1859,9 +1929,9 @@ const base = generatingPayslipStaff.baseSalary || 850;
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-[#257C86]" />
+                  <Calendar className="h-5 w-5 text-brand-600" />
                   <h3 className="text-lg font-black">تقديم طلب رخصة / إجازة</h3>
                 </div>
 
@@ -1922,7 +1992,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer"
                   >
                     إرسال الطلب للمصادقة
                   </button>
@@ -1943,9 +2013,9 @@ const base = generatingPayslipStaff.baseSalary || 850;
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8 flex flex-col max-h-[90vh]"
           >
-            <div className="p-6 bg-[#257C86] text-white flex justify-between items-center">
+            <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-[#257C86]" />
+                <Calendar className="h-5 w-5 text-brand-600" />
                 <h3 className="text-lg font-black">طلب سلفة</h3>
               </div>
               <button 
@@ -1984,7 +2054,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
 
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setIsAdvanceModalOpen(false)} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer">إلغاء</button>
-                <button type="submit" className="px-4 py-2 bg-[#257C86] text-white rounded-xl font-bold text-xs cursor-pointer">إرسال طلب السلفة</button>
+                <button type="submit" className="px-4 py-2 bg-brand-600 text-white rounded-xl font-bold text-xs cursor-pointer">إرسال طلب السلفة</button>
               </div>
             </form>
           </motion.div>
@@ -2047,7 +2117,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                 <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                   <button
                     onClick={() => setCinErrorDialog({ open: false, message: '' })}
-                    className="px-5 py-2.5 bg-[#257C86] hover:bg-[#1e626b] text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+                    className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
                   >
                     موافق
                   </button>

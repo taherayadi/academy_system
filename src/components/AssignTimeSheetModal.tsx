@@ -115,7 +115,7 @@ export default function AssignTimeSheetModal({
         {/* Header */}
         <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-[#3A93A0]" />
+            <Users className="h-5 w-5 text-brand-500" />
             <h3 className="text-lg font-black">إسناد جدول التوقيت</h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400">
@@ -125,8 +125,8 @@ export default function AssignTimeSheetModal({
 
         <div className="p-6 max-h-[70vh] overflow-y-auto">
           {/* Timesheet Info */}
-          <div className="bg-[#F2F8F9] border border-[#C3E0E4] rounded-xl p-4 mb-4">
-            <p className="text-xs font-bold text-[#14464E]">
+          <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 mb-4">
+            <p className="text-xs font-bold text-brand-800">
               <span className="font-black">{timeSheet.establishmentName} - {timeSheet.schoolYear}</span>
               {' '}— {timeSheet.gradeLevel}
               {timeSheet.branch ? ` / ${timeSheet.branch}` : ''}
@@ -143,7 +143,7 @@ export default function AssignTimeSheetModal({
               onClick={() => { setActiveTab('assigned'); setSearch(''); setChecked({}); }}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition ${
                 activeTab === 'assigned'
-                  ? 'bg-[#257C86] text-white shadow'
+                  ? 'bg-brand-600 text-white shadow'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -154,7 +154,7 @@ export default function AssignTimeSheetModal({
               onClick={() => { setActiveTab('add'); setSearch(''); setChecked({}); }}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition ${
                 activeTab === 'add'
-                  ? 'bg-[#257C86] text-white shadow'
+                  ? 'bg-brand-600 text-white shadow'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -171,7 +171,7 @@ export default function AssignTimeSheetModal({
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="بحث باسم التلميذ..."
-              className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#257C86]"
+              className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
             />
           </div>
 
@@ -211,7 +211,7 @@ export default function AssignTimeSheetModal({
               <div className="flex items-center gap-2 mb-4">
                 <button
                   onClick={() => toggleAll(true)}
-                  className="px-3 py-1.5 bg-[#F2F8F9] hover:bg-[#E0EFF1] text-[#14464E] border border-[#C3E0E4] rounded-xl text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 rounded-xl text-[10px] font-bold cursor-pointer flex items-center gap-1"
                 >
                   <CheckSquare className="h-3 w-3" />
                   تحديد الكل
@@ -238,14 +238,14 @@ export default function AssignTimeSheetModal({
                     <label
                       key={st.id}
                       className={`flex items-center gap-3 p-3 cursor-pointer transition ${
-                        checked[st.id] ? 'bg-[#F2F8F9]' : 'hover:bg-slate-50'
+                        checked[st.id] ? 'bg-brand-50' : 'hover:bg-slate-50'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={!!checked[st.id]}
                         onChange={() => toggleOne(st.id)}
-                        className="w-4 h-4 accent-[#257C86] rounded"
+                        className="w-4 h-4 accent-brand-600 rounded"
                       />
                       <div className="flex-1 min-w-0">
                         <span className="text-xs font-bold text-slate-900">{st.firstName} {st.lastName}</span>
@@ -271,7 +271,7 @@ export default function AssignTimeSheetModal({
             <button
               onClick={handleAssign}
               disabled={checkedCount === 0}
-              className="px-5 py-2 bg-[#257C86] hover:bg-[#1E6A73] text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <UserCheck className="h-4 w-4" />
               إسناد للتحديد ({checkedCount})

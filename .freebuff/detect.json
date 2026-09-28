@@ -1,0 +1,307 @@
+[
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\AdvertisementInterstitial.tsx",
+    "line": 194,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx",
+      "AdvertisementInterstitial.test.tsx",
+      "LandingPage.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\BusDriverModule.tsx",
+    "line": 1095,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\BusDriverModule.tsx",
+    "line": 873,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\EtudeModule.tsx",
+    "line": 865,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\EventsModule.tsx",
+    "line": 828,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx",
+      "EventsModule.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\ExternalCoursesModule.tsx",
+    "line": 1523,
+    "snippet": "text-slate-600 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\FormationModule.tsx",
+    "line": 1101,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gradient-text",
+    "name": "Gradient text",
+    "description": "Gradient text is decorative rather than meaningful — a common AI tell, especially on headings and metrics. Use solid colors for text.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\LandingPage.tsx",
+    "line": 364,
+    "snippet": "bg-clip-text + bg-gradient",
+    "importedBy": [
+      "App.tsx",
+      "LandingPage.smoke.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "gradient-text",
+    "name": "Gradient text",
+    "description": "Gradient text is decorative rather than meaningful — a common AI tell, especially on headings and metrics. Use solid colors for text.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\LandingPage.tsx",
+    "line": 642,
+    "snippet": "bg-clip-text + bg-gradient",
+    "importedBy": [
+      "App.tsx",
+      "LandingPage.smoke.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\LandingPage.tsx",
+    "line": 1411,
+    "snippet": "text-slate-300 on bg-red-50",
+    "importedBy": [
+      "App.tsx",
+      "LandingPage.smoke.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\LibraryModule.tsx",
+    "line": 614,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\MealsModule.tsx",
+    "line": 1169,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\SeanceRevisionModule.tsx",
+    "line": 863,
+    "snippet": "text-slate-600 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StaffManagementModule.tsx",
+    "line": 1234,
+    "snippet": "text-slate-600 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StaffManagementModule.tsx",
+    "line": 1260,
+    "snippet": "text-slate-600 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 813,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 937,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 1138,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 1280,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 1299,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 1345,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\StudentRegistrationModule.tsx",
+    "line": 1517,
+    "snippet": "border-r-4",
+    "importedBy": [
+      "App.tsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "F:\\my_academy\\academy_system\\src\\components\\SuiviScolaireModule.tsx",
+    "line": 764,
+    "snippet": "text-slate-400 on bg-red-50",
+    "importedBy": [
+      "App.tsx"
+    ]
+  }
+]

@@ -1,14 +1,13 @@
 /**
  * PubNub realtime client (browser side).
  *
- * One shared PubNub instance per tab serves every consumer (App, RenewalModule,
- * PlatformAdminDashboard). Messages are **"refetch" signals only**: consumers
+ * One shared PubNub instance per tab serves every consumer (the application and its modules). Messages are **"refetch" signals only**: consumers
  * re-run their existing fetch/snapshot/toast handlers and NEVER trust the
  * pushed payload.
  *
  * Lifecycle:
  *   1. `GET /api/pubnub-grant` returns a short-TTL PAM token scoped to the
- *      session (center → `center.{ownId}`, platform admin → `platform`).
+ *      center session (read-only `center.{ownId}`).
  *   2. The client subscribes to the granted channels with that token.
  *   3. The token is refreshed halfway through its TTL for long-lived tabs.
  *   4. Any failure — client keys absent (not baked at build time), grant
