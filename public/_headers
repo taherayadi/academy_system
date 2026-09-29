@@ -2,3 +2,10 @@
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+/*
+  Never cache HTML — every page load revalidates so browsers always get the
+  current build's asset hashes. Vite's hashed assets keep their own long cache.
+ */
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
