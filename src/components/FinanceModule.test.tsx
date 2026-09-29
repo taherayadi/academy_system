@@ -320,8 +320,10 @@ describe('FinanceModule — US1 general-view de-double-counting (feature 008)', 
   const gouterPayer = pay('st_gouter_p', 'Goûter', 60);
 
   const readAnnualTotal = () => {
+    // The card now lives inside the «مزيد من التفاصيل» block — open it first.
+    fireEvent.click(screen.getByText(/مزيد من التفاصيل/));
     const label = screen.getByText('الإيرادات الكلية (السنة)');
-    return label.parentElement?.textContent ?? '';
+    return label.closest('div.bg-white')?.textContent ?? '';
   };
 
   it('never renders the «إيرادات المطعم» card (FR-001)', () => {
@@ -351,12 +353,15 @@ describe('FinanceModule — US1 general-view de-double-counting (feature 008)', 
 
   it('keeps the other revenue cards byte-identical (FR-003)', () => {
     const readCardTexts = () => {
+      // Annual-inscriptions and sans-canteen cards moved into the «مزيد من
+      // التفاصيل» block; the cheques card stayed in the main grid.
+      fireEvent.click(screen.getByText(/مزيد من التفاصيل/));
       const grab = (label: string) =>
-        screen.getByText(label).parentElement?.textContent ?? '';
+        screen.getByText(label).closest('div.bg-white')?.textContent ?? '';
       const texts = {
         annualInscriptions: grab('التسجيلات السنوية (كل الفترات)'),
-        sansRepas: screen.getByText('المقبوضات بدون المطعم').parentElement?.textContent ?? '',
-        cheques: grab('مبالغ الشيكات القادمة')
+        sansRepas: grab('المقبوضات بدون المطعم'),
+        cheques: grab('شيكات معلقة')
       };
       return texts;
     };

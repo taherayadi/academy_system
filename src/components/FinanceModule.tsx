@@ -86,6 +86,20 @@ const RESTRICTED_SERVICES = ['Cours Particuliers', 'Revision', 'Formation', 'Rep
 
 const fmt = (n: number) => n.toFixed(3);
 
+// Unified neutral metric card: dark text/number, colored cue only as a dot.
+function MetricCard({ label, value, hint, dot, className = '' }: { label: string; value: string; hint?: string; dot?: string; className?: string }) {
+  return (
+    <div className={`bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1 ${className}`}>
+      <div className="flex items-center gap-1.5">
+        {dot && <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} aria-hidden />}
+        <span className="text-xs font-bold text-slate-500 block truncate">{label}</span>
+      </div>
+      <p className="text-2xl font-black font-mono text-slate-900">{value} <span className="text-xs font-bold text-slate-500">د.ت</span></p>
+      {hint && <span className="text-[10px] text-slate-400 font-bold block">{hint}</span>}
+    </div>
+  );
+}
+
 const MONTH_TO_NUM: Record<string, number> = {
   'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12,
   'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5,
@@ -651,6 +665,24 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Total amount of ALL unpaid cheques, regardless of the current month/school-year filter.
   const allPendingChequeTotal = allPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
   
+  // Netted per-service aggregation: signed gross (centerShare where present)
+  // minus uncollected cheques — the income rows then add up to «إجمالي المقبوضات».
+  const grossNetFor = (pred: (p: PaymentRecord) => boolean) => {
+    const rows = filteredPayments.filter(pred);
+    const gross = rows.reduce((s, p) => {
+      const rec = p as any;
+      return s + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
+    }, 0);
+    const pending = rows
+      .filter(p => p.method === 'Chèque' && p.chequePaid !== true && !p.refund)
+      .reduce((s, p) => {
+        const rec = p as any;
+        return s + (rec.centerShare ?? p.amountPaid);
+      }, 0);
+    return gross - pending;
+  };
+  const isRepasRow = (p: PaymentRecord) => p.service === 'Repas' && !(isExternalTraiteur && isUnitRepasPayment(p));
+
   // Revenue excluding pending cheques (only cashed cheques and cash count)
   const totalRevenueExclCheques = totalRevenue - filteredPendingChequePayments.filter(p => !p.refund && !(isExternalTraiteur && isUnitRepasPayment(p))).reduce((sum, p) => {
     const rec = p as any;
@@ -676,10 +708,20 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return totalUnitPlates * (f.fraisParRepas - f.prixPlatTraiteur);
   })();
   const totalRevenueWithResto = totalRevenueExclCheques + filteredRestoCenterBenefit;
-  // The traiteur share is NOT added here: filteredRestoCenterBenefit is already the center
-  // margin (fraisParRepas − prixPlatTraiteur), so the traiteur cost is netted out once.
   const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const netProfit = totalRevenueWithResto - totalExpensesAmount;
+
+  // ── Unified metric cards — all five follow the month/year filters ──
+  // Restaurant receipts come straight from the payments table (payments-based
+  // logic): subscription Repas/Goûter payments count fully; unit lunch plates
+  // contribute their traiteur margin instead of their payment. They are ALREADY
+  // included in Total receipts — never added on top.
+  const repasRowValue = grossNetFor(isRepasRow) + (isExternalTraiteur ? filteredRestoCenterBenefit : 0);
+  const gouterRowValue = grossNetFor(p => p.service === 'Goûter');
+  const restoReceipts = repasRowValue + gouterRowValue;
+  const totalReceipts = totalRevenueWithResto;
+  const totalExpensesAll = totalExpensesAmount + (isExternalTraiteur && !hideRestrictedModules && canteenEnabled ? repasTraiteurTotal : 0);
+  const netBalance = totalReceipts - totalExpensesAll;
+  const showRestoCard = (!hideRestrictedModules && canteenEnabled) || Math.abs(restoReceipts) > 0;
 
   // --- Metric cards ---
   // Card: Total revenue for the school year (NOT affected by the month filter).
@@ -768,18 +810,20 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     receiptRef: 'PART-TRAITEUR'
   } : null;
 
+  // Every row nets its own refunds and pending cheques ( repas follows the
+  // payments-based restaurant logic) — the rows add up to «إجمالي المقبوضات».
   const revenueByService = {
-    Suivi: filteredPayments.filter(p => p.service === 'Suivi' || p.service === 'Inscription Suivi').reduce((s, p) => s + p.amountPaid, 0),
-    Etude: filteredPayments.filter(p => p.service === 'Étude' || p.service === 'Inscription Étude').reduce((s, p) => s + p.amountPaid, 0),
-    CoursParticuliers: externalCenterTotal,
-    Revision: revisionCenterTotal,
-    Formation: filteredPayments.filter(p => p.service === 'Formation').reduce((s, p) => s + (p.refund ? -p.amountPaid : p.amountPaid), 0),
-    Événements: filteredPayments.filter(p => p.service === 'Événements').reduce((s, p) => s + p.amountPaid, 0),
-    Bibliotheque: filteredPayments.filter(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque').reduce((s, p) => s + p.amountPaid, 0),
-    Gouter: filteredPayments.filter(p => p.service === 'Goûter').reduce((s, p) => s + p.amountPaid, 0),
-    Assurance: filteredPayments.filter(p => p.service === 'Assurance').reduce((s, p) => s + p.amountPaid, 0),
-    Autres: filteredPayments.filter(p => p.service === 'Autres').reduce((s, p) => s + p.amountPaid, 0),
-    Refunds: filteredPayments.filter(p => p.refund).reduce((s, p) => s + p.amountPaid, 0)
+    Suivi: grossNetFor(p => p.service === 'Suivi' || p.service === 'Inscription Suivi'),
+    Etude: grossNetFor(p => p.service === 'Étude' || p.service === 'Inscription Étude'),
+    CoursParticuliers: grossNetFor(p => p.service === 'Cours Particuliers'),
+    Revision: grossNetFor(p => p.service === 'Revision'),
+    Formation: grossNetFor(p => p.service === 'Formation'),
+    Événements: grossNetFor(p => p.service === 'Événements'),
+    Bibliotheque: grossNetFor(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque'),
+    Assurance: grossNetFor(p => p.service === 'Assurance'),
+    Autres: grossNetFor(p => p.service === 'Autres'),
+    Repas: repasRowValue,
+    Gouter: gouterRowValue
   };
 
   // Calculate overall unpaid rate
@@ -861,38 +905,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         </button>
       </div>
 
-      {/* OVERALL METRIC CARDS (ALL-TIME SUMMARY) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 no-print">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-slate-500 block">إجمالي المقبوضات الكلي</span>
-          <p className="text-2xl font-black font-mono text-brand-700">{fmt(grandTotalRevenueNet)} د.ت</p>
-          <span className="text-[10px] text-slate-400 font-bold block">المقبوضات الفعلية (نقداً + شيكات محصلة)</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-slate-500 block">شيكات معلقة</span>
-          <p className="text-2xl font-black font-mono text-brand-600">{fmt(grandPendingChequeTotal)} د.ت</p>
-          <span className="text-[10px] text-slate-400 font-bold block">شيكات لم يتم تحصيلها بعد</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-slate-500 block">إجمالي مصاريف السنتر الكلي</span>
-          <p className="text-2xl font-black font-mono text-red-600">{fmt(grandTotalExpenses)} د.ت</p>
-          <span className="text-[10px] text-slate-400 font-bold block">مجموع كافة الفواتير والمصاريف</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-slate-500 block">الصافي المالي الشامل</span>
-          <p className="text-2xl font-black font-mono text-brand-600">{fmt(grandTotalNet)} د.ت</p>
-          <span className="text-[10px] text-slate-400 font-bold block">الفارق الإجمالي للسنتر</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-slate-500 block">عدد التلاميذ الإجمالي</span>
-          <p className="text-2xl font-black font-mono text-slate-900">{uniqueStudentCount} تلميذ</p>
-          <span className="text-[10px] text-slate-400 font-bold block">{students.length} ملف تسجيل ({uniqueStudentCount} تلميذ فريد)</span>
-        </div>
-      </div>
+      {/* Header meta: student count lives here now (moved out of the cards) */}
+      <p className="text-[11px] text-slate-400 font-bold -mt-3 no-print">
+        عدد التلاميذ: {uniqueStudentCount} تلميذ فريد · {students.length} ملف تسجيل
+      </p>
 
       {/* FILTER BAR: ACADEMIC YEAR & MONTH */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 flex flex-col sm:flex-row gap-4 items-center justify-between no-print">
@@ -958,52 +974,26 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         </div>
       </div>
 
-      {/* FILTERED METRIC CARDS (ACCORDING TO SELECTED FILTERS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
-        <div className="bg-brand-600 p-5 rounded-3xl border border-white/20 shadow-lg shadow-brand-600/25 space-y-1">
-          <span className="text-xs font-bold text-white/80 block">الإيرادات الكلية (السنة)</span>
-          <p className="text-2xl font-black text-white font-mono">{fmt(yearTotalRevenue)} د.ت</p>
-          <span className="text-[10px] text-white/60 font-bold">كل الإيرادات دون فيلتر الشهر</span>
-        </div>
-
-        <div className="bg-brand-600/[0.05] p-5 rounded-3xl border border-brand-600/25 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-brand-700 block">التسجيلات السنوية (كل الفترات)</span>
-          <p className="text-2xl font-black text-brand-600 font-mono">{fmt(annualInscriptionTotal)} د.ت</p>
-          <span className="text-[10px] text-brand-700 font-bold">تسجيلات سنوية — لا يتأثر بفيلتر الشهر</span>
-        </div>
-
-        <div className="bg-brand-600/[0.06] p-5 rounded-3xl border border-brand-600/20/80 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-brand-700 block">{canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات'}</span>
-          <p className="text-2xl font-black text-brand-700 font-mono">{fmt(revenueSansRepas)} د.ت</p>
-          <span className="text-[10px] text-brand-600 font-bold">بدون سنوي · بدون شيكات معلقة — حسب الشهر</span>
-        </div>
-
-        {formationsEnabled && !hideRestrictedModules && (
-          <div className="bg-brand-600/5 p-5 rounded-3xl border border-brand-600/20 shadow-lg shadow-slate-900/5 space-y-1">
-            <span className="text-xs font-bold text-brand-700 block">التكوينات والدورات</span>
-            <p className="text-2xl font-black text-brand-600 font-mono">{fmt(formationRevenueFiltered)} د.ت</p>
-            <span className="text-[10px] text-brand-600 font-bold">حسب الشهر</span>
-          </div>
+      {/* UNIFIED METRIC CARDS — one filter, one neutral color, 5 cards (3 + 2) */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 no-print">
+        <MetricCard label="إجمالي المقبوضات" value={fmt(totalReceipts)} dot="bg-brand-500" hint="نقداً + شيكات محصلة — حسب الفلتر" className="lg:col-span-1" />
+        {showRestoCard && (
+          <MetricCard label="مقبوضات المطعم" value={fmt(restoReceipts)} dot="bg-emerald-500" hint="اشتراكات الوجبات واللمجة (مشمولة في الإجمالي)" className="lg:col-span-1" />
         )}
-
-        <div className="bg-brand-600/[0.06] p-5 rounded-3xl border border-brand-600/25 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-brand-700 block">مبالغ الشيكات القادمة</span>
-          <p className="text-2xl font-black text-brand-600 font-mono">{fmt(allPendingChequeTotal)} د.ت</p>
-          <span className="text-[10px] text-brand-700 font-bold">كل الشيكات غير المحصلة (كل الفترات)</span>
-        </div>
-
-        <div className="bg-red-50/60 p-5 rounded-3xl border border-red-200/80 shadow-lg shadow-slate-900/5 space-y-1">
-          <span className="text-xs font-bold text-red-800 block">المصاريف المفلترة</span>
-          <p className="text-2xl font-black text-red-600 font-mono">{fmt(totalExpensesAmount)} د.ت</p>
-          <span className="text-[10px] text-red-500 font-bold">فواتير الفترة المختارة</span>
-        </div>
-
-        <div className="bg-brand-600 p-5 rounded-3xl border border-white/20 shadow-lg shadow-brand-600/25 space-y-1">
-          <span className="text-xs font-bold text-white/80 block">الصافي المالي للفترة</span>
-          <p className="text-2xl font-black text-white font-mono">{fmt(netProfit)} د.ت</p>
-          <span className="text-[10px] text-white/60 font-bold">الإيرادات حسب الشهر − المصاريف حسب الشهر</span>
-        </div>
+        <MetricCard label="إجمالي المصاريف" value={fmt(totalExpensesAll)} dot="bg-red-500" hint="فواتير ومصاريف الفترة المختارة" className="lg:col-span-1" />
+        <MetricCard label="الصافي المالي" value={fmt(netBalance)} dot={netBalance >= 0 ? 'bg-brand-500' : 'bg-red-500'} hint="المقبوضات − المصاريف — حسب الفلتر" className="col-span-2 lg:col-span-2" />
+        <MetricCard label="شيكات معلقة" value={fmt(allPendingChequeTotal)} dot="bg-amber-500" hint={`${pendingChequeCount} شيك غير محصّل (كل الفترات)`} className="col-span-2 lg:col-span-1" />
       </div>
+
+      {/* MORE DETAILS — the removed cards live here (annual figures, sans-canteen) */}
+      <details className="bg-white p-4 rounded-2xl border border-slate-200/70 shadow-lg shadow-slate-900/5 no-print">
+        <summary className="text-xs font-black text-slate-600 cursor-pointer select-none">مزيد من التفاصيل — أرقام سنوية وتوزيع الإيرادات</summary>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+          <MetricCard label="الإيرادات الكلية (السنة)" value={fmt(yearTotalRevenue)} hint="كل الإيرادات دون فيلتر الشهر — بدون مطعم" />
+          <MetricCard label="التسجيلات السنوية (كل الفترات)" value={fmt(annualInscriptionTotal)} hint="تسجيلات سنوية — لا يتأثر بفيلتر الشهر" />
+          <MetricCard label={canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات الشهرية'} value={fmt(revenueSansRepas)} hint="بدون سنوي · بدون شيكات معلقة — حسب الشهر" />
+        </div>
+      </details>
 
       {/* SUB TABS NAVIGATION */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200/70 flex flex-wrap items-center gap-2 no-print">
@@ -1149,6 +1139,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
               )}
+              {!hideRestrictedModules && canteenEnabled && revenueByService.Repas !== 0 && (
+                <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20 flex justify-between font-bold">
+                  <span className="text-brand-700">4أ. اشتراكات ومداخيل المطعم (Repas):</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Repas)} د.ت</span>
+                </div>
+              )}
               {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
                 <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20 flex justify-between font-bold">
                   <span className="text-brand-700">4ب. مداخيل خدمة اللمجة (Goûter):</span>
@@ -1167,10 +1163,10 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Événements)} د.ت</span>
               </div>
               )}
-              {revenueByService.Refunds !== 0 && (
-                <div className="p-3 bg-red-50 rounded-2xl border border-red-200 flex justify-between font-bold">
-                  <span className="text-red-700">6. استرجاعات / إرجاعات:</span>
-                  <span className="font-mono text-red-700 font-black">{fmt(revenueByService.Refunds)} د.ت</span>
+              {revenueByService.Autres !== 0 && (
+                <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
+                  <span className="text-slate-700">6. أخرى (Autres):</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Autres)} د.ت</span>
                 </div>
               )}
             </div>
