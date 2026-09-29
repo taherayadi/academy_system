@@ -448,34 +448,44 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     return total;
   };
 
-  // Grand totals across all time/records.
-  // Repas payments are NOT counted here: the center only earns its margin
-  // (fraisParRepas − prixPlatTraiteur per plate consumed), the rest belongs to the traiteur.
-  // The traiteur share is therefore never added to expenses — it is already netted out.
-  const repasBenefitAllTime = (() => {
-    if (!settings) return 0;
-    let totalPlates = 0;
+  // Grand totals across all time/records — payments-based receipts model:
+  //  - Subscription Repas and Goûter revenue = the actual subscription payments
+  //    (the center keeps the full subscription amount — repasCenterShare).
+  //  - Goûter is NEVER multiplied by the repas price: its payments carry its own fees.
+  //  - The per-plate traiteur margin (fraisParRepas − prixPlatTraiteur) applies ONLY
+  //    to unit (non-subscription) lunch meals, and ONLY with an external traiteur:
+  //    those unit payments are excluded and the margin replaces them. An in-house
+  //    kitchen has no traiteur — every payment counts as-is and no margin applies.
+  const isExternalTraiteur = settings?.mealOperatingMode === 'external_traiteur';
+  const isUnitRepasPayment = (p: { service: string; month: string }) =>
+    p.service === 'Repas' && String(p.month || '').includes('unitaire');
+
+  const repasUnitMarginAllTime = (() => {
+    if (!settings || !isExternalTraiteur) return 0;
+    let totalUnitPlates = 0;
     for (const s of students) {
-      totalPlates += (s.mealAttendances || []).filter(a => a.paid).length;
+      totalUnitPlates += (s.mealAttendances || [])
+        .filter(a => a.paid && a.type !== 'subscription' && isLunchAttendance(a)).length;
     }
     const f = getFeesForYear(settings, getCurrentAcademicYear());
-    return totalPlates * (f.fraisParRepas - f.prixPlatTraiteur) + calcForfaitAcquis({ monthFilter: 'all', schoolYear: 'all' });
+    return totalUnitPlates * (f.fraisParRepas - f.prixPlatTraiteur);
   })();
+
   const grandTotalRevenue = allPaymentsMerged
-    .filter(p => p.service !== 'Repas')
+    .filter(p => !(isExternalTraiteur && isUnitRepasPayment(p)))
     .reduce((sum, p) => {
       const rec = p as any;
       return sum + (rec.centerShare ?? p.amountPaid);
-    }, 0) + repasBenefitAllTime;
+    }, 0) + repasUnitMarginAllTime;
   const grandTotalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Pending cheque amounts (not yet cashed - should NOT count in revenue until validated)
   const grandPendingChequePayments = allPaymentsMerged.filter(p => p.method === 'Chèque' && p.chequePaid !== true);
   const grandPendingChequeTotal = grandPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
-  // Repas cheques are excluded from the revenue deduction: repas revenue is the fixed
-  // center margin (benefit), so the subscription cheque never hits the total revenue.
+  // Subscription Repas/Goûter cheques deduct normally (their payments are revenue).
+  // Unit repas cheques only deduct in traiteur mode (their margin replaces the payment).
   const grandPendingChequeRevenueTotal = grandPendingChequePayments
-    .filter(p => p.service !== 'Repas' && !p.refund)
+    .filter(p => !p.refund && !(isExternalTraiteur && isUnitRepasPayment(p)))
     .reduce((sum, p) => sum + p.amountPaid, 0);
 
   // Revenue excluding pending cheques (only cashed cheques and cash count)
@@ -598,7 +608,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const externalPaymentsFiltered = filteredPayments.filter((p): p is ExternalPaymentRec => p.service === 'Cours Particuliers');
   const externalCenterTotal = externalPaymentsFiltered.reduce((s, p) => s + p.centerShare, 0);
 
-  const totalRevenue = filteredPayments.filter(p => p.service !== 'Repas').reduce((sum, p) => {
+  const totalRevenue = filteredPayments.filter(p => !(isExternalTraiteur && isUnitRepasPayment(p))).reduce((sum, p) => {
     const rec = p as any;
     return sum + (rec.centerShare ?? (p.refund ? -p.amountPaid : p.amountPaid));
   }, 0);
@@ -642,26 +652,28 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const allPendingChequeTotal = allPendingChequePayments.reduce((sum, p) => sum + p.amountPaid, 0);
   
   // Revenue excluding pending cheques (only cashed cheques and cash count)
-  const totalRevenueExclCheques = totalRevenue - filteredPendingChequePayments.filter(p => p.service !== 'Repas' && !p.refund).reduce((sum, p) => {
+  const totalRevenueExclCheques = totalRevenue - filteredPendingChequePayments.filter(p => !p.refund && !(isExternalTraiteur && isUnitRepasPayment(p))).reduce((sum, p) => {
     const rec = p as any;
     return sum + (rec.centerShare ?? p.amountPaid);
   }, 0);
   
-  // Add center benefit from meals: plates consumed × center margin per plate + forfait acquired
+  // Restaurant contribution to the monthly revenue: subscription Repas/Goûter payments
+  // already flow inside totalRevenue. Only unit lunch meals under an external traiteur
+  // contribute a per-plate margin (their payments are excluded); an in-house kitchen
+  // and subscriptions add no margin term. Goûter is never priced as a repas.
   const filteredRestoCenterBenefit = (() => {
-    if (!settings) return 0;
-    let totalPlates = 0;
+    if (!settings || !isExternalTraiteur) return 0;
+    let totalUnitPlates = 0;
     const datePrefix = monthFilter === 'all' ? null : monthFilterToDatePrefix(monthFilter, schoolYearFilter);
     for (const s of filteredStudents) {
       const attendances = (s.mealAttendances || []).filter(a => {
         if (!datePrefix) return true;
         return a.date.startsWith(datePrefix);
       });
-      totalPlates += attendances.filter(a => a.paid).length;
+      totalUnitPlates += attendances.filter(a => a.paid && a.type !== 'subscription' && isLunchAttendance(a)).length;
     }
     const f = getFeesForYear(settings, getCurrentAcademicYear());
-    const margin = f.fraisParRepas - f.prixPlatTraiteur;
-    return totalPlates * margin + calcForfaitAcquis({ monthFilter, schoolYear: schoolYearFilter });
+    return totalUnitPlates * (f.fraisParRepas - f.prixPlatTraiteur);
   })();
   const totalRevenueWithResto = totalRevenueExclCheques + filteredRestoCenterBenefit;
   // The traiteur share is NOT added here: filteredRestoCenterBenefit is already the center
