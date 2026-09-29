@@ -877,6 +877,7 @@ export default function App() {
           centerName={settings?.centerName}
           //
           //test credentials for demo centers
+          //hi ta
         />
         <CloseConfirmDialog />
       </>
