@@ -21,6 +21,12 @@ interface AdvertisementCarouselProps {
    * vivent que dans leurs créneaux (interstitiel → overlay plein écran,
    * cf. AdvertisementInterstitial).
    */
+   /**
+   * Rend le format « rectangle » au lieu du carrousel 16:9. Les pubs SANS
+   * position alimentent le carrousel standard ; les pubs positionnées ne
+   * vivent que dans leurs créneaux (interstitiel → overlay plein écran,
+   * cf. AdvertisementInterstitial).
+   */
 }
 
 /**
