@@ -148,7 +148,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     [pricedModules]
   );
   const basePrice = modulesPrice(BASE_KEYS, modulePrices);
-  const priceLabel = (price: number): string => pricesReady ? String(price) : pricingLoading ? '…' : '—';
+  const priceLabel = (price: number): string => pricesReady ? String(Math.round(price)) : pricingLoading ? '…' : '—';
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
