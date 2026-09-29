@@ -84,8 +84,8 @@ export default function App() {
   // Always start logged out so the app requires login on every launch.
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [currentCenter, setCurrentCenter] = useState<CenterTenant | null>(null);
-  // The application opens on the login page; the landing remains reachable
-  // via LoginScreen's « back to landing » action.
+  // The application opens on the login page; the landing page is not
+  // reachable from the login screen.
   const [authView, setAuthView] = useState<'landing' | 'login'>('login');
 
 
@@ -875,7 +875,6 @@ export default function App() {
         <LoginScreen
           onLogin={handleLogin}
           centerName={settings?.centerName}
-          onBackToLanding={() => setAuthView('landing')}
         />
         <CloseConfirmDialog />
       </>
