@@ -875,6 +875,7 @@ export default function App() {
         <LoginScreen
           onLogin={handleLogin}
           centerName={settings?.centerName}
+          //
         />
         <CloseConfirmDialog />
       </>
