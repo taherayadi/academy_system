@@ -244,9 +244,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900" dir="rtl">
+    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900" dir="rtl">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-accent-700 focus:rounded-xl focus:border focus:border-accent-500 focus:text-sm focus:font-black">تخطي إلى المحتوى</a>
-      <div className="flex min-h-screen">
+      <div className="flex h-full">
         {/* ── Sidebar ── */}
         <aside className="w-64 shrink-0 bg-white border-l border-slate-200/70 flex flex-col max-md:hidden">
           <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
@@ -308,7 +308,7 @@ export default function App() {
         </aside>
 
         {/* ── Main area ── */}
-        <main className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           {/* Mobile top bar */}
           <div className="md:hidden bg-white border-b border-slate-200/70 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -348,7 +348,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="flex-1 p-4 md:p-6"
+              className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6"
             >
               <Suspense fallback={<DashboardFallback />}>
                 <PlatformAdminDashboard
