@@ -17,7 +17,7 @@ export default function App() {
       <LandingPage
         onOpenLogin={() => {
           // The center workspace (login) is served by the other application.
-          window.open('https://app.edusphere.tn', '_self');
+          window.open('https://app.edusphere.com.tn', '_self');
         }}
       />
       {/* Public ad surfaces — same placement contract as the vitrine. */}
