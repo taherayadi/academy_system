@@ -31,20 +31,79 @@ export async function submitDemoRequestApi(data: {
 }
 
 
-/** Fetch public module prices for the landing page without a session. */
-export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
+/** Raw price row as served by the endpoint. */
+interface PublicPriceRow {
+  module_key: string;
+  price: number;
+}
+
+/** Payload served by GET /api/public-pricing — the DB-backed catalog. */
+export interface PublicPricingPayload {
+  schoolYear: string;
+  prices: Record<string, number>;
+  modules: Array<{
+    key: string;
+    label: string;
+    labelAr: string;
+    icon: string;
+    description: string;
+    features: string[];
+    mock: string;
+    isBasic: boolean;
+    isUnbilled: boolean;
+    isHidden: boolean;
+  }>;
+  centerTypes: Array<{ key: string; label: string; labelAr: string; hint: string; hintAr: string }>;
+  moduleCenterTypes: Record<string, string[]>;
+}
+
+/** Fetch the public catalog (modules, types, compatibility, prices) without a session. */
+export async function fetchPublicPricingApi(year?: string): Promise<PublicPricingPayload> {
   const params = new URLSearchParams();
   if (year) params.set('year', year);
   const query = params.toString();
   const res = await fetch(`${API_BASE}/public-pricing${query ? `?${query}` : ''}`, {
     credentials: 'same-origin'
   });
-  const data: { prices?: Array<{ module_key?: string; price?: number }>; error?: string } = await res.json().catch(() => ({}));
+  const data: Partial<Omit<PublicPricingPayload, 'prices'>> & { prices?: PublicPriceRow[]; error?: string } = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Erreur chargement des tarifs publics.');
-  return (data.prices || []).reduce<Record<string, number>>((prices, row) => {
-    if (row.module_key) prices[row.module_key] = Number(row.price) || 0;
-    return prices;
-  }, {});
+  return {
+    schoolYear: String(data.schoolYear || ''),
+    prices: (data.prices || []).reduce<Record<string, number>>((acc, row) => {
+      if (row?.module_key) acc[String(row.module_key)] = Number(row.price) || 0;
+      return acc;
+    }, {}),
+    modules: (data.modules || []).map(m => {
+      const rawFeatures = (m as { features?: unknown }).features;
+      const features = Array.isArray(rawFeatures) ? rawFeatures.map(String) : [];
+      return {
+        key: String(m.key || ''),
+        label: String(m.label || ''),
+        labelAr: String(m.labelAr || ''),
+        icon: String(m.icon || ''),
+        description: String(m.description || ''),
+        features: features ?? [],
+        mock: String((m as { mock?: unknown }).mock || ''),
+        isBasic: !!m.isBasic,
+        isUnbilled: !!m.isUnbilled,
+        isHidden: !!m.isHidden,
+      };
+    }).filter(m => m.key),
+    centerTypes: (data.centerTypes || []).map(t => ({
+      key: String(t.key || ''),
+      label: String(t.label || ''),
+      labelAr: String(t.labelAr || ''),
+      hint: String(t.hint || ''),
+      hintAr: String(t.hintAr || ''),
+    })).filter(t => t.key),
+    moduleCenterTypes: data.moduleCenterTypes || {},
+  };
+}
+
+/** Back-compat helper: prices only. */
+export async function fetchPublicModulePricesApi(year?: string): Promise<Record<string, number>> {
+  const payload = await fetchPublicPricingApi(year);
+  return payload.prices;
 }
 
 

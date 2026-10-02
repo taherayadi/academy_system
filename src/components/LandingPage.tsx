@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AdvertisementCarousel from './AdvertisementCarousel';
 import AdvertisementInterstitial from './AdvertisementInterstitial';
-import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
-import { ALL_MODULES, ADDON_MODULES, BASE_MODULES, BASE_KEYS, modulesPrice } from '../utils/pricing';
-import { isModuleCompatible, incompatibleModules, CENTER_TYPES, CENTER_TYPE_LABELS } from '../utils/centerType';
+import { fetchPublicPricingApi, submitDemoRequestApi } from '../api';
+import { allModules, addonModules, BASE_KEYS, modulesPrice } from '../utils/pricing';
+import type { PricedModule } from '../utils/pricing';
+import { setCatalog, servedTypes } from '../utils/catalog';
+import { MODULE_ICONS } from '../utils/catalog';
+import { isModuleCompatible, incompatibleModules, centerTypeLabels } from '../utils/centerType';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
   GraduationCap,
@@ -100,15 +103,27 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
   const [selectedModules, setSelectedModules] = useState<string[]>([...BASE_KEYS]);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
-  const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
+  const [catalog, setCatalogState] = useState<{ modules: PricedModule[]; centerTypes: { key: string; label: string; hint: string }[]; prices: Record<string, number> }>({ modules: [], centerTypes: [], prices: {} });
   const [pricingLoading, setPricingLoading] = useState(true);
   const [pricingError, setPricingError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchPublicModulePricesApi()
-      .then(prices => {
-        if (!cancelled) setModulePrices(prices);
+    fetchPublicPricingApi()
+      .then(payload => {
+        if (cancelled) return;
+        setCatalog({
+          modules: payload.modules,
+          centerTypes: payload.centerTypes,
+          moduleCenterTypes: payload.moduleCenterTypes,
+          prices: payload.prices,
+          schoolYear: payload.schoolYear,
+        });
+        setCatalogState({
+          modules: allModules(),
+          centerTypes: payload.centerTypes.map(t => ({ key: t.key, label: t.label, hint: t.hint })),
+          prices: payload.prices,
+        });
       })
       .catch(() => {
         if (!cancelled) setPricingError(true);
@@ -134,11 +149,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     };
   }, []);
 
-  const pricesReady = Object.keys(modulePrices).length > 0;
-  const pricedModules = useMemo(
-    () => ALL_MODULES.map(module => ({ ...module, price: modulePrices[module.key] ?? 0 })),
-    [modulePrices]
-  );
+  const pricesReady = catalog.modules.length > 0;
+  const pricedModules = useMemo(() => catalog.modules, [catalog]);
   const pricedAddonModules = useMemo(
     () => pricedModules.filter(module => !(BASE_KEYS as readonly string[]).includes(module.key)),
     [pricedModules]
@@ -147,12 +159,19 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     () => pricedModules.filter(module => (BASE_KEYS as readonly string[]).includes(module.key)),
     [pricedModules]
   );
-  const basePrice = modulesPrice(BASE_KEYS, modulePrices);
+  const billedBaseModules = useMemo(() => pricedBaseModules.filter(m => !m.bundled), [pricedBaseModules]);
+  const bundledModule = pricedBaseModules.find(m => m.bundled);
+  const firstAddon = pricedAddonModules[0];
+  const BundledIcon = bundledModule?.icon ?? Clock;
+  const basePrice = useMemo(
+    () => pricedBaseModules.reduce((sum, m) => sum + (m.bundled ? 0 : m.price), 0),
+    [pricedBaseModules]
+  );
   const priceLabel = (price: number): string => pricesReady ? String(Math.round(price)) : pricingLoading ? '…' : '—';
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
-  const [centerType, setCenterType] = useState<'jardin' | 'creche' | 'garderie' | 'formation' | ''>('');
+  const [centerType, setCenterType] = useState<string>('');
   const [fullName, setFullName] = useState('');
   const [academyName, setAcademyName] = useState('');
   const [email, setEmail] = useState('');
@@ -171,7 +190,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // Remark 5 : chaque carte module affiche les types de centres qu'il sert.
-  const compatibleTypesFor = (key: string) => CENTER_TYPES.filter(t => isModuleCompatible(key, t));
+  // Lecture DIRECTE de la matrice center_type_modules (servedTypes) : pas de
+  // passthrough « type inconnu → tout » ici, sinon chaque carte afficherait
+  // les 4 types quand le catalogue n'est pas (encore) chargé.
+  const compatibleTypesFor = (key: string) =>
+    catalog.centerTypes.map(t => t.key).filter(t => (servedTypes(key) as readonly string[]).includes(t));
+  const typeLabels = centerTypeLabels();
   // Remark 6 : validation live informative — jamais bloquante — de la
   // combinaison type × modules (le payload part tel quel).
   const incompatibleSelected = useMemo(
@@ -189,14 +213,14 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   // ── Pricing math ──
   const addonKeys = useMemo(() => selectedModules.filter(k => !(BASE_KEYS as readonly string[]).includes(k)), [selectedModules]);
   const { monthlyPrice, annualMonthly, annualTotal, savings } = useMemo(() => {
-    const monthly = modulesPrice(selectedModules, modulePrices);
+    const monthly = catalog.modules.reduce((sum, m) => (selectedModules.includes(m.key) ? sum + m.price : sum), 0);
     return {
       monthlyPrice: monthly,
       annualMonthly: monthly * 0.8,
       annualTotal: monthly * 12 * 0.8,
       savings: monthly * 12 * 0.2
     };
-  }, [selectedModules, modulePrices]);
+  }, [selectedModules, catalog]);
 
   // ── Selection logic : la base est verrouillée, on ne peut qu'ajouter ──
   const toggleModule = (key: string) => {
@@ -326,7 +350,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   const faqs = [
     {
       q: 'Que contient le plan de base ?',
-      a: `Chaque abonnement démarre avec la base Scolaire & Notes + Finance & Paiements (${priceLabel(basePrice)} TND/mois) : fiches élèves, notes et bulletins, carnets de paiements, reçus et statistiques de revenus. Ces deux modules sont toujours inclus et ne peuvent pas être retirés.`
+      a: `Chaque abonnement démarre avec la base ${billedBaseModules.map(m => m.label).join(' + ')} (${priceLabel(basePrice)} TND/mois) : fiches élèves, notes et bulletins, carnets de paiements, reçus et statistiques de revenus. Ces modules sont toujours inclus et ne peuvent pas être retirés.`
     },
     {
       q: 'Comment ajouter des modules ?',
@@ -355,12 +379,8 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     { key: 'info', label: 'Plus d’infos' }
   ];
 
-  const centerTypes: { key: 'jardin' | 'creche' | 'garderie' | 'formation'; label: string; hint: string }[] = [
-    { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
-    { key: 'creche', label: 'Crèche', hint: 'Petite enfance · 0–3 ans' },
-    { key: 'garderie', label: 'Garderie', hint: 'Garderie périscolaire' },
-    { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
-  ];
+  // Types d'établissement servis depuis la table center_types (catalogue D1).
+  const centerTypes = catalog.centerTypes;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
@@ -430,7 +450,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-600 opacity-50"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-600"></span>
                 </span>
-                <span className="text-[13px] font-bold text-slate-700">Base Scolaire + Finance + Jd. Horaires offert — {priceLabel(basePrice)} TND/mois</span>
+                <span className="text-[13px] font-bold text-slate-700">{billedBaseModules.map(m => m.label).join(' + ')} + {bundledModule?.label ?? 'Jd. Horaires'} offert — {priceLabel(basePrice)} TND/mois</span>
               </motion.div>
 
               <motion.h1
@@ -452,10 +472,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                 transition={{ duration: 0.65, delay: 0.16 }}
                 className="text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed font-medium"
               >
-                La base <span className="text-slate-900 font-black">Scolaire &amp; Notes</span> +{' '}
-                <span className="text-slate-900 font-black">Finance &amp; Paiements</span> démarre à{' '}
+                La base <span className="text-slate-900 font-black">{billedBaseModules[0]?.label ?? 'Scolaire'}</span> +{' '}
+                <span className="text-slate-900 font-black">{billedBaseModules[1]?.label ?? 'Finance'}</span> démarre à{' '}
                 <span className="text-slate-900 font-black">{priceLabel(basePrice)} TND/mois</span>,
-                avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert{' '}
+                avec <span className="text-slate-900 font-black">{bundledModule?.label ?? 'Jd. Horaires'}</span> offert{' '}
                 <span className="text-slate-500 font-semibold">(pointage des entrées/sorties des élèves)</span>.
                 Ajoutez étude, cantine ou transport uniquement quand vous en avez besoin —
                 élèves et utilisateurs illimités.
@@ -677,12 +697,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   </div>
                   <div>
                     <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                      Cantine ajoutée
+                      {firstAddon?.label ?? 'Module'} ajouté
                       <span className="p-0.5 rounded-full bg-emerald-50 border border-emerald-100">
                         <Plus className="h-2.5 w-2.5 text-emerald-600" />
                       </span>
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400">+{pricesReady ? (modulePrices.cantine ?? 0) : pricingLoading ? '…' : '—'} TND/mois</div>
+                    <div className="text-[10px] font-bold text-slate-400">+{pricesReady ? (firstAddon?.price ?? 0) : pricingLoading ? '…' : '—'} TND/mois</div>
                   </div>
                 </div>
               </motion.div>
@@ -764,7 +784,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
               {
                 n: '01',
                 title: 'Démarrez avec la base',
-                text: 'Scolaire & Notes et Finance & Paiements sont inclus dans chaque abonnement — élèves, notes, reçus et encaissements dès le premier jour.',
+                text: `${billedBaseModules.map(m => m.label).join(' et ')} sont inclus dans chaque abonnement — élèves, notes, reçus et encaissements dès le premier jour.`,
                 icon: Layers
               },
               {
@@ -819,13 +839,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
               Trois modules. Toujours inclus.
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
-              Le socle de chaque abonnement — <span className="text-slate-900 font-black">Scolaire &amp; Finance</span> pour {priceLabel(basePrice)} TND/mois,
-              avec <span className="text-slate-900 font-black">Jd. Horaires</span> offert. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
+              Le socle de chaque abonnement — <span className="text-slate-900 font-black">{billedBaseModules.map(m => m.label).join(' & ')}</span> pour {priceLabel(basePrice)} TND/mois,
+              avec <span className="text-slate-900 font-black">{bundledModule?.label ?? 'Jd. Horaires'}</span> offert. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
             </p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            {pricedBaseModules.filter(m => m.key !== 'studentTimeSheets').map((mod, i) => (
+            {billedBaseModules.map((mod, i) => (
               <motion.div
                 key={mod.key}
                 initial={{ opacity: 0, y: 30 }}
@@ -849,20 +869,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <p className="text-slate-600 text-sm leading-relaxed font-medium mb-6">{mod.description}</p>
 
                   <ul className="space-y-3 mb-7">
-                    {(mod.key === 'scolaire'
-                      ? [
-                          'Fiches élèves complètes : parents, fratries, autorisations',
-                          'Notes par trimestre — devoirs et synthèses',
-                          'Moyennes automatiques et élèves à risque',
-                          'Réinscriptions rapides depuis une année précédente'
-                        ]
-                      : [
-                          'Carnet de paiements par élève avec reçus',
-                          'Répartition des revenus par service',
-                          'Gestion des chèques et de leur encaissement',
-                          'Dépenses et synthèses financières mensuelles'
-                        ]
-                    ).map(f => (
+                    {(mod.features.length > 0 ? mod.features : [mod.description]).map(f => (
                       <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
                         <span className="p-1 rounded-md bg-brand-600/10 text-brand-600 mt-0.5">
                           <Check className="h-3 w-3" />
@@ -874,7 +881,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
 
                   {/* mini mock UI */}
                   <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
-                    {mod.key === 'scolaire' ? (
+                    {mod.mock !== 'revenue' ? (
                       <div className="space-y-2">
                         <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Bulletin · Trimestre 1</div>
                         {[
@@ -934,19 +941,19 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
             className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
           >
             <div className="p-3.5 rounded-2xl bg-emerald-100 flex-shrink-0">
-              <Clock className="h-7 w-7 text-emerald-600" />
+              <BundledIcon className="h-7 w-7 text-emerald-600" />
             </div>
             <div className="flex-1 text-center sm:text-left min-w-0">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mb-1.5">
-                <h3 className="text-lg font-black text-slate-900">Jd. Horaires — Pointage Élèves</h3>
+                <h3 className="text-lg font-black text-slate-900">{bundledModule?.label ?? 'Jd. Horaires'}</h3>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[11px] font-black text-emerald-700 uppercase tracking-wider">
                   <Check className="h-3 w-3" />
                   Offert avec la base
                 </span>
               </div>
               <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                Pointage journalier des entrées et sorties de vos élèves. Pas de tarif dédié :
-                ce module est <span className="font-black text-emerald-700">inclus gratuitement avec Scolaire</span>,
+                {bundledModule?.description ?? 'Pointage journalier des entrées et sorties de vos élèves.'} Pas de tarif dédié :
+                ce module est <span className="font-black text-emerald-700">inclus gratuitement avec {billedBaseModules[0]?.label ?? 'Scolaire'}</span>,
                 pour chaque abonnement — dès le plan de base.
               </p>
             </div>
@@ -970,7 +977,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
               </div>
               <div>
                 <div className="text-slate-900 font-black text-lg">Le plan de base</div>
-                <div className="text-slate-600 text-sm font-semibold">Scolaire &amp; Notes + Jd. Horaires + Finance &amp; Paiements — élèves et utilisateurs illimités</div>
+                <div className="text-slate-600 text-sm font-semibold">{pricedBaseModules.map(m => m.label).join(' + ')} — élèves et utilisateurs illimités</div>
               </div>
             </div>
             <div className="flex items-center gap-5">
@@ -1134,7 +1141,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {pricedBaseModules.filter(m => m.key !== 'studentTimeSheets').map(mod => (
+                  {billedBaseModules.map(mod => (
                     <div key={mod.key} className="flex items-center gap-3.5 p-4 rounded-2xl bg-white shadow-sm">
                       <div className="p-2.5 rounded-xl bg-brand-600/10 flex-shrink-0">
                         <mod.icon className="h-5 w-5 text-brand-600" />
@@ -1149,20 +1156,22 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                       </div>
                     </div>
                   ))}
-                  {/* Jd. Horaires — bundled, no tarif */}
+                  {/* Module offert (isUnbilled) — pas de tarif */}
+                  {bundledModule && (
                   <div className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl bg-emerald-50/60">
                     <div className="p-2.5 rounded-xl bg-emerald-100">
-                      <Clock className="h-5 w-5 text-emerald-600" />
+                      <BundledIcon className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-black text-slate-900">Jd. Horaires — Pointage Élèves</div>
-                      <div className="text-[11px] font-semibold text-slate-500">Entrées/sorties journalières — offert avec Scolaire</div>
+                      <div className="text-sm font-black text-slate-900">{bundledModule.label} — Pointage Élèves</div>
+                      <div className="text-[11px] font-semibold text-slate-500">Entrées/sorties journalières — offert avec {billedBaseModules[0]?.label ?? 'Scolaire'}</div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-base font-black text-emerald-600">Inclus</div>
                       <div className="text-[11px] font-bold text-slate-500">0 TND</div>
                     </div>
                   </div>
+                  )}
                 </div>
               </div>
 
@@ -1196,7 +1205,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                               Une seule chaîne texte — les libellés de types ne
                               collisionnent pas avec les radios du formulaire. */}
                           <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                            Disponible : {compatibleTypesFor(mod.key).map(t => CENTER_TYPE_LABELS[t].fr).join(' · ')}
+                            Disponible : {compatibleTypesFor(mod.key).map(t => typeLabels[t]?.fr ?? t).join(' · ')}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
@@ -1224,14 +1233,14 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-bold text-slate-600 flex items-center gap-2">
                       <Lock className="h-3.5 w-3.5 text-brand-600" />
-                      Base (3 modules)
+                      Base ({pricedBaseModules.length} modules)
                     </span>
                     <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND</span>
                   </div>
                   <div className="flex items-center justify-between mb-3 pl-6">
                     <span className="text-xs font-bold text-slate-500 flex items-center gap-2">
-                      <Clock className="h-3 w-3 text-emerald-500" />
-                      dont Jd. Horaires
+                      <BundledIcon className="h-3 w-3 text-emerald-500" />
+                      dont {bundledModule?.label ?? 'Jd. Horaires'}
                     </span>
                     <span className="text-xs font-black text-emerald-600">Inclus — offert</span>
                   </div>
@@ -1616,10 +1625,10 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <div role="note" className="mb-5 p-4 rounded-2xl border border-sky-200 bg-sky-50">
                     <p className="text-xs font-bold text-sky-800 text-center">
                       ℹ️ {incompatibleSelected
-                        .map(key => ALL_MODULES.find(m => m.key === key)?.label || key)
+                        .map(key => pricedModules.find(m => m.key === key)?.label || key)
                         .join(', ')}{' '}
-                      n'est pas disponible pour les centres Crèche et Jardin d'enfants.
-                      Vous pouvez le retirer ou choisir Garderie / Formation pour le conserver.
+                      n'est pas disponible pour ce type d'établissement.
+                      Vous pouvez le retirer ou changer de type pour le conserver.
                     </p>
                   </div>
                 )}

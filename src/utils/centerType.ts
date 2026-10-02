@@ -1,94 +1,82 @@
 /**
- * Center-type predicates — single source of truth for type-aware UI gating.
+ * Center-type predicates — type-aware UI gating, derived from the D1 catalog
+ * (`center_types` + `center_type_modules` tables, served by /api/public-pricing
+ * through src/utils/catalog.ts).
  *
- * Four accepted center types: 'jardin' | 'creche' | 'garderie' | 'formation'.
  * Unknown/empty input returns TRUE (legacy visibility): centers created before
  * center types existed must keep seeing everything, so gating is always
  * removal-only and never changes behavior for legacy or unknown values.
  */
 
-export type CenterType = 'jardin' | 'creche' | 'garderie' | 'formation';
+import { getCatalog, servedTypes } from './catalog';
 
-/** The four accepted center types, in landing-form display order. */
-export const CENTER_TYPES: readonly CenterType[] = ['jardin', 'creche', 'garderie', 'formation'];
-
-const SCHOOL_LEVEL_TYPES = new Set<string>(['garderie', 'formation']);
-
-const STUDY_MODULE_TYPES = new Set<string>(['garderie', 'formation']);
-
-const KNOWN_TYPES = new Set<string>(['jardin', 'creche', 'garderie', 'formation']);
+/** Center type keys live in the `center_types` table. */
+export type CenterType = string;
 
 /**
- * Legacy/unknown passthrough: only the four known types ever gate anything.
- * Any other value (pre-types centers, typos, server-side values added later)
- * keeps full legacy visibility.
+ * Center types each module serves — read live from the catalog
+ * (center_type_modules). Kept as an exported name for existing consumers;
+ * every access derives from the current catalog.
  */
-function isKnownType(type?: string | null): boolean {
-  return !!type && KNOWN_TYPES.has(String(type));
+export const moduleCenterTypes: Readonly<Record<string, readonly string[]>> = new Proxy(
+  {},
+  {
+    get: (_t, prop: string | symbol) => servedTypes(String(prop)),
+    has: (_t, prop: string | symbol) => !!servedTypes(String(prop)).length,
+    ownKeys: () => Reflect.ownKeys(getCatalog().moduleCenterTypes),
+  }
+);
+
+/** True when `type` is a center type key declared in the DB. */
+export function isKnownType(type?: string | null): boolean {
+  return !!type && getCatalog().centerTypes.some(t => t.key === String(type));
 }
 
 /**
  * True when the center shows school-level artifacts (grade / établissement
- * fields, school-year labels, grade filters). 'garderie' and 'formation' are
- * school-bearing; 'creche' and 'jardin' are not. Unknown/empty → true.
+ * fields, school-year labels, grade filters). A type is school-bearing when
+ * the compatibility matrix serves it more than the base modules alone — i.e.
+ * at least one add-on module (non-isBasic) is compatible with it. This
+ * derives entirely from center_type_modules; no key is hardcoded here.
+ * Unknown/empty → true.
  */
 export function hasSchoolLevel(type?: string | null): boolean {
   if (!isKnownType(type)) return true;
-  return SCHOOL_LEVEL_TYPES.has(String(type));
+  const key = String(type);
+  return servedTypesFor(key) > baseServedCountFor(key);
 }
 
 /**
- * True when the center shows the four school study modules (Cours
- * Particuliers, Étude, Révision, Formations). Unknown/empty → true.
+ * True when the center shows the study modules (Étude, Cours Particuliers,
+ * Révision, Formations). Same derivation: the type must serve at least one
+ * offered add-on module beyond the base. Unknown/empty → true.
  */
 export function hasStudyModules(type?: string | null): boolean {
   if (!isKnownType(type)) return true;
-  return STUDY_MODULE_TYPES.has(String(type));
+  const key = String(type);
+  return getCatalog().modules.some(
+    m => !m.isHidden && !m.isBasic && servedTypes(m.key).includes(key)
+  );
 }
 
-// ─── Module × center-type compatibility (remarks alignment, revision B) ────
-//
-// Which center types each catalog module serves. Transcribed from the client
-// remarks matrix (center-type-module-rules.md): study modules (and the other
-// school-bearing addons) are garderie/formation only; the core addons serve
-// all four types. This map is THE single definition — renewal, the landing
-// badges and the demo form all derive from it, and the coherence test asserts
-// every catalog key has an entry, so the matrix can never drift from the
-// catalog.
+/** Base modules (isBasic = 1) served to this type, per center_type_modules. */
+function baseServedCountFor(typeKey: string): number {
+  return getCatalog().modules.filter(m => m.isBasic && servedTypes(m.key).includes(typeKey)).length;
+}
 
-/**
- * Center types each module serves, keyed by catalog module key. Every
- * `ALL_MODULES` key MUST appear here (asserted by the coherence test).
- * Unknown keys are treated as garderie/formation-only by isModuleCompatible.
- */
-export const moduleCenterTypes: Record<string, readonly CenterType[]> = {
-  // Base (all-types by construction; listed for the coverage invariant).
-  scolaire: ['jardin', 'creche', 'garderie', 'formation'],
-  studentTimeSheets: ['jardin', 'creche', 'garderie', 'formation'],
-  finance: ['jardin', 'creche', 'garderie', 'formation'],
-  // School-bearing addons — garderie/formation only (remarks matrix).
-  etude: ['garderie', 'formation'],
-  coursParticuliers: ['garderie', 'formation'],
-  revision: ['garderie', 'formation'],
-  formations: ['garderie', 'formation'],
-  // Core addons — every center type.
-  cantine: ['jardin', 'creche', 'garderie', 'formation'],
-  transport: ['jardin', 'creche', 'garderie', 'formation'],
-  events: ['jardin', 'creche', 'garderie', 'formation'],
-  staff: ['jardin', 'creche', 'garderie', 'formation'],
-  activites: ['jardin', 'creche', 'garderie', 'formation'],
-  competences: ['jardin', 'creche', 'garderie', 'formation'],
-};
+/** All modules served to this type, per center_type_modules. */
+function servedTypesFor(typeKey: string): number {
+  return getCatalog().modules.filter(m => servedTypes(m.key).includes(typeKey)).length;
+}
 
 /**
  * True when the module may be offered to / used by a center of this type.
  * Unknown or empty type → true (legacy passthrough, same rule as above).
- * A key missing from `moduleCenterTypes` is served to no known type.
+ * A module with no compatibility row is served to no known type.
  */
 export function isModuleCompatible(moduleKey: string, centerType?: string | null): boolean {
   if (!isKnownType(centerType)) return true;
-  const served = moduleCenterTypes[String(moduleKey)];
-  return !!served && served.includes(String(centerType) as CenterType);
+  return servedTypes(String(moduleKey)).includes(String(centerType));
 }
 
 /**
@@ -100,10 +88,9 @@ export function incompatibleModules(keys: readonly string[], centerType?: string
   return keys.filter(key => !isModuleCompatible(key, centerType));
 }
 
-/** Display labels for the four center types (badges, banners, remarks). */
-export const CENTER_TYPE_LABELS: Record<CenterType, { fr: string; ar: string }> = {
-  creche: { fr: 'Crèche', ar: 'الحضانة' },
-  jardin: { fr: "Jardin d'enfants", ar: 'روض الأطفال' },
-  garderie: { fr: 'Garderie', ar: 'الحضيرة المدرسية' },
-  formation: { fr: 'Formation', ar: 'مركز تكوين' },
-};
+/** Display labels for the center types (badges, banners, remarks). */
+export function centerTypeLabels(): Record<string, { fr: string; ar: string }> {
+  return Object.fromEntries(
+    getCatalog().centerTypes.map(t => [t.key, { fr: t.label, ar: t.labelAr || t.label }])
+  );
+}
