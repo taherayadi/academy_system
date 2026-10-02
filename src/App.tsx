@@ -40,7 +40,7 @@ import LoginScreen from './components/LoginScreen';
 // platform session exists — the login screen ships in the initial chunk.
 const PlatformAdminDashboard = lazy(() => import('./components/PlatformAdminDashboard'));
 import { useToast } from './components/Toast';
-import brandIcon from './assets/icon.png';
+import brandIcon from './assets/edusphere-icon.png';
 
 /** Tab ids map 1:1 onto the platform dashboard sections. */
 type PlatformTab =

@@ -3,7 +3,7 @@ import { Trash2, Check, X, Loader2, Upload, Lock, ImagePlus } from 'lucide-react
 import { createCenterApi, uploadPlatformLogoApi, fetchModulePricesApi } from '../../api';
 import { DemoRequest } from '../../types';
 import { useToast } from '../Toast';
-import icon from '../../assets/icon.png';
+import icon from '../../assets/edusphere-icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
 import { currentSchoolYear, parseModules, BASE_MODULE_KEYS, normalizePhoneInput, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, isValidCenterPhone, formatTnd, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, ALL_MODULES, isModuleHidden, isModuleAllowedForCenterType } from './constants';

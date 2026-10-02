@@ -3,7 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import {Plus, RefreshCw, Search, X } from 'lucide-react';
 import RenewalReviewModal from './RenewalReviewModal';
 import ConfirmDialog from './ConfirmDialog';
-import icon from '../assets/icon.png';
+import icon from '../assets/edusphere-icon.png';
 import { titleCaseName } from './dashboard/constants';
 import type { PlatformAdminDashboardProps } from './dashboard/constants';
 import { BRAND_NAME } from '../brand';

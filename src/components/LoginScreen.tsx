@@ -12,7 +12,7 @@ import { motion } from 'motion/react';
 import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
 import { UserAccount } from '../types';
 import { verifyPassword } from '../auth';
-import icon from '../assets/icon.png';
+import icon from '../assets/edusphere-icon.png';
 import { BRAND_NAME, BRAND_FOOTER } from '../brand';
 
 interface LoginScreenProps {

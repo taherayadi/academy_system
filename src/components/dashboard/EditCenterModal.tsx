@@ -4,7 +4,7 @@ import { updateCenterApi, uploadPlatformLogoApi, fetchInvoicesApi, fetchModulePr
 import { CenterTenant } from '../../types';
 import { analyzePlanChange, ClientPlanDecision } from '../../utils/planChange';
 import { useToast } from '../Toast';
-import icon from '../../assets/icon.png';
+import icon from '../../assets/edusphere-icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate } from '../../utils/format';
 import { normalizeCenterModules, normalizePhoneInput, normalizeCenterType, centerDateInputValue, currentSchoolYear, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, centerDateTimestamp, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, isValidCenterPhone, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, isModuleAllowedForCenterType } from './constants';
