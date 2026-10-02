@@ -8,7 +8,20 @@ function currentSchoolYear(timestamp = Date.now()): string {
   return `${schoolStartYear}/${schoolStartYear + 1}`;
 }
 
-/** Public read-only pricing used by the landing page. */
+interface CatalogModuleRow {
+  key: string;
+  label: string;
+  labelAr: string;
+  icon: string;
+  description: string;
+  features: string[];
+  mock: string;
+  isBasic: boolean;
+  isUnbilled: boolean;
+  isHidden: boolean;
+}
+
+/** Public read-only pricing + catalog used by the landing page. */
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const url = new URL(request.url);
@@ -39,7 +52,66 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       price: row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)
     })).filter(row => row.module_key);
 
-    return json({ schoolYear, prices });
+    // ── Catalog: modules, center types and their compatibility matrix ──
+    // Single source of truth is the D1 tables; nothing is hardcoded here.
+    const moduleRows = (await env.DB.prepare(
+      `SELECT key, label, label_ar, icon, description, features, mock, isBasic, isUnbilled, isHidden
+       FROM modules ORDER BY rowid`
+    ).all<any>()).results || [];
+    const typeRows = (await env.DB.prepare(
+      'SELECT key, label, label_ar, hint, hint_ar FROM center_types ORDER BY rowid'
+    ).all<any>()).results || [];
+    const compatRows = (await env.DB.prepare(
+      'SELECT center_type, module_key FROM center_type_modules'
+    ).all<any>()).results || [];
+
+    // Only center types that actually serve at least one module are offered —
+    // "other" (no compatibility rows) stays out of the public catalog.
+    const servedTypes = new Set(compatRows.map(r => String(r.center_type)));
+
+    const modules: CatalogModuleRow[] = moduleRows.map(row => {
+      let features: string[] = [];
+      try { features = JSON.parse(String(row.features || '[]')); } catch { /* [] */ }
+      if (!Array.isArray(features)) features = [];
+      return {
+        key: String(row.key || ''),
+        label: String(row.label || ''),
+        labelAr: String(row.label_ar || ''),
+        icon: String(row.icon || ''),
+        description: String(row.description || ''),
+        features: features.map(String),
+        mock: String(row.mock || ''),
+        isBasic: Number(row.isBasic) === 1,
+        isUnbilled: Number(row.isUnbilled) === 1,
+        isHidden: Number(row.isHidden) === 1,
+      };
+    }).filter(m => m.key);
+
+    const centerTypes = typeRows
+      .map(row => ({
+        key: String(row.key || ''),
+        label: String(row.label || ''),
+        labelAr: String(row.label_ar || ''),
+        hint: String(row.hint || ''),
+        hintAr: String(row.hint_ar || ''),
+      }))
+      .filter(t => t.key && servedTypes.has(t.key));
+
+    const moduleCenterTypes: Record<string, string[]> = {};
+    for (const row of compatRows) {
+      const moduleKey = String(row.module_key || '');
+      const typeKey = String(row.center_type || '');
+      if (!moduleKey || !typeKey) continue;
+      (moduleCenterTypes[moduleKey] ||= []).push(typeKey);
+    }
+
+    return json({
+      schoolYear,
+      prices,
+      modules,
+      centerTypes,
+      moduleCenterTypes,
+    });
   } catch (err) {
     console.error('Error:', err);
     return json({ error: 'Erreur chargement des tarifs publics.' }, 500);

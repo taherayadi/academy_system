@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { submitDemoRequestApi, fetchPublicModulePricesApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
+import { submitDemoRequestApi, fetchPublicPricingApi, fetchActiveAdvertisementsApi, __resetActiveAdsCacheForTests } from './api';
 
 const fetchMock = vi.fn();
 
@@ -41,23 +41,36 @@ describe('submitDemoRequestApi', () => {
   });
 });
 
-describe('fetchPublicModulePricesApi', () => {
-  it('maps pricing rows into a module-key price map', async () => {
+describe('fetchPublicPricingApi', () => {
+  it('maps the DB-backed catalog payload', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       schoolYear: '2026/2027',
       prices: [
         { module_key: 'scolaire', price: 20 },
         { module_key: 'studentTimeSheets', price: 0 },
         { module_key: 'finance', price: 20 }
-      ]
+      ],
+      modules: [
+        { key: 'scolaire', label: 'Scolaire & Notes', labelAr: 'الدراسة والنقاط', icon: 'GraduationCap', description: 'desc', isBasic: true, isUnbilled: false, isHidden: false },
+        { key: 'bibliotheque', label: 'Bibliothèque', labelAr: 'المكتبة', icon: '', description: '', isBasic: false, isUnbilled: false, isHidden: true }
+      ],
+      centerTypes: [
+        { key: 'creche', label: 'Crèche', labelAr: 'حضانة', hint: 'الرضّع' },
+        { key: 'other', label: 'Autre', labelAr: 'أخرى', hint: '' }
+      ],
+      moduleCenterTypes: { scolaire: ['creche'] }
     }), { status: 200 }));
-    const prices = await fetchPublicModulePricesApi();
-    expect(prices).toEqual({ scolaire: 20, studentTimeSheets: 0, finance: 20 });
+    const payload = await fetchPublicPricingApi();
+    expect(payload.schoolYear).toBe('2026/2027');
+    expect(payload.prices).toEqual({ scolaire: 20, studentTimeSheets: 0, finance: 20 });
+    expect(payload.modules.map(m => m.key)).toEqual(['scolaire', 'bibliotheque']);
+    expect(payload.centerTypes.map(t => t.key)).toEqual(['creche', 'other']);
+    expect(payload.moduleCenterTypes).toEqual({ scolaire: ['creche'] });
   });
 
   it('propagates API failures', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'nope' }), { status: 500 }));
-    await expect(fetchPublicModulePricesApi()).rejects.toThrow('nope');
+    await expect(fetchPublicPricingApi()).rejects.toThrow('nope');
   });
 });
 
