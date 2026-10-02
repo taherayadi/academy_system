@@ -42,7 +42,6 @@ interface FinanceModuleProps {
   onUpdateEvents?: (events: SchoolEvent[]) => void;
   events?: SchoolEvent[];
   slots?: EtudeSlot[];
-  hideRestrictedModules?: boolean;
   settings?: CenterSettings;
   enabledModules?: string[];
   mealForfaitClosures?: MealForfaitClosure[];
@@ -82,7 +81,6 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
 ];
 
 // Services hidden for the restricted (limited) account: external courses, revision, formations, meals, assurance
-const RESTRICTED_SERVICES = ['Cours Particuliers', 'Revision', 'Formation', 'Repas', 'Assurance'];
 
 const fmt = (n: number) => n.toFixed(3);
 
@@ -142,7 +140,7 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], hideRestrictedModules, settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
@@ -407,8 +405,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     })
   );
 
-  const allPaymentsMerged = [...allPayments, ...(hideRestrictedModules ? [] : externalPayments), ...(hideRestrictedModules ? [] : revisionPayments), ...(hideRestrictedModules ? [] : formationPayments), ...(hideRestrictedModules ? [] : eventPayments)]
-    .filter(p => !hideRestrictedModules || (p.service !== 'Repas' && p.service !== 'Cours Particuliers' && p.service !== 'Revision' && p.service !== 'Formation'));
+  const allPaymentsMerged = [...allPayments, ...externalPayments, ...revisionPayments, ...formationPayments, ...eventPayments];
 
   const paymentYearOf = (p: PaymentRecord) => {
     const m = p.month.match(/\((\d{4}\/\d{4})\)/);
@@ -719,9 +716,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const gouterRowValue = grossNetFor(p => p.service === 'Goûter');
   const restoReceipts = repasRowValue + gouterRowValue;
   const totalReceipts = totalRevenueWithResto;
-  const totalExpensesAll = totalExpensesAmount + (isExternalTraiteur && !hideRestrictedModules && canteenEnabled ? repasTraiteurTotal : 0);
+  const totalExpensesAll = totalExpensesAmount + (isExternalTraiteur && canteenEnabled ? repasTraiteurTotal : 0);
   const netBalance = totalReceipts - totalExpensesAll;
-  const showRestoCard = (!hideRestrictedModules && canteenEnabled) || Math.abs(restoReceipts) > 0;
+  const showRestoCard = canteenEnabled || Math.abs(restoReceipts) > 0;
 
   // --- Metric cards ---
   // Card: Total revenue for the school year (NOT affected by the month filter).
@@ -827,7 +824,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   };
 
   // Calculate overall unpaid rate
-  const totalRequiredFromStudents = filteredStudents.length * (hideRestrictedModules ? (250 + 80 + 30) : (250 + 80 + 30 + 150)); // exclude Repas when restricted
+  const totalRequiredFromStudents = filteredStudents.length * (250 + 80 + 30 + 150);
   const unpaidTotal = Math.max(0, totalRequiredFromStudents - totalCollected);
   const unpaidRate = Math.min(100, Math.round((unpaidTotal / (totalRequiredFromStudents || 1)) * 100));
 
@@ -991,7 +988,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
           <MetricCard label="الإيرادات الكلية (السنة)" value={fmt(yearTotalRevenue)} hint="كل الإيرادات دون فيلتر الشهر — بدون مطعم" />
           <MetricCard label="التسجيلات السنوية (كل الفترات)" value={fmt(annualInscriptionTotal)} hint="تسجيلات سنوية — لا يتأثر بفيلتر الشهر" />
-          <MetricCard label={canteenEnabled && !hideRestrictedModules ? 'المقبوضات بدون المطعم' : 'المقبوضات الشهرية'} value={fmt(revenueSansRepas)} hint="بدون سنوي · بدون شيكات معلقة — حسب الشهر" />
+          <MetricCard label={canteenEnabled ? 'المقبوضات بدون المطعم' : 'المقبوضات الشهرية'} value={fmt(revenueSansRepas)} hint="بدون سنوي · بدون شيكات معلقة — حسب الشهر" />
         </div>
       </details>
 
@@ -1034,7 +1031,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             }`}>{annualInscriptionPayments.length}</span>
           )}
         </button>
-        {!hideRestrictedModules && formationsEnabled && (
+        {formationsEnabled && (
           <button
             onClick={() => setActiveTab('formations')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
@@ -1049,7 +1046,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             )}
           </button>
         )}
-        {!hideRestrictedModules && coursPartEnabled && (
+        {coursPartEnabled && (
           <button
             onClick={() => setActiveTab('externalCours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
@@ -1064,7 +1061,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             )}
           </button>
         )}
-        {!hideRestrictedModules && canteenEnabled && (
+        {canteenEnabled && (
           <button
             onClick={() => setActiveTab('restaurant')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
@@ -1115,19 +1112,19 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Etude)} د.ت</span>
               </div>
               )}
-              {!hideRestrictedModules && coursPartEnabled && (
+              {coursPartEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3. مناب السنتر من الكورسات الخاصة:</span>
                   <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.CoursParticuliers)} د.ت</span>
                 </div>
               )}
-              {!hideRestrictedModules && revisionsEnabled && (
+              {revisionsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ب. مناب السنتر من حصص المراجعة:</span>
                   <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Revision)} د.ت</span>
                 </div>
               )}
-              {!hideRestrictedModules && formationsEnabled && (
+              {formationsEnabled && (
                 <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                   <span className="text-slate-700">3ج. مداخيل التكوينات والدورات:</span>
                   <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Formation)} د.ت</span>
@@ -1139,13 +1136,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Bibliotheque)} د.ت</span>
               </div>
               )}
-              {!hideRestrictedModules && canteenEnabled && revenueByService.Repas !== 0 && (
+              {canteenEnabled && revenueByService.Repas !== 0 && (
                 <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20 flex justify-between font-bold">
                   <span className="text-brand-700">4أ. اشتراكات ومداخيل المطعم (Repas):</span>
                   <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Repas)} د.ت</span>
                 </div>
               )}
-              {!hideRestrictedModules && canteenEnabled && revenueByService.Gouter > 0 && (
+              {canteenEnabled && revenueByService.Gouter > 0 && (
                 <div className="p-3 bg-brand-600/5 rounded-2xl border border-brand-600/20 flex justify-between font-bold">
                   <span className="text-brand-700">4ب. مداخيل خدمة اللمجة (Goûter):</span>
                   <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Gouter)} د.ت</span>
@@ -1176,7 +1173,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             <h3 className="font-extrabold text-slate-900 text-sm">ملخص المصاريف التشغيلية</h3>
             
             <div className="space-y-3 text-xs">
-              {!hideRestrictedModules && canteenEnabled && repasTraiteurTotal !== 0 && (
+              {canteenEnabled && repasTraiteurTotal !== 0 && (
 
                 <div className="p-3 bg-red-50/50 rounded-2xl border border-red-100 flex justify-between font-bold">
                   <span className="text-red-900">• حصة المطعم الخارجي من الوجبات:</span>
@@ -1205,7 +1202,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         // Colonnes de services affichées uniquement si le module est au plan
         const showEtudeCol = hasModule('etude');
         const showLibraryCol = hasModule('bibliotheque');
-        const showRepasCol = !hideRestrictedModules && hasModule('cantine');
+        const showRepasCol = hasModule('cantine');
         const ledgerColCount = 4 + (showEtudeCol ? 1 : 0) + (showLibraryCol ? 1 : 0) + (showRepasCol ? 1 : 0);
 
         const ledgerStudents = filteredStudents.filter(st => {
@@ -1308,10 +1305,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 3: PAYMENT HISTORY */}
       {activeTab === 'history' && (() => {
-        const historyServiceOptions = (hideRestrictedModules 
-          ? serviceOptions.filter(s => !RESTRICTED_SERVICES.includes(s.value)) 
-          : serviceOptions
-        ).filter(s => s.value !== 'Repas' && s.value !== 'Goûter' && s.value !== 'Formation' && !s.value.startsWith('Inscription'));
+        const historyServiceOptions = serviceOptions.filter(s => s.value !== 'Repas' && s.value !== 'Goûter' && s.value !== 'Formation' && !s.value.startsWith('Inscription'));
 
         const historyPayments = (serviceFilter === 'all' ? filteredPayments : filteredPayments.filter(p => p.service === serviceFilter))
           .filter(p => 

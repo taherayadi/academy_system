@@ -58,19 +58,4 @@ describe('auth session management', () => {
       expect(() => clearLocalSession()).not.toThrow();
     });
   });
-
-  describe('restricted_admin user role', () => {
-    it('supports saving and loading a restricted_admin user', () => {
-      const restrictedUser = {
-        email: 'restricted@example.invalid',
-        name: 'مدير المركز',
-        role: 'restricted_admin' as const,
-        description: 'إدارة المركز',
-      };
-      saveSessionUser(restrictedUser);
-      const loaded = loadSessionUser();
-      expect(loaded).toEqual(restrictedUser);
-      expect(loaded?.role).toBe('restricted_admin');
-    });
-  });
 });

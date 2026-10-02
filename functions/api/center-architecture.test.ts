@@ -10,7 +10,7 @@ const source = (file: string) => readFileSync(resolve(root, file), 'utf8');
 describe('center and landing repository architecture', () => {
   it('is permanently a center application, never a request-selected mode', () => {
     expect(APPLICATION).toBe('center');
-    for (const role of ['admin', 'super_admin', 'restricted_admin']) expect(isDeploymentRole(role)).toBe(true);
+    for (const role of ['admin', 'super_admin']) expect(isDeploymentRole(role)).toBe(true);
     for (const role of ['platform_super_admin', 'unknown', '', null]) expect(isDeploymentRole(role)).toBe(false);
   });
 

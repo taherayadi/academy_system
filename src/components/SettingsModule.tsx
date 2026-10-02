@@ -32,7 +32,6 @@ interface SettingsModuleProps {
   key?: React.Key;
   settings: CenterSettings;
   onUpdateSettings: (newSettings: CenterSettings) => void;
-  hideRestrictedModules?: boolean;
   onExportDatabase?: () => void;
   onImportDatabase?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   currentUserEmail?: string;
@@ -46,7 +45,7 @@ interface SettingsModuleProps {
 
 const YEAR_OPTIONS = DEFAULT_ACADEMIC_YEARS;
 
-export default function SettingsModule({ settings, onUpdateSettings, hideRestrictedModules, onExportDatabase, onImportDatabase, currentUserEmail, centerLogoUrl, onCenterLogoChange, enabledModules }: SettingsModuleProps) {
+export default function SettingsModule({ settings, onUpdateSettings, onExportDatabase, onImportDatabase, currentUserEmail, centerLogoUrl, onCenterLogoChange, enabledModules }: SettingsModuleProps) {
   // Subscription gating: fees can only be set for services included in the center's plan.
   const hasModule = (key: string) => !enabledModules || enabledModules.includes(key);
   const toast = useToast();
@@ -430,7 +429,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
             )}
 
             {/* Repas / Restaurant & Cantine Adaptative — module Cantine requis */}
-            {!hideRestrictedModules && hasModule('cantine') && (
+            {hasModule('cantine') && (
               <div className="bg-brand-600/[0.05] p-4 rounded-2xl border border-brand-600/20 space-y-4 md:col-span-2 lg:col-span-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-brand-600/20 pb-2">
                   <span className="text-xs font-extrabold text-brand-700 flex items-center gap-2">
@@ -672,7 +671,7 @@ export default function SettingsModule({ settings, onUpdateSettings, hideRestric
             )}
 
             {/* Cours Particuliers — module requis au plan */}
-            {!hideRestrictedModules && hasModule('coursParticuliers') && (
+            {hasModule('coursParticuliers') && (
               <div className="bg-brand-600/[0.06]/40 p-4 rounded-2xl border border-brand-600/20/60 space-y-3 lg:col-span-2">
                 <span className="text-xs font-extrabold text-brand-800 block border-b border-brand-600/20/60 pb-1">
                   الدروس الخصوصية

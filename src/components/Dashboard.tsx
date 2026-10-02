@@ -29,7 +29,6 @@ interface DashboardProps {
   setActiveTab: (tab: string) => void;
   openAddStudent: () => void;
   openAddStaff: () => void;
-  hideRestrictedModules?: boolean;
   settings?: CenterSettings;
   /** 'jardin' | 'formation' — drives the time-sheet module naming. */
   centerType?: string;
@@ -37,7 +36,7 @@ interface DashboardProps {
   isModuleAllowed?: (tabId: string) => boolean;
 }
 
-export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, hideRestrictedModules, settings, centerType, isModuleAllowed }: DashboardProps) {
+export default function Dashboard({ staff, students, setActiveTab, openAddStudent, openAddStaff, settings, centerType, isModuleAllowed }: DashboardProps) {
   // Center subscription gating (default: everything allowed).
   const allowed = (tab: string) => (isModuleAllowed ? isModuleAllowed(tab) : true);
   // Type gating mirrors the sidebar: study modules only for school-bearing types.
@@ -47,8 +46,6 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const totalStudents = students.length;
 
   // ── Quick-access catalog: ONLY the modules enabled in the center's plan ──
-  // Role layer mirrors the sidebar: restricted_admin never sees these surfaces.
-  const RESTRICTED_TABS = ['module4', 'module4b', 'formations', 'module6', 'module8'];
   const QUICK_MODULES: { tab: string; title: string; desc: string; icon: any; tile: string }[] = [
     { tab: 'module1', title: "Fiche d'inscription élève", desc: 'بطاقة التسجيل والأولياء', icon: UserPlus, tile: 'bg-brand-600/10 text-brand-600' },
     { tab: 'module2', title: 'Suivi Scolaire', desc: 'الدراسة والمدفوعات', icon: BookOpen, tile: 'bg-brand-600/[0.06] text-brand-600' },
@@ -68,7 +65,6 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
   const quickModules = QUICK_MODULES.filter(m =>
     allowed(m.tab)
     && (hasStudy || !STUDY_TABS.includes(m.tab))
-    && !(hideRestrictedModules && RESTRICTED_TABS.includes(m.tab))
   );
   const moduleCount = quickModules.length;
 
@@ -76,12 +72,11 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
     let collected = 0;
     students.forEach(s => {
       (s.payments || []).forEach(p => {
-        if (hideRestrictedModules && (p.service === 'Repas' || p.service === 'Cours Particuliers' || p.service === 'Revision')) return;
         collected += p.amountPaid || 0;
       });
     });
     return collected;
-  }, [students, hideRestrictedModules]);
+  }, [students]);
 
   // Group students by grade
   const studentsByGrade = useMemo(() => {
@@ -144,7 +139,7 @@ export default function Dashboard({ staff, students, setActiveTab, openAddStuden
         </motion.div>
 
         {/* Total Staff — uniquement si le module Personnel est au plan */}
-        {allowed('module8') && !hideRestrictedModules && (
+        {allowed('module8') && (
         <motion.div 
           whileHover={{ y: -4 }}
           className="bg-white rounded-3xl p-6 border border-slate-200/70 shadow-lg shadow-slate-900/5 flex items-center justify-between"

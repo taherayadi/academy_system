@@ -9,7 +9,7 @@ vi.mock('./_lib', () => ({
 }));
 const platform = String(APPLICATION) === 'platform';
 const allowedRole = platform ? 'platform_super_admin' : 'admin';
-const foreignRoles = platform ? ['admin', 'super_admin', 'restricted_admin'] : ['platform_super_admin'];
+const foreignRoles = platform ? ['admin', 'super_admin'] : ['platform_super_admin'];
 const protectedPath = platform ? '/api/platform-billing' : '/api/state';
 function context(path: string, method = 'GET', origin?: string) {
   return { request: new Request('https://app.example' + path, { method, headers: origin ? { Origin: origin } : {} }), env: { DB: {} }, data: {}, next: vi.fn(async () => new Response('ok')) };

@@ -74,7 +74,7 @@ export function hasInterstitialPosition(positions?: string[]): boolean {
 export interface UserAccount {
   email: string;
   name: string;
-  role: 'admin' | 'super_admin' | 'restricted_admin';
+  role: 'admin' | 'super_admin';
   description: string;
   centerId?: string;
 }

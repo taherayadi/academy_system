@@ -15,7 +15,7 @@ import * as api from './api';
 import type { CenterTenant, UserAccount } from './types';
 import {
   CRECHE_COMPOSED_CONFIG,
-  C5_RESTRICTED_CONFIG,
+  C5_COMPOSED_CONFIG,
   FORMATION_CONFIG,
   GARDERIE_CONFIG,
   LEGACY_PASSTHROUGH_CONFIG,
@@ -283,14 +283,12 @@ describe('US1 — the crèche composed pass (C1)', { timeout: 30000 }, () => {
   });
 });
 
-describe('US1 edge — C5 composes all three restriction layers', { timeout: 30000 }, () => {
-  it('role limits ∩ subscription ∩ type hiding compose with no error state', async () => {
-    const { center, user } = makeProgram(C5_RESTRICTED_CONFIG);
+describe('US1 edge — C5 composes the subscription and type layers', { timeout: 30000 }, () => {
+  it('subscription limits ∩ type hiding compose with no error state', async () => {
+    const { center, user } = makeProgram(C5_COMPOSED_CONFIG);
     await loginAs(center, user);
 
-    // role layer: restricted_admin never reaches the staff module, even with étude entitled
-    expect(screen.queryByText('إدارة الموظفين')).toBeNull();
-    // role layer: the restricted payroll/meal tabs are gone too
+    // subscription layer: cantine is not entitled → the meals tab stays closed
     expect(screen.queryByText('إدارة الوجبات')).toBeNull();
     // type layer: no study surface for the crèche
     for (const label of STUDY_TAB_LABELS) {
@@ -299,6 +297,8 @@ describe('US1 edge — C5 composes all three restriction layers', { timeout: 300
     // subscription layer: only the entitled new module is navigable
     expect(screen.getAllByText('الأنشطة والبرنامج').length).toBeGreaterThan(0);
     expect(screen.queryByText('المهارات والكفاءات')).toBeNull();
+    // étude entitlement keeps the staff module reachable (staff-lite)
+    expect(screen.getAllByText('إدارة الموظفين').length).toBeGreaterThan(0);
     // the shell is healthy: dashboard renders and the entitled module works
     expect(document.body.textContent || '').toMatch(DASHBOARD_GREETING);
     await clickTab('الأنشطة والبرنامج', 'Motricité du matin');

@@ -7,8 +7,8 @@ vi.mock('./_lib', () => ({ validateSession: vi.fn(), json: (value: unknown, stat
 vi.mock('./_pubnub', () => ({ PUBNUB_GRANT_TTL_SECONDS: 600, grantToken: vi.fn(async () => 'grant-token') }));
 beforeEach(() => { vi.mocked(validateSession).mockReset(); vi.mocked(grantToken).mockClear(); });
 describe('fixed application realtime scope', () => {
-  const allowed = String(APPLICATION) === 'center' ? ['admin', 'super_admin', 'restricted_admin'] : ['platform_super_admin'];
-  const denied = String(APPLICATION) === 'center' ? ['platform_super_admin'] : ['admin', 'super_admin', 'restricted_admin'];
+  const allowed = String(APPLICATION) === 'center' ? ['admin', 'super_admin'] : ['platform_super_admin'];
+  const denied = String(APPLICATION) === 'center' ? ['platform_super_admin'] : ['admin', 'super_admin'];
   it.each(allowed)('grants exact read-only scope to %s', async role => {
     vi.mocked(validateSession).mockResolvedValue({ role, email: 'test@example.invalid', token: 'test', centerId: 'c1' });
     const res = await onRequestGet({ env: { DB: {} }, request: new Request('https://app.example/api/pubnub-grant') } as any);

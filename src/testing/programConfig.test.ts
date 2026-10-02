@@ -3,7 +3,7 @@ import {
   LEGACY_CONFIG,
   PRE_PROGRAM_MODULES,
   CRECHE_COMPOSED_CONFIG,
-  C5_RESTRICTED_CONFIG,
+  C5_COMPOSED_CONFIG,
   makeCenter,
   makeConfig,
   makeProgram,
@@ -20,7 +20,7 @@ describe('programConfig factory (006 R2)', () => {
   it('applies each override (type, modules, role) independently', () => {
     expect(makeConfig({ type: 'creche' }).type).toBe('creche');
     expect(makeConfig({ enabledModules: ['etude'] }).enabledModules).toEqual(['etude']);
-    expect(makeConfig({ role: 'restricted_admin' }).role).toBe('restricted_admin');
+    expect(makeConfig({ role: 'super_admin' }).role).toBe('super_admin');
     // unknown type values pass through verbatim (legacy passthrough)
     expect(makeConfig({ type: 'maternelle-1998' }).type).toBe('maternelle-1998');
   });
@@ -51,12 +51,12 @@ describe('programConfig factory (006 R2)', () => {
     expect(user.email).toBeTruthy();
     expect(typeof user.name).toBe('string');
     expect(typeof user.description).toBe('string');
-    expect(makeUser('restricted_admin').role).toBe('restricted_admin');
+    expect(makeUser('super_admin').role).toBe('super_admin');
   });
 
   it('makeProgram returns the login pair with the config role applied', () => {
-    const { center, user, config } = makeProgram(C5_RESTRICTED_CONFIG);
-    expect(user.role).toBe('restricted_admin');
+    const { center, user, config } = makeProgram(C5_COMPOSED_CONFIG);
+    expect(user.role).toBe('admin');
     expect(center.centerType).toBe('creche');
     expect(center.enabledModules).toEqual(['etude', 'activites']);
     expect(config.type).toBe('creche');

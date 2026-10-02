@@ -21,8 +21,16 @@ export default defineConfig(({mode}) => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
-        // Local dev: run `npx wrangler pages dev` (default port 8788) alongside `npm run dev`
-        '/api': 'http://localhost:8788',
+        // Local dev: run `npx wrangler pages dev` (default port 8788) alongside `npm run dev`.
+        // changeOrigin + Origin rewrite keep _middleware.ts's same-origin CSRF
+        // check happy: the browser Origin (:3000) is rewritten to the functions
+        // origin (:8788) — otherwise every POST /api/* is rejected 403
+        // 'Untrusted origin' before reaching the handler.
+        '/api': {
+          target: 'http://localhost:8788',
+          changeOrigin: true,
+          headers: { Origin: 'http://localhost:8788' },
+        },
       },
     },
   };

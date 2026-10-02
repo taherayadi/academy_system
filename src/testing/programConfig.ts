@@ -120,9 +120,9 @@ export const GARDERIE_CONFIG: Partial<ProgramConfig> = {
   role: 'admin'
 };
 
-/** C5: crèche (type layer) + étude-only (subscription layer) + restricted_admin (role layer). */
-export const C5_RESTRICTED_CONFIG: Partial<ProgramConfig> = {
+/** C5: crèche (type layer) + étude-only (subscription layer), admin. */
+export const C5_COMPOSED_CONFIG: Partial<ProgramConfig> = {
   type: 'creche',
   enabledModules: ['etude', 'activites'],
-  role: 'restricted_admin'
+  role: 'admin'
 };
