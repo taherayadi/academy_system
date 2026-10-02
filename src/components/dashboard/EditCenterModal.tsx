@@ -7,7 +7,7 @@ import { useToast } from '../Toast';
 import icon from '../../assets/icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate } from '../../utils/format';
-import { normalizeCenterModules, normalizePhoneInput, normalizeCenterType, centerDateInputValue, currentSchoolYear, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, centerDateTimestamp, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, isValidCenterPhone, CENTER_TYPES, CENTER_TYPE_LABEL, ALL_MODULES, isModuleAllowedForCenterType } from './constants';
+import { normalizeCenterModules, normalizePhoneInput, normalizeCenterType, centerDateInputValue, currentSchoolYear, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, centerDateTimestamp, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, isValidCenterPhone, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, isModuleAllowedForCenterType } from './constants';
 import type { CenterType } from './constants';
 import ConfirmDialog from '../ConfirmDialog';
 
@@ -153,19 +153,19 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
 
   useEffect(() => {
     if (form.plan === 'pro') {
-      setEnabledModules([...SELECTABLE_MODULE_KEYS]);
+      setEnabledModules(SELECTABLE_MODULE_KEYS());
     } else if (
       form.plan === 'basic'
-      && (enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => enabledModules.includes(key)))
+      && (enabledModules.length !== BASIC_MODULE_KEYS().length || !BASIC_MODULE_KEYS().every(key => enabledModules.includes(key)))
     ) {
-      setEnabledModules([...BASIC_MODULE_KEYS]);
+      setEnabledModules(BASIC_MODULE_KEYS());
     }
   }, [form.plan]);
 
   const handleEditPlanChange = (plan: string) => {
     setForm(current => ({ ...current, plan }));
-    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS]);
-    if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
+    if (plan === 'pro') setEnabledModules(SELECTABLE_MODULE_KEYS());
+    if (plan === 'basic') setEnabledModules(BASIC_MODULE_KEYS());
   };
 
   const toggleEditModule = (key: string) => {
@@ -319,15 +319,16 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ec-phone">الهاتف *</label>
+              {/* RTL page: digits keep their LTR run, the field is aligned right. */}
               <input id="ec-phone" required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className={`${inputCls} text-start`} />
+                className={`${inputCls} text-right`} />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="ec-type">نوع المؤسسة</label>
               <select id="ec-type" value={form.centerType} onChange={e => setForm(f => ({ ...f, centerType: e.target.value as CenterType | '' }))} className={`${inputCls} cursor-pointer`}>
                 <option value="">غير معرّف</option>
-                {CENTER_TYPES.map(ct => (
+                {CENTER_TYPES().map(ct => (
                   <option key={ct.key} value={ct.key}>{ct.label}</option>
                 ))}
               </select>
@@ -363,7 +364,7 @@ function EditCenterModal({ center, onClose, onSaved }: { center: CenterTenant; o
       <ConfirmDialog
         open={confirmTypeChange}
         title="تغيير نوع المؤسسة؟"
-        message={`سيتم تعطيل الوحدات التالية لأنها غير متاحة لنوع «${CENTER_TYPE_LABEL[form.centerType as CenterType]}»: ${modulesDisabledByTypeChange.map(k => ALL_MODULES.find(m => m.key === k)?.label || k).join('، ')}. هل تؤكد؟`}
+        message={`سيتم تعطيل الوحدات التالية لأنها غير متاحة لنوع «${CENTER_TYPE_LABEL()[form.centerType as CenterType]}»: ${modulesDisabledByTypeChange.map(k => MODULE_LABEL(k)).join('، ')}. هل تؤكد؟`}
         confirmLabel="نعم، غيّر النوع"
         cancelLabel="إلغاء"
         onConfirm={doSave}

@@ -111,7 +111,7 @@ export default function OverviewSection({ d }: { d: DashboardApi }) {
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-black text-slate-900 truncate">{titleCaseName(r.academyName)}</div>
                     <div className="text-[11px] font-semibold text-slate-500 truncate">
-                      {titleCaseName(r.fullName)} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
+                      {titleCaseName(r.fullName)} · {normalizeCenterType(r.centerType) ? CENTER_TYPE_LABEL()[normalizeCenterType(r.centerType)] : fmtDate(r.createdAt)}
                     </div>
                   </div>
                   <span className={`text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${toneClasses(REQ_STATUS_BADGE[r.status] || REQ_STATUS_BADGE.new)}`}>

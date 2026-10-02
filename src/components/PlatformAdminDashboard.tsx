@@ -18,9 +18,11 @@ import CentersSection from './dashboard/CentersSection';
 import RequestsSection from './dashboard/RequestsSection';
 import FinanceSection from './dashboard/FinanceSection';
 import PricingSection from './dashboard/PricingSection';
+import EligibilitySection from './dashboard/EligibilitySection';
 import AdvertisementsSection from './dashboard/AdvertisementsSection';
 import RenewalsSection from './dashboard/RenewalsSection';
 import type { DashboardApi } from './dashboard/usePlatformDashboard';
+import { ModuleCatalogProvider } from './dashboard/ModuleCatalogProvider';
 
 export default function PlatformAdminDashboard({ page = 'overview', onNavigate }: PlatformAdminDashboardProps) {
   const d: DashboardApi = usePlatformDashboard({ page, onNavigate });
@@ -41,7 +43,10 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
   useEffect(() => {
     document.title = `${PAGE_META[page].title} — ${BRAND_NAME} SaaS`;
   }, [page, PAGE_META]);
+  // DB-driven module + center-type catalog: every picker, eligibility lock and
+  // label below derives from the `modules` / `center_types` tables (GET /api/modules).
   return (
+    <ModuleCatalogProvider>
     <div className="relative space-y-6 overflow-x-clip" dir="rtl">
 
       {/* soft background wash */}
@@ -126,7 +131,11 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
 
       {/* ═══ PRICING PAGE (Tarifs & Modules) ═══ */}
       {page === 'pricing' && (
-        <PricingSection d={d} />
+        <>
+          <PricingSection d={d} />
+          {/* center_type_modules — which module each center type is offered */}
+          <EligibilitySection d={d} />
+        </>
       )}
 
       {/* ─── Advertisements Page ───────────────────────────────────────── */}
@@ -216,5 +225,6 @@ export default function PlatformAdminDashboard({ page = 'overview', onNavigate }
         onCancel={() => setDeleteAd(null)}
       />
     </div>
+    </ModuleCatalogProvider>
   );
 }

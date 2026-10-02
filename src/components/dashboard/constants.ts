@@ -1,5 +1,6 @@
 import type { ModuleKey, CenterTenant, PlatformAdvertisement } from '../../types';
 import type { StatusTone } from '../ui/StatusBadge';
+import { getModuleCatalog, type ClientModuleEntry, type ClientCenterTypeEntry } from '../../utils/moduleCatalogStore';
 
 const RENEWAL_STATUS_LABEL: Record<string, string> = {
   trial: 'تجربة', active: 'نشط', suspended: 'موقوف', expired: 'منتهٍ',
@@ -7,73 +8,97 @@ const RENEWAL_STATUS_LABEL: Record<string, string> = {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 // Base plan: Scolaire + Finance (priced) + Jd. Horaires (bundled, no tarif)
-const BASE_MODULE_KEYS = ['scolaire', 'finance'];
 
-const BUNDLED_MODULE_KEY = 'studentTimeSheets';
+// The bundled (isUnbilled) module is identified via the DB flag, not a hardcoded key.
 
- // Jd. Horaires — offert avec la base, sans tarif
-const PAGE_SIZE = 9;
+// ─── DB-driven catalog accessors ───────────────────────────────────────────
+// The `modules` and `center_types` tables are the single source of truth.
+// These helpers read the latest catalog snapshot fed by ModuleCatalogProvider
+// (see src/utils/moduleCatalogStore.ts). Nothing here hardcodes a module key,
+// a label or an eligibility list.
 
- // Centres & Demandes : 9 cartes par page (3 lignes × 3 colonnes)
-
-const ALL_MODULES: { key: ModuleKey; label: string }[] = [
-  { key: 'scolaire', label: 'مدرسي' },
-  { key: 'finance', label: 'مالية' },
-  { key: 'etude', label: 'مراجعة مشرفة' },
-  { key: 'coursParticuliers', label: 'دروس خاصة' },
-  { key: 'revision', label: 'مراجعة الامتحانات' },
-  { key: 'formations', label: 'دورات' },
-  { key: 'cantine', label: 'مقصف / وجبات' },
-  { key: 'transport', label: 'نقل' },
-  { key: 'events', label: 'مناسبات' },
-  { key: 'studentTimeSheets', label: 'سجل الدوام' },
-  { key: 'staff', label: 'الموظفون' },
-  { key: 'activites', label: 'أنشطة وبرنامج' },
-  { key: 'competences', label: 'مهارات ومستويات' },
-];
-
-const ALL_MODULE_KEYS = ALL_MODULES.map(module => module.key);
-
-// Bibliothèque retirée du catalogue (module plus proposé) : isModuleHidden
-// la masque des sélections de modules et de la page Tarifs, et
-// calculateModuleTotal ne la facture jamais — les lignes de prix historiques
-// restent intactes.
-const isModuleHidden = (key: string) => key === 'bibliotheque';
-
-const SELECTABLE_MODULE_KEYS = ALL_MODULE_KEYS.filter(k => !isModuleHidden(k as string));
-
-const BASIC_MODULE_KEYS = [...BASE_MODULE_KEYS, BUNDLED_MODULE_KEY];
-
-// ─── Module eligibility per center type (mirrors functions/api/_modules.ts) ──
-// étude/cours/révision/formations are school-support modules: not offered to
-// crèches nor jardins. Everything else is universal. Base modules are always
-// included and never togglable.
-const UNIVERSAL_MODULES = ['cantine', 'transport', 'events', 'staff', 'activites', 'competences'];
-const SCHOOL_SUPPORT_MODULES = ['etude', 'coursParticuliers', 'revision', 'formations'];
-const MODULE_CENTER_TYPES: Record<string, readonly CenterType[]> = {
-  ...Object.fromEntries(UNIVERSAL_MODULES.map(k => [k, ['creche', 'jardin', 'garderie', 'formation'] as const])),
-  ...Object.fromEntries(SCHOOL_SUPPORT_MODULES.map(k => [k, ['garderie', 'formation'] as const])),
-};
-
-/** A module may only be attached to a center whose type is marked eligible. */
-function isModuleAllowedForCenterType(key: string, centerType: CenterType | ''): boolean {
-  if (isBaseModule(key)) return true;
-  if (key === 'bibliotheque') return false; // removed from catalog
-  if (!centerType) return true; // legacy/untyped centers stay permissive
-  const allowed = MODULE_CENTER_TYPES[key];
-  return !allowed || allowed.includes(centerType);
+/** Every module in the DB catalog, hidden ones included. */
+function catalogModules(): ClientModuleEntry[] {
+  return getModuleCatalog().modules;
 }
 
-const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
+/** Center types from the DB ('other' sentinel already excluded server-side). */
+function catalogCenterTypes(): ClientCenterTypeEntry[] {
+  return getModuleCatalog().centerTypes;
+}
 
-const isBaseModule = (key: string) =>
-  (BASE_MODULE_KEYS as string[]).includes(key) || key === BUNDLED_MODULE_KEY;
+/** Non-hidden modules — the selectable catalog. */
+function selectableModules(): ClientModuleEntry[] {
+  return catalogModules().filter(m => !m.isHidden);
+}
 
+/** Modules flagged isBasic (always attached to every centre). The platform
+ *  admin edits this list from the Tarifs page (« أساسي » toggle). */
+function basicModules(): ClientModuleEntry[] {
+  return catalogModules().filter(m => m.isBasic);
+}
+
+/** Modules flagged isUnbilled (never priced) — exported for price sheets. */
+export function unbilledModuleKeys(): Set<string> {
+  return new Set(catalogModules().filter(m => m.isUnbilled).map(m => m.key));
+}
+
+function unbilledKeys(): Set<string> {
+  return unbilledModuleKeys();
+}
+
+/** SELECTABLE_MODULE_KEYS — DB order, hidden modules excluded. */
+export function SELECTABLE_MODULE_KEYS(): string[] {
+  return selectableModules().map(m => m.key);
+}
+
+/** BASIC_MODULE_KEYS — the isBasic rows of the DB (base + bundled). */
+export function BASIC_MODULE_KEYS(): string[] {
+  return basicModules().map(m => m.key);
+}
+
+/** BASE_MODULE_KEYS — basic modules that are priced (isUnbilled=false). */
+export function BASE_MODULE_KEYS(): string[] {
+  return basicModules().filter(m => !m.isUnbilled).map(m => m.key);
+}
+
+/** ALL_MODULES — {key, labelAr, flags} triples of the whole DB catalog. */
+export function ALL_MODULES(): Array<{ key: ModuleKey; label: string; isBasic: boolean; isUnbilled: boolean; isHidden: boolean }> {
+  return catalogModules().map(m => ({ key: m.key as ModuleKey, label: m.labelAr, isBasic: m.isBasic, isUnbilled: m.isUnbilled, isHidden: m.isHidden }));
+}
+
+/** « Bibliothèque » et les modules retirés du catalogue : isModuleHidden les
+ *  masque des sélections et de la page Tarifs — flag isHidden = 1 en DB. */
+export function isModuleHidden(key: string): boolean {
+  return !!catalogModules().find(m => m.key === key)?.isHidden;
+}
+
+const MODULE_LABEL = (key: string) => {
+  const entry = catalogModules().find(m => m.key === key);
+  return entry?.labelAr || key;
+};
+
+/** True when the key is flagged isBasic in the DB. */
+export function isBaseModule(key: string): boolean {
+  return basicModules().some(m => m.key === key);
+}
+
+/** A module may only be attached to a center whose type is marked eligible
+ *  (center_type_modules). Empty allowedCenterTypes ⇒ universal. */
+function isModuleAllowedForCenterType(key: string, centerType: CenterType | ''): boolean {
+  if (isBaseModule(key)) return true;
+  if (isModuleHidden(key)) return false; // removed from catalog
+  if (!centerType) return true; // legacy/untyped centers stay permissive
+  const entry = catalogModules().find(m => m.key === key);
+  if (!entry) return false; // unknown module → never offer it
+  return entry.allowedCenterTypes.length === 0 || entry.allowedCenterTypes.includes(centerType);
+}
+
+/** Base toujours incluse + modules du centre, dédupliqués (DB order). */
 function normalizeCenterModules(modules?: string[] | null): string[] {
   return Array.from(new Set([
-    ...BASE_MODULE_KEYS,
-    BUNDLED_MODULE_KEY,
-    ...(modules || [])
+    ...BASIC_MODULE_KEYS(),
+    ...(modules || []),
   ]));
 }
 
@@ -118,38 +143,44 @@ const PLAN_BADGE: Record<string, StatusTone> = {
   starter: 'neutral', basic: 'neutral', growth: 'neutral', pro: 'brand', custom: 'brand'
 };
 
-// ─── Center types (single source of truth; server twin: functions/api/_modules.ts) ──
+// ─── Center types (DB-driven via /api/modules → center_types table) ────────
 export type CenterType = 'creche' | 'jardin' | 'garderie' | 'formation';
 export type CenterTypeFilter = 'all' | CenterType;
 
-const CENTER_TYPES: { key: CenterType; label: string; hint: string }[] = [
-  { key: 'creche', label: 'حضانة', hint: 'الرضّع · ما قبل الروضة' },
-  { key: 'jardin', label: 'روضة أطفال', hint: 'ما قبل المدرسي · الروضات' },
-  { key: 'garderie', label: 'دار الرعاية', hint: 'حضانة نهارية · رعاية بعد الدرس' },
-  { key: 'formation', label: 'مركز تدريب', hint: 'دعم · دروس · دورات' }
-];
+/** CENTER_TYPES — {key, labelAr, hint} from the DB, in DB order. */
+function CENTER_TYPES(): Array<{ key: CenterType; label: string; hint: string }> {
+  return catalogCenterTypes()
+    .filter(ct => ct.key !== 'other')
+    .map(ct => ({ key: ct.key as CenterType, label: ct.labelAr, hint: ct.hint }));
+}
 
-const CENTER_TYPE_LABEL: Record<CenterType, string> = CENTER_TYPES.reduce(
-  (map, ct) => { map[ct.key] = ct.label; return map; },
-  {} as Record<CenterType, string>
-);
+/** CENTER_TYPE_LABEL — key → Arabic label from the DB. */
+function CENTER_TYPE_LABEL(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const ct of catalogCenterTypes()) map[ct.key] = ct.labelAr;
+  return map;
+}
 
-/** Badge tone per center type — replaces per-screen color ternaries. */
-const CENTER_TYPE_BADGE: Record<CenterType, StatusTone> = {
+/** Badge tone per center type — replaces per-screen color ternaries.
+ *  Presentation only; keys come from the DB, tones are theme constants. */
+const CENTER_TYPE_BADGE: Record<string, StatusTone> = {
   creche: 'warning',
   jardin: 'brand',
   garderie: 'info',
   formation: 'neutral',
 };
 
-/** Normalise le type d'établissement : CenterType | '' (insensible aux accents — « Crèche » → 'creche'). */
+/** Normalise le type d’établissement: strips diacritics, lowercases, trims.
+ *  Known legacy fuzzy variants are mapped to their canonical key; other
+ *  non-empty values pass through so new DB types work without a code change. */
 function normalizeCenterType(raw?: string): CenterType | '' {
-  const v = String(raw || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const v = String(raw || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!v || v === 'other') return '';
   if (v.includes('creche')) return 'creche';
   if (v.includes('garderie')) return 'garderie';
   if (v.includes('jardin')) return 'jardin';
-  if (v.includes('formation') || v.includes('centre')) return 'formation';
-  return '';
+  if (v.includes('formation') || v.includes('centre de formation')) return 'formation';
+  return v as CenterType;
 }
 
 /** Capitalise la première lettre de chaque mot : "ahmed ben-ali" → "Ahmed Ben-Ali" */
@@ -204,10 +235,12 @@ const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
 
 const ANNUAL_DISCOUNT = 0.2;
 
+/** Sum of the enabled modules' prices. Unbilled modules (isUnbilled = 1 in
+ *  the DB — the bundled time sheets, the retired Library) never count. */
 function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
-  // Bibliothèque désactivée pour l'instant : jamais facturée.
+  const unbilled = unbilledKeys();
   return enabledModules.reduce((total, key) => (
-    total + (key === BUNDLED_MODULE_KEY || key === 'bibliotheque' ? 0 : (Number(modulePrices[key]) || 0))
+    total + (unbilled.has(key) ? 0 : (Number(modulePrices[key]) || 0))
   ), 0);
 }
 
@@ -350,30 +383,24 @@ function adDateInput(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+const PAGE_SIZE = 9; // Centres & Demandes : 9 cartes par page (3×3)
+
 export {
   RENEWAL_STATUS_LABEL,
-  BASE_MODULE_KEYS,
-  BUNDLED_MODULE_KEY,
   PAGE_SIZE,
-  ALL_MODULES,
-  ALL_MODULE_KEYS,
-  isModuleHidden,
-  SELECTABLE_MODULE_KEYS,
-  BASIC_MODULE_KEYS,
   MODULE_LABEL,
-  isBaseModule,
   normalizeCenterModules,
   parseModules,
   currentSchoolYear,
   PLAN_LABEL,
   PLAN_BADGE,
+  CENTER_TYPES,
   CENTER_TYPE_LABEL,
   CENTER_TYPE_BADGE,
   normalizeCenterType,
   isModuleAllowedForCenterType,
   titleCaseName,
   normalizeText,
-  CENTER_TYPES,
   STATUS_BADGE,
   STATUS_LABEL,
   REQ_STATUS_BADGE,

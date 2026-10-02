@@ -25,6 +25,8 @@ import {
   validateSession,
   PLATFORM_ROLE,
   truncateField,
+  replaceCenterModulesStmt,
+  deleteCenterModulesStmt,
 } from './_lib';
 import { logPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
@@ -173,7 +175,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     if (status === 'approved' && !skipApply) {
       const center = await env.DB.prepare(
-        `SELECT id, status, plan, billing_cycle, subscription_ends_at, trial_ends_at, enabled_modules
+        `SELECT id, status, plan, billing_cycle, subscription_ends_at, trial_ends_at
          FROM centers WHERE id = ?`
       ).bind(String(row.center_id)).first<any>();
       if (!center) return json({ error: 'المركز غير موجود.' }, 404);
@@ -189,17 +191,24 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
       await env.DB.prepare(
         `UPDATE centers
-         SET plan = ?, billing_cycle = ?, monthly_price = ?, enabled_modules = ?,
+         SET plan = ?, billing_cycle = ?, monthly_price = ?,
              subscription_ends_at = ?, status = 'active'
          WHERE id = ?`
       ).bind(
         String(row.requested_plan),
         String(row.billing_cycle),
         row.amount === null || row.amount === undefined ? 0 : Number(row.amount),
-        String(row.requested_modules || '[]'),
         newEnd,
         String(row.center_id)
       ).run();
+      // Normalized schema: rewrite the module rows from the request payload.
+      const renewalModules: string[] = (() => {
+        try { const arr = JSON.parse(String(row.requested_modules || '[]')); return Array.isArray(arr) ? arr.map(String) : []; } catch { return []; }
+      })();
+      await env.DB.batch([
+        deleteCenterModulesStmt(env.DB, String(row.center_id)),
+        ...(renewalModules.length > 0 ? [replaceCenterModulesStmt(env.DB, String(row.center_id), renewalModules)] : [])
+      ]);
 
       await logPlanHistory(env.DB, {
         centerId: String(row.center_id),

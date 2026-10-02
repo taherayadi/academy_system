@@ -1,11 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { onRequestGet, onRequestPost } from './center-plans';
+import { resetModuleCatalogCache } from './_modules';
 
-vi.mock('./_lib', () => ({
-  validateSession: vi.fn(async () => ({ role: 'platform_super_admin' })),
-  readBody: vi.fn(async (request: Request) => request.json()),
-  json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
-}));
+vi.mock('./_lib', async (importOriginal) => {
+  const lib = await importOriginal<typeof import('./_lib')>();
+  return {
+    ...lib,
+    validateSession: vi.fn(async () => ({ role: 'platform_super_admin', email: 'root@test.tn' })),
+    readBody: vi.fn(async (request: Request) => request.json()),
+    json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } }),
+    // The fake DB carries no center_modules table — the center's module rows
+    // come from the seeded center row's legacy JSON (readCenterModules falls
+    // back to it via the pragma probe when no normalized rows exist).
+    readCenterModules: vi.fn(async (_db: any, centerId: string) =>
+      JSON.parse(ACTIVE_UNPAID.enabled_modules)),
+    readAllCenterModules: vi.fn(async () => new Map([['c1', JSON.parse(ACTIVE_UNPAID.enabled_modules)]])),
+    readAllCenterMealModes: vi.fn(async () => new Map([['c1', 'external_traiteur']])),
+    replaceCenterModulesStmt: vi.fn((db: any, centerId: string, keys: string[]) =>
+      db.prepare(`INSERT INTO center_modules (center_id, module_key) VALUES ${keys.map(() => '(?, ?)').join(', ')}`).bind(...keys.flatMap((k: string) => [centerId, k]))),
+    deleteCenterModulesStmt: vi.fn((db: any, centerId: string) =>
+      db.prepare('DELETE FROM center_modules WHERE center_id = ?').bind(centerId)),
+    insertMealModeStmt: vi.fn((db: any, centerId: string, mode: string) =>
+      db.prepare('INSERT INTO center_meal_mode_history (center_id, mode) VALUES (?, ?)').bind(centerId, mode)),
+    readCenterMealMode: vi.fn(async () => 'external_traiteur'),
+  };
+});
 
 const DAY = 86400000;
 
@@ -25,7 +44,73 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
   return {
     calls,
     prepare(sql: string) {
+      // allImpl is shared by both prepare().all() (used by loadModuleCatalog)
+      // and prepare().bind(...).all() (used by other handlers).
+      async function allImpl(): Promise<{ results: any[] }> {
+        if (opts.noSchedules && sql.includes('center_plan_schedules')) {
+          throw new Error('D1_ERROR: no such table: center_plan_schedules');
+        }
+        if (opts.noHistory && sql.includes('center_plan_history')) {
+          throw new Error('D1_ERROR: no such table: center_plan_history');
+        }
+        if (sql.includes('FROM modules')) {
+          return {
+            results: [
+              { key: 'scolaire', label: 'Scolaire', label_ar: 'Scolaire', isBasic: 1, isUnbilled: 0, isHidden: 0 },
+              { key: 'finance', label: 'Finance', label_ar: 'Finance', isBasic: 1, isUnbilled: 0, isHidden: 0 },
+              { key: 'studentTimeSheets', label: 'Emplois du temps', label_ar: 'Emplois du temps', isBasic: 1, isUnbilled: 1, isHidden: 0 },
+              { key: 'cantine', label: 'Cantine', label_ar: 'Cantine', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'transport', label: 'Transport', label_ar: 'Transport', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'etude', label: 'Étude', label_ar: 'Étude', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'coursParticuliers', label: 'Cours particuliers', label_ar: 'Cours particuliers', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'revision', label: 'Révision', label_ar: 'Révision', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'formations', label: 'Formations', label_ar: 'Formations', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'events', label: 'Événements', label_ar: 'Événements', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'staff', label: 'Personnel', label_ar: 'Personnel', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'activites', label: 'Activités', label_ar: 'Activités', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'competences', label: 'Compétences', label_ar: 'Compétences', isBasic: 0, isUnbilled: 0, isHidden: 0 },
+              { key: 'bibliotheque', label: 'Bibliothèque', label_ar: 'Bibliothèque', isBasic: 0, isUnbilled: 1, isHidden: 1 },
+            ],
+          };
+        }
+        if (sql.includes('FROM center_type_modules')) {
+          const universal = ['scolaire', 'finance', 'studentTimeSheets', 'cantine', 'transport', 'events', 'staff', 'activites', 'competences'];
+          const schoolSupport = ['etude', 'coursParticuliers', 'revision', 'formations'];
+          const rows: Array<{ center_type: string; module_key: string }> = [];
+          for (const type of ['creche', 'jardin', 'garderie', 'formation']) {
+            for (const k of universal) rows.push({ center_type: type, module_key: k });
+          }
+          for (const type of ['garderie', 'formation']) {
+            for (const k of schoolSupport) rows.push({ center_type: type, module_key: k });
+          }
+          return { results: rows };
+        }
+        if (sql.includes('module_prices')) {
+          return { results: opts.modulePrices || [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
+        }
+        if (sql.includes('FROM center_invoices')) {
+          return {
+            results: [{
+              id: 'inv-1', invoice_number: 'INV-OLD', period_start: Date.now() - 10 * DAY,
+              period_end: Date.now() + 20 * DAY, amount: 60, status: 'pending',
+              payment_method: null, payment_date: null, cheque_number: null, created_at: Date.now(),
+            }],
+          };
+        }
+        if (sql.includes('FROM center_plan_schedules')) {
+          return {
+            results: [{
+              id: 'sch-1', to_plan: 'pro', to_billing_cycle: 'monthly', to_monthly_price: 120,
+              apply_at: Date.now() + 20 * DAY, notes: 'x', created_at: Date.now(),
+            }],
+          };
+        }
+        return { results: [] };
+      }
       return {
+        // prepare().all() — used by loadModuleCatalog (no bind)
+        all: allImpl,
+        async first(): Promise<any> { return null; },
         bind(...args: any[]) {
           return {
             async first(): Promise<any> {
@@ -35,35 +120,7 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
               }
               return null;
             },
-            async all(): Promise<{ results: any[] }> {
-              if (opts.noSchedules && sql.includes('center_plan_schedules')) {
-                throw new Error('D1_ERROR: no such table: center_plan_schedules');
-              }
-              if (opts.noHistory && sql.includes('center_plan_history')) {
-                throw new Error('D1_ERROR: no such table: center_plan_history');
-              }
-              if (sql.includes('module_prices')) {
-                return { results: opts.modulePrices || [{ module_key: 'scolaire', price: 45 }, { module_key: 'finance', price: 30 }] };
-              }
-              if (sql.includes('FROM center_invoices')) {
-                return {
-                  results: [{
-                    id: 'inv-1', invoice_number: 'INV-OLD', period_start: Date.now() - 10 * DAY,
-                    period_end: Date.now() + 20 * DAY, amount: 60, status: 'pending',
-                    payment_method: null, payment_date: null, cheque_number: null, created_at: Date.now(),
-                  }],
-                };
-              }
-              if (sql.includes('FROM center_plan_schedules')) {
-                return {
-                  results: [{
-                    id: 'sch-1', to_plan: 'pro', to_billing_cycle: 'monthly', to_monthly_price: 120,
-                    apply_at: Date.now() + 20 * DAY, notes: 'x', created_at: Date.now(),
-                  }],
-                };
-              }
-              return { results: [] };
-            },
+            all: allImpl,
             async run() {
               if (opts.noSchedules && sql.includes('center_plan_schedules')) {
                 throw new Error('D1_ERROR: no such table: center_plan_schedules');
@@ -77,6 +134,11 @@ function makeDb(center: CenterRow | null, opts: { windowPaid?: boolean; noSchedu
           };
         },
       };
+    },
+    // The real handlers batch module rewrites with the center UPDATE.
+    async batch(stmtList: Array<{ run(): Promise<unknown> }>) {
+      for (const s of stmtList) await s.run();
+      return stmtList.map(() => ({ meta: { changes: 1 } }));
     },
   };
 }
@@ -111,7 +173,7 @@ const TRIAL: CenterRow = {
   enabled_modules: '["scolaire","finance","studentTimeSheets"]',
 };
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); resetModuleCatalogCache(); });
 
 describe('center-plans POST — set-plan', () => {
   it('unpaid window: replaces the pending invoice and restarts the period (no new plan on top)', async () => {
@@ -193,9 +255,9 @@ describe('center-plans POST — set-plan', () => {
     const data = await res.json() as any;
     expect(data.mode).toBe('activated');
 
-    const centersUpdate = db.calls.find((c: any) => c.sql.includes('UPDATE centers'))!;
-    const modulesJson = centersUpdate.args.find((a: any) => typeof a === 'string' && a.includes('scolaire'));
-    const storedModules = JSON.parse(modulesJson);
+    // Modules are normalized: the rewritten rows land in center_modules.
+    const moduleInsert = db.calls.find((c: any) => c.sql.includes('INSERT INTO center_modules'))!;
+    const storedModules = moduleInsert.args.filter((a: any, i: number) => i % 2 === 1);
     expect(storedModules).not.toContain('bibliotheque');
     expect(storedModules).toContain('etude');
 
@@ -326,7 +388,9 @@ describe('center-plans — expired center back to active', () => {
     expect(data.success).toBe(true);
     const centersUpd = db.calls.find((c: any) => c.sql.includes('UPDATE centers'));
     expect(centersUpd.sql).toContain("status = 'active'");
-    expect(centersUpd.args[4]).toBeGreaterThan(Date.now()); // subscription ends in the future
+    // plan, billing_cycle, monthly_price, subscription_ends_at, id — no
+    // enabled_modules in the normalized schema.
+    expect(centersUpd.args[3]).toBeGreaterThan(Date.now()); // subscription ends in the future
     const insert = db.calls.find((c: any) => c.sql.includes('INSERT INTO center_invoices'));
     expect(insert).toBeTruthy();
     expect(data.invoice).toBeTruthy();

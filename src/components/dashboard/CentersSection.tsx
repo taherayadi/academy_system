@@ -3,6 +3,7 @@ import {Building2, CheckCircle2, PauseCircle, CalendarClock, Layers, Trash2, X, 
 import { StatusBadge, SkeletonCard } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
 import { daysLeft, inferredSubscriptionStart, normalizeCenterType, CENTER_TYPE_LABEL, CENTER_TYPE_BADGE, CENTER_TYPES, STATUS_BADGE, STATUS_LABEL, PLAN_BADGE, PLAN_LABEL, isBaseModule, MODULE_LABEL } from './constants';
+import type { CenterType } from './constants';
 import { toneClasses } from '../ui/StatusBadge';
 import {Segmented, Pagination, Hint, EmptyState } from './uiParts';
 import { PrimaryButton } from '../ui';
@@ -18,12 +19,12 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
           <div ref={listTopRef} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl bg-white border border-slate-200 shadow-sm px-5 py-4 scroll-mt-24">
             <div>
               <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.12em] mb-1.5">النوع</div>
-              <Segmented<'all' | typeof CENTER_TYPES[number]['key']>
+              <Segmented<'all' | CenterType>
                 value={centerTypeFilter}
                 onChange={setCenterTypeFilter}
                 options={[
                   { key: 'all', label: 'الكل' },
-                  ...CENTER_TYPES.map(ct => ({ key: ct.key, label: ct.label })),
+                  ...CENTER_TYPES().map(ct => ({ key: ct.key, label: ct.label })),
                 ]}
               />
             </div>
@@ -108,7 +109,7 @@ export default function CentersSection({ d }: { d: DashboardApi }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     {normalizeCenterType(c.centerType) && (
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${toneClasses(CENTER_TYPE_BADGE[normalizeCenterType(c.centerType)])}`}>
-                        {CENTER_TYPE_LABEL[normalizeCenterType(c.centerType)]}
+                        {CENTER_TYPE_LABEL()[normalizeCenterType(c.centerType)]}
                       </span>
                     )}
                     <StatusBadge tone={STATUS_BADGE[c.status] || 'neutral'} label={STATUS_LABEL[c.status] || c.status} />

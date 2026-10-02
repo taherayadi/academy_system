@@ -173,6 +173,67 @@ export async function deleteDemoRequestApi(id: string): Promise<void> {
 }
 
 // ========================================================================
+// SaaS Platform API – Module catalog (DB-driven UI)
+// ========================================================================
+
+/** One module row of the DB catalog, as served by GET /api/modules. */
+export interface ModuleCatalogEntry {
+  key: string;
+  label: string;
+  /** Arabic label (dashboard UI) — DB column modules.label_ar. */
+  labelAr: string;
+  isBasic: boolean;
+  isUnbilled: boolean;
+  isHidden: boolean;
+  /** Empty ⇒ universal (allowed with every center type). */
+  allowedCenterTypes: string[];
+}
+
+/** One center type row of the DB catalog ('other' sentinel excluded server-side). */
+export interface CenterTypeEntry {
+  key: string;
+  label: string;
+  /** Arabic label (dashboard UI) — DB column center_types.label_ar. */
+  labelAr: string;
+  /** Short UI hint (New Center modal cards) — DB column center_types.hint. */
+  hint: string;
+}
+
+export interface ModuleCatalogPayload {
+  modules: ModuleCatalogEntry[];
+  centerTypes: CenterTypeEntry[];
+}
+
+/** Fetch the module + center-type catalog from the DB (platform admin). */
+export async function fetchModuleCatalogApi(): Promise<ModuleCatalogPayload> {
+  const res = await fetch(`${API_BASE}/modules`, {
+    headers: authHeaders(false),
+    credentials: 'include'
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: (ModuleCatalogPayload & { error?: string }) | { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'Erreur lors de la récupération du catalogue des modules.');
+  return data as ModuleCatalogPayload;
+}
+
+/** Replace which center types a module is offered to (center_type_modules).
+ *  `allowedCenterTypes = []` means « offered to every type » (no rows).
+ *  Returns the freshly read catalog so the store can repaint in one round
+ *  trip — no follow-up GET, no chance of a stale answer. */
+export async function updateModuleEligibilityApi(key: string, allowedCenterTypes: string[]): Promise<ModuleCatalogPayload> {
+  const res = await fetch(`${API_BASE}/modules`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ action: 'update-module-eligibility', key, allowedCenterTypes })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { catalog?: ModuleCatalogPayload; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour éligibilité du module.');
+  return data.catalog as ModuleCatalogPayload;
+}
+
+// ========================================================================
 // SaaS Platform API – Centers
 // ========================================================================
 
@@ -558,6 +619,19 @@ export async function updateModulePricesApi(year: string, prices: Array<{ module
   if (res.status === 401) throw new UnauthorizedError();
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Erreur mise à jour tarifs.');
+}
+
+/** Update isBasic / isHidden / isUnbilled flags for a single module. */
+export async function updateModuleFlagsApi(key: string, flags: { isBasic?: boolean; isHidden?: boolean; isUnbilled?: boolean }): Promise<void> {
+  const res = await fetch(`${API_BASE}/platform-billing`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ action: 'update-module-flags', key, ...flags })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur mise à jour flags module.');
 }
 
 // ========================================================================

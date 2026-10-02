@@ -395,6 +395,10 @@ export interface PlatformSession {
   email: string;
   token: string;
   role: string;
+  /** users.id of the account — the value FK columns (created_by …) expect.
+   *  Optional: callers that build a session by hand may omit it, in which
+   *  case writes must fall back to NULL (never to the email). */
+  userId?: string | null;
 }
 
 /**
@@ -412,16 +416,16 @@ export async function validateSession(db: D1Database, request: Request): Promise
   await ensurePlatformSessionsTable(db);
   const row = await db
     .prepare(
-      `SELECT s.token, s.email, u.role
+      `SELECT s.token, s.email, u.id AS user_id, u.role
        FROM platform_sessions s
        JOIN users u ON u.email = s.email
        WHERE s.token = ? AND s.expires_at > ?`
     )
     .bind(token, Date.now())
-    .first<{ token: string; email: string; role: string }>();
+    .first<{ token: string; email: string; user_id: string; role: string }>();
   if (!row) return null;
   if (row.role !== PLATFORM_ROLE) return null;
-  return { email: row.email, token: row.token, role: row.role };
+  return { email: row.email, token: row.token, role: row.role, userId: row.user_id ?? null };
 }
 
 /** Alias kept for readability at handler call sites. */
@@ -477,30 +481,80 @@ export function getCenterAccessState(center: any, now = Date.now()): CenterAcces
   return subscriptionEndsAt > 0 && subscriptionEndsAt <= now ? 'subscription_expired' : null;
 }
 
-/** Maps a raw `centers` DB row (snake_case) to the camelCase CenterTenant shape. */
-export function mapCenterRow(c: any): any {
-  let modules: string[] = [];
-  try {
-    modules = typeof c.enabled_modules === 'string' ? JSON.parse(c.enabled_modules) : (c.enabled_modules || []);
-  } catch {
-    modules = [];
+// ---------------------------------------------------------------------------
+// Normalized module / meal-mode access (center_modules table +
+// center_meal_mode_history — the legacy denormalized columns on centers
+// were removed; these helpers read from the normalized tables directly).
+// ---------------------------------------------------------------------------
+
+/** Reads the enabled module keys of one center from center_modules. */
+export async function readCenterModules(db: D1Database, centerId: string): Promise<string[]> {
+  const { results } = await db.prepare(
+    'SELECT module_key FROM center_modules WHERE center_id = ? ORDER BY module_key'
+  ).bind(centerId).all<any>();
+  return (results || []).map(r => String(r.module_key));
+}
+
+/**
+ * Bulk variant of readCenterModules for list endpoints: returns a
+ * center_id → module keys map from center_modules.
+ */
+export async function readAllCenterModules(db: D1Database): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  const { results } = await db.prepare('SELECT center_id, module_key FROM center_modules').all<any>();
+  for (const row of results || []) {
+    const list = map.get(row.center_id) || [];
+    list.push(String(row.module_key));
+    map.set(row.center_id, list);
   }
-  return {
-    id: c.id,
-    name: c.name,
-    slug: c.slug || '',
-    phoneNumber: c.phone_number || '',
-    locationCity: c.location_city || '',
-    plan: c.plan || 'starter',
-    enabledModules: Array.isArray(modules) ? modules : [],
-    mealOperatingMode: c.meal_operating_mode || 'external_traiteur',
-    status: c.status || 'active',
-    trialEndsAt: c.trial_ends_at || null,
-    subscriptionEndsAt: c.subscription_ends_at || null,
-    billingCycle: c.billing_cycle || 'monthly',
-    monthlyPrice: c.monthly_price !== null && c.monthly_price !== undefined ? Number(c.monthly_price) : 0,
-    centerType: c.center_type || '',
-    logoUrl: c.logo_url || '',
-    createdAt: c.created_at || Date.now()
-  };
+  return map;
+}
+
+/** Replaces the module rows of a center with `moduleKeys` (center_modules table). */
+export function replaceCenterModulesStmt(db: D1Database, centerId: string, moduleKeys: string[]): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO center_modules (center_id, module_key)
+     VALUES ${moduleKeys.map(() => '(?, ?)').join(', ') || '(NULL, NULL)'}
+     ON CONFLICT(center_id, module_key) DO NOTHING`
+  ).bind(...moduleKeys.flatMap(k => [centerId, k]));
+}
+
+/** Deletes every module row of a center (center_modules table). */
+export function deleteCenterModulesStmt(db: D1Database, centerId: string): D1PreparedStatement {
+  return db.prepare('DELETE FROM center_modules WHERE center_id = ?').bind(centerId);
+}
+
+/** Reads the current meal operating mode of a center (latest center_meal_mode_history row, or default). */
+export async function readCenterMealMode(db: D1Database, centerId: string): Promise<string> {
+  const row = await db.prepare(
+    'SELECT mode FROM center_meal_mode_history WHERE center_id = ? ORDER BY effective_from DESC, created_at DESC LIMIT 1'
+  ).bind(centerId).first<any>();
+  return row?.mode || 'external_traiteur';
+}
+
+/**
+ * Bulk variant of readCenterMealMode for list endpoints: center_id → mode.
+ * The newest row per center wins (effective_from DESC, created_at DESC).
+ */
+export async function readAllCenterMealModes(db: D1Database): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const { results } = await db.prepare(
+    `SELECT center_id, mode FROM center_meal_mode_history
+     WHERE id IN (
+       SELECT MAX(id) FROM center_meal_mode_history
+       GROUP BY center_id
+     )`
+  ).all<any>();
+  for (const row of results || []) map.set(row.center_id, row.mode || 'external_traiteur');
+  return map;
+}
+
+/** Appends a meal-mode history row (normalized schema) — the latest row is the current mode. */
+export function insertMealModeStmt(db: D1Database, centerId: string, mode: string, createdBy?: string | null): D1PreparedStatement {
+  const today = new Date().toISOString().split('T')[0];
+  return db.prepare(
+    `INSERT INTO center_meal_mode_history (center_id, mode, effective_from, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(center_id, effective_from) DO UPDATE SET mode = excluded.mode`
+  ).bind(centerId, mode, today, createdBy ?? null, Date.now());
 }

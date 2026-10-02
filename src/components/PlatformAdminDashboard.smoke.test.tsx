@@ -6,6 +6,31 @@ import type { CenterInvoice } from '../api';
 // Every API surface used by the dashboard is mocked; the finance fetches are
 // counted to detect the self-triggering fetch-loop regression.
 vi.mock('../api', () => ({
+  // DB-driven catalog (GET /api/modules) — same shape as the endpoint payload.
+  fetchModuleCatalogApi: vi.fn().mockResolvedValue({
+    modules: [
+      { key: 'scolaire', label: 'Scolaire', labelAr: 'مدرسي', isBasic: true, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'finance', label: 'Finance', labelAr: 'مالية', isBasic: true, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'studentTimeSheets', label: 'Emplois du temps', labelAr: 'سجل الدوام', isBasic: true, isUnbilled: true, isHidden: false, allowedCenterTypes: [] },
+      { key: 'etude', label: 'Étude', labelAr: 'مراجعة مشرفة', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: ['garderie', 'formation'] },
+      { key: 'coursParticuliers', label: 'Cours particuliers', labelAr: 'دروس خاصة', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: ['garderie', 'formation'] },
+      { key: 'revision', label: 'Révision', labelAr: 'مراجعة الامتحانات', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: ['garderie', 'formation'] },
+      { key: 'formations', label: 'Formations', labelAr: 'دورات', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: ['garderie', 'formation'] },
+      { key: 'cantine', label: 'Cantine', labelAr: 'مقصف / وجبات', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'transport', label: 'Transport', labelAr: 'نقل', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'events', label: 'Événements', labelAr: 'مناسبات', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'staff', label: 'Personnel', labelAr: 'الموظفون', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'activites', label: 'Activités', labelAr: 'أنشطة وبرنامج', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'competences', label: 'Compétences', labelAr: 'مهارات ومستويات', isBasic: false, isUnbilled: false, isHidden: false, allowedCenterTypes: [] },
+      { key: 'bibliotheque', label: 'Bibliothèque', labelAr: 'مكتبة', isBasic: false, isUnbilled: true, isHidden: true, allowedCenterTypes: [] },
+    ],
+    centerTypes: [
+      { key: 'creche', label: 'Crèche', labelAr: 'حضانة', hint: 'الرضّع · ما قبل الروضة' },
+      { key: 'jardin', label: "Jardin d'enfants", labelAr: 'روضة أطفال', hint: 'ما قبل المدرسي · الروضات' },
+      { key: 'garderie', label: 'Garderie', labelAr: 'دار الرعاية', hint: 'حضانة نهارية · رعاية بعد الدرس' },
+      { key: 'formation', label: 'Centre de formation', labelAr: 'مركز تدريب', hint: 'دعم · دروس · دورات' },
+    ],
+  }),
   fetchCentersApi: vi.fn().mockResolvedValue([]),
   createCenterApi: vi.fn().mockResolvedValue({ centerId: 'x' }),
   updateCenterApi: vi.fn().mockResolvedValue({ planChange: {} }),
@@ -316,7 +341,7 @@ describe('PlatformAdminDashboard — Pricing page (school years)', () => {
     await waitFor(() => expect(api.updateModulePricesApi).toHaveBeenCalledWith(YEAR_ADDED, expect.arrayContaining([
       { module_key: 'scolaire', price: 50 },
       { module_key: 'etude', price: 12 },
-      { module_key: 'studentTimeSheets', price: 0 }, // Jd. Horaires toujours offert
+      // Jd. Horaires (isUnbilled) has no dedicated tariff → never written.
     ])));
     // …and the new year is selected in the dropdown.
     await waitFor(() => expect(yearSelect().value).toBe(YEAR_ADDED));
@@ -430,6 +455,100 @@ describe('PlatformAdminDashboard — Plan manager (Plans & factures)', () => {
     // The center list is refreshed after the plan action.
     const centersCalls = (api.fetchCentersApi as ReturnType<typeof vi.fn>).mock.calls;
     expect(centersCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('plan manager: a TRIAL center with add-on modules preselects Growth (Basic would drop them)', async () => {
+    const DAY = 86400000;
+    // « Basic + 3 modules » as chosen on the demo/landing form: the row is
+    // stored as plan='starter' + status='trial' but keeps the add-ons.
+    const modules = ['scolaire', 'finance', 'studentTimeSheets', 'cantine', 'transport'];
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+      ...activeCenter, id: 'c9', name: 'Centre Essai', status: 'trial', plan: 'starter',
+      monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 10 * DAY,
+      enabledModules: modules,
+    }]);
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c9', name: 'Centre Essai', status: 'trial', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 10 * DAY,
+        enabledModules: modules,
+      },
+      invoices: [], schedules: [],
+    });
+
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Essai')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /اختر باقة وفعّل/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /اختر باقة وفعّل/ }));
+
+    await waitFor(() => expect(screen.getByLabelText('الباقة')).toBeTruthy());
+    expect((screen.getByLabelText('الباقة') as unknown as HTMLSelectElement).value).toBe('growth');
+    // Growth is the plan where add-ons are legal → the chips are shown too.
+    expect(screen.getByText('وحدات للتفعيل')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /مقصف/ })).toBeTruthy();
+  });
+
+  it('plan manager: the module SELECTION drives the plan (all ⇒ Pro, none ⇒ Basic)', async () => {
+    const DAY = 86400000;
+    const modules = ['scolaire', 'finance', 'studentTimeSheets', 'cantine', 'transport'];
+    (api.fetchCentersApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{
+      ...activeCenter, id: 'c9', name: 'Centre Essai', status: 'trial', plan: 'starter',
+      monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 10 * DAY,
+      enabledModules: modules,
+    }]);
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c9', name: 'Centre Essai', status: 'trial', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 0, subscriptionEndsAt: null, trialEndsAt: Date.now() + 10 * DAY,
+        enabledModules: modules,
+      },
+      invoices: [], schedules: [],
+    });
+
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Essai')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /اختر باقة وفعّل/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /اختر باقة وفعّل/ }));
+    await waitFor(() => expect(screen.getByLabelText('الباقة')).toBeTruthy());
+
+    const planValue = () => (screen.getByLabelText('الباقة') as unknown as HTMLSelectElement).value;
+    expect(planValue()).toBe('growth'); // 2 of the eligible add-ons are on
+
+    // Selecting EVERY eligible add-on turns the plan into Pro…
+    for (const label of [/مناسبات/, /الموظفون/, /أنشطة/, /مهارات/]) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+    expect(planValue()).toBe('pro');
+    // …and the chips stay visible so the choice can be undone.
+    expect(screen.getByRole('button', { name: /مقصف/ })).toBeTruthy();
+
+    // Deselecting them all comes back to Basic.
+    for (const label of [/مقصف/, /نقل/, /مناسبات/, /الموظفون/, /أنشطة/, /مهارات/]) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+    expect(planValue()).toBe('basic');
+    expect(screen.getByText(/الباقة الأساسية/)).toBeTruthy();
+  });
+
+  it('plan manager: a starter center WITHOUT add-on modules still defaults to Basic', async () => {
+    (api.fetchCenterPlansApi as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      center: {
+        id: 'c1', name: 'Centre Alpha', status: 'active', plan: 'starter', billingCycle: 'monthly',
+        monthlyPrice: 30, subscriptionEndsAt: Date.now() + 20 * 86400000, trialEndsAt: null,
+        enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
+      },
+      invoices: [], schedules: [],
+    });
+    render(<PlatformAdminDashboard page="centers" onNavigate={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Centre Alpha')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /الباقات & الفواتير/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /تعديل الباقة/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /تعديل الباقة/ }));
+
+    await waitFor(() => expect(screen.getByLabelText('الباقة')).toBeTruthy());
+    expect((screen.getByLabelText('الباقة') as unknown as HTMLSelectElement).value).toBe('basic');
   });
 
   it('plan manager: a paid invoice covering the subscription (even future-starting) is shown as paid, not « Sans facture »', async () => {
@@ -904,8 +1023,9 @@ describe('PlatformAdminDashboard — Renewal requests page', () => {
     fireEvent.click(review);
 
     // La modale affiche la demande en lecture seule : plan Growth / mensuel, non modifiables.
+    // (Le libellé vient du PLAN_LABEL partagé du dashboard — « Growth » → « النمو ».)
     await waitFor(() => expect(screen.getAllByText('مراجعة وتطبيق').length).toBeGreaterThanOrEqual(2));
-    await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('Growth'));
+    await waitFor(() => expect(screen.getByTestId('review-apply-plan').textContent).toBe('النمو'));
     expect(screen.getByTestId('review-apply-cycle').textContent).toBe('شهري');
     expect(screen.queryByTitle('Plan du centre')).toBeNull();
   });

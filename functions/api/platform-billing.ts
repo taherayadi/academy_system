@@ -196,6 +196,42 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       return json({ success: true });
     }
 
+    if (action === 'update-module-flags') {
+      // Platform admin can toggle isBasic (base-plan membership), isHidden and
+      // isUnbilled per module. Invariants enforced here:
+      //   • a module is never both basic and hidden, and
+      //   • the base plan always keeps at least one module.
+      //
+      // Note: adding a module to the base plan only changes the CATALOG —
+      // centres keep their stored module list until their plan is edited.
+      const key = String(body.key || '').trim();
+      if (!key) return json({ error: 'module key requis.' }, 400);
+      const module = await env.DB.prepare('SELECT key, isBasic, isHidden FROM modules WHERE key = ?').bind(key).first<any>();
+      if (!module) return json({ error: 'وحدة غير موجودة.' }, 404);
+
+      const nextBasic = body.isBasic === undefined ? Number(module.isBasic) : (body.isBasic ? 1 : 0);
+      const nextHidden = body.isHidden === undefined ? Number(module.isHidden) : (body.isHidden ? 1 : 0);
+      if (nextBasic === 1 && nextHidden === 1) {
+        return json({ error: 'لا يمكن أن تكون الوحدة أساسية ومخفية معًا — أظهرها أو أزلها من الباقة الأساسية.' }, 400);
+      }
+      if (body.isBasic !== undefined && !body.isBasic) {
+        const others = await env.DB.prepare('SELECT COUNT(*) AS n FROM modules WHERE isBasic = 1 AND key != ?').bind(key).first<any>();
+        if (!others || Number(others.n) === 0) {
+          return json({ error: 'يجب أن تبقى وحدة واحدة على الأقل في الباقة الأساسية.' }, 400);
+        }
+      }
+
+      const flagUpdates: string[] = [];
+      const flagBinds: any[] = [];
+      if (body.isBasic !== undefined) { flagUpdates.push('isBasic = ?'); flagBinds.push(nextBasic); }
+      if (body.isHidden !== undefined) { flagUpdates.push('isHidden = ?'); flagBinds.push(nextHidden); }
+      if (body.isUnbilled !== undefined) { flagUpdates.push('isUnbilled = ?'); flagBinds.push(body.isUnbilled ? 1 : 0); }
+      if (flagUpdates.length === 0) return json({ error: 'لا توجد تغييرات.' }, 400);
+      flagBinds.push(key);
+      await env.DB.prepare(`UPDATE modules SET ${flagUpdates.join(', ')} WHERE key = ?`).bind(...flagBinds).run();
+      return json({ success: true });
+    }
+
     return json({ error: 'Action inconnue.' }, 400);
   } catch (err) {
     logError('create invoice', err);

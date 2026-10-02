@@ -1,9 +1,11 @@
-import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState, isValidEmail, validatePasswordStrength, clampMonthlyPrice, isValidPlan } from './_lib';
+import { Env, json, readBody, validateSession, hashPassword, getCenterAccessState, isValidEmail, validatePasswordStrength, clampMonthlyPrice, isValidPlan, readAllCenterModules, readAllCenterMealModes, replaceCenterModulesStmt, deleteCenterModulesStmt, insertMealModeStmt, readCenterModules, readCenterMealMode } from './_lib';
 import {
-  BUNDLED_MODULE_KEY, ALL_MODULE_KEYS, UNBILLED_MODULE_KEYS, AUTO_PRICED_PLANS,
-  ANNUAL_DISCOUNT, normalizeCenterType, isValidCenterType, CENTER_TYPE_KEYS,
-  normalizeEnabledModules, ineligibleModules, isModuleAllowedForCenterType as isModuleAllowed,
-  REQUIRED_MODULE_KEYS as REQUIRED_BASE_KEYS, CenterType,
+  AUTO_PRICED_PLANS,
+  ANNUAL_DISCOUNT, normalizeCenterType,
+  loadModuleCatalog, loadCenterTypeCatalog,
+  normalizeEnabledModulesInCatalog, ineligibleModulesInCatalog,
+  isModuleAllowedInCatalog as isModuleAllowed, isModuleUnbilledInCatalog,
+  CenterType,
 } from './_modules';
 import {
   DAY_MS, PRICE_EPSILON, evaluatePlanChange, planLabel,
@@ -12,10 +14,6 @@ import {
 import { logPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
 import { logError } from './_logger';
-
-const DEFAULT_ACADEMIC_YEARS = [
-  '2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', '2027/2028', '2028/2029'
-];
 
 function normalizeDayCount(value: unknown, fallback: number): number {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
@@ -201,11 +199,14 @@ async function computePeriodAmount(
   if (args.plan === 'custom') return Math.max(0, Number(args.customPrice) || 0);
   if (!AUTO_PRICED_PLANS.has(args.plan)) return 0;
   const placeholders = args.modules.map(() => '?').join(',');
-  const { results } = await db.prepare(
-    `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
-  ).bind(currentSchoolYear(), ...args.modules).all<any>();
-  let total = (results || []).reduce(
-    (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
+  const [catalog, priceRes] = await Promise.all([
+    loadModuleCatalog(db),
+    db.prepare(
+      `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
+    ).bind(currentSchoolYear(), ...args.modules).all<any>(),
+  ]);
+  let total = (priceRes.results || []).reduce(
+    (sum, row) => sum + (isModuleUnbilledInCatalog(catalog, row.module_key) ? 0 : (Number(row.price) || 0)),
     0
   );
   if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
@@ -231,7 +232,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       const { results } = await env.DB.prepare(`
         SELECT
           c.id, c.name, c.slug, c.phone_number, c.location_city, c.plan,
-          c.enabled_modules, c.meal_operating_mode, c.status,
+          c.status,
           c.trial_ends_at, c.subscription_ends_at, c.billing_cycle, c.monthly_price,
           c.center_type, c.logo_url, c.created_at,
           (SELECT COUNT(*) FROM students s WHERE s.center_id = c.id) as student_count,
@@ -239,6 +240,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         FROM centers c
         ORDER BY c.created_at DESC
       `).all<any>();
+
+      // Normalized schema: modules and meal mode live in their own tables.
+      const [modulesByCenter, mealModesByCenter, catalog] = await Promise.all([
+        readAllCenterModules(env.DB),
+        readAllCenterMealModes(env.DB),
+        loadModuleCatalog(env.DB)
+      ]);
 
       // Older centers may predate the billing columns being populated. Compute
       // their current subscription total from the enabled modules so the edit
@@ -260,17 +268,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       if (expiredUpdates.length > 0) await env.DB.batch(expiredUpdates);
 
       const formatted = (results || []).map(c => {
-        let modules: string[] = [];
-        try {
-          modules = typeof c.enabled_modules === 'string' ? JSON.parse(c.enabled_modules) : (c.enabled_modules || []);
-        } catch {
-          modules = [];
-        }
+        const modules = modulesByCenter.get(c.id) || [];
         const storedMonthlyPrice = c.monthly_price === null || c.monthly_price === undefined
           ? 0
           : Number(c.monthly_price) || 0;
         const calculatedMonthlyPrice = modules.reduce(
-          (total, moduleKey) => total + (UNBILLED_MODULE_KEYS.has(moduleKey) ? 0 : (modulePrices.get(moduleKey) || 0)),
+          (total, moduleKey) => total + (isModuleUnbilledInCatalog(catalog, moduleKey) ? 0 : (modulePrices.get(moduleKey) || 0)),
           0
         );
         const storedStatus = c.status || 'active';
@@ -291,7 +294,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
           locationCity: c.location_city || '',
           plan: c.plan || 'starter',
           enabledModules: modules,
-          mealOperatingMode: c.meal_operating_mode || 'external_traiteur',
+          mealOperatingMode: mealModesByCenter.get(c.id) || 'external_traiteur',
           status,
           trialEndsAt: c.trial_ends_at || null,
           subscriptionEndsAt: c.subscription_ends_at || null,
@@ -437,8 +440,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Center type must come from the canonical whitelist — new center types
     // (crèche, jardin, garderie, formation) are first-class, anything else is a 400.
     const requestedCenterType = String(body.centerType || '').trim();
-    if (requestedCenterType && !isValidCenterType(normalizeCenterType(requestedCenterType) || requestedCenterType)) {
-      return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${CENTER_TYPE_KEYS.join('، ')}.` }, 400);
+    const typeCatalog = await loadCenterTypeCatalog(env.DB);
+    if (requestedCenterType && !typeCatalog.keys.includes(normalizeCenterType(requestedCenterType) || requestedCenterType as CenterType)) {
+      return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${typeCatalog.keys.join('، ')}.` }, 400);
     }
     const centerType = normalizeCenterType(requestedCenterType);
 
@@ -448,14 +452,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // center type does not allow is a hard 400 — except in the convert flow,
     // where a stale requested-modules list is filtered instead of rejected
     // (a conversion must never fail because the landing form changed).
+    const catalog = await loadModuleCatalog(env.DB);
     if (!demoRequestId) {
-      const ineligible = ineligibleModules(body.enabledModules, centerType);
+      const ineligible = ineligibleModulesInCatalog(catalog, body.enabledModules, centerType);
       if (ineligible.length > 0) {
         return json({ error: `وحدات غير متاحة لنوع المؤسسة «${centerType}»: ${ineligible.join('، ')}.` }, 400);
       }
     }
-    const enabledModules = normalizeEnabledModules(body.enabledModules, plan, centerType);
-    const modulesJson = JSON.stringify(enabledModules);
+    // A trial center is stored as plan='starter' (CHECK constraint), but the
+    // starter preset means « base modules only » and would silently discard the
+    // modules picked in the form. While the center is a trial, the requested
+    // list is authoritative (still filtered by the type eligibility above).
+    const enabledModules = normalizeEnabledModulesInCatalog(
+      catalog,
+      body.enabledModules,
+      isTrial ? 'trial' : plan,
+      centerType
+    );
 
     // Compute the automatic tariff from module_prices for the current school year
     const billingMonth = new Date(createdAt).getMonth(); // 0-indexed
@@ -471,7 +484,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
       ).bind(currentSchoolYear, ...enabledModules).all<any>();
       monthlyPrice = priceRows.reduce(
-        (sum, r) => sum + (UNBILLED_MODULE_KEYS.has(r.module_key) ? 0 : (Number(r.price) || 0)),
+        (sum, r) => sum + (isModuleUnbilledInCatalog(catalog, r.module_key) ? 0 : (Number(r.price) || 0)),
         0
       );
       if (billingCycle === 'annual') {
@@ -491,45 +504,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const stmts: D1PreparedStatement[] = [];
 
-    // 1. Center
+    // 1. Center (modules + meal mode are normalized into their own tables)
     stmts.push(env.DB.prepare(`
       INSERT INTO centers (
-        id, name, slug, phone_number, location_city, plan, enabled_modules,
-        meal_operating_mode, status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, logo_url, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, slug, phone_number, location_city, plan,
+        status, trial_ends_at, subscription_ends_at, billing_cycle, monthly_price, center_type, logo_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `    ).bind(
-      id, name, slug, phoneNumber, locationCity, plan, modulesJson,
-      mealOperatingMode, status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
-      centerType, String(body.logoUrl || '').trim(), createdAt
+      id, name, slug, phoneNumber, locationCity, plan,
+      status, trialEndsAt, subscriptionEndsAt, billingCycle, monthlyPrice,
+      centerType, String(body.logoUrl || '').trim(), createdAt, createdAt
     ));
+    if (enabledModules.length > 0) {
+      stmts.push(replaceCenterModulesStmt(env.DB, id, enabledModules));
+    }
+    stmts.push(insertMealModeStmt(env.DB, id, mealOperatingMode, session?.userId || null));
 
-    // 2. Center Settings
+    // 2. Center Settings (no meal_operating_mode column in the new schema —
+    //    the mode is read from center_meal_mode_history)
     stmts.push(env.DB.prepare(`
       INSERT INTO center_settings (
-        center_id, center_name, phone_number, location_city, meal_operating_mode
+        center_id, center_name, phone_number, location_city, updated_at
       ) VALUES (?, ?, ?, ?, ?)
-    `).bind(id, name, phoneNumber, locationCity, mealOperatingMode));
+    `).bind(id, name, phoneNumber, locationCity, createdAt));
 
-    // 3. Fee Sets
-    for (const yr of DEFAULT_ACADEMIC_YEARS) {
-      stmts.push(env.DB.prepare(`
-        INSERT INTO center_fee_sets (
-          center_id, year, frais_annuel_suivi, frais_mensuel_suivi, 
-          frais_annuel_bibliotheque, frais_mensuel_bibliotheque, 
-          frais_abonnement_repas, frais_par_repas, frais_abonnement_repas_traiteur,
-          frais_annuel_etude, frais_mensuel_etude, frais_assurance_cours_externes,
-          frais_gouter_matin_mensuel, frais_gouter_matin_unitaire,
-          frais_gouter_soir_mensuel, frais_gouter_soir_unitaire, frais_deux_gouters_mensuel
-        ) VALUES (?, ?, 50, 40, 30, 20, 150, 8, 6, 60, 50, 25, 30, 2.5, 30, 2.5, 50)
-      `).bind(id, yr));
-    }
-
-    // 4. Admin User
+    // 4. Admin User (new users schema: id + created_at NOT NULL, no 'super_admin' role)
     stmts.push(env.DB.prepare(`
       INSERT INTO users (
-        email, name, role, description, password_hash, center_id
-      ) VALUES (?, ?, 'admin', 'مدير المركز', ?, ?)
-    `).bind(adminEmail, adminName, passwordHash, id));
+        id, email, name, role, description, password_hash, center_id, created_at
+      ) VALUES (?, ?, ?, 'admin', 'مدير المركز', ?, ?, ?)
+    `).bind('usr-' + crypto.randomUUID(), adminEmail, adminName, passwordHash, id, createdAt));
 
     // 5. Update demo request if converted
     if (demoRequestId) {
@@ -625,17 +629,17 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       : null;
     const cancelScheduledChange = body.cancelScheduledChange === true;
     const applyScheduledPlan = body.applyScheduledPlan === true;
-    const needsCenter = requestedAutoCalculatePrice || requestedAutoCalculateSubscription
-      || body.addOfferDays !== undefined || body.extendTrialDays !== undefined
-      || body.plan !== undefined || body.billingCycle !== undefined || body.enabledModules !== undefined
-      || body.status !== undefined || scheduleChangeBody || cancelScheduledChange || applyScheduledPlan
-      || body.monthlyPrice !== undefined || body.centerType !== undefined;
 
-    let current: any = null;
-    if (needsCenter) {
-      current = await env.DB.prepare('SELECT plan, enabled_modules, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, center_type FROM centers WHERE id = ?').bind(id).first<any>();
-      if (!current) return json({ error: 'المركز غير موجود.' }, 404);
-    }
+    // The center row is ALWAYS loaded: the live path derives plan, status,
+    // modules, price and dates from it. Loading it only for billing fields
+    // (`current === null` otherwise) made a plain identity edit read
+    // `current.center_type` → 500, and made center_modules look like it needed
+    // rewriting to the base list.
+    const current: any = await env.DB.prepare('SELECT plan, status, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, center_type FROM centers WHERE id = ?').bind(id).first<any>();
+    if (!current) return json({ error: 'المركز غير موجود.' }, 404);
+    // Normalized schema: modules and meal mode come from their own tables.
+    current.enabled_modules = JSON.stringify(await readCenterModules(env.DB, id));
+    current.meal_operating_mode = await readCenterMealMode(env.DB, id);
 
     // Center type: validate against the whitelist, normalize DB variants.
     // A narrowed type (e.g. jardin → crèche) prunes now-ineligible modules.
@@ -643,8 +647,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     if (body.centerType !== undefined) {
       const rawType = String(body.centerType || '').trim();
       const normalized = normalizeCenterType(rawType);
-      if (rawType && !isValidCenterType(normalized || rawType)) {
-        return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${CENTER_TYPE_KEYS.join('، ')}.` }, 400);
+      const typeCatalogPatch = await loadCenterTypeCatalog(env.DB);
+      if (rawType && !typeCatalogPatch.keys.includes(normalized || rawType as CenterType)) {
+        return json({ error: `نوع المؤسسة غير صالح. الأنواع المتاحة: ${typeCatalogPatch.keys.join('، ')}.` }, 400);
       }
       requestedCenterType = normalized;
     }
@@ -690,13 +695,15 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       // that only become ineligible through a same-request type change are pruned.
       const scheduledCenterType = requestedCenterType !== undefined ? requestedCenterType : normalizeCenterType(current.center_type);
       const requestedScheduleModules = Array.isArray(scheduleChangeBody.enabledModules) ? scheduleChangeBody.enabledModules : null;
+      const catalog = await loadModuleCatalog(env.DB);
       if (requestedScheduleModules) {
-        const ineligibleSched = ineligibleModules(requestedScheduleModules, scheduledCenterType);
+        const ineligibleSched = ineligibleModulesInCatalog(catalog, requestedScheduleModules, scheduledCenterType);
         if (ineligibleSched.length > 0) {
           return json({ error: `وحدات غير متاحة لنوع المؤسسة «${scheduledCenterType}»: ${ineligibleSched.join('، ')}.` }, 400);
         }
       }
-      const toModules = normalizeEnabledModules(
+      const toModules = normalizeEnabledModulesInCatalog(
+        catalog,
         requestedScheduleModules ?? parseModulesJson(current.enabled_modules),
         toPlan,
         scheduledCenterType
@@ -732,16 +739,19 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       if (body.phoneNumber !== undefined) { scheduleBaseUpdates.push('phone_number = ?'); scheduleBaseBinds.push(String(body.phoneNumber).trim()); }
       if (body.locationCity !== undefined) { scheduleBaseUpdates.push('location_city = ?'); scheduleBaseBinds.push(String(body.locationCity).trim()); }
       if (body.centerType !== undefined) { scheduleBaseUpdates.push('center_type = ?'); scheduleBaseBinds.push(requestedCenterType); }
-      if (body.mealOperatingMode !== undefined) { scheduleBaseUpdates.push('meal_operating_mode = ?'); scheduleBaseBinds.push(String(body.mealOperatingMode).trim()); }
       if (scheduleBaseUpdates.length > 0) {
         scheduleBaseBinds.push(id);
         await env.DB.prepare(`UPDATE centers SET ${scheduleBaseUpdates.join(', ')} WHERE id = ?`).bind(...scheduleBaseBinds).run();
       }
+      if (body.mealOperatingMode !== undefined) {
+        await insertMealModeStmt(env.DB, id, String(body.mealOperatingMode).trim(), session?.userId || null).run();
+      }
       // Audit trail: a type change is worth recording, especially when it
       // deactivates modules the center used to have.
       if (requestedCenterType !== undefined && requestedCenterType !== normalizeCenterType(current.center_type)) {
+        const catalogSched = await loadModuleCatalog(env.DB);
         const removedModules = parseModulesJson(current.enabled_modules)
-          .filter(k => !REQUIRED_BASE_KEYS.includes(k) && !isModuleAllowed(k, requestedCenterType));
+          .filter(k => !catalogSched.basicKeys.has(k) && !isModuleAllowed(catalogSched, k, requestedCenterType));
         await logPlanHistory(env.DB, {
           centerId: id,
           action: 'center_type_change',
@@ -754,10 +764,13 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       if (body.name !== undefined) { scheduleSettingsUpdates.push('center_name = ?'); scheduleSettingsBinds.push(String(body.name).trim()); }
       if (body.phoneNumber !== undefined) { scheduleSettingsUpdates.push('phone_number = ?'); scheduleSettingsBinds.push(String(body.phoneNumber).trim()); }
       if (body.locationCity !== undefined) { scheduleSettingsUpdates.push('location_city = ?'); scheduleSettingsBinds.push(String(body.locationCity).trim()); }
-      if (body.mealOperatingMode !== undefined) { scheduleSettingsUpdates.push('meal_operating_mode = ?'); scheduleSettingsBinds.push(String(body.mealOperatingMode).trim()); }
       if (scheduleSettingsUpdates.length > 0) {
         scheduleSettingsBinds.push(id);
         await env.DB.prepare(`UPDATE center_settings SET ${scheduleSettingsUpdates.join(', ')} WHERE center_id = ?`).bind(...scheduleSettingsBinds).run();
+      }
+      // Meal mode rides along with the scheduled change too (normalized schema).
+      if (body.mealOperatingMode !== undefined) {
+        await insertMealModeStmt(env.DB, id, String(body.mealOperatingMode).trim(), session?.userId || null).run();
       }
 
       //publishOnResponse(context, env, ['center.' + id, 'platform'], { type: 'refetch', topic: 'center_updated', centerId: id, at: Date.now() });
@@ -836,14 +849,27 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     // An explicitly requested module that the center type forbids is a hard
     // 400 (server-side validation, per the remarks) — silent pruning is only
     // for modules already on the center that a type change just invalidated.
+    const catalog = await loadModuleCatalog(env.DB);
     if (Array.isArray(body.enabledModules)) {
-      const ineligibleLive = ineligibleModules(body.enabledModules, effectiveCenterType);
+      const ineligibleLive = ineligibleModulesInCatalog(catalog, body.enabledModules, effectiveCenterType);
       if (ineligibleLive.length > 0) {
         return json({ error: `وحدات غير متاحة لنوع المؤسسة «${effectiveCenterType}»: ${ineligibleLive.join('، ')}.` }, 400);
       }
     }
-    const targetModules = normalizeEnabledModules(requestedModulesRaw, effectivePlan, effectiveCenterType);
-    const modulesChanged = JSON.stringify(targetModules) !== JSON.stringify(currentModules);
+    // Same trial-vs-starter trap as the create path: a trial row carries
+    // plan='starter', so normalizing with it would rewrite center_modules to
+    // the base list on ANY update (even a name change). While the center is
+    // still in trial the stored/requested list stays authoritative.
+    const presetPlan = effectivePlan === 'starter' && effectiveStatus === 'trial' ? 'trial' : effectivePlan;
+    const targetModules = normalizeEnabledModulesInCatalog(catalog, requestedModulesRaw, presetPlan, effectiveCenterType);
+    const modulesChanged = (() => {
+      // Compare as SETS: `currentModules` comes back ordered by module_key
+      // while `targetModules` is base-first, so a raw array comparison flagged
+      // a "module change" (rewriting center_modules) on a no-op update.
+      const a = [...targetModules].sort();
+      const b = [...currentModules].sort();
+      return a.length !== b.length || a.some((key, i) => key !== b[i]);
+    })();
     const planChanged = (normalizedBodyPlan !== null && normalizedBodyPlan !== currentPlan) || (foldSchedule && effectivePlan !== currentPlan);
     const billingCycleChanged = cycleWrite;
     const customPriceForTarget = effectivePlan === 'custom'
@@ -904,19 +930,19 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     if (body.centerType !== undefined) { updates.push('center_type = ?'); binds.push(requestedCenterType); }
 
     // Plan / enabled modules: applied live, except for a scheduled decrease.
+    // Modules are normalized into center_modules — flushed after the UPDATE.
+    // Never touch center_modules unless the row behind them was loaded: with
+    // `current === null` currentModules is [] and the base list looks like a
+    // « change », so a name-only edit could wipe a paid center's modules.
+    const modulesRewrite = Boolean(current) && !scheduleDecrease && (modulesChanged || body.enabledModules !== undefined || foldSchedule);
     if (!scheduleDecrease && (planChanged || modulesChanged || foldSchedule || body.plan !== undefined || body.enabledModules !== undefined)) {
       if (planChanged || body.plan !== undefined || foldSchedule) {
         updates.push('plan = ?');
         binds.push(effectivePlan);
       }
-      if (modulesChanged || body.enabledModules !== undefined || foldSchedule) {
-        updates.push('enabled_modules = ?');
-        binds.push(JSON.stringify(targetModules));
-      }
     }
 
     if (body.status !== undefined || autoRenewScheduled) { updates.push('status = ?'); binds.push(effectiveStatus); }
-    if (body.mealOperatingMode !== undefined) { updates.push('meal_operating_mode = ?'); binds.push(String(body.mealOperatingMode).trim()); }
     if (body.trialEndsAt !== undefined) { updates.push('trial_ends_at = ?'); binds.push(body.trialEndsAt ? Number(body.trialEndsAt) : null); }
     if (body.logoUrl !== undefined) { updates.push('logo_url = ?'); binds.push(String(body.logoUrl).trim()); }
     if (body.billingCycle !== undefined || foldSchedule) { updates.push('billing_cycle = ?'); binds.push(effectiveBillingCycle); }
@@ -961,9 +987,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
         ...(Array.isArray(body.enabledModules) ? body.enabledModules.map(String) : []),
       ]);
       const removedDueToType = Array.from(beforeSet).filter(k =>
-        k && !REQUIRED_BASE_KEYS.includes(k)
+        k && !catalog.basicKeys.has(k)
         && !targetModules.includes(k)
-        && !isModuleAllowed(k, requestedCenterType)
+        && !isModuleAllowed(catalog, k, requestedCenterType)
       );
       historyEntries.push({
         action: 'center_type_change',
@@ -1103,9 +1129,18 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       const mainStmts: D1PreparedStatement[] = [
         env.DB.prepare(`UPDATE centers SET ${updates.join(', ')} WHERE id = ?`).bind(...binds)
       ];
+      if (modulesRewrite) {
+        mainStmts.push(deleteCenterModulesStmt(env.DB, id));
+        if (targetModules.length > 0) mainStmts.push(replaceCenterModulesStmt(env.DB, id, targetModules));
+      }
       await env.DB.batch([...mainStmts, ...scheduleStmts]);
     } else if (scheduleStmts.length > 0) {
       await env.DB.batch(scheduleStmts);
+    }
+
+    // Meal-mode change (normalized schema): appended after the main write.
+    if (body.mealOperatingMode !== undefined) {
+      await insertMealModeStmt(env.DB, id, String(body.mealOperatingMode).trim(), session?.userId || null).run();
     }
 
     // ── Automatic subscription invoice for a NEW/RENEWED paid window ────────
@@ -1151,7 +1186,6 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     if (body.name !== undefined) { settingsUpdates.push('center_name = ?'); settingsBinds.push(String(body.name).trim()); }
     if (body.phoneNumber !== undefined) { settingsUpdates.push('phone_number = ?'); settingsBinds.push(String(body.phoneNumber).trim()); }
     if (body.locationCity !== undefined) { settingsUpdates.push('location_city = ?'); settingsBinds.push(String(body.locationCity).trim()); }
-    if (body.mealOperatingMode !== undefined) { settingsUpdates.push('meal_operating_mode = ?'); settingsBinds.push(String(body.mealOperatingMode).trim()); }
     if (settingsUpdates.length > 0) {
       settingsBinds.push(id);
       await env.DB.prepare(`UPDATE center_settings SET ${settingsUpdates.join(', ')} WHERE center_id = ?`).bind(...settingsBinds).run();
@@ -1197,6 +1231,17 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
   }
 };
 
+/** Table names present in this database — `null` when the probe itself fails
+ *  (⇒ caller skips the filter and runs every statement). */
+async function existingTables(db: D1Database): Promise<Set<string> | null> {
+  try {
+    const { results } = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>();
+    return new Set((results || []).map(r => String(r.name)));
+  } catch {
+    return null;
+  }
+}
+
 export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const session = await validateSession(env.DB, request);
@@ -1211,69 +1256,69 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, request }) => {
     const existing = await env.DB.prepare('SELECT id FROM centers WHERE id = ?').bind(id).first<any>();
     if (!existing) return json({ error: 'المركز غير موجود.' }, 404);
 
-    // Full cleanup of the center's data: users, students, payments, staff…
-    // Child rows are deleted explicitly in dependency order so the cleanup is
-    // complete whether or not FK cascades are enforced by the engine.
-    // Platform super-admins are never deleted (they may reference this center
-    // historically but belong to the platform, not to a center).
-    const stmts = [
+    // [table, sql] pairs, deleted in dependency order. A D1 batch is ATOMIC:
+    // one statement against a table this deployment does not have would abort
+    // the ENTIRE delete (the list used to reference 10 tables that no longer
+    // exist — course_enrolled_students, session_present_students, sessions …),
+    // so the list is filtered against sqlite_master first. Every statement
+    // binds exactly the center id.
+    const deletes: Array<[string, string]> = [
       // ── students & their child rows ──
-      env.DB.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM students WHERE center_id = ?').bind(id),
+      ['payments', 'DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['meal_attendances', 'DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['suivi_notes', 'DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['student_parents', 'DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['siblings', 'DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['authorized_persons', 'DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['academic_history', 'DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)'],
+      ['students', 'DELETE FROM students WHERE center_id = ?'],
       // ── staff & their child rows ──
-      env.DB.prepare('DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff_leave_requests WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff_advances WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM staff WHERE center_id = ?').bind(id),
+      ['staff_subjects', 'DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff_schedule', 'DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff_payments', 'DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff_payslips', 'DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff_leave_requests', 'DELETE FROM staff_leave_requests WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff_advances', 'DELETE FROM staff_advances WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)'],
+      ['staff', 'DELETE FROM staff WHERE center_id = ?'],
       // ── étude slots ──
-      env.DB.prepare('DELETE FROM slot_enrollments WHERE slot_id IN (SELECT id FROM etude_slots WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM etude_slots WHERE center_id = ?').bind(id),
-      // ── external courses ──
-      env.DB.prepare('DELETE FROM course_enrolled_students WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM session_present_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM session_one_time_students WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM session_month_paid WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM session_seance_status WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM session_seance_amount WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM external_course_sessions WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM external_payments WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM external_attendance WHERE student_id IN (SELECT id FROM external_students WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM external_students WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(id),
+      ['slot_enrollments', 'DELETE FROM slot_enrollments WHERE slot_id IN (SELECT id FROM etude_slots WHERE center_id = ?)'],
+      ['etude_slots', 'DELETE FROM etude_slots WHERE center_id = ?'],
+      // ── external courses (attendance merged into course_session_attendance) ──
+      ['course_enrollments', 'DELETE FROM course_enrollments WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)'],
+      ['course_session_attendance', 'DELETE FROM course_session_attendance WHERE session_id IN (SELECT id FROM external_course_sessions WHERE center_id = ?)'],
+      ['external_course_sessions', 'DELETE FROM external_course_sessions WHERE center_id = ?'],
+      ['external_attendance', 'DELETE FROM external_attendance WHERE center_id = ?'],
+      ['external_courses', 'DELETE FROM external_courses WHERE center_id = ?'],
       // ── meals ──
-      env.DB.prepare('DELETE FROM meal_plan_attendees WHERE meal_plan_id IN (SELECT id FROM meal_plan_days WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM meal_plan_days WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM meal_forfait_closure_items WHERE closure_id IN (SELECT id FROM meal_forfait_closures WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM meal_forfait_closures WHERE center_id = ?').bind(id),
+      ['meal_plan_days', 'DELETE FROM meal_plan_days WHERE center_id = ?'],
+      ['meal_forfait_closure_items', 'DELETE FROM meal_forfait_closure_items WHERE closure_id IN (SELECT id FROM meal_forfait_closures WHERE center_id = ?)'],
+      ['meal_forfait_closures', 'DELETE FROM meal_forfait_closures WHERE center_id = ?'],
+      ['center_meal_mode_history', 'DELETE FROM center_meal_mode_history WHERE center_id = ?'],
+      ['center_modules', 'DELETE FROM center_modules WHERE center_id = ?'],
+      ['center_service_prices', 'DELETE FROM center_service_prices WHERE center_id = ?'],
       // ── revision seances ──
-      env.DB.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(id),
-      env.DB.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(id),
+      ['revision_seance_students', 'DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)'],
+      ['revision_seances', 'DELETE FROM revision_seances WHERE center_id = ?'],
       // ── formations / timesheets / expenses ──
-      env.DB.prepare('DELETE FROM formations WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM student_attendance WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM expenses WHERE center_id = ?').bind(id),
+      ['formations', 'DELETE FROM formations WHERE center_id = ?'],
+      ['student_time_sheets', 'DELETE FROM student_time_sheets WHERE center_id = ?'],
+      ['student_attendance', 'DELETE FROM student_attendance WHERE center_id = ?'],
+      ['timesheets', 'DELETE FROM timesheets WHERE center_id = ?'],
+      ['expenses', 'DELETE FROM expenses WHERE center_id = ?'],
       // ── auth: sessions + the center's users (platform admins preserved) ──
-      env.DB.prepare('DELETE FROM sessions WHERE center_id = ?').bind(id),
-      env.DB.prepare("DELETE FROM users WHERE center_id = ? AND role != 'platform_super_admin'").bind(id),
+      ['auth_sessions', 'DELETE FROM auth_sessions WHERE center_id = ?'],
+      ['users', "DELETE FROM users WHERE center_id = ? AND role != 'platform_super_admin'"],
       // ── center config & billing ──
-      env.DB.prepare('DELETE FROM center_settings WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM center_fee_sets WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM center_plan_schedules WHERE center_id = ?').bind(id),
-      env.DB.prepare('DELETE FROM center_invoices WHERE center_id = ?').bind(id),
+      ['center_settings', 'DELETE FROM center_settings WHERE center_id = ?'],
+      ['center_plan_schedules', 'DELETE FROM center_plan_schedules WHERE center_id = ?'],
+      ['center_invoices', 'DELETE FROM center_invoices WHERE center_id = ?'],
       // ── finally the center itself ──
-      env.DB.prepare('DELETE FROM centers WHERE id = ?').bind(id)
+      ['centers', 'DELETE FROM centers WHERE id = ?'],
     ];
+    const present = await existingTables(env.DB);
+    const stmts = deletes
+      .filter(([table]) => !present || present.has(table))
+      .map(([, sql]) => env.DB.prepare(sql).bind(id));
     await env.DB.batch(stmts);
 
     return json({ success: true, message: 'تم حذف المركز بنجاح.' });

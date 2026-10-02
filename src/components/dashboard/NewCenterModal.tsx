@@ -6,8 +6,10 @@ import { useToast } from '../Toast';
 import icon from '../../assets/icon.png';
 import { BaseModal, PrimaryButton, SecondaryButton } from '../ui';
 import { fmtDate, arPlural } from '../../utils/format';
-import { currentSchoolYear, parseModules, BASE_MODULE_KEYS, BUNDLED_MODULE_KEY, normalizePhoneInput, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, isValidCenterPhone, formatTnd, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, ALL_MODULES, isModuleHidden, isModuleAllowedForCenterType } from './constants';
+import { currentSchoolYear, parseModules, BASE_MODULE_KEYS, normalizePhoneInput, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, addSubscriptionPeriod, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, isValidCenterPhone, formatTnd, CENTER_TYPES, CENTER_TYPE_LABEL, MODULE_LABEL, ALL_MODULES, isModuleHidden, isModuleAllowedForCenterType } from './constants';
 import type { CenterType } from './constants';
+// DB-driven catalog accessors are functions called during render — DB lists
+// (modules, center types, labels, eligibility) flow in live from /api/modules.
 import { NoticeDialog } from './uiParts';
 
 // ─── New / Convert Center Modal ────────────────────────────────────────────
@@ -81,8 +83,8 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
     const requested = parseModules(initialData?.requestedModules);
     const initialType = (initialData?.centerType as CenterType | '') || '';
     const enabled = Array.from(new Set<string>([
-      ...BASE_MODULE_KEYS,
-      BUNDLED_MODULE_KEY,
+      ...BASE_MODULE_KEYS(),
+
       ...(requested.length ? requested : [])
     ])).filter(k => isBaseModule(k) || isModuleAllowedForCenterType(k, initialType));
     return {
@@ -126,9 +128,9 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       plan,
       offerDays: plan === 'trial' ? '0' : current.offerDays,
       enabledModules: plan === 'pro'
-        ? [...SELECTABLE_MODULE_KEYS].filter(k => isModuleAllowedForCenterType(k, current.centerType))
+        ? SELECTABLE_MODULE_KEYS().filter(k => isModuleAllowedForCenterType(k, current.centerType))
         : plan === 'basic'
-          ? [...BASIC_MODULE_KEYS]
+          ? BASIC_MODULE_KEYS()
           : current.enabledModules
     }));
   };
@@ -136,13 +138,13 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
   // Keep the Pro preset true even when the form is opened or updated from
   // another flow instead of through the plan select change handler.
   React.useEffect(() => {
-    if (form.plan === 'pro' && form.enabledModules.length !== SELECTABLE_MODULE_KEYS.length) {
-      setForm(current => ({ ...current, enabledModules: [...SELECTABLE_MODULE_KEYS] }));
+    if (form.plan === 'pro' && form.enabledModules.length !== SELECTABLE_MODULE_KEYS().length) {
+      setForm(current => ({ ...current, enabledModules: SELECTABLE_MODULE_KEYS() }));
     } else if (
       form.plan === 'basic'
-      && (form.enabledModules.length !== BASIC_MODULE_KEYS.length || !BASIC_MODULE_KEYS.every(key => form.enabledModules.includes(key)))
+      && (form.enabledModules.length !== BASIC_MODULE_KEYS().length || !BASIC_MODULE_KEYS().every(key => form.enabledModules.includes(key)))
     ) {
-      setForm(current => ({ ...current, enabledModules: [...BASIC_MODULE_KEYS] }));
+      setForm(current => ({ ...current, enabledModules: BASIC_MODULE_KEYS() }));
     }
   }, [form.plan]);
 
@@ -176,7 +178,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       return;
     }
     if (!form.centerType) {
-      toast.error(`اختر نوع المؤسسة (${CENTER_TYPES.map(ct => ct.label).join('، ')}).`);
+      toast.error(`اختر نوع المؤسسة (${CENTER_TYPES().map(ct => ct.label).join('، ')}).`);
       return;
     }
     setSaving(true);
@@ -245,7 +247,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" id="nc-type-label">نوع المؤسسة *</label>
               <div role="radiogroup" aria-labelledby="nc-type-label" className="grid grid-cols-2 gap-3">
-                {CENTER_TYPES.map(ct => {
+                {CENTER_TYPES().map(ct => {
                   const active = form.centerType === ct.key;
                   return (
                     <button key={ct.key} type="button" onClick={() => setForm(f => ({ ...f, centerType: ct.key }))}
@@ -319,9 +321,11 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-phone">الهاتف *</label>
+              {/* RTL page: the digits stay an LTR run (dir=ltr) but the field
+                  is right-aligned like every other field of the form. */}
               <input id="nc-phone" required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-start" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-right" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-plan">الباقة *</label>
@@ -346,7 +350,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 </div>
                 {/* Same presentation as the « Essai gratuit » card — free days
                     are an trial before the billing starts, not a separate note. */}
-                <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
+                <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="rtl">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                     <label htmlFor="new-center-offer-days" className="text-xs font-black text-slate-600">مدة التجربة قبل الاشتراك</label>
                     <div className="flex items-center gap-2">
@@ -383,7 +387,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                       className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 outline-none" />
                   )}
                 </div>
-                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="ltr">
+                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="rtl">
                   <div className="flex items-center justify-between gap-3 text-start">
                     <span className="text-xs font-black text-slate-600">نهاية الاشتراك المحسوبة</span>
                     <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
@@ -397,7 +401,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </>
             )}
             {form.plan === 'trial' && (
-              <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
+              <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="rtl">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                   <label htmlFor="new-center-trial-days" className="text-xs font-black text-slate-600">مدة التجربة المجانية</label>
                   <div className="flex items-center gap-2">
@@ -443,7 +447,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             <p className="text-xs font-black text-slate-500 uppercase tracking-[0.15em] mb-3">وحدات مفعّلة</p>
 
             <div className="flex flex-wrap gap-2 mb-3">
-              {BASE_MODULE_KEYS.map(key => (
+              {BASE_MODULE_KEYS().map(key => (
                 <span key={key} className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-accent-500 text-white shadow-sm shadow-accent-500/25 cursor-default">
                   <Lock aria-hidden="true" className="h-4 w-4" />
                   {MODULE_LABEL(key)}
@@ -452,7 +456,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               ))}
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl bg-accent-500 text-white shadow-sm shadow-accent-500/25 cursor-default">
                 <Lock aria-hidden="true" className="h-4 w-4" />
-                {MODULE_LABEL(BUNDLED_MODULE_KEY)}
+                {ALL_MODULES().filter(m => m.isUnbilled && !m.isHidden)[0]?.label ?? 'Horaires'}
                 <span className="text-[11px] font-bold bg-white/25 rounded-full px-1.5 py-px uppercase">Offert</span>
               </span>
             </div>
@@ -463,12 +467,12 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(m => {
+                {ALL_MODULES().filter(m => !isBaseModule(m.key) && !m.isUnbilled && !isModuleHidden(m.key)).map(m => {
                   const on = form.enabledModules.includes(m.key);
                   const allowed = isModuleAllowedForCenterType(m.key, form.centerType);
                   return (
                     <button key={m.key} type="button" onClick={() => toggle(m.key)} disabled={!allowed}
-                      title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL[form.centerType as CenterType] || 'غير معرّف'}»`}
+                      title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL()[form.centerType as CenterType] || 'غير معرّف'}»`}
                       className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition inline-flex items-center gap-1 ${
                         !allowed
                           ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
