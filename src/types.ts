@@ -24,21 +24,9 @@ export interface ScheduledPlanChange {
   createdAt: number;
 }
 
-export type ModuleKey = 
-  | 'scolaire' 
-  | 'finance' 
-  | 'etude' 
-  | 'coursParticuliers' 
-  | 'revision' 
-  | 'formations' 
-  | 'cantine' 
-  | 'transport' 
-  | 'events' 
-  | 'bibliotheque' 
-  | 'studentTimeSheets' 
-  | 'staff'
-  | 'activites'
-  | 'competences';
+// Module keys are DB-driven — the authoritative list lives in the modules table.
+// String alias kept so callers have a meaningful type name without a hardcoded union.
+export type ModuleKey = string;
 
 export interface CenterTenant {
   id: string;
@@ -47,8 +35,9 @@ export interface CenterTenant {
   phoneNumber?: string;
   locationCity?: string;
   plan: SaaSPlan;
-  enabledModules: ModuleKey[] | string[];
-  mealOperatingMode?: 'external_traiteur' | 'in_house_kitchen';
+  enabledModules: string[];
+  /** Meal operating mode — read from center_meal_mode_history table, not centers. */
+  mealOperatingMode?: string;
   status: CenterStatus;
   trialEndsAt?: number | null;
   subscriptionEndsAt?: number | null;

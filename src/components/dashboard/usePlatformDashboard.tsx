@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, deleteAdvertisementApi, fetchRenewalRequestsApi, decideRenewalRequestApi } from '../../api';
+import { fetchCentersApi, updateCenterApi, deleteCenterApi, fetchDemoRequestsApi, updateDemoRequestApi, deleteDemoRequestApi, fetchPlatformBillingApi, fetchInvoicesApi, fetchModulePricesApi, updateModulePricesApi, updateModuleFlagsApi, fetchModuleCatalogApi, CenterInvoice, ModulePrice, PlatformBillingSummary, fetchAdvertisementsApi, deleteAdvertisementApi, fetchRenewalRequestsApi, decideRenewalRequestApi } from '../../api';
+import { setModuleCatalog, patchModuleFlags } from '../../utils/moduleCatalogStore';
 import { CenterTenant, DemoRequest, PlatformAdvertisement, RenewalRequest } from '../../types';
 import { openInvoicePrintWindow } from '../../utils/invoicePrint';
 import { useToast } from '../Toast';
 import { useLiveSync, LIVE_SYNC_INTERVAL_MS } from '../../hooks/useLiveSync';
 import { usePubNubSync } from '../../hooks/usePubNubSync';
 import { arPlural } from '../../utils/format';
-import { currentSchoolYear, adStatusOf, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterType, PAGE_SIZE, PLAN_LABEL, formatTnd } from './constants';
+import { currentSchoolYear, adStatusOf, ALL_MODULES, normalizeCenterType, PAGE_SIZE, PLAN_LABEL, formatTnd, isModuleHidden, unbilledModuleKeys } from './constants';
 import type { CenterTypeFilter } from './constants';
 import type { AdStatus, PlatformAdminPage, PlatformAdminDashboardProps } from './constants';
 
@@ -331,10 +332,11 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     try {
       const prices = await fetchModulePricesApi(year);
       const map: Record<string, number> = {};
-      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      // Catalogue DB (GET /api/modules) : une ligne par module non masqué.
+      ALL_MODULES().forEach(m => { if (!isModuleHidden(m.key)) map[m.key] = 15; });
       (prices || []).forEach((p: ModulePrice) => { map[p.module_key] = p.price; });
-      // Jd. Horaires est offert avec la base — aucun tarif dédié
-      map[BUNDLED_MODULE_KEY] = 0;
+      // Modules non facturables (sTimeSheets inclus) — aucun tarif dédié.
+      unbilledModuleKeys().forEach(k => { map[k] = 0; });
       setPriceList(map);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'خطأ في تحميل التعريفات');
@@ -374,10 +376,10 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
       const prevYear = priceYears[priceYears.length - 1];
       const prices = await fetchModulePricesApi(prevYear);
       const map: Record<string, number> = {};
-      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      ALL_MODULES().forEach(m => { if (!isModuleHidden(m.key)) map[m.key] = 15; });
       (prices || []).forEach((p: ModulePrice) => { map[p.module_key] = p.price; });
-      map[BUNDLED_MODULE_KEY] = 0; // Jd. Horaires toujours offert
-      await updateModulePricesApi(nextSchoolYear, ALL_MODULES.map(m => ({ module_key: m.key, price: Number(map[m.key] || 0) })));
+      unbilledModuleKeys().forEach(k => { map[k] = 0; }); // modules offerts, pas de tarif
+      await updateModulePricesApi(nextSchoolYear, ALL_MODULES().filter(m => !m.isHidden && !m.isUnbilled).map(m => ({ module_key: m.key, price: Number(map[m.key] || 0) })));
       setKnownYears(ys => Array.from(new Set([...ys, nextSchoolYear])));
       setPriceList(map);
       setPriceYear(nextSchoolYear);
@@ -391,12 +393,41 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
   const savePrices = async () => {
     setSavingPrices(true);
     try {
-      await updateModulePricesApi(priceYear, ALL_MODULES.map(m => ({ module_key: m.key, price: Number(priceList[m.key] || 0) })));
+      await updateModulePricesApi(priceYear, ALL_MODULES().filter(m => !m.isHidden && !m.isUnbilled).map(m => ({ module_key: m.key, price: Number(priceList[m.key] || 0) })));
       toast.success('تم حفظ التعريفات');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'خطأ في حفظ التعريفات');
     } finally {
       setSavingPrices(false);
+    }
+  };
+  const reloadModuleCatalog = async () => {
+    try {
+      const data = await fetchModuleCatalogApi();
+      setModuleCatalog(data);
+    } catch { /* silent: the confirmed flags are already patched into the store */ }
+  };
+  const updateModuleFlag = async (key: string, flags: { isBasic?: boolean; isHidden?: boolean; isUnbilled?: boolean }) => {
+    try {
+      await updateModuleFlagsApi(key, flags);
+      // The server just confirmed these exact flags — reflect them at once so
+      // the Tarifs chips never wait for (or depend on) the follow-up fetch.
+      patchModuleFlags(key, flags);
+      // A price only exists for a billable module: re-derive the edited value
+      // so unlocking a module never leaves a silent 0 TND tariff behind.
+      if (flags.isUnbilled !== undefined) {
+        setPriceList(p => {
+          const next = { ...p };
+          if (flags.isUnbilled) next[key] = 0;
+          else if (!Number(next[key])) next[key] = 15;
+          return next;
+        });
+      }
+      // Authoritative refresh (the confirmed flags are already patched above).
+      await reloadModuleCatalog();
+      toast.success('تم تحديث إعدادات الوحدة');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'خطأ في تحديث الوحدة');
     }
   };
   // ── Derived KPIs ──
@@ -662,6 +693,7 @@ export function usePlatformDashboard({ page, onNavigate }: PlatformAdminDashboar
     nextSchoolYear,
     addSchoolYear,
     savePrices,
+    updateModuleFlag,
     activeCenters,
     trialCenters,
     newRequests,

@@ -12,7 +12,6 @@ import {
   isHttpsRequest,
   makeSessionCookie,
   clearSessionCookie,
-  mapCenterRow,
   getCenterAccessState,
   removedRouteResponse,
   PLATFORM_SESSION_COOKIE,
@@ -292,59 +291,6 @@ describe('clearSessionCookie', () => {
     const cookie = clearSessionCookie(req);
     expect(cookie).toContain('Max-Age=0');
     expect(cookie).toContain('tc_platform_session=');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// mapCenterRow — snake_case DB row → camelCase CenterTenant (auth login/me)
-// ---------------------------------------------------------------------------
-describe('mapCenterRow', () => {
-  it('maps a raw centers row to the camelCase API shape used by the client', () => {
-    const row = {
-      id: 'c1',
-      name: 'Centre Test',
-      slug: 'centre-test',
-      phone_number: '20123456',
-      location_city: 'Tunis',
-      plan: 'custom',
-      enabled_modules: JSON.stringify(['scolaire', 'finance', 'etude']),
-      meal_operating_mode: 'in_house_kitchen',
-      status: 'trial',
-      trial_ends_at: 1750000000000,
-      subscription_ends_at: null,
-      billing_cycle: 'annual',
-      monthly_price: 90,
-      center_type: 'jardin',
-      logo_url: 'https://ik.imagekit.io/abc/logo.png',
-      created_at: 1700000000000
-    };
-
-    expect(mapCenterRow(row)).toEqual({
-      id: 'c1',
-      name: 'Centre Test',
-      slug: 'centre-test',
-      phoneNumber: '20123456',
-      locationCity: 'Tunis',
-      plan: 'custom',
-      enabledModules: ['scolaire', 'finance', 'etude'],
-      mealOperatingMode: 'in_house_kitchen',
-      status: 'trial',
-      trialEndsAt: 1750000000000,
-      subscriptionEndsAt: null,
-      billingCycle: 'annual',
-      monthlyPrice: 90,
-      centerType: 'jardin',
-      logoUrl: 'https://ik.imagekit.io/abc/logo.png',
-      createdAt: 1700000000000
-    });
-  });
-
-  it('parses enabled_modules and defaults to [] on invalid JSON or missing fields', () => {
-    expect(mapCenterRow({ id: 'c1', name: 'X', enabled_modules: 'not-json' }).enabledModules).toEqual([]);
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).enabledModules).toEqual([]);
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).logoUrl).toBe('');
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).plan).toBe('starter');
-    expect(mapCenterRow({ id: 'c2', name: 'Y', monthly_price: null }).monthlyPrice).toBe(0);
   });
 });
 

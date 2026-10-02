@@ -1,4 +1,5 @@
 import { ANNUAL_DISCOUNT } from './pricing';
+import { getModuleCatalog } from './moduleCatalogStore';
 
 // Client-side mirror of the backend plan-change rules (functions/api/planLogic.ts).
 // Kept in src because the frontend cannot import from functions/. The backend
@@ -9,7 +10,7 @@ export const PLAN_CHANGE_EPSILON = 0.005;
 export const DAY_MS = 86400000;
 export const MONTH_PERIOD_DAYS = 30;
 export const YEAR_PERIOD_DAYS = 365;
-export const BUNDLED_MODULE_KEY = 'studentTimeSheets';
+// BUNDLED_MODULE_KEY removed — use catalog.unbilledKeys (isUnbilled=1 in modules table).
 
 export type BillingCycle = 'monthly' | 'annual';
 export type PlanValue = 'basic' | 'growth' | 'pro' | 'custom';
@@ -66,12 +67,13 @@ function normalizeModules(modules: string[] | null | undefined): string[] {
   return Array.from(new Set((modules || []).filter(Boolean)));
 }
 
-/** Total of the selected modules, ignoring the bundled (free) time-sheet module.
- *  Bibliothèque désactivée pour l'instant : jamais facturée, même si un
- *  centre l'a encore dans ses modules. */
+/** Total of the selected modules. Unbilled modules (isUnbilled = 1 in the DB
+ *  catalog — the bundled time sheets, the retired Library) never count, even
+ *  when a legacy center row still lists them. */
 export function moduleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
+  const unbilled = new Set(getModuleCatalog().modules.filter(m => m.isUnbilled).map(m => m.key));
   return enabledModules.reduce(
-    (total, key) => total + (key === BUNDLED_MODULE_KEY || key === 'bibliotheque' ? 0 : (Number(modulePrices[key]) || 0)),
+    (total, key) => total + (unbilled.has(key) ? 0 : (Number(modulePrices[key]) || 0)),
     0
   );
 }

@@ -8,62 +8,21 @@ import {
 import type { ModuleKey, RenewalRequest } from '../types';
 import { analyzePlanChange, ClientPlanDecision } from '../utils/planChange';
 import { useToast } from './Toast';
-
-// ─── Catalogue & helpers — same values as Plans & factures ──────────────────
-const BUNDLED_MODULE_KEY = 'studentTimeSheets';
-const ALL_MODULES: { key: ModuleKey; label: string }[] = [
-  { key: 'scolaire', label: 'مدرسي' },
-  { key: 'finance', label: 'مالية' },
-  { key: 'etude', label: 'مراجعة مشرفة' },
-  { key: 'coursParticuliers', label: 'دروس خاصة' },
-  { key: 'revision', label: 'مراجعة الامتحانات' },
-  { key: 'formations', label: 'دورات' },
-  { key: 'cantine', label: 'مقصف / وجبات' },
-  { key: 'transport', label: 'نقل' },
-  { key: 'events', label: 'مناسبات' },
-  { key: 'bibliotheque', label: 'مكتبة' },
-  { key: 'studentTimeSheets', label: 'سجل الدوام' },
-  { key: 'staff', label: 'الموظفون' },
-];
-const MODULE_LABEL = (key: string) => ALL_MODULES.find(m => m.key === key)?.label || key;
-
-function normalizeCenterModules(modules?: string[] | null): string[] {
-  const set = new Set(['scolaire', 'finance', 'studentTimeSheets', ...(Array.isArray(modules) ? modules : [])]);
-  return Array.from(set);
-}
-
-const RENEWAL_STATUS_LABEL: Record<string, string> = {
-  trial: 'تجربة', active: 'نشط', suspended: 'موقوف', expired: 'منتهٍ',
-};
-
-const PLAN_LABEL: Record<string, string> = {
-  starter: 'Basic', basic: 'Basic', growth: 'Growth', pro: 'Pro', custom: 'Custom',
-};
-const PLAN_BADGE: Record<string, string> = {
-  starter: 'bg-slate-100 text-slate-600 border border-slate-200',
-  basic: 'bg-slate-100 text-slate-600 border border-slate-200',
-  growth: 'bg-slate-100 text-slate-600 border border-slate-200',
-  pro: 'bg-slate-100 text-slate-600 border border-slate-200',
-  custom: 'bg-accent-500/10 text-accent-500 border border-accent-500/20',
-};
-
-const PLAN_HISTORY_LABEL: Record<string, { text: string; tone: StatusTone }> = {
-  center_created: { text: 'إنشاء', tone: 'neutral' },
-  plan_set: { text: 'تطبيق الباقة', tone: 'brand' },
-  plan_activated: { text: 'تفعيل الاشتراك', tone: 'brand' },
-  plan_renewed: { text: 'تجديد', tone: 'brand' },
-  plan_settled: { text: 'تسوية', tone: 'brand' },
-  plan_scheduled: { text: 'باقة مجدولة', tone: 'warning' },
-  plan_applied: { text: 'تطبيق البرنامج', tone: 'brand' },
-  schedule_cancelled: { text: 'إلغاء البرنامج', tone: 'neutral' },
-  plan_removed: { text: 'إلغاء الاشتراك', tone: 'error' },
-  trial_added: { text: 'أيام مقدمة', tone: 'brand' },
-  renewal_approved: { text: 'قبول التجديد', tone: 'brand' },
-  renewal_upgrade: { text: 'قبول تغيير الباقة', tone: 'brand' },
-};
-
-const AUTOMATIC_PLAN_KEYS = ['basic', 'growth', 'pro'];
-const ANNUAL_DISCOUNT = 0.2;
+import {
+  // DB-driven catalog helpers (modules/center_types tables via /api/modules):
+  // labels, presets and unbilled logic — no hardcoded module list anymore.
+  ALL_MODULES,
+  MODULE_LABEL,
+  normalizeCenterModules,
+  isModuleHidden,
+  unbilledModuleKeys,
+  calculatePlanTariff,
+  addSubscriptionPeriod,
+  RENEWAL_STATUS_LABEL,
+  PLAN_LABEL,
+  PLAN_BADGE,
+  PLAN_HISTORY_LABEL,
+} from './dashboard/constants';
 
 function currentSchoolYear(): string {
   const d = new Date();
@@ -80,21 +39,10 @@ function formatTnd(value: number): string {
 }
 
 function calculateModuleTotal(enabledModules: string[], modulePrices: Record<string, number>): number {
-  // Bibliothèque désactivée pour l'instant : jamais facturée.
+  const unbilled = unbilledModuleKeys();
   return enabledModules.reduce((total, key) => (
-    total + (key === BUNDLED_MODULE_KEY || key === 'bibliotheque' ? 0 : (Number(modulePrices[key]) || 0))
+    total + (unbilled.has(key) ? 0 : (Number(modulePrices[key]) || 0))
   ), 0);
-}
-
-function calculatePlanTariff(plan: string, billingCycle: 'monthly' | 'annual', enabledModules: string[], modulePrices: Record<string, number>, manualTariff = 0): number {
-  if (plan === 'custom') return Math.max(0, Number(manualTariff) || 0);
-  if (!AUTOMATIC_PLAN_KEYS.includes(plan)) return 0;
-  const monthlyTotal = calculateModuleTotal(enabledModules, modulePrices);
-  return billingCycle === 'annual' ? monthlyTotal * 12 * (1 - ANNUAL_DISCOUNT) : monthlyTotal;
-}
-
-function addSubscriptionPeriod(timestamp: number, billingCycle: 'monthly' | 'annual'): number {
-  return timestamp + (billingCycle === 'annual' ? 365 : 30) * 86400000;
 }
 
 interface PlanDraft { plan: string; billingCycle: 'monthly' | 'annual'; monthlyPrice: string }
@@ -138,9 +86,9 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
     fetchModulePricesApi(currentSchoolYear()).then(prices => {
       if (!mounted) return;
       const map: Record<string, number> = {};
-      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      ALL_MODULES().forEach(m => { if (!isModuleHidden(m.key)) map[m.key] = 15; });
       (prices || []).forEach(p => { map[p.module_key] = Number(p.price) || 0; });
-      map[BUNDLED_MODULE_KEY] = 0;
+      unbilledModuleKeys().forEach(k => { map[k] = 0; });
       setModulePrices(map);
       setPricesReady(true);
     }).catch(() => { if (mounted) setPricesReady(true); });
@@ -201,7 +149,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
   ) || null;
 
   // ── Live decision (mid-period rules) shared with the plan-change engine ──
-  const automaticPlan = AUTOMATIC_PLAN_KEYS.includes(draft.plan);
+  const automaticPlan = ['basic', 'growth', 'pro'].includes(draft.plan);
   const calculatedTariff = calculatePlanTariff(
     draft.plan, draft.billingCycle, enabledModules, modulePrices, Number(draft.monthlyPrice) || 0
   );
@@ -496,7 +444,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
               </div>
               {isTrial ? (
                 <p className="text-sm font-black text-amber-700">
-                  Essai jusqu’au {view.center.trialEndsAt ? fmtDate(view.center.trialEndsAt) : '—'}
+                  التجربة حتى {view.center.trialEndsAt ? fmtDate(view.center.trialEndsAt) : '—'}
                 </p>
               ) : (
                 <>
@@ -517,12 +465,12 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                     </p>
                   ) : (
                     <p className="text-[11px] font-semibold text-slate-500 mt-1.5">
-                      Fin de l’abonnement : {liveEnd > 0 ? fmtDate(liveEnd) : '—'}
+                      نهاية الاشتراك: {liveEnd > 0 ? fmtDate(liveEnd) : '—'}
                     </p>
                   )}
                   {!expiredState && pendingInvoice && (
                     <p className="text-[11px] font-bold text-amber-700 mt-1.5">
-                      Facture {pendingInvoice.invoiceNumber} —{' '}
+                      فاتورة {pendingInvoice.invoiceNumber} —{' '}
                       {pendingInvoice.status === 'overdue' ? 'متأخرة' : 'قيد الانتظار'} · {pendingInvoice.amount.toFixed(2)} TND
                     </p>
                   )}
@@ -548,7 +496,7 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                       تغيير خلال الفترة الجارية —{' '}
                       {decision.kind === 'mid_period_increase' ? 'إلى أعلى' : 'إلى أسفل'}
                       {decision.kind === 'mid_period_increase' && (
-                        <> · ${arPlural(decision.remainingDays, 'يوم متبقٍ', 'يومان متبقيان', 'أيام متبقية', 'يومًا متبقيًا')} على الفترة المدفوعة</>
+                        <>· {arPlural(decision.remainingDays, 'يوم متبقٍ', 'يومان متبقيان', 'أيام متبقية', 'يومًا متبقيًا')} على الفترة المدفوعة</>
                       )}
                     </p>
                     {settlementRelevant ? (
@@ -682,7 +630,9 @@ export default function RenewalReviewModal({ request, onClose, onDecided }: Rene
                 <p className="text-[11px] font-semibold text-slate-500">لا توجد أنشطة مسجلة.</p>
               ) : (
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                  <table className="min-w-[560px] w-full" dir="ltr">
+                  {/* dir=rtl: an LTR context reorders mixed Arabic+digit text
+                      («01 أكتوبر 2026» rendered as «01 2026 أكتوبر»). */}
+                  <table className="min-w-[560px] w-full" dir="rtl">
                     <thead>
                       <tr className="bg-slate-50 text-start text-[11px] font-black uppercase tracking-wider text-slate-500">
                         <th scope="col" className="px-3 py-2">التاريخ</th>

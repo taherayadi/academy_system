@@ -83,6 +83,11 @@ function makeDb(rows: Record<string, any> = {}, results: Record<string, any[]> =
         async run() { calls.push({ sql, args: [] }); return { meta: { changes: 1 } }; },
       };
     },
+    // Batched statements run through the same fake (record + route).
+    async batch(stmtList: Array<{ run(): Promise<unknown> }>) {
+      for (const s of stmtList) await s.run();
+      return stmtList.map(() => ({ meta: { changes: 1 } }));
+    },
   };
 }
 
@@ -214,7 +219,10 @@ describe('renewal-requests PATCH — the platform decides', () => {
     expect(update).toBeTruthy();
     expect(update!.sql).toContain("status = 'active'");
     expect(update!.args).toContain('growth');
-    expect(update!.args).toContain(JSON.stringify(['scolaire', 'finance', 'etude']));
+    // Modules are normalized: the request's module list lands in center_modules.
+    const moduleInsert = db.calls.find(c => c.sql.includes('INSERT INTO center_modules'));
+    expect(moduleInsert).toBeTruthy();
+    expect(moduleInsert!.args).toEqual(expect.arrayContaining(['c1', 'scolaire', 'c1', 'finance', 'c1', 'etude']));
     // Upgrade → new 30-day period starting now.
     expect(update!.args).toContain(NOW + 30 * DAY);
 

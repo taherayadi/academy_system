@@ -1,11 +1,11 @@
-import { Env, json, readBody, validateSession } from './_lib';
+import { Env, json, readBody, validateSession, readCenterModules, replaceCenterModulesStmt, deleteCenterModulesStmt } from './_lib';
 import { round2, planLabel, BillingCycle } from './planLogic';
 import { logPlanHistory, fetchPlanHistory } from './_planHistory';
 import { publishOnResponse } from './_pubnub';
 import { logError } from './_logger';
 import {
-  BUNDLED_MODULE_KEY, UNBILLED_MODULE_KEYS, AUTO_PRICED_PLANS, ANNUAL_DISCOUNT,
-  normalizeEnabledModules, ineligibleModules, normalizeCenterType, CenterType,
+  AUTO_PRICED_PLANS, ANNUAL_DISCOUNT,
+  loadModuleCatalog, isModuleUnbilledInCatalog, normalizeEnabledModulesInCatalog, ineligibleModulesInCatalog, normalizeCenterType, CenterType,
 } from './_modules';
 
 // ─── Platform SaaS — per-center plan manager ────────────────────────────────
@@ -61,11 +61,14 @@ async function computePeriodAmount(
   const cleanModules = args.modules.slice(0, 40).filter(m => /^[a-z0-9-]+$/i.test(m));
   if (cleanModules.length === 0) return 0;
   const placeholders = cleanModules.map(() => '?').join(',');
-  const { results } = await db.prepare(
-    `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
-  ).bind(currentSchoolYear(), ...cleanModules).all<any>();
-  let total = (results || []).reduce(
-    (sum, row) => sum + (UNBILLED_MODULE_KEYS.has(row.module_key) ? 0 : (Number(row.price) || 0)),
+  const [catalog, priceRes] = await Promise.all([
+    loadModuleCatalog(db),
+    db.prepare(
+      `SELECT module_key, price FROM module_prices WHERE school_year = ? AND module_key IN (${placeholders})`
+    ).bind(currentSchoolYear(), ...cleanModules).all<any>(),
+  ]);
+  let total = (priceRes.results || []).reduce(
+    (sum, row) => sum + (isModuleUnbilledInCatalog(catalog, row.module_key) ? 0 : (Number(row.price) || 0)),
     0
   );
   if (args.billingCycle === 'annual') total *= 12 * (1 - ANNUAL_DISCOUNT);
@@ -91,10 +94,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     const center = await env.DB.prepare(`
       SELECT id, name, status, plan, billing_cycle, monthly_price,
-             subscription_ends_at, trial_ends_at, enabled_modules
+             subscription_ends_at, trial_ends_at
       FROM centers WHERE id = ?
     `).bind(centerId).first<any>();
     if (!center) return json({ error: 'المركز غير موجود.' }, 404);
+    // Normalized schema: modules live in center_modules.
+    center.enabled_modules = JSON.stringify(await readCenterModules(env.DB, centerId));
 
     const [invoicesRes, schedulesRes] = await Promise.all([
       env.DB.prepare(`
@@ -165,10 +170,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!centerId) return json({ error: 'معرف المركز مطلوب.' }, 400);
 
     const center = await env.DB.prepare(`
-      SELECT id, status, plan, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, enabled_modules, center_type
+      SELECT id, status, plan, billing_cycle, monthly_price, subscription_ends_at, trial_ends_at, center_type
       FROM centers WHERE id = ?
     `).bind(centerId).first<any>();
     if (!center) return json({ error: 'المركز غير موجود.' }, 404);
+    // Normalized schema: modules live in center_modules.
+    center.enabled_modules = JSON.stringify(await readCenterModules(env.DB, centerId));
 
     const now = Date.now();
     const existingEnd = Number(center.subscription_ends_at) || 0;
@@ -309,11 +316,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // explicitly requested module the type forbids is a hard 400 before
       // any invoice/schedule write happens.
       const planCenterType = normalizeCenterType((center as any).center_type);
-      const ineligible = ineligibleModules(body.enabledModules, planCenterType);
+      const catalog = await loadModuleCatalog(env.DB);
+      const ineligible = ineligibleModulesInCatalog(catalog, body.enabledModules, planCenterType);
       if (ineligible.length > 0) {
         return json({ error: `وحدات غير متاحة لنوع المؤسسة «${planCenterType}»: ${ineligible.join('، ')}.` }, 400);
       }
-      const targetModules = normalizeEnabledModules(
+      const targetModules = normalizeEnabledModulesInCatalog(
+        catalog,
         body.enabledModules !== undefined
           ? body.enabledModules
           : parseModulesJson(center.enabled_modules),
@@ -404,15 +413,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const duration = targetCycle === 'annual' ? 365 : 30;
       const periodEnd = base + duration * DAY_MS;
 
-      await env.DB.prepare(`
-        UPDATE centers
-        SET plan = ?, billing_cycle = ?, monthly_price = ?, enabled_modules = ?,
-            subscription_ends_at = ?, status = 'active'
-        WHERE id = ?
-      `).bind(
-        targetPlan, targetCycle, periodAmount, JSON.stringify(targetModules),
+      await env.DB.prepare(
+        `UPDATE centers
+         SET plan = ?, billing_cycle = ?, monthly_price = ?,
+             subscription_ends_at = ?, status = 'active'
+         WHERE id = ?`
+      ).bind(
+        targetPlan, targetCycle, periodAmount,
         periodEnd, centerId
       ).run();
+      // Normalized schema: rewrite the module rows.
+      await env.DB.batch([
+        deleteCenterModulesStmt(env.DB, centerId),
+        ...(targetModules.length > 0 ? [replaceCenterModulesStmt(env.DB, centerId, targetModules)] : [])
+      ]);
 
       let invoice: { invoiceNumber: string; amount: number } | null = null;
       if (periodAmount > 0) {

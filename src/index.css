@@ -6,6 +6,17 @@
   color-scheme: light;
 }
 
+@layer base {
+  /* The UA stylesheet centres <th>, while cells follow the table/page
+     direction (start = right in Arabic): headers floated mid-column while
+     their values hugged the start — up to ~100px apart on wide columns.
+     Align headers with their cells; utilities like text-end still win
+     (they live in the later utilities layer). */
+  th {
+    text-align: start;
+  }
+}
+
 @theme {
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cairo", ui-monospace, SFMono-Regular, monospace;
@@ -202,6 +213,28 @@ input[type="month"] {
 input[type="date"] {
   direction: rtl;
   text-align: right;
+}
+
+/* Chromium hard-forces direction:ltr inside the date widget and lays its
+   inner fields at the start edge no matter what `text-align` says (measured:
+   the value text stays glued to the left padding). Reach into the shadow
+   widget instead: make the edit box full-width and RTL so the whole
+   dd/mm/aaaa group hugs the right edge, while the fields wrapper stays LTR
+   so the field order is unchanged. Firefox never needed this (it honors the
+   direction rule above) and silently drops these -webkit- rules. */
+input[type="date"]::-webkit-datetime-edit {
+  width: 100%;
+  direction: rtl;
+}
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  direction: ltr;
+}
+
+/* Fields explicitly kept LTR-left (cheque date, platform subscription dates)
+   opt out of the right-alignment above and keep the native left layout. */
+input[type="date"].input-date-ltr::-webkit-datetime-edit {
+  width: auto;
+  direction: ltr;
 }
 
 /* Platform admin subscription dates are intentionally displayed left-to-right. */

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { onRequestGet, onRequestPatch } from './platform-billing';
+import { onRequestGet, onRequestPatch, onRequestPost } from './platform-billing';
 
 vi.mock('./_lib', async (importOriginal) => {
   const lib = await importOriginal<typeof import('./_lib')>();
@@ -229,5 +229,124 @@ describe('platform-billing GET summary — MRR only from paid invoices', () => {
       ],
     });
     expect(mrr).toBeCloseTo(90, 2);
+  });
+});
+
+// ── POST /api/platform-billing (update-module-flags) ─────────────────────────
+// The Tarifs page toggles three independent flags per module. isBasic (base
+// plan membership) is editable but guarded: the base plan is never empty and
+// a module is never both basic and hidden.
+
+interface ModuleRow { key: string; isBasic: number; isHidden: number; isUnbilled: number; }
+
+function makeModuleDb(modules: ModuleRow[]) {
+  const updates: Array<{ sql: string; args: any[] }> = [];
+  return {
+    modules,
+    updates,
+    prepare(sql: string) {
+      return {
+        bind(...args: any[]) {
+          const bound = { args };
+          return {
+            async first(): Promise<any> {
+              if (sql.includes('COUNT(*)')) {
+                const key = bound.args[0];
+                return { n: modules.filter(m => m.isBasic === 1 && m.key !== key).length };
+              }
+              if (sql.includes('FROM modules')) {
+                const row = modules.find(m => m.key === bound.args[0]);
+                return row ? { ...row } : null;
+              }
+              return null;
+            },
+            async run(): Promise<{ meta: { changes: number } }> {
+              if (sql.startsWith('UPDATE modules')) {
+                updates.push({ sql, args: bound.args });
+                const setPart = sql.split(' SET ')[1].split(' WHERE ')[0];
+                const cols = Array.from(setPart.matchAll(/([a-zA-Z_]+)\s*=\s*\?/g), m => m[1]);
+                const row = modules.find(m => m.key === bound.args[bound.args.length - 1]);
+                if (!row) return { meta: { changes: 0 } };
+                cols.forEach((col, i) => { (row as any)[col] = bound.args[i]; });
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 0 } };
+            },
+            async all(): Promise<{ results: any[] }> { return { results: [] }; },
+          };
+        },
+      };
+    },
+  };
+}
+
+async function post(db: ReturnType<typeof makeModuleDb>, body: Record<string, unknown>) {
+  const request = new Request('https://example.test/api/platform-billing', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return onRequestPost({ env: { DB: db }, request } as any);
+}
+
+const seedModules = (): ModuleRow[] => [
+  { key: 'scolaire', isBasic: 1, isHidden: 0, isUnbilled: 0 },
+  { key: 'finance', isBasic: 1, isHidden: 0, isUnbilled: 0 },
+  { key: 'cantine', isBasic: 0, isHidden: 0, isUnbilled: 0 },
+  { key: 'bibliotheque', isBasic: 0, isHidden: 1, isUnbilled: 1 },
+];
+
+describe('platform-billing POST — update-module-flags', () => {
+  it('adds a module to the base plan (isBasic = 1)', async () => {
+    const db = makeModuleDb(seedModules());
+    const res = await post(db, { action: 'update-module-flags', key: 'cantine', isBasic: true });
+    expect(res.status).toBe(200);
+    expect(db.modules.find(m => m.key === 'cantine')!.isBasic).toBe(1);
+  });
+
+  it('removes a module from the base plan while another basic one remains', async () => {
+    const db = makeModuleDb(seedModules());
+    const res = await post(db, { action: 'update-module-flags', key: 'scolaire', isBasic: false });
+    expect(res.status).toBe(200);
+    expect(db.modules.filter(m => m.isBasic === 1).map(m => m.key)).toEqual(['finance']);
+  });
+
+  it('refuses to empty the base plan (last basic module)', async () => {
+    const db = makeModuleDb([{ key: 'scolaire', isBasic: 1, isHidden: 0, isUnbilled: 0 }]);
+    const res = await post(db, { action: 'update-module-flags', key: 'scolaire', isBasic: false });
+    expect(res.status).toBe(400);
+    expect(db.updates).toHaveLength(0); // nothing written
+    expect(db.modules[0].isBasic).toBe(1);
+  });
+
+  it('refuses to hide a basic module (unlist it from the base plan first)', async () => {
+    const db = makeModuleDb(seedModules());
+    const res = await post(db, { action: 'update-module-flags', key: 'scolaire', isHidden: true });
+    expect(res.status).toBe(400);
+    expect(db.updates).toHaveLength(0);
+    expect(db.modules[0].isHidden).toBe(0);
+  });
+
+  it('refuses to make a hidden module basic (unhide it first)', async () => {
+    const db = makeModuleDb(seedModules());
+    const res = await post(db, { action: 'update-module-flags', key: 'bibliotheque', isBasic: true });
+    expect(res.status).toBe(400);
+    expect(db.modules.find(m => m.key === 'bibliotheque')!.isBasic).toBe(0);
+  });
+
+  it('still toggles isUnbilled and isHidden independently', async () => {
+    const db = makeModuleDb(seedModules());
+    expect((await post(db, { action: 'update-module-flags', key: 'cantine', isUnbilled: true })).status).toBe(200);
+    expect(db.modules.find(m => m.key === 'cantine')!.isUnbilled).toBe(1);
+    expect((await post(db, { action: 'update-module-flags', key: 'cantine', isHidden: true })).status).toBe(200);
+    expect(db.modules.find(m => m.key === 'cantine')!.isHidden).toBe(1);
+    expect((await post(db, { action: 'update-module-flags', key: 'cantine', isHidden: false })).status).toBe(200);
+    expect(db.modules.find(m => m.key === 'cantine')!.isHidden).toBe(0);
+  });
+
+  it('404 for an unknown module, 400 when no flag is sent', async () => {
+    const db = makeModuleDb(seedModules());
+    expect((await post(db, { action: 'update-module-flags', key: 'nope', isBasic: true })).status).toBe(404);
+    expect((await post(db, { action: 'update-module-flags', key: 'cantine' })).status).toBe(400);
   });
 });

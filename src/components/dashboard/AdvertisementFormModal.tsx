@@ -187,7 +187,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
               {uploading && <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-accent-500" /> رفع…</span>}
               <div className="flex items-center gap-2 flex-1 min-w-[220px]">
                 <input id="ad-image-url" value={extraImageUrl} onChange={e => setExtraImageUrl(e.target.value)} placeholder="…أو ألصق رابط صورة"
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-accent-500 outline-none" dir="ltr" />
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:border-accent-500 outline-none text-right" dir="ltr" />
                 <button type="button" disabled={!extraImageUrl.trim()}
                   onClick={() => { setImageUrls(cur => [...cur, extraImageUrl.trim()]); setExtraImageUrl(''); }}
                   className="px-3 py-2 text-xs font-black text-accent-500 bg-accent-500/10 border border-accent-500/30 rounded-xl hover:bg-accent-500/20 transition cursor-pointer disabled:opacity-40">
@@ -246,7 +246,7 @@ function AdvertisementFormModal({ ad, centers, onClose, onSaved }: {
                 </div>
                 {centerQuery.trim() !== '' && filteredCenters.length > 0 && (
                   <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                    ${arPlural(filteredCenters.length, 'مركز', 'مركزان', 'مراكز', 'مركزًا')} من {centers.length}
+                    {arPlural(filteredCenters.length, 'مركز', 'مركزان', 'مراكز', 'مركزًا')} من {centers.length}
                     {centerIds.length > 0 ? ` · ${arPlural(centerIds.length, 'مركز محدد', 'مركزان محددان', 'مراكز محددة', 'مركزًا محددًا')}` : ''}
                   </p>
                 )}

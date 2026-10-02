@@ -185,7 +185,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           `).bind(
             id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
             linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0, JSON.stringify(positions),
-            session.email, now, now
+            session.userId || null, now, now
           )
         : env.DB.prepare(`
             INSERT INTO platform_advertisements (
@@ -196,7 +196,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
           `).bind(
             id, title, dateStart, dateEnd, location, JSON.stringify(imageUrls),
             linkUrl, priority, isActive ? 1 : 0, isPublished ? 1 : 0,
-            session.email, now, now
+            session.userId || null, now, now
           ),
       // Insert center assignments
       ...centerIds.map((centerId: string) =>

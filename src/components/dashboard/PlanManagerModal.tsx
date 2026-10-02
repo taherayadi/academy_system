@@ -10,7 +10,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import { StatusBadge } from '../ui';
 import { StatusTone, toneClasses } from '../ui/StatusBadge';
 import { fmtDate, arPlural } from '../../utils/format';
-import { currentSchoolYear, ALL_MODULES, BUNDLED_MODULE_KEY, normalizeCenterModules, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, PLAN_LABEL, isModuleHidden, PLAN_BADGE, PLAN_HISTORY_LABEL, normalizeCenterType, CENTER_TYPE_LABEL, isModuleAllowedForCenterType } from './constants';
+import { currentSchoolYear, ALL_MODULES, normalizeCenterModules, AUTOMATIC_PLAN_KEYS, calculatePlanTariff, SELECTABLE_MODULE_KEYS, BASIC_MODULE_KEYS, isBaseModule, formatTnd, PLAN_LABEL, isModuleHidden, unbilledModuleKeys, PLAN_BADGE, PLAN_HISTORY_LABEL, normalizeCenterType, CENTER_TYPE_LABEL, isModuleAllowedForCenterType } from './constants';
 import type { CenterType } from './constants';
 
 // ─── Plan manager per center (Plans & factures) ─────────────────────────────
@@ -58,9 +58,11 @@ function PlanManagerModal({ center, onClose, onSaved }: {
     fetchModulePricesApi(currentSchoolYear()).then(prices => {
       if (!mounted) return;
       const map: Record<string, number> = {};
-      ALL_MODULES.forEach(m => { map[m.key] = 15; });
+      // Catalogue DB : une ligne de prix par module non masqué.
+      ALL_MODULES().forEach(m => { if (!isModuleHidden(m.key)) map[m.key] = 15; });
       (prices || []).forEach(p => { map[p.module_key] = Number(p.price) || 0; });
-      map[BUNDLED_MODULE_KEY] = 0;
+      // Modules non facturables (isUnbilled = 1 en DB) — aucun tarif dédié.
+      unbilledModuleKeys().forEach(k => { map[k] = 0; });
       setModulePrices(map);
       setPricesReady(true);
     }).catch(() => { if (mounted) setPricesReady(true); });
@@ -68,9 +70,16 @@ function PlanManagerModal({ center, onClose, onSaved }: {
   }, []);
 
   const draftFromView = useCallback((v: CenterPlansView) => {
-    const plan = v.center.plan === 'starter' || !v.center.plan ? 'basic' : v.center.plan;
+    const modules = normalizeCenterModules(v.center.enabledModules);
+    const stored = v.center.plan === 'starter' || !v.center.plan ? 'basic' : v.center.plan;
+    // A trial/demo center is stored as plan='starter' but carries the add-ons
+    // chosen when it was created (« Basic + 3 modules »). Basic is base-only,
+    // so preselecting it here would activate a plan that silently DROPS those
+    // add-ons — preselect Growth, the cheapest plan where they are legal.
+    const hasAddOns = modules.some(key => !isBaseModule(key));
+    const plan = stored === 'basic' && hasAddOns ? 'growth' : stored;
     setDraft({ plan, billingCycle: v.center.billingCycle || 'monthly', monthlyPrice: String(v.center.monthlyPrice ?? '') });
-    setEnabledModules(normalizeCenterModules(v.center.enabledModules));
+    setEnabledModules(modules);
   }, []);
 
   const reload = useCallback(async () => {
@@ -158,15 +167,31 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
   const handleDraftPlanChange = (plan: string) => {
     setDraft(d => ({ ...d, plan }));
-    if (plan === 'pro') setEnabledModules([...SELECTABLE_MODULE_KEYS].filter(k => isModuleAllowedForCenterType(k, centerType)));
-    if (plan === 'basic') setEnabledModules([...BASIC_MODULE_KEYS]);
+    if (plan === 'pro') setEnabledModules(SELECTABLE_MODULE_KEYS().filter(k => isModuleAllowedForCenterType(k, centerType)));
+    if (plan === 'basic') setEnabledModules(BASIC_MODULE_KEYS());
   };
+
+  /** The add-on chips exactly as rendered: non-basic, billed, visible and
+   *  allowed for this center's type. */
+  const selectableModuleKeys = () => ALL_MODULES()
+    .filter(m => !isBaseModule(m.key) && !m.isUnbilled && !isModuleHidden(m.key))
+    .filter(m => isModuleAllowedForCenterType(m.key, centerType))
+    .map(m => m.key);
 
   const toggleDraftModule = (key: string) => {
     if (isBaseModule(key) || !isModuleAllowedForCenterType(key, centerType)) return;
-    setEnabledModules(current => current.includes(key)
-      ? current.filter(moduleKey => moduleKey !== key)
-      : [...current, key]);
+    const next = enabledModules.includes(key)
+      ? enabledModules.filter(moduleKey => moduleKey !== key)
+      : [...enabledModules, key];
+    setEnabledModules(next);
+    // The SELECTION drives the plan: every add-on ⇒ Pro, none ⇒ Basic,
+    // anything in between ⇒ Growth (the plan where add-ons are legal).
+    const addOns = next.filter(moduleKey => !isBaseModule(moduleKey));
+    const plan = addOns.length === 0
+      ? 'basic'
+      : selectableModuleKeys().every(k => next.includes(k)) ? 'pro'
+        : 'growth';
+    setDraft(d => (d.plan === plan ? d : { ...d, plan }));
   };
 
   const runAction = async (payload: Parameters<typeof centerPlanActionApi>[0], fallbackMsg: string) => {
@@ -338,34 +363,12 @@ function PlanManagerModal({ center, onClose, onSaved }: {
         )}
       </div>
 
-      {/* Modules — sélectionnables pour Growth (Pro = tout, Basic = base) */}
-      {draft.plan === 'growth' && (
-        <div>
-          <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">وحدات للتفعيل</p>
-          <div className="flex flex-wrap gap-1.5">
-            {ALL_MODULES.filter(m => !isBaseModule(m.key) && m.key !== BUNDLED_MODULE_KEY && !isModuleHidden(m.key)).map(module => {
-              const selected = enabledModules.includes(module.key);
-              const allowed = isModuleAllowedForCenterType(module.key, centerType);
-              return (
-                <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)} disabled={!allowed}
-                  title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL[centerType] || 'غير معرّف'}»`}
-                  className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition inline-flex items-center gap-1 ${
-                    !allowed
-                      ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                      : selected
-                        ? 'bg-accent-500 text-white border-accent-500 cursor-pointer'
-                        : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40 cursor-pointer'
-                  }`}>
-                  {selected && <Check className="h-4 w-4" aria-hidden="true" />} {module.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Modules — the SELECTION drives the plan: every add-on ⇒ Pro, none ⇒
+          Basic, anything in between ⇒ Growth. The chips stay visible in every
+          plan so the switch works in both directions. */}
       {draft.plan === 'pro' && (
         <p className="text-[11px] font-semibold text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-          Pro: تُفعَّل كل الوحدات المتاحة لنوع «{CENTER_TYPE_LABEL[centerType] || 'غير معرّف'}» تلقائيًا.
+          Pro: تُفعَّل كل الوحدات المتاحة لنوع «{CENTER_TYPE_LABEL()[centerType] || 'غير معرّف'}» تلقائيًا.
         </p>
       )}
       {draft.plan === 'basic' && (
@@ -373,6 +376,28 @@ function PlanManagerModal({ center, onClose, onSaved }: {
           الباقة الأساسية: مدرسي + مالية (+ سجل الدوام مشمول).
         </p>
       )}
+      <div>
+        <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">وحدات للتفعيل</p>
+        <div className="flex flex-wrap gap-1.5">
+          {ALL_MODULES().filter(m => !isBaseModule(m.key) && !m.isUnbilled && !isModuleHidden(m.key)).map(module => {
+            const selected = enabledModules.includes(module.key);
+            const allowed = isModuleAllowedForCenterType(module.key, centerType);
+            return (
+              <button key={module.key} type="button" onClick={() => toggleDraftModule(module.key)} disabled={!allowed}
+                title={allowed ? undefined : `غير متاحة لنوع «${CENTER_TYPE_LABEL()[centerType] || 'غير معرّف'}»`}
+                className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition inline-flex items-center gap-1 ${
+                  !allowed
+                    ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                    : selected
+                      ? 'bg-accent-500 text-white border-accent-500 cursor-pointer'
+                      : 'bg-white text-slate-500 border-slate-200 hover:border-accent-500/40 cursor-pointer'
+                }`}>
+                {selected && <Check className="h-4 w-4" aria-hidden="true" />} {module.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 
@@ -422,7 +447,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
               </div>
               {isTrial ? (
                 <p className="text-sm font-black text-amber-700">
-                  Essai jusqu’au {view.center.trialEndsAt ? fmtDate(view.center.trialEndsAt) : '—'}
+                  التجربة حتى {view.center.trialEndsAt ? fmtDate(view.center.trialEndsAt) : '—'}
                 </p>
               ) : (
                 <>
@@ -497,7 +522,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
 
             {/* ── Formulaire : ajouter une période d'essai ── */}
             {mode === 'trial' && (
-              <div className="rounded-2xl border border-accent-500/30 bg-accent-500/[0.04] p-4 space-y-3" dir="ltr">
+              <div className="rounded-2xl border border-accent-500/30 bg-accent-500/[0.04] p-4 space-y-3" dir="rtl">
                 <p className="text-xs font-black text-slate-700">إضافة فترة تجريبية مقدمة</p>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <label htmlFor="plan-manager-trial-days" className="text-xs font-black text-slate-600">عدد الأيام</label>
@@ -549,7 +574,7 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                       تغيير خلال الفترة الجارية —{' '}
                       {decision.kind === 'mid_period_increase' ? 'إلى أعلى' : 'إلى أسفل'}
                       {decision.kind === 'mid_period_increase' && (
-                        <> · ${arPlural(decision.remainingDays, 'يوم متبقٍ', 'يومان متبقيان', 'أيام متبقية', 'يومًا متبقيًا')} على الفترة المدفوعة</>
+                        <>· {arPlural(decision.remainingDays, 'يوم متبقٍ', 'يومان متبقيان', 'أيام متبقية', 'يومًا متبقيًا')} على الفترة المدفوعة</>
                       )}
                     </p>
                     {settlementRelevant ? (
@@ -671,7 +696,9 @@ function PlanManagerModal({ center, onClose, onSaved }: {
                 <p className="text-[11px] font-semibold text-slate-500">لا توجد أنشطة مسجلة.</p>
               ) : (
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                  <table className="min-w-[560px] w-full" dir="ltr">
+                  {/* dir=rtl: an LTR context reorders mixed Arabic+digit text
+                      («01 أكتوبر 2026» rendered as «01 2026 أكتوبر»). */}
+                  <table className="min-w-[560px] w-full" dir="rtl">
                     <thead>
                       <tr className="bg-slate-50 text-start text-[11px] font-black uppercase tracking-wider text-slate-500">
                         <th scope="col" className="px-3 py-2">التاريخ</th>
