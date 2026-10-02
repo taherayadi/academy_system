@@ -36,8 +36,7 @@ import {
   Receipt,
   Layers,
   X,
-  CreditCard,
-  Clock
+  CreditCard
 } from 'lucide-react';
 import icon from '../assets/icon.png';
 
@@ -98,6 +97,19 @@ const MOCK_BARS = [
   { m: 'Sep', v: 34 }, { m: 'Oct', v: 52 }, { m: 'Nov', v: 44 },
   { m: 'Déc', v: 68 }, { m: 'Jan', v: 58 }, { m: 'Fév', v: 88 }
 ];
+
+// ─── Libellés dérivés du catalogue (aucun nom de module codé en dur) ─────────
+/** Énumération française : « a », « a ou b », « a, b ou c ». */
+function frList(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  return items.slice(0, -1).join(', ') + ' ou ' + items[items.length - 1];
+}
+
+/** Glose héro : premier segment de la description DB (avant « — »), sans point final. */
+function heroGloss(description: string): string {
+  return (description || '').split(' — ')[0].trim().replace(/\.$/, '').trim();
+}
 
 export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: LandingPageProps) {
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
@@ -160,9 +172,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     [pricedModules]
   );
   const billedBaseModules = useMemo(() => pricedBaseModules.filter(m => !m.bundled), [pricedBaseModules]);
-  const bundledModule = pricedBaseModules.find(m => m.bundled);
+  // Tout module isUnbilled = 1 est offert avec la base — pas seulement le premier.
+  const bundledModules = useMemo(() => pricedBaseModules.filter(m => m.bundled), [pricedBaseModules]);
   const firstAddon = pricedAddonModules[0];
-  const BundledIcon = bundledModule?.icon ?? Clock;
+  const billedBaseLabels = billedBaseModules.map(m => m.label).join(' + ');
+  const bundledLabels = bundledModules.map(m => m.label).join(' + ');
+  const addonTeaser = pricedAddonModules.slice(0, 3).map(m => m.label);
+  const bundledGlosses = bundledModules.map(m => heroGloss(m.description)).filter(Boolean);
   const basePrice = useMemo(
     () => pricedBaseModules.reduce((sum, m) => sum + (m.bundled ? 0 : m.price), 0),
     [pricedBaseModules]
@@ -450,7 +466,11 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-600 opacity-50"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-600"></span>
                 </span>
-                <span className="text-[13px] font-bold text-slate-700">{billedBaseModules.map(m => m.label).join(' + ')} + {bundledModule?.label ?? 'Jd. Horaires'} offert — {priceLabel(basePrice)} TND/mois</span>
+                <span className="text-[13px] font-bold text-slate-700">
+                  {bundledLabels
+                    ? `${billedBaseLabels} + ${bundledLabels} offert${bundledModules.length > 1 ? 's' : ''} — ${priceLabel(basePrice)} TND/mois`
+                    : `${billedBaseLabels} — ${priceLabel(basePrice)} TND/mois`}
+                </span>
               </motion.div>
 
               <motion.h1
@@ -472,12 +492,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                 transition={{ duration: 0.65, delay: 0.16 }}
                 className="text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed font-medium"
               >
-                La base <span className="text-slate-900 font-black">{billedBaseModules[0]?.label ?? 'Scolaire'}</span> +{' '}
-                <span className="text-slate-900 font-black">{billedBaseModules[1]?.label ?? 'Finance'}</span> démarre à{' '}
-                <span className="text-slate-900 font-black">{priceLabel(basePrice)} TND/mois</span>,
-                avec <span className="text-slate-900 font-black">{bundledModule?.label ?? 'Jd. Horaires'}</span> offert{' '}
-                <span className="text-slate-500 font-semibold">(pointage des entrées/sorties des élèves)</span>.
-                Ajoutez étude, cantine ou transport uniquement quand vous en avez besoin —
+                La base <span className="text-slate-900 font-black">{billedBaseLabels}</span> démarre à{' '}
+                <span className="text-slate-900 font-black">{priceLabel(basePrice)} TND/mois</span>
+                {bundledModules.length > 0 && (
+                  <>, avec <span className="text-slate-900 font-black">{bundledLabels}</span> offert{bundledModules.length > 1 ? 's' : ''}</>
+                )}
+                {bundledGlosses.length > 0 && (
+                  <> <span className="text-slate-500 font-semibold">({bundledGlosses.join(' · ')})</span></>
+                )}.
+                Ajoutez {addonTeaser.length > 0 ? frList(addonTeaser) : 'des modules additionnels'} uniquement quand vous en avez besoin —
                 élèves et utilisateurs illimités.
               </motion.p>
 
@@ -494,7 +517,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   </span>
                   <span className="text-sm font-bold text-slate-500">TND/mois</span>
                   <span className="hidden md:inline text-[11px] font-black uppercase tracking-wider text-slate-500 border-l border-slate-200 pl-3 ml-1">
-                    Base 3 modules · sans engagement
+                    Base {pricedBaseModules.length} {pricedBaseModules.length > 1 ? 'modules' : 'module'} · sans engagement
                   </span>
                 </div>
 
@@ -836,11 +859,13 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
               Le plan de base
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-4 tracking-tight">
-              Trois modules. Toujours inclus.
+              {pricedBaseModules.length} {pricedBaseModules.length > 1 ? 'modules' : 'module'}. Toujours inclus.
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
-              Le socle de chaque abonnement — <span className="text-slate-900 font-black">{billedBaseModules.map(m => m.label).join(' & ')}</span> pour {priceLabel(basePrice)} TND/mois,
-              avec <span className="text-slate-900 font-black">{bundledModule?.label ?? 'Jd. Horaires'}</span> offert. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
+              Le socle de chaque abonnement — <span className="text-slate-900 font-black">{billedBaseModules.map(m => m.label).join(' & ')}</span> pour {priceLabel(basePrice)} TND/mois
+              {bundledModules.length > 0 && (
+                <>, avec <span className="text-slate-900 font-black">{bundledLabels}</span> offert{bundledModules.length > 1 ? 's' : ''}</>
+              )}. Vous ne pouvez pas les retirer, et vous n’aurez jamais besoin de le faire.
             </p>
           </div>
 
@@ -932,36 +957,39 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
             ))}
           </div>
 
-          {/* Jd. Horaires — bundled with the base, no extra cost */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: 0.5 }}
-            className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
-          >
-            <div className="p-3.5 rounded-2xl bg-emerald-100 flex-shrink-0">
-              <BundledIcon className="h-7 w-7 text-emerald-600" />
-            </div>
-            <div className="flex-1 text-center sm:text-left min-w-0">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mb-1.5">
-                <h3 className="text-lg font-black text-slate-900">{bundledModule?.label ?? 'Jd. Horaires'}</h3>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[11px] font-black text-emerald-700 uppercase tracking-wider">
-                  <Check className="h-3 w-3" />
-                  Offert avec la base
-                </span>
+          {/* Modules offerts (modules.isUnbilled = 1) — inclus avec la base, sans tarif */}
+          {bundledModules.map((mod, i) => (
+            <motion.div
+              key={mod.key}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.5, delay: i * 0.08 }}
+              className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 sm:p-7 flex flex-col sm:flex-row items-center gap-6 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/5 transition-all duration-300"
+            >
+              <div className="p-3.5 rounded-2xl bg-emerald-100 flex-shrink-0">
+                <mod.icon className="h-7 w-7 text-emerald-600" />
               </div>
-              <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                {bundledModule?.description ?? 'Pointage journalier des entrées et sorties de vos élèves.'} Pas de tarif dédié :
-                ce module est <span className="font-black text-emerald-700">inclus gratuitement avec {billedBaseModules[0]?.label ?? 'Scolaire'}</span>,
-                pour chaque abonnement — dès le plan de base.
-              </p>
-            </div>
-            <div className="text-center flex-shrink-0">
-              <div className="text-2xl font-black text-emerald-600">Inclus</div>
-              <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">0 TND supplémentaire</div>
-            </div>
-          </motion.div>
+              <div className="flex-1 text-center sm:text-left min-w-0">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mb-1.5">
+                  <h3 className="text-lg font-black text-slate-900">{mod.label}</h3>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-[11px] font-black text-emerald-700 uppercase tracking-wider">
+                    <Check className="h-3 w-3" />
+                    Offert avec la base
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                  {mod.description} Pas de tarif dédié :
+                  ce module est <span className="font-black text-emerald-700">inclus gratuitement avec la base</span>,
+                  pour chaque abonnement — dès le plan de base.
+                </p>
+              </div>
+              <div className="text-center flex-shrink-0">
+                <div className="text-2xl font-black text-emerald-600">Inclus</div>
+                <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">0 TND supplémentaire</div>
+              </div>
+            </motion.div>
+          ))}
 
           {/* base price banner */}
           <motion.div
@@ -1156,22 +1184,22 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                       </div>
                     </div>
                   ))}
-                  {/* Module offert (isUnbilled) — pas de tarif */}
-                  {bundledModule && (
-                  <div className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl bg-emerald-50/60">
-                    <div className="p-2.5 rounded-xl bg-emerald-100">
-                      <BundledIcon className="h-5 w-5 text-emerald-600" />
+                  {/* Modules offerts (isUnbilled) — pas de tarif, une carte par module */}
+                  {bundledModules.map(mod => (
+                    <div key={mod.key} className="sm:col-span-2 flex items-center gap-3.5 p-4 rounded-2xl bg-emerald-50/60">
+                      <div className="p-2.5 rounded-xl bg-emerald-100">
+                        <mod.icon className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-black text-slate-900">{mod.label}</div>
+                        <div className="text-[11px] font-semibold text-slate-500">{mod.description}</div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-base font-black text-emerald-600">Inclus</div>
+                        <div className="text-[11px] font-bold text-slate-500">0 TND</div>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-black text-slate-900">{bundledModule.label} — Pointage Élèves</div>
-                      <div className="text-[11px] font-semibold text-slate-500">Entrées/sorties journalières — offert avec {billedBaseModules[0]?.label ?? 'Scolaire'}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-base font-black text-emerald-600">Inclus</div>
-                      <div className="text-[11px] font-bold text-slate-500">0 TND</div>
-                    </div>
-                  </div>
-                  )}
+                  ))}
                 </div>
               </div>
 
@@ -1237,13 +1265,15 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                     </span>
                     <span className="text-sm font-black text-slate-900">{priceLabel(basePrice)} TND</span>
                   </div>
-                  <div className="flex items-center justify-between mb-3 pl-6">
-                    <span className="text-xs font-bold text-slate-500 flex items-center gap-2">
-                      <BundledIcon className="h-3 w-3 text-emerald-500" />
-                      dont {bundledModule?.label ?? 'Jd. Horaires'}
-                    </span>
-                    <span className="text-xs font-black text-emerald-600">Inclus — offert</span>
-                  </div>
+                  {bundledModules.map(mod => (
+                    <div key={mod.key} className="flex items-center justify-between mb-3 pl-6">
+                      <span className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                        <mod.icon className="h-3 w-3 text-emerald-500" />
+                        dont {mod.label}
+                      </span>
+                      <span className="text-xs font-black text-emerald-600">Inclus — offert</span>
+                    </div>
+                  ))}
                   {/* addon lines */}
                   <AnimatePresence initial={false}>
                     {addonKeys.length === 0 && (

@@ -1,7 +1,5 @@
 import { Env, json } from './_lib';
 
-const BUNDLED_MODULE_KEY = 'studentTimeSheets';
-
 function currentSchoolYear(timestamp = Date.now()): string {
   const date = new Date(timestamp);
   const schoolStartYear = date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
@@ -46,18 +44,23 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       }
     }
 
-    const prices = (results || []).map(row => ({
-      module_key: String(row.module_key || ''),
-      // Jd. Horaires is bundled and is never charged separately.
-      price: row.module_key === BUNDLED_MODULE_KEY ? 0 : (Number(row.price) || 0)
-    })).filter(row => row.module_key);
-
     // ── Catalog: modules, center types and their compatibility matrix ──
     // Single source of truth is the D1 tables; nothing is hardcoded here.
     const moduleRows = (await env.DB.prepare(
       `SELECT key, label, label_ar, icon, description, features, mock, isBasic, isUnbilled, isHidden
        FROM modules ORDER BY rowid`
     ).all<any>()).results || [];
+
+    // Every module flagged isUnbilled = 1 is bundled with the base and never
+    // charged separately — the flag list (not a hardcoded key) zeroes prices.
+    const unbilledKeys = new Set(
+      moduleRows.filter(row => Number(row.isUnbilled) === 1).map(row => String(row.key || ''))
+    );
+
+    const prices = (results || []).map(row => ({
+      module_key: String(row.module_key || ''),
+      price: unbilledKeys.has(String(row.module_key)) ? 0 : (Number(row.price) || 0)
+    })).filter(row => row.module_key);
     const typeRows = (await env.DB.prepare(
       'SELECT key, label, label_ar, hint, hint_ar FROM center_types ORDER BY rowid'
     ).all<any>()).results || [];
