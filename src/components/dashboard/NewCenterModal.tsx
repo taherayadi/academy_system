@@ -150,7 +150,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
 
   // Modules that the chosen center type does not allow are deactivated as
   // soon as the type changes (convert flow included) — the server would
-  // reject them otherwise. Base modules are never touched.
+  // reject tm otherwise. Base modules are never touched.
   React.useEffect(() => {
     setForm(current => {
       const filtered = current.enabledModules.filter(k =>
@@ -235,7 +235,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
       </div>
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
-          {/* Centre info */}
+          {/* Centre heinfo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-name">اسم المركز *</label>
@@ -321,11 +321,9 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-phone">الهاتف *</label>
-              {/* RTL page: the digits stay an LTR run (dir=ltr) but the field
-                  is right-aligned like every other field of the form. */}
               <input id="nc-phone" required type="tel" inputMode="numeric" maxLength={8} pattern="[0-9]{8}" dir="ltr" value={form.phoneNumber}
                 onChange={e => setForm(f => ({ ...f, phoneNumber: normalizePhoneInput(e.target.value) }))}
-                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-right" />
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 focus:ring-0 outline-none transition text-start" />
             </div>
             <div>
               <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5" htmlFor="nc-plan">الباقة *</label>
@@ -350,7 +348,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                 </div>
                 {/* Same presentation as the « Essai gratuit » card — free days
                     are an trial before the billing starts, not a separate note. */}
-                <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="rtl">
+                <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                     <label htmlFor="new-center-offer-days" className="text-xs font-black text-slate-600">مدة التجربة قبل الاشتراك</label>
                     <div className="flex items-center gap-2">
@@ -387,7 +385,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
                       className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white focus:border-accent-500 outline-none" />
                   )}
                 </div>
-                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="rtl">
+                <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1" dir="ltr">
                   <div className="flex items-center justify-between gap-3 text-start">
                     <span className="text-xs font-black text-slate-600">نهاية الاشتراك المحسوبة</span>
                     <span className="text-sm font-black text-slate-800">{fmtDate(previewEnd)}</span>
@@ -401,7 +399,7 @@ function NewCenterModal({ initialData, convertRequestId, onClose, onCreated }: N
               </>
             )}
             {form.plan === 'trial' && (
-              <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="rtl">
+              <div className="sm:col-span-2 rounded-2xl border border-accent-500/30 bg-accent-500/[0.05] px-4 py-3 space-y-2" dir="ltr">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-start">
                   <label htmlFor="new-center-trial-days" className="text-xs font-black text-slate-600">مدة التجربة المجانية</label>
                   <div className="flex items-center gap-2">
