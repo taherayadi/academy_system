@@ -113,7 +113,8 @@ export default function LibraryModule({ students, onUpdateStudent, onRecordPayme
   });
 
   // Calculate stats for a given month in Library
-  // Resolve the CURRENT monthly/registration fees from settings (fallback to stored student fees)
+  // Frais = grille du settings (par année scolaire), jamais de valeur par défaut :
+  // frais non configurés → 0, et le paiement est refusé au submit.
   const currentFees = (st: Student) => {
     const y = st.academicYear || schoolYear;
     if (settings) {
@@ -124,8 +125,8 @@ export default function LibraryModule({ students, onUpdateStudent, onRecordPayme
       };
     }
     return {
-      annualRegistrationFee: st.libraryFees?.annualRegistrationFee || 20,
-      monthlyFee: st.libraryFees?.monthlyFee || 30
+      annualRegistrationFee: st.libraryFees?.annualRegistrationFee || 0,
+      monthlyFee: st.libraryFees?.monthlyFee || 0
     };
   };
 
@@ -238,8 +239,8 @@ export default function LibraryModule({ students, onUpdateStudent, onRecordPayme
         library: true
       },
       libraryFees: st.libraryFees || { 
-        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelBibliotheque : 20, 
-        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelBibliotheque : 30 
+        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelBibliotheque : 0, 
+        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelBibliotheque : 0 
       }
     };
     onUpdateStudent(updatedStudent);
@@ -277,6 +278,13 @@ export default function LibraryModule({ students, onUpdateStudent, onRecordPayme
 
     const disc = Math.max(0, numDiscount);
     const paid = Math.max(0, Number(amountPaid) || 0);
+
+    // prix non configuré (0 د.ت dans الإعدادات) → paiement impossible
+    if (baseRequired <= 0) {
+      toast.error('عذراً، يجب أولاً إدخال رسوم هذه الخدمة في الإعدادات قبل تسجيل أي دفعة!');
+      setIsSubmitting(false);
+      return;
+    }
 
     if (paymentServiceTarget === 'Inscription Bibliothèque') {
       const currentStatus = getStudentInscriptionStatus(selectedStudentForPayment);
@@ -793,9 +801,10 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     : null;
                   const isAdvanceStatus = activeMonthStatus?.status === 'advance';
                   const stFees = selectedStudentForPayment ? currentFees(selectedStudentForPayment) : null;
+                  // Pas de fallback factice : frais non configurés → 0 (validation au submit)
                   const standardFee = isInscription 
-                    ? (stFees?.annualRegistrationFee || 20)
-                    : (stFees?.monthlyFee || 30);
+                    ? (stFees?.annualRegistrationFee || 0)
+                    : (stFees?.monthlyFee || 0);
 
                   return (
                     <>
@@ -1003,7 +1012,10 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !(selectedStudentForPayment && (paymentServiceTarget === 'Inscription Bibliothèque'
+                      ? currentFees(selectedStudentForPayment).annualRegistrationFee
+                      : currentFees(selectedStudentForPayment).monthlyFee) > 0)}
+                    title={isSubmitting ? undefined : 'أدخل رسوم الخدمة في الإعدادات أولاً'}
                     className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -1053,7 +1065,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 );
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
-                const fullFeeRequired = printingReceipt.payment.totalRequired || (printingReceipt.payment.month.includes('Annuel') ? 20 : 30);
+                const fullFeeRequired = printingReceipt.payment.totalRequired || 0;
                 const finalRemaining = Math.max(0, fullFeeRequired - totalPaidForMonth);
 
                 return (

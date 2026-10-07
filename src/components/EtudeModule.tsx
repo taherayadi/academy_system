@@ -219,8 +219,8 @@ export default function EtudeModule({
       };
     }
     return {
-      annualRegistrationFee: st.etudeFees?.annualRegistrationFee || 100,
-      monthlyFee: st.etudeFees?.monthlyFee || 180
+      annualRegistrationFee: st.etudeFees?.annualRegistrationFee || 0,
+      monthlyFee: st.etudeFees?.monthlyFee || 0
     };
   };
 
@@ -361,8 +361,8 @@ export default function EtudeModule({
         etude: true
       },
       etudeFees: st.etudeFees || {
-        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelEtude : 100,
-        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelEtude : 180
+        annualRegistrationFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisAnnuelEtude : 0,
+        monthlyFee: settings ? getFeesForYear(settings, st.academicYear || schoolYear).fraisMensuelEtude : 0
       }
     };
     onUpdateStudent(updatedStudent);
@@ -400,6 +400,13 @@ export default function EtudeModule({
 
     const disc = Math.max(0, numDiscount);
     const paid = Math.max(0, Number(amountPaid) || 0);
+
+    // prix non configuré (0 د.ت in الإعدادات) → paiement impossible
+    if (baseRequired <= 0) {
+      toast.error('عذراً، يجب أولاً إدخال رسوم هذه الخدمة في الإعدادات قبل تسجيل أي دفعة!');
+      setIsSubmitting(false);
+      return;
+    }
 
     if (paymentServiceTarget === 'Inscription Étude') {
       const currentStatus = getStudentInscriptionStatus(selectedStudentForPayment);
@@ -1447,9 +1454,10 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     : null;
                   const isAdvanceStatus = activeMonthStatus?.status === 'advance';
                   const stFees = selectedStudentForPayment ? currentFees(selectedStudentForPayment) : null;
+                  // Pas de fallback factice : frais non configurés → 0 (validation au submit)
                   const standardFee = isInscription 
-                    ? (stFees?.annualRegistrationFee || 100)
-                    : (stFees?.monthlyFee || 180);
+                    ? (stFees?.annualRegistrationFee || 0)
+                    : (stFees?.monthlyFee || 0);
 
                   return (
                     <>
@@ -1657,7 +1665,10 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !(selectedStudentForPayment && (paymentServiceTarget === 'Inscription Étude'
+                      ? currentFees(selectedStudentForPayment).annualRegistrationFee
+                      : currentFees(selectedStudentForPayment).monthlyFee) > 0)}
+                    title={isSubmitting ? undefined : 'أدخل رسوم الخدمة في الإعدادات أولاً'}
                     className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -1707,7 +1718,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 );
                 const totalPaidForMonth = allMonthPayments.reduce((s, p) => s + p.amountPaid, 0);
                 const totalMonthDiscount = allMonthPayments.reduce((s, p) => s + (p.discount || 0), 0);
-                const fullFeeRequired = printingReceipt.payment.totalRequired || (printingReceipt.payment.month.includes('Annuel') ? 100 : 180);
+                const fullFeeRequired = printingReceipt.payment.totalRequired || 0;
                 const finalRemaining = Math.max(0, fullFeeRequired - totalPaidForMonth);
 
                 return (

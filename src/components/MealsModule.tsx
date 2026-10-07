@@ -174,7 +174,8 @@ export default function MealsModule({
     s.mealSubscription?.active !== false
   );
   const getMealStatus = (st: Student, month: AcademicMonth) => {
-    const total = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : (st.mealSubscription?.monthlyPrice || 150);
+    // Frais = grille settings, jamais de valeur par défaut (non configuré → 0)
+    const total = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : (st.mealSubscription?.monthlyPrice || 0);
     const payments = (st.payments || []).filter(p => p.service === 'Repas' && p.month === `${month} (${schoolYear})`);
     const paidAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
     const discount = payments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
@@ -235,7 +236,7 @@ export default function MealsModule({
       if (existing.type === 'unit' && existing.paid) {
         const fees = settings ? getFeesForYear(settings, schoolYear) : null;
         const refundedAmount = service === 'lunch'
-          ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 8))
+          ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 0))
           : service === 'gouter_matin'
             ? (fees?.fraisGouterMatinUnitaire ?? 0)
             : (fees?.fraisGouterSoirUnitaire ?? 0);
@@ -312,10 +313,14 @@ export default function MealsModule({
     if (!attendance || attendance.type !== 'unit' || attendance.paid) return;
     const fees = settings ? getFeesForYear(settings, schoolYear) : null;
     const unitPrice = service === 'lunch'
-      ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 8))
+      ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 0))
       : service === 'gouter_matin'
         ? (fees?.fraisGouterMatinUnitaire ?? 0)
         : (fees?.fraisGouterSoirUnitaire ?? 0);
+    if (unitPrice <= 0) {
+      toast.error('عذراً، يجب أولاً إدخال ثمن الخدمة في الإعدادات قبل تسجيل الدفع!');
+      return;
+    }
     const serviceLabel = service === 'lunch' ? 'الغداء' : service === 'gouter_matin' ? 'لمجة الصباح' : 'لمجة المساء';
     const payment: PaymentRecord = {
       id: `pay_unit_${service}_${crypto.randomUUID()}`,
@@ -507,7 +512,12 @@ export default function MealsModule({
   const handlePayUnitMeal = (st: Student) => {
     const attendance = getAttendance(st);
     if (!attendance || attendance.type !== 'unit' || attendance.paid) return;
-    const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : (st.mealSubscription?.unitPrice || 8);
+    // Frais = grille settings, jamais de valeur par défaut (non configuré → 0)
+    const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : (st.mealSubscription?.unitPrice || 0);
+    if (unitPrice <= 0) {
+      toast.error('عذراً، يجب أولاً إدخال ثمن الوجبة في الإعدادات قبل تسجيل الدفع!');
+      return;
+    }
     const payment: PaymentRecord = {
       id: `pay_meal_unit_${crypto.randomUUID()}`,
       date: selectedDate,
@@ -543,9 +553,10 @@ export default function MealsModule({
     if (attendance.type === 'unit' && attendance.paid) {
       const refundedAmount = settings
         ? getFeesForYear(settings, schoolYear).fraisParRepas
-        : (st.mealSubscription?.unitPrice || 8);
+        : (st.mealSubscription?.unitPrice || 0);
       // Remboursement = ligne de paiement seule, intégrée au même PUT élève.
-      updatedStudent = {
+      // (refundedAmount 0 → pas de ligne de remboursement : éviter un montant 0)
+      if (refundedAmount > 0) updatedStudent = {
         ...updatedStudent,
         payments: [...(st.payments || []), {
           id: `ref_meal_unit_${crypto.randomUUID()}`,
@@ -677,8 +688,9 @@ export default function MealsModule({
   };
 
   const handleEnrollStudent = (st: Student) => {
-    const monthlyPrice = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150;
-    const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 8;
+    // Frais = grille settings, jamais de valeur par défaut (non configuré → 0)
+    const monthlyPrice = settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 0;
+    const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : 0;
     // On re-enrollment, always start completely fresh.
     // Clear ALL subscription-based Repas payments (monthly + refund records).
     // Keep unit meal records (وجبة منفردة) — they are independent daily history.
@@ -713,8 +725,8 @@ export default function MealsModule({
       enrolledServices: { ...st.enrolledServices, meals: false },
       mealSubscription: {
         mode: 'unit' as const,
-        monthlyPrice: 150,
-        unitPrice: 8,
+        monthlyPrice: 0,
+        unitPrice: 0,
         prepaidMeals: 0,
         consumedMealsCount: 0,
         active: false
@@ -805,8 +817,15 @@ export default function MealsModule({
     const numDiscount = Math.max(0, Number(discount) || 0);
     const standardFee = Number(totalRequired) || (isGouter
       ? getGouterStatus(selectedStudentForPayment, paymentMonth).total
-      : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150));
+      : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 0));
     const effectiveRequired = Math.max(0, standardFee - numDiscount);
+
+    // prix non configuré (0 د.ت in الإعدادات) → paiement impossible
+    if (standardFee <= 0) {
+      toast.error('عذراً، يجب أولاً إدخال رسوم هذه الخدمة في الإعدادات قبل تسجيل أي دفعة!');
+      setIsSubmitting(false);
+      return;
+    }
 
     const status = (selectedStudentForPayment.payments || [])
       ?.filter(p => p.service === currentService && p.month === monthKey && !p.refund)
@@ -916,11 +935,11 @@ export default function MealsModule({
       }
       const unitPrice = settings
         ? getFeesForYear(settings, schoolYear).fraisParRepas
-        : (refundingStudent.mealSubscription?.unitPrice || 8);
+        : (refundingStudent.mealSubscription?.unitPrice || 0);
       const subFee = settings
         ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
-        : (refundingStudent.mealSubscription?.monthlyPrice || 150);
-      const prepaid = Math.floor(subFee / unitPrice) || 18;
+        : (refundingStudent.mealSubscription?.monthlyPrice || 0);
+      const prepaid = Math.floor(subFee / unitPrice) || 0;
 
       // Find if there was an earlier refund for this month
       const previousRefund = (refundingStudent.payments || []).filter(
@@ -1954,7 +1973,7 @@ export default function MealsModule({
                 const consumedThisMonth = consumptionMonth === 'all' ? consumed : getConsumedInMonth(st, consumptionMonth as AcademicMonth);
                 const subFee = settings
                   ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
-                  : (st.mealSubscription?.monthlyPrice || 150);
+                  : (st.mealSubscription?.monthlyPrice || 0);
                 const monthStatus = consumptionMonth === 'all'
                   ? null
                   : getMealStatus(st, consumptionMonth as AcademicMonth);
@@ -2358,7 +2377,7 @@ export default function MealsModule({
                   const hasRefund = (!isGouter && selectedStudentForPayment)
                     ? hasUncoveredRefund(selectedStudentForPayment, paymentMonth)
                     : false;
-                  const standardFee = activeMonthStatus?.total || (isGouter ? 30 : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 150));
+                  const standardFee = activeMonthStatus?.total || (isGouter ? 0 : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas : 0));
 
                   return (
                     <>
@@ -2575,7 +2594,11 @@ export default function MealsModule({
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !(selectedStudentForPayment && (paymentService === 'Goûter'
+                      ? getGouterStatus(selectedStudentForPayment, paymentMonth).total
+                      : (settings ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
+                        : (selectedStudentForPayment.mealSubscription?.monthlyPrice || 0))) > 0)}
+                    title={isSubmitting ? undefined : 'أدخل رسوم الخدمة في الإعدادات أولاً'}
                     className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -2896,11 +2919,11 @@ export default function MealsModule({
                       const ms = getMealStatus(refundingStudent, m as AcademicMonth);
                       const unitPrice = settings
                         ? getFeesForYear(settings, schoolYear).fraisParRepas
-                        : (refundingStudent.mealSubscription?.unitPrice || 8);
+                        : (refundingStudent.mealSubscription?.unitPrice || 0);
                       const subFee = settings
                         ? getFeesForYear(settings, schoolYear).fraisAbonnementRepas
-                        : (refundingStudent.mealSubscription?.monthlyPrice || 150);
-                      const prepaid = Math.floor(subFee / unitPrice) || 18;
+                        : (refundingStudent.mealSubscription?.monthlyPrice || 0);
+                      const prepaid = Math.floor(subFee / unitPrice) || 0;
                       const monthKey = `${m} (${schoolYear})`;
                       const previousRefund = (refundingStudent.payments || []).filter(
                         p => p.service === 'Repas' && p.refund && p.month === monthKey
