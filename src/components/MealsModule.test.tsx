@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import MealsModule from './MealsModule';
-import { Student, CenterSettings, initialStudentFeeSet } from '../types';
+import { Student, CenterSettings, feeSetToServicePrices } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -362,7 +362,7 @@ describe('MealsModule — revision E (onglets Repas/Goûter)', () => {
 describe('MealsModule — Goûter paid-status cross-surface agreement (feature 008)', () => {
   const feesSettings = {
     centerName: 'Test Center',
-    fees: { ...initialStudentFeeSet, fraisGouterMatinMensuel: 15 }
+    servicePrices: feeSetToServicePrices({ fraisGouterMatinMensuel: 15 })
   } as unknown as CenterSettings;
 
   // One shared paid-month fixture: a settled Goûter month (frais 15 = paid 15)
@@ -424,7 +424,7 @@ describe('MealsModule — Goûter paid-status cross-surface agreement (feature 0
   it('FR-009: the daily-grid mark path treats the paid month as subscription (hasPaid true)', async () => {
     const logic = await import('../utils/mealLogic');
     // Sanity pin on the shared computation the day grid consumes.
-    expect(logic.getGouterStatusFor(paidGouterStudent, 'Septembre', '2026/2027', feesSettings.fees).status).toBe('paid');
+    expect(logic.getGouterStatusFor(paidGouterStudent, 'Septembre', '2026/2027', feesSettings.servicePrices['DEFAULT'] as any).status).toBe('paid');
     // The student must hold an attendance dated today to appear in the day grid.
     const today = new Date().toISOString().split('T')[0];
     const gridStudent = { ...paidGouterStudent, mealAttendances: [...(paidGouterStudent.mealAttendances || []), { date: today, type: 'unit' as const, paid: false, service: 'lunch' as const }] };

@@ -63,7 +63,7 @@ export function subscriptionSnapshot(center: CenterTenant | null | undefined): s
     plan: center.plan ?? null,
     billingCycle: center.billingCycle ?? null,
     monthlyPrice: Number(center.monthlyPrice) || 0,
-    modules: [...((center.enabledModules as string[] | undefined) || [])].sort(),
+    modules: [...(center.modules || [])].sort(),
     subscriptionEndsAt: center.subscriptionEndsAt ?? null,
     trialEndsAt: center.trialEndsAt ?? null,
   });

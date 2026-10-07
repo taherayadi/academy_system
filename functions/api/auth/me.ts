@@ -21,8 +21,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
         .prepare('SELECT * FROM centers WHERE id = ?')
         .bind(centerId)
         .first<any>();
-      // Same camelCase mapping as /api/centers (client reads enabledModules).
-      if (row) center = mapCenterRow(row);
+      // Same camelCase mapping as /api/centers (client reads `modules`).
+      if (row) center = await mapCenterRow(env.DB, row);
     }
 
     return json({

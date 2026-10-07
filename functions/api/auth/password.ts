@@ -53,7 +53,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     await env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
       .bind(newHash, cleanEmail).run();
 
-    await env.DB.prepare('DELETE FROM center_sessions WHERE email = ?').bind(cleanEmail).run();
+    // Révoque toutes les sessions de l'utilisateur (auth_sessions.user_id).
+    await env.DB.prepare('DELETE FROM auth_sessions WHERE user_id = (SELECT id FROM users WHERE email = ?)').bind(cleanEmail).run();
     logAudit(env, request, { email: cleanEmail, action: 'password_change', entityType: 'user', entityId: cleanEmail, ip }).catch(() => {});
     return json({ ok: true });
   } catch (err) {

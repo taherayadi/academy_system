@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AdvertisementCarousel from './AdvertisementCarousel';
 import AdvertisementInterstitial from './AdvertisementInterstitial';
 import { fetchPublicModulePricesApi, submitDemoRequestApi } from '../api';
-import { ALL_MODULES, ADDON_MODULES, BASE_MODULES, BASE_KEYS, modulesPrice } from '../utils/pricing';
-import { isModuleCompatible, incompatibleModules, CENTER_TYPES, CENTER_TYPE_LABELS } from '../utils/centerType';
+import { allModules, addonModules, baseModules, baseKeys, modulesPrice } from '../utils/pricing';
+import { isModuleCompatible, incompatibleModules, centerTypes, centerTypeLabel, isKnownType } from '../utils/centerType';
+import { useCatalog, moduleCatalogEmpty } from '../utils/catalogStore';
 import { motion, AnimatePresence, useInView, useScroll, useSpring } from 'motion/react';
 import {
   GraduationCap,
@@ -97,8 +98,19 @@ const MOCK_BARS = [
 ];
 
 export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: LandingPageProps) {
+  // Catalogue live (modules + types + compatibilité) : rendu initial vide,
+  // rempli quand /api/catalog arrive.
+  const catalogVersion = useCatalog();
+
   // ── Selection state : base toujours incluse, on ne peut qu'ajouter ──
-  const [selectedModules, setSelectedModules] = useState<string[]>([...BASE_KEYS]);
+  // Vide au premier rendu, puis rempli (base seule) dès que le catalogue
+  // arrive de la base — jamais de données codées en dur. L'utilisateur
+  // garde ensuite la main sur sa sélection.
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  useEffect(() => {
+    if (moduleCatalogEmpty()) return;
+    setSelectedModules(prev => (prev.length > 0 ? prev : [...baseKeys()]));
+  }, [catalogVersion]);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [modulePrices, setModulePrices] = useState<Record<string, number>>({});
   const [pricingLoading, setPricingLoading] = useState(true);
@@ -135,24 +147,26 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   }, []);
 
   const pricesReady = Object.keys(modulePrices).length > 0;
+  const catalogModules = allModules();
+  const base = baseKeys() as readonly string[];
   const pricedModules = useMemo(
-    () => ALL_MODULES.map(module => ({ ...module, price: modulePrices[module.key] ?? 0 })),
-    [modulePrices]
+    () => catalogModules.map(module => ({ ...module, price: modulePrices[module.key] ?? 0 })),
+    [modulePrices, catalogModules]
   );
   const pricedAddonModules = useMemo(
-    () => pricedModules.filter(module => !(BASE_KEYS as readonly string[]).includes(module.key)),
-    [pricedModules]
+    () => pricedModules.filter(module => !base.includes(module.key)),
+    [pricedModules, base]
   );
   const pricedBaseModules = useMemo(
-    () => pricedModules.filter(module => (BASE_KEYS as readonly string[]).includes(module.key)),
-    [pricedModules]
+    () => pricedModules.filter(module => base.includes(module.key)),
+    [pricedModules, base]
   );
-  const basePrice = modulesPrice(BASE_KEYS, modulePrices);
+  const basePrice = modulesPrice(base, modulePrices);
   const priceLabel = (price: number): string => pricesReady ? String(price) : pricingLoading ? '…' : '—';
 
   // Contact / demo form
   const [requestType, setRequestType] = useState<'trial' | 'demo' | 'info'>('trial');
-  const [centerType, setCenterType] = useState<'jardin' | 'creche' | 'garderie' | 'formation' | ''>('');
+  const [centerType, setCenterType] = useState<string>('');
   const [fullName, setFullName] = useState('');
   const [academyName, setAcademyName] = useState('');
   const [email, setEmail] = useState('');
@@ -171,7 +185,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // Remark 5 : chaque carte module affiche les types de centres qu'il sert.
-  const compatibleTypesFor = (key: string) => CENTER_TYPES.filter(t => isModuleCompatible(key, t));
+  const compatibleTypesFor = (key: string) => centerTypes().filter(t => isModuleCompatible(key, t.key));
   // Remark 6 : validation live informative — jamais bloquante — de la
   // combinaison type × modules (le payload part tel quel).
   const incompatibleSelected = useMemo(
@@ -187,7 +201,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
   const progress = useSpring(scrollYProgress, { stiffness: 120, damping: 28, mass: 0.4 });
 
   // ── Pricing math ──
-  const addonKeys = useMemo(() => selectedModules.filter(k => !(BASE_KEYS as readonly string[]).includes(k)), [selectedModules]);
+  const addonKeys = useMemo(() => selectedModules.filter(k => !base.includes(k)), [selectedModules, base]);
   const { monthlyPrice, annualMonthly, annualTotal, savings } = useMemo(() => {
     const monthly = modulesPrice(selectedModules, modulePrices);
     return {
@@ -200,14 +214,14 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
 
   // ── Selection logic : la base est verrouillée, on ne peut qu'ajouter ──
   const toggleModule = (key: string) => {
-    if ((BASE_KEYS as readonly string[]).includes(key)) return; // base non retirable
+    if (base.includes(key)) return; // base non retirable
     setSelectedModules(prev =>
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     );
   };
 
   // ── Réinitialisation de la sélection (revenir à la base seule) ──
-  const resetSelection = () => setSelectedModules([...BASE_KEYS]);
+  const resetSelection = () => setSelectedModules([...baseKeys()]);
 
   // ── Sticky bar : visible après le hero, cachée sur la section contact ──
   useEffect(() => {
@@ -355,12 +369,12 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
     { key: 'info', label: 'Plus d’infos' }
   ];
 
-  const centerTypes: { key: 'jardin' | 'creche' | 'garderie' | 'formation'; label: string; hint: string }[] = [
-    { key: 'jardin', label: 'Jardin d’enfant', hint: 'Préscolaire · maternelle' },
-    { key: 'creche', label: 'Crèche', hint: 'Petite enfance · 0–3 ans' },
-    { key: 'garderie', label: 'Garderie', hint: 'Garderie périscolaire' },
-    { key: 'formation', label: 'Centre de formation', hint: 'Soutien · cours · formations' }
-  ];
+  // Types proposés dans le formulaire : seulement ceux « gatables »
+  // (présents dans center_type_modules) — « other » et futurs types hors
+  // gating restent hors du formulaire de démo.
+  const selectableCenterTypes: { key: string; label: string; hint: string }[] = centerTypes()
+    .filter(t => isKnownType(t.key))
+    .map(t => ({ key: t.key, label: t.label, hint: t.hint }));
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-clip" dir="ltr">
@@ -1196,7 +1210,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                               Une seule chaîne texte — les libellés de types ne
                               collisionnent pas avec les radios du formulaire. */}
                           <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                            Disponible : {compatibleTypesFor(mod.key).map(t => CENTER_TYPE_LABELS[t].fr).join(' · ')}
+                            Disponible : {compatibleTypesFor(mod.key).map(t => centerTypeLabel(t.key)).join(' · ')}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0 mr-1">
@@ -1584,7 +1598,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                 <div className="mb-5">
                   <span id="center-type-label" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Type d’établissement *</span>
                   <div role="radiogroup" aria-labelledby="center-type-label" className="grid grid-cols-2 gap-3">
-                    {centerTypes.map(ct => {
+                    {selectableCenterTypes.map(ct => {
                       const active = centerType === ct.key;
                       return (
                         <button
@@ -1616,7 +1630,7 @@ export default function LandingPage({ onOpenLogin, centerName = 'EduSphère' }: 
                   <div role="note" className="mb-5 p-4 rounded-2xl border border-sky-200 bg-sky-50">
                     <p className="text-xs font-bold text-sky-800 text-center">
                       ℹ️ {incompatibleSelected
-                        .map(key => ALL_MODULES.find(m => m.key === key)?.label || key)
+                        .map(key => catalogModules.find(m => m.key === key)?.label || key)
                         .join(', ')}{' '}
                       n'est pas disponible pour les centres Crèche et Jardin d'enfants.
                       Vous pouvez le retirer ou choisir Garderie / Formation pour le conserver.

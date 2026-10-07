@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ALL_MODULES, PLAN_PRESET_MODULES, derivePlanFromModules, modulesForPlan, applicableModuleKeys, BASE_KEYS } from './pricing';
+import { allModules, planPresetModules, derivePlanFromModules, modulesForPlan, applicableModuleKeys, baseKeys } from './pricing';
+
+// Catalogue live lu depuis catalogStore (repli généré en tests) — figé une
+// fois par module, équivalent à l'ancien const ALL_MODULES / BASE_KEYS.
+const ALL_MODULES = allModules();
+const BASE_KEYS = baseKeys();
+const PLAN_PRESET_MODULES = planPresetModules();
 
 const NEW_KEYS = ['activites', 'competences'];
 
@@ -33,7 +39,7 @@ describe('pricing catalog: new modules (US8)', () => {
 
 const ALL_KEYS = ALL_MODULES.map(m => m.key);
 
-/** The 9 modules applicable to crèche/jardin per the remarks matrix (catalog order). */
+/** The 9 modules applicable to crèche/jardin per the remarks matrix (comparé en ensemble : l'ordre d'affichage vient de la table `modules`). */
 const CRECHE_KEYS = [
   'scolaire', 'finance', 'studentTimeSheets',            // base
   'cantine', 'transport', 'events', 'staff', 'activites', 'competences'
@@ -41,8 +47,8 @@ const CRECHE_KEYS = [
 
 describe('applicableModuleKeys (revision C, remark 7)', () => {
   it('offers crèche exactly the 9 type-compatible keys — never the study modules', () => {
-    expect(applicableModuleKeys('creche')).toEqual(CRECHE_KEYS);
-    expect(applicableModuleKeys('jardin')).toEqual(CRECHE_KEYS);
+    expect([...applicableModuleKeys('creche')].sort()).toEqual([...CRECHE_KEYS].sort());
+    expect([...applicableModuleKeys('jardin')].sort()).toEqual([...CRECHE_KEYS].sort());
     for (const study of ['etude', 'coursParticuliers', 'revision', 'formations']) {
       expect(applicableModuleKeys('creche'), study).not.toContain(study);
     }
@@ -91,7 +97,7 @@ describe('derivePlanFromModules with a center type (revision C, remark 7)', () =
 
 describe('modulesForPlan with a center type (revision C, remark 7)', () => {
   it('filters the Pro preset to the type-applicable set', () => {
-    expect(modulesForPlan('pro', 'creche')).toEqual(CRECHE_KEYS);
+    expect([...modulesForPlan('pro', 'creche')].sort()).toEqual([...CRECHE_KEYS].sort());
     expect(modulesForPlan('pro', 'formation')).toEqual(ALL_KEYS);
   });
 

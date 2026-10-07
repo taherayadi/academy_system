@@ -113,7 +113,8 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
 
   it('rejects phone numbers that are not exactly 8 digits', () => {
     render(<LandingPage onOpenLogin={() => {}} />);
-    fireEvent.click(screen.getByText('Jardin d’enfant'));
+    // Libellés = table center_types (via /api/catalog).
+    fireEvent.click(screen.getByText("Jardin d'enfants"));
     fillForm('20123'); // too short
     fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
     expect(screen.getByText(/exactement 8 chiffres/i)).toBeTruthy();
@@ -129,13 +130,13 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
 
     fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
 
-    await waitFor(() => {
-      expect(submitDemoRequestApi).toHaveBeenCalledWith(expect.objectContaining({
-        phone: '20123456',
-        centerType: 'formation',
-        requestedModules: ['scolaire', 'studentTimeSheets', 'finance', 'cantine']
-      }));
-    });
+    await waitFor(() => expect(submitDemoRequestApi).toHaveBeenCalled());
+    const payload = vi.mocked(submitDemoRequestApi).mock.calls.at(-1)?.[0] as any;
+    expect(payload.phone).toBe('20123456');
+    expect(payload.centerType).toBe('formation');
+    // Ordre indifférent : il découle de la table `modules` (via /api/catalog),
+    // le contrat est l'ENSEMBLE base + cantine, pas la séquence.
+    expect([...payload.requestedModules].sort()).toEqual(['cantine', 'finance', 'scolaire', 'studentTimeSheets']);
   });
 
   it('shows an error with retry instead of fake success when the API fails', async () => {
@@ -144,7 +145,7 @@ describe('LandingPage (base = Scolaire + Jd. Horaires + Finance, add-ons only)',
     apiMock.mockRejectedValueOnce(new Error('network down'));
     render(<LandingPage onOpenLogin={() => {}} />);
 
-    fireEvent.click(screen.getByText('Jardin d’enfant'));
+    fireEvent.click(screen.getByText("Jardin d'enfants"));
     fillForm('20 123 456');
     fireEvent.click(screen.getByRole('button', { name: /Démarrer mon essai gratuit/i }));
 
@@ -236,14 +237,14 @@ describe('LandingPage — module×type compatibility (T025, remarks 5+6)', () =>
   it('shows a «Disponible : …» badge line on every addon row (remark 5)', () => {
     render(<LandingPage onOpenLogin={() => {}} />);
 
-    // étude → Garderie, Formation only.
+    // étude → Garderie, Centre de formation only (libellés = table center_types).
     const etude = addonRow('Étude Surveillée');
-    expect(within(etude).getByText(/Disponible\s*:\s*Garderie · Formation/)).toBeTruthy();
+    expect(within(etude).getByText(/Disponible\s*:\s*Garderie · Centre de formation/)).toBeTruthy();
 
     // events → all four types (order-agnostic: the badge is one text run).
     const events = addonRow('Événements & Sorties');
     const eventsText = within(events).getByText(/Disponible\s*:/).textContent || '';
-    for (const label of ["Jardin d'enfants", 'Crèche', 'Garderie', 'Formation']) {
+    for (const label of ["Jardin d'enfants", 'Crèche', 'Garderie', 'Centre de formation']) {
       expect(eventsText).toContain(label);
     }
 

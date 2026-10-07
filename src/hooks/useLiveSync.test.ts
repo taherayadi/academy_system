@@ -7,7 +7,7 @@ const center = (over: Record<string, unknown> = {}): CenterTenant => ({
   id: 'c1',
   name: 'Centre Alpha',
   plan: 'starter',
-  enabledModules: ['scolaire', 'finance', 'studentTimeSheets'],
+  modules: ['scolaire', 'finance', 'studentTimeSheets'] as CenterTenant['modules'],
   status: 'active',
   trialEndsAt: null,
   subscriptionEndsAt: 9999999999999,
@@ -33,14 +33,14 @@ describe('subscriptionSnapshot', () => {
     expect(subscriptionSnapshot(center({ subscriptionEndsAt: 1111111111111 }))).not.toBe(base);
     expect(subscriptionSnapshot(center({ trialEndsAt: 1111111111111 }))).not.toBe(base);
     expect(
-      subscriptionSnapshot(center({ enabledModules: ['scolaire', 'finance', 'studentTimeSheets', 'etude'] }))
+      subscriptionSnapshot(center({ modules: ['scolaire', 'finance', 'studentTimeSheets', 'etude'] as CenterTenant['modules'] }))
     ).not.toBe(base);
   });
 
   it('ignores module order and cosmetic fields', () => {
     const base = subscriptionSnapshot(center());
     expect(
-      subscriptionSnapshot(center({ enabledModules: ['finance', 'studentTimeSheets', 'scolaire'] }))
+      subscriptionSnapshot(center({ modules: ['finance', 'studentTimeSheets', 'scolaire'] as CenterTenant['modules'] }))
     ).toBe(base);
     expect(subscriptionSnapshot(center({ name: 'Renamed', logoUrl: 'https://x/y.png' }))).toBe(base);
   });

@@ -296,7 +296,7 @@ describe('Atomic Entity Mutators', () => {
 // Step 3: Adaptive Cantine (Traiteur vs In-house Kitchen) & Goûter
 // ---------------------------------------------------------------------------
 describe('Step 3: Adaptive Cantine & Goûter', () => {
-  it('normalizes settings with in_house_kitchen mealOperatingMode', () => {
+  it('normalizes legacy fees payload into servicePrices and keeps meal mode', () => {
     const raw = {
       centerName: 'Al-Najah',
       mealOperatingMode: 'in_house_kitchen',
@@ -311,18 +311,18 @@ describe('Step 3: Adaptive Cantine & Goûter', () => {
     };
     const normalized = normalizeSettings(raw);
     expect(normalized.mealOperatingMode).toBe('in_house_kitchen');
-    expect(normalized.fees.fraisAbonnementRepas).toBe(180);
-    expect(normalized.fees.fraisParRepas).toBe(9);
-    expect(normalized.fees.fraisGouterMatinMensuel).toBe(30);
-    expect(normalized.fees.fraisGouterMatinUnitaire).toBe(2);
-    expect(normalized.fees.fraisGouterSoirMensuel).toBe(30);
-    expect(normalized.fees.fraisGouterSoirUnitaire).toBe(2);
+    expect(normalized.servicePrices.DEFAULT['lunch:month']).toBe(180);
+    expect(normalized.servicePrices.DEFAULT['lunch:unit']).toBe(9);
+    expect(normalized.servicePrices.DEFAULT['gouter_matin:month']).toBe(30);
+    expect(normalized.servicePrices.DEFAULT['gouter_matin:unit']).toBe(2);
+    expect(normalized.servicePrices.DEFAULT['gouter_apres_midi:month']).toBe(30);
+    expect(normalized.servicePrices.DEFAULT['gouter_apres_midi:unit']).toBe(2);
   });
 
-  it('normalizes settings with external_traiteur mode as default', () => {
+  it('keeps mealOperatingMode undefined when the platform set none', () => {
     const raw = { centerName: 'Test Academy' };
     const normalized = normalizeSettings(raw);
-    expect(normalized.mealOperatingMode).toBe('external_traiteur');
+    expect(normalized.mealOperatingMode).toBeUndefined();
   });
 
   it('normalizes snake_case fees for Goûter from API/DB', () => {

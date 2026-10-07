@@ -13,6 +13,8 @@ import { writeSkills } from '../functions/api/_lib';
 import type { CenterTenant, UserAccount } from './types';
 import { CRECHE_COMPOSED_CONFIG, makeCenter, makeProgram } from './testing/programConfig';
 
+const modulesOf = (c: CenterTenant): string[] => (c.modules as string[] | undefined) || [];
+
 const h = vi.hoisted(() => ({
   liveSyncHandlers: [] as Array<() => Promise<void>>,
   centers: [] as unknown[],
@@ -192,7 +194,7 @@ describe('C7 — an entitlement upgrade reveals locked payroll records unchanged
     expect(screen.getAllByText(LOCKED_MESSAGE).length).toBeGreaterThanOrEqual(4);
 
     // the center buys the staff module mid-session
-    await pushCenterUpdate({ ...center, enabledModules: ['scolaire', 'etude', 'staff'] });
+    await pushCenterUpdate({ ...center, modules: ['scolaire', 'etude', 'staff'] });
     await waitFor(() => expect(screen.queryByText(LOCKED_MESSAGE)).toBeNull(), { timeout: 5000 });
     const unlockedTab = screen.getByText(POINTAGE_TAB_LABEL).closest('button') as HTMLButtonElement;
     expect(unlockedTab.disabled).toBe(false);
@@ -209,12 +211,12 @@ describe('C8 — disabling and re-enabling a module never loses its data', { tim
     await loginAs(center, user);
     await clickTab('الأنشطة والبرنامج', 'Motricité du matin');
 
-    await pushCenterUpdate({ ...center, enabledModules: (center.enabledModules as string[]).filter(k => k !== 'activites') });
+    await pushCenterUpdate({ ...center, modules: modulesOf(center).filter(k => k !== 'activites') as CenterTenant['modules'] });
     // nav trace gone, and the stale deep link fell back to the dashboard
     await waitFor(() => expect(screen.queryByText('الأنشطة والبرنامج')).toBeNull(), { timeout: 5000 });
     await waitFor(() => expect(bodyText()).toMatch(DASHBOARD_GREETING), { timeout: 5000 });
 
-    await pushCenterUpdate({ ...center, enabledModules: [...(CRECHE_COMPOSED_CONFIG.enabledModules as string[])] });
+    await pushCenterUpdate({ ...center, modules: [...(CRECHE_COMPOSED_CONFIG.enabledModules as string[])] as CenterTenant['modules'] });
     await clickTab('الأنشطة والبرنامج', 'Motricité du matin');
     expect(screen.getByText('Motricité du matin')).toBeTruthy();
   });
@@ -225,10 +227,10 @@ describe('C8 — disabling and re-enabling a module never loses its data', { tim
     await clickTab('المهارات والكفاءات', 'الكتالوج');
     expect(screen.getByText('Vocabulaire')).toBeTruthy();
 
-    await pushCenterUpdate({ ...center, enabledModules: (center.enabledModules as string[]).filter(k => k !== 'competences') });
+    await pushCenterUpdate({ ...center, modules: modulesOf(center).filter(k => k !== 'competences') as CenterTenant['modules'] });
     await waitFor(() => expect(screen.queryByText('المهارات والكفاءات')).toBeNull(), { timeout: 5000 });
 
-    await pushCenterUpdate({ ...center, enabledModules: [...(CRECHE_COMPOSED_CONFIG.enabledModules as string[])] });
+    await pushCenterUpdate({ ...center, modules: [...(CRECHE_COMPOSED_CONFIG.enabledModules as string[])] as CenterTenant['modules'] });
     await clickTab('المهارات والكفاءات', 'الكتالوج');
     // catalog intact; the stored evaluation is still there for the child
     expect(screen.getByText('Vocabulaire')).toBeTruthy();
@@ -365,7 +367,7 @@ describe('programConfig factory remains the matrix source for this suite', () =>
   it('the composed crèche row is the one these round-trips flip between', () => {
     const center = makeCenter(CRECHE_COMPOSED_CONFIG);
     expect(center.centerType).toBe('creche');
-    expect(center.enabledModules).toContain('activites');
-    expect(center.enabledModules).toContain('competences');
+    expect(center.modules).toContain('activites');
+    expect(center.modules).toContain('competences');
   });
 });

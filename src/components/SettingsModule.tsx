@@ -22,7 +22,7 @@ import {
   Trash2,
   Loader2
 } from 'lucide-react';
-import { CenterSettings, CenterFeeSet, getFeesForYear, initialStudentFeeSet, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear, parseDecimalFee } from '../types';
+import { CenterSettings, CenterFeeSet, getFeesForYear, LEGACY_FEE_SERVICE_MAP, withServicePrice, initialCenterSettings, DEFAULT_ACADEMIC_YEARS, getCurrentAcademicYear, parseDecimalFee } from '../types';
 import { changeAccountPassword } from '../auth';
 import { uploadCenterLogoApi, saveCenterLogoApi } from '../api';
 import { useToast } from './Toast';
@@ -151,32 +151,21 @@ export default function SettingsModule({ settings, onUpdateSettings, onExportDat
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const activeYearFees = getFeesForYear(formData, selectedYear);
-    const updatedSettings: CenterSettings = {
-      ...formData,
-      fees: activeYearFees,
-      feesByYear: {
-        ...(formData.feesByYear || {}),
-        [selectedYear]: activeYearFees
-      }
-    };
-    onUpdateSettings(updatedSettings);
+    // Les tarifs vivent dans servicePrices (mise à jour par updateFee) —
+    // plus de bloc fees/feesByYear.
+    onUpdateSettings({ ...formData });
     setIsSaved(true);
     toast.success('تم حفظ الإعدادات بنجاح!');
     setTimeout(() => setIsSaved(false), 3000);
   };
 
+  // Nouveau schéma : chaque champ du formulaire est un (service_key, period)
+  // dans center_service_prices, porté par formData.servicePrices[year].
   const updateFee = (key: keyof CenterFeeSet, value: number) => {
     setFormData(prev => {
-      const currentYearFees = getFeesForYear(prev, selectedYear);
-      const updatedYearFees: CenterFeeSet = { ...currentYearFees, [key]: value };
-      return {
-        ...prev,
-        feesByYear: {
-          ...(prev.feesByYear || {}),
-          [selectedYear]: updatedYearFees
-        }
-      };
+      const map = LEGACY_FEE_SERVICE_MAP[key];
+      if (!map) return prev;
+      return { ...prev, servicePrices: withServicePrice(prev.servicePrices || {}, selectedYear, map.serviceKey, map.period, value) };
     });
   };
 
@@ -436,25 +425,12 @@ export default function SettingsModule({ settings, onUpdateSettings, onExportDat
                     <Utensils className="h-4 w-4 text-brand-600" />
                     المطعم والوجبات (Cantine Adaptative)
                   </span>
-                  {/* Mode Selector */}
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-brand-600/20 text-[11px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'external_traiteur' }))}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur' ? 'bg-brand-600 text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
-                    >
-                      🤝 متعاقد مع Traiteur خارجي
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, mealOperatingMode: 'in_house_kitchen' }));
-                        updateFee('prixPlatTraiteur', 0);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${formData.mealOperatingMode === 'in_house_kitchen' ? 'bg-brand-600 text-white shadow-lg shadow-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
-                    >
-                      👨‍🍳 مطبخ داخلي (طباخ قار)
-                    </button>
+                  {/* Mode cantine : géré par la plateforme (center_meal_mode_history) —
+                      lecture seule ici. Le centre voit le mode courant. */}
+                  <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-brand-600/20 text-[11px] font-bold text-brand-700">
+                    {(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur'
+                      ? '🤝 متعاقد مع Traiteur خارجي'
+                      : '👨‍🍳 مطبخ داخلي (طباخ قار)'}
                   </div>
                 </div>
 

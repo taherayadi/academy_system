@@ -19,10 +19,14 @@ import {
   PhoneCall, 
   Printer, 
   X,
-  Eye
+  Eye,
+  User,
+  ChevronDown,
+  ChevronLeft
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure } from '../types';
+import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure, paymentMethodLabel } from '../types';
 import { academicMonthPrefix, isLunchAttendance } from '../utils/mealLogic';
+import { updatePaymentApi } from '../api';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
@@ -34,6 +38,8 @@ interface FinanceModuleProps {
   expenses: CenterExpense[];
   onUpdateExpenses: (expenses: CenterExpense[]) => void;
   onUpdateStudent?: (student: Student) => void;
+  /** Réconciliation locale de paiements déjà persistés via /api/payments (sans réécriture élève). */
+  onMarkPaymentsPaid?: (updates: { studentId: string; paymentIds: string[] }[]) => void;
   externalStudents?: ExternalStudentRegister[];
   courses?: ExternalCourse[];
   revisions?: RevisionSeance[];
@@ -63,6 +69,24 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'Autres'
 ];
 
+// Libellés bilingues (arabe — français) affichés uniquement dans la liste
+// déroulante d'ajout de dépense ; la valeur stockée reste la catégorie brute,
+// donc aucune migration de données n'est nécessaire.
+const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, { ar: string; fr: string }> = {
+  'Télécom': { ar: 'الاتصالات', fr: 'Télécom' },
+  'Eau (SONEDE)': { ar: 'الماء', fr: 'Eau (SONEDE)' },
+  'Électricité (STEG)': { ar: 'الكهرباء', fr: 'Électricité (STEG)' },
+  'CNSS': { ar: 'الضمان الاجتماعي', fr: 'CNSS' },
+  "Produits d'hygiène": { ar: 'مستلزمات النظافة', fr: "Produits d'hygiène" },
+  "Fournitures d'entretien": { ar: 'مواد التنظيف', fr: "Fournitures d'entretien" },
+  "Frais d'examen": { ar: 'مصاريف الامتحانات', fr: "Frais d'examen" },
+  'Assurance': { ar: 'التأمين', fr: 'Assurance' },
+  'Salaires (Personnel)': { ar: 'الأجور (الإطار)', fr: 'Salaires (Personnel)' },
+  'الكراء': { ar: 'الكراء', fr: 'Loyer' },
+  'المحاسبات': { ar: 'المحاسبة', fr: 'Comptabilité' },
+  'Autres': { ar: 'أخرى', fr: 'Autres' }
+};
+
 const getServiceOptions = (centerName: string): { value: string; label: string }[] => [
   { value: 'Suivi', label: 'متابعة' },
   { value: 'Inscription Suivi', label: 'تسجيل المتابعة' },
@@ -83,6 +107,9 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
 // Services hidden for the restricted (limited) account: external courses, revision, formations, meals, assurance
 
 const fmt = (n: number) => n.toFixed(3);
+
+// Ordre arabe insensible : regroupe les reçus d'un même élève en blocs contigus
+const sortCompare = (x: string, y: string) => x.localeCompare(y, 'ar');
 
 // Unified neutral metric card: dark text/number, colored cue only as a dot.
 function MetricCard({ label, value, hint, dot, className = '' }: { label: string; value: string; hint?: string; dot?: string; className?: string }) {
@@ -140,7 +167,7 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, onMarkPaymentsPaid, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
@@ -202,6 +229,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const chequesPageSize = 10;
   const [chequeSearch, setChequeSearch] = useState('');
   const [chequeDetailModal, setChequeDetailModal] = useState<{ chequeNumber?: string; chequeDate?: string; payments: any[]; totalAmount: number; paid: boolean } | null>(null);
+  // Groupes pliables par élève (سجل المقبوضات + سجل الخلاص السنوي) — ouverts par défaut,
+  // la clé inclut l'onglet pour que le repli dans un onglet ne réplique pas sur l'autre.
+  const [expandedStudents, setExpandedStudents] = useState<Record<string, boolean>>({});
+  const toggleStudentGroup = (groupKey: string) => {
+    setExpandedStudents(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
+  const isStudentGroupExpanded = (groupKey: string) => expandedStudents[groupKey] !== false;
 
   // Expense modal state
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -1337,9 +1371,25 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           ...Object.values(chequeGroups).map(g => ({ type: 'cheque' as const, group: g }))
         ];
 
-        const totalPages = Math.ceil(mergedHistory.length / pageSize) || 1;
+        const studentOfHistoryItem = (item: typeof mergedHistory[number]) =>
+          item.type === 'single' ? (item.payment.studentName || '—') : (item.group.studentNames[0] || '—');
+        // Tri par élève : les reçus d'un même élève restent regroupés d'une page à l'autre
+        const sortedHistory = [...mergedHistory].sort(
+          (a, b) => sortCompare(studentOfHistoryItem(a), studentOfHistoryItem(b))
+        );
+        const totalPages = Math.ceil(sortedHistory.length / pageSize) || 1;
         const currentPage = Math.min(Math.max(1, historyPage), totalPages);
-        const paginatedHistory = mergedHistory.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+        const paginatedHistory = sortedHistory.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+        const historyPageStats: Record<string, { count: number; total: number }> = {};
+        paginatedHistory.forEach(item => {
+          const name = studentOfHistoryItem(item);
+          const amt = item.type === 'single'
+            ? (item.payment.refund ? -Math.abs(item.payment.amountPaid) : item.payment.amountPaid)
+            : item.group.totalAmount;
+          if (!historyPageStats[name]) historyPageStats[name] = { count: 0, total: 0 };
+          historyPageStats[name].count += 1;
+          historyPageStats[name].total += amt;
+        });
 
         return (
           <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
@@ -1386,10 +1436,39 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <td colSpan={8} className="p-8 text-center text-slate-400">لا توجد وصولات مقبوضات موافقة للتصفية.</td>
                     </tr>
                   ) : (
-                    paginatedHistory.map((item) => {
-                      if (item.type === 'single') {
-                        const p = item.payment;
-                        return (
+                    paginatedHistory.map((item, idx) => {
+                      const itemStudentName = studentOfHistoryItem(item);
+                      const showStudentHeader = idx === 0 || studentOfHistoryItem(paginatedHistory[idx - 1]) !== itemStudentName;
+                      const itemStats = historyPageStats[itemStudentName];
+                      const itemKey = item.type === 'single' ? item.payment.id : `cheque_${item.group.chequeNumber}`;
+                      const historyGroupKey = `history:${itemStudentName}`;
+                      const historyExpanded = isStudentGroupExpanded(historyGroupKey);
+                      return (
+                        <React.Fragment key={itemKey}>
+                          {showStudentHeader && (
+                            <tr
+                              onClick={() => toggleStudentGroup(historyGroupKey)}
+                              className="bg-brand-600/[0.07] border-y border-brand-600/10 cursor-pointer select-none hover:bg-brand-600/[0.12] transition"
+                              title={historyExpanded ? 'طي المجموعة' : 'فتح المجموعة'}
+                              aria-expanded={historyExpanded}
+                            >
+                              <td colSpan={8} className="p-2.5 px-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 font-black text-brand-800 text-[11px]">
+                                    <User className="h-3.5 w-3.5" />
+                                    {itemStudentName}
+                                    <span className="text-[9px] font-bold text-slate-400">({itemStats?.count ?? 0} وصل)</span>
+                                    {historyExpanded ? <ChevronDown className="h-3.5 w-3.5 text-brand-600" /> : <ChevronLeft className="h-3.5 w-3.5 text-slate-400" />}
+                                  </span>
+                                  <span className="font-mono font-black text-brand-700 text-[11px]">{fmt(itemStats?.total ?? 0)} د.ت</span>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          {historyExpanded && (item.type === 'single' ? (
+                            (() => {
+                              const p = item.payment;
+                              return (
                           <tr key={p.id} className="hover:bg-slate-50/80 transition">
                             <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                             <td className="p-4 font-mono text-slate-600">{p.date}</td>
@@ -1411,13 +1490,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               )}
                             </td>
                             <td className="p-4">
-                              <span className="text-slate-600 font-bold">{p.method}</span>
+                              <span className="text-slate-600 font-bold">{paymentMethodLabel(p.method)}</span>
                             </td>
                           </tr>
-                        );
-                      } else {
-                        const g = item.group;
-                        return (
+                              );
+                            })()
+                          ) : (
+                            (() => {
+                              const g = item.group;
+                              return (
                           <tr key={g.chequeNumber} className="hover:bg-brand-600/[0.05] transition">
                             <td className="p-4 font-mono font-bold text-slate-500 text-[10px]">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
                             <td className="p-4 font-mono text-slate-600">{g.chequeDate || '-'}</td>
@@ -1466,8 +1547,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               </div>
                             </td>
                           </tr>
-                        );
-                      }
+                              );
+                            })()
+                          ))}
+                        </React.Fragment>
+                      );
                     })
                   )}
                 </tbody>
@@ -1500,9 +1584,25 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
       {/* TAB 3bis: ANNUAL INSCRIPTION HISTORY (SUIVI / ÉTUDE / LIBRARY) */}
       {activeTab === 'annualInscriptions' && (() => {
-        const annTotalPages = Math.ceil(annualInscriptionPayments.length / pageSize) || 1;
+        // Tri par élève : les reçus annuels d'un même élève restent regroupés d'une page à l'autre
+        const sortedAnn = [...annualInscriptionPayments].sort(
+          (a, b) => sortCompare((a.studentName || '—'), (b.studentName || '—')) || (a.date || '').localeCompare(b.date || '')
+        );
+        const annTotalPages = Math.ceil(sortedAnn.length / pageSize) || 1;
         const annCurrentPage = Math.min(Math.max(1, historyPage), annTotalPages);
-        const paginatedAnn = annualInscriptionPayments.slice((annCurrentPage - 1) * pageSize, annCurrentPage * pageSize);
+        const paginatedAnn = sortedAnn.slice((annCurrentPage - 1) * pageSize, annCurrentPage * pageSize);
+
+        // Regroupement par élève : une ligne d'en-tête par élève récapitule le
+        // nombre de reçus et son total net (annuel + inscriptions, net des remboursements).
+        const annPageStats: Record<string, { count: number; total: number }> = {};
+        paginatedAnn.forEach(p => {
+          const rec = p as any;
+          const amt = rec.centerShare ?? (p.refund ? -Math.abs(p.amountPaid) : p.amountPaid);
+          const name = p.studentName || '—';
+          if (!annPageStats[name]) annPageStats[name] = { count: 0, total: 0 };
+          annPageStats[name].count += 1;
+          annPageStats[name].total += amt;
+        });
 
         return (
           <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
@@ -1537,8 +1637,36 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <td colSpan={8} className="p-8 text-center text-slate-400">لا توجد تسجيلات سنوية موافقة للسنة الدراسية المختارة.</td>
                     </tr>
                   ) : (
-                    paginatedAnn.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/80 transition">
+                    paginatedAnn.map((p, idx) => {
+                      const studentName = p.studentName || '—';
+                      const showHeader = idx === 0 || (paginatedAnn[idx - 1].studentName || '—') !== studentName;
+                      const st = annPageStats[studentName];
+                      const annualGroupKey = `annual:${studentName}`;
+                      const annualExpanded = isStudentGroupExpanded(annualGroupKey);
+                      return (
+                        <React.Fragment key={p.id}>
+                          {showHeader && (
+                            <tr
+                              onClick={() => toggleStudentGroup(annualGroupKey)}
+                              className="bg-brand-600/[0.07] border-y border-brand-600/10 cursor-pointer select-none hover:bg-brand-600/[0.12] transition"
+                              title={annualExpanded ? 'طي المجموعة' : 'فتح المجموعة'}
+                              aria-expanded={annualExpanded}
+                            >
+                              <td colSpan={8} className="p-2.5 px-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 font-black text-brand-800 text-[11px]">
+                                    <User className="h-3.5 w-3.5" />
+                                    {studentName}
+                                    <span className="text-[9px] font-bold text-slate-400">({st?.count ?? 0} وصل)</span>
+                                    {annualExpanded ? <ChevronDown className="h-3.5 w-3.5 text-brand-600" /> : <ChevronLeft className="h-3.5 w-3.5 text-slate-400" />}
+                                  </span>
+                                  <span className="font-mono font-black text-brand-700 text-[11px]">{fmt(st?.total ?? 0)} د.ت</span>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          {annualExpanded && (
+                          <tr className="hover:bg-slate-50/80 transition">
                         <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
                         <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
                         <td className="p-4 font-black text-slate-900">{p.studentName}</td>
@@ -1581,11 +1709,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               </button>
                             </div>
                           ) : (
-                            <span className="text-slate-600 font-bold">{p.method}</span>
+                            <span className="text-slate-600 font-bold">{paymentMethodLabel(p.method)}</span>
                           )}
                         </td>
                       </tr>
-                    ))
+                        )}
+                        </React.Fragment>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1708,7 +1839,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               </button>
                             </div>
                           ) : (
-                            <span className="text-slate-600 font-bold">{p.method}</span>
+                            <span className="text-slate-600 font-bold">{paymentMethodLabel(p.method)}</span>
                           )}
                         </td>
                       </tr>
@@ -1960,7 +2091,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               <td className="p-4 font-black text-slate-900">{row.name}</td>
                               <td className={`p-4 font-bold ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{row.courseName}</td>
                               <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{fmt(row.amount)} د.ت</td>
-                              <td className="p-4 text-slate-600 font-bold">{row.method}</td>
+                              <td className="p-4 text-slate-600 font-bold">{paymentMethodLabel(row.method)}</td>
                             </tr>
                           ))
                         )}
@@ -2119,7 +2250,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     value={expCategory} onChange={(e) => setExpCategory(e.target.value as any)}
                     className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold"
                   >
-                    {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {EXPENSE_CATEGORIES.map(c => {
+                      const lbl = EXPENSE_CATEGORY_LABELS[c] || { ar: c, fr: c };
+                      const bilingual = lbl.ar === lbl.fr ? lbl.ar : `${lbl.ar} — ${lbl.fr}`;
+                      return <option key={c} value={c}>{bilingual}</option>;
+                    })}
                   </select>
                 </div>
 
@@ -2340,8 +2475,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalForfaitEstimate = restoStudents.reduce((sum, s) => sum + s.forfaitEstimate, 0);
         // Forfait actually acquired — snapshot from closed months only.
         const totalForfaitUnused = restoStudents.reduce((sum, s) => sum + s.forfaitUnused, 0);
-        const prixPlat = settings?.fees?.fraisParRepas ?? 8;
-        const prixTraiteur = isInHouseKitchen ? 0 : (settings?.fees?.prixPlatTraiteur ?? 6);
+        const prixPlat = getFeesForYear(settings, getCurrentAcademicYear()).fraisParRepas;
+        const prixTraiteur = isInHouseKitchen ? 0 : getFeesForYear(settings, getCurrentAcademicYear()).prixPlatTraiteur;
         const centerMarginPerPlate = isInHouseKitchen ? prixPlat : (prixPlat - prixTraiteur);
         const traiteurCost = restoStudents.reduce((sum, s) => sum + s.traiteurPart, 0);
         // Margin on paid plates + forfait acquired from closed months. Unpaid plates earn nothing.
@@ -2884,21 +3019,18 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
         const handleValidateChequeGroup = (cheque: typeof groupedCheques[0]) => {
           const paymentIds = new Set(cheque.payments.map(p => p.id));
-          const studentUpdates = new Map<string, Student>();
+          // Encaissement atomique : UN PUT /api/payments PAR paiement du chèque —
+          // l'élève n'est plus réécrit en entier (l'ancien flux PUT /api/students
+          // renvoyait toutes les tables enfants et violait les CHECK stricts) ;
+          // l'état local est réconcilié via onMarkPaymentsPaid, sans requête élève.
+          const reconciliations: { studentId: string; paymentIds: string[] }[] = [];
           cheque.payments.forEach(p => {
-            if (!p.studentId || !onUpdateStudent) return;
-            if (!studentUpdates.has(p.studentId)) {
-              const student = students.find(s => s.id === p.studentId);
-              if (student) studentUpdates.set(p.studentId, student);
-            }
+            if (!p.studentId) return; // paiements synthétiques (formations/événements) : marquage local plus bas
+            reconciliations.push({ studentId: p.studentId, paymentIds: [p.id] });
+            updatePaymentApi({ id: p.id, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate })
+              .catch(() => toast.error(`تعذر تسجيل تحصيل الشيك ${cheque.chequeNumber || ''} على الخادم.`));
           });
-          studentUpdates.forEach((student, studentId) => {
-            const updatedPayments = (student.payments || []).map(sp => {
-              if (paymentIds.has(sp.id)) return { ...sp, chequePaid: true };
-              return sp;
-            });
-            onUpdateStudent({ ...student, payments: updatedPayments });
-          });
+          if (onMarkPaymentsPaid && reconciliations.length > 0) onMarkPaymentsPaid(reconciliations);
 
           // Also validate formation students if any payment is from Formation
           if (formations && onUpdateFormations) {

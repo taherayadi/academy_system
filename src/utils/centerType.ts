@@ -1,94 +1,92 @@
 /**
  * Center-type predicates — single source of truth for type-aware UI gating.
  *
- * Four accepted center types: 'jardin' | 'creche' | 'garderie' | 'formation'.
+ * ⚠️ Tout est lu à l'EXÉCUTION depuis /api/catalog (tables `center_types` +
+ * `center_type_modules`) via catalogStore ; le fichier généré
+ * Aucune clé de type ni matrice codée en dur ici.
+ *
  * Unknown/empty input returns TRUE (legacy visibility): centers created before
  * center types existed must keep seeing everything, so gating is always
  * removal-only and never changes behavior for legacy or unknown values.
  */
 
-export type CenterType = 'jardin' | 'creche' | 'garderie' | 'formation';
+import { getCatalogSnapshot, type CatalogCenterType } from './catalogStore';
 
-/** The four accepted center types, in landing-form display order. */
-export const CENTER_TYPES: readonly CenterType[] = ['jardin', 'creche', 'garderie', 'formation'];
+/** Clé de type de centre — string libre miroir de `center_types.key`. */
+export type CenterType = string;
 
-const SCHOOL_LEVEL_TYPES = new Set<string>(['garderie', 'formation']);
-
-const STUDY_MODULE_TYPES = new Set<string>(['garderie', 'formation']);
-
-const KNOWN_TYPES = new Set<string>(['jardin', 'creche', 'garderie', 'formation']);
+/** Types de centre, ordre de la table `center_types`. */
+export function centerTypes(): readonly CatalogCenterType[] {
+  return getCatalogSnapshot().centerTypes;
+}
 
 /**
- * Legacy/unknown passthrough: only the four known types ever gate anything.
- * Any other value (pre-types centers, typos, server-side values added later)
- * keeps full legacy visibility.
+ * Clés des types de centre « gatables » — ceux qui portent des lignes dans
+ * `center_type_modules` (ordre de la table). Un type sans ligne (ex. « other »)
+ * n'est jamais gated : hors liste, comme les types inconnus.
  */
-function isKnownType(type?: string | null): boolean {
-  return !!type && KNOWN_TYPES.has(String(type));
+export function centerTypeKeys(): CenterType[] {
+  return centerTypes().map(t => t.key as CenterType).filter(isKnownType);
+}
+
+/**
+ * Un type est « connu » (donc peut gated) s'il apparaît dans
+ * `center_type_modules` — la table de compatibilité DÉFINIT le gating. Un type
+ * sans ligne (ex. « other ») reste en passthrough hérité : visibilité
+ * complète, jamais bloqué — même règle que pour les centres sans type.
+ */
+/** Exporté : les formulaires n'affichent que les types réellement « gatables ». */
+export function isKnownType(type?: string | null): boolean {
+  return !!type && getCatalogSnapshot().centerTypeModuleKeys.some(p => p.centerType === String(type));
 }
 
 /**
  * True when the center shows school-level artifacts (grade / établissement
- * fields, school-year labels, grade filters). 'garderie' and 'formation' are
- * school-bearing; 'creche' and 'jardin' are not. Unknown/empty → true.
+ * fields, school-year labels, grade filters). Invariant métier porté par la
+ * base : les types scolaires sont exactement ceux servis par les modules
+ * d'étude (`center_type_modules` × etude) — garderie et formation aujourd'hui.
+ * Unknown/empty → true.
  */
 export function hasSchoolLevel(type?: string | null): boolean {
   if (!isKnownType(type)) return true;
-  return SCHOOL_LEVEL_TYPES.has(String(type));
+  return isModuleCompatible('etude', type);
 }
 
 /**
- * True when the center shows the four school study modules (Cours
- * Particuliers, Étude, Révision, Formations). Unknown/empty → true.
+ * True when the center shows the school study modules (Cours Particuliers,
+ * Étude, Révision, Formations) — même invariant que hasSchoolLevel.
+ * Unknown/empty → true.
  */
 export function hasStudyModules(type?: string | null): boolean {
   if (!isKnownType(type)) return true;
-  return STUDY_MODULE_TYPES.has(String(type));
+  return isModuleCompatible('etude', type);
 }
 
-// ─── Module × center-type compatibility (remarks alignment, revision B) ────
-//
-// Which center types each catalog module serves. Transcribed from the client
-// remarks matrix (center-type-module-rules.md): study modules (and the other
-// school-bearing addons) are garderie/formation only; the core addons serve
-// all four types. This map is THE single definition — renewal, the landing
-// badges and the demo form all derive from it, and the coherence test asserts
-// every catalog key has an entry, so the matrix can never drift from the
-// catalog.
-
 /**
- * Center types each module serves, keyed by catalog module key. Every
- * `ALL_MODULES` key MUST appear here (asserted by the coherence test).
- * Unknown keys are treated as garderie/formation-only by isModuleCompatible.
+ * Center types each module serves, keyed by module key — reconstruit à chaque
+ * appel depuis les lignes de `center_type_modules`. Une clé sans ligne (ex.
+ * bibliotheque, isHidden) est servie à aucun type connu.
  */
-export const moduleCenterTypes: Record<string, readonly CenterType[]> = {
-  // Base (all-types by construction; listed for the coverage invariant).
-  scolaire: ['jardin', 'creche', 'garderie', 'formation'],
-  studentTimeSheets: ['jardin', 'creche', 'garderie', 'formation'],
-  finance: ['jardin', 'creche', 'garderie', 'formation'],
-  // School-bearing addons — garderie/formation only (remarks matrix).
-  etude: ['garderie', 'formation'],
-  coursParticuliers: ['garderie', 'formation'],
-  revision: ['garderie', 'formation'],
-  formations: ['garderie', 'formation'],
-  // Core addons — every center type.
-  cantine: ['jardin', 'creche', 'garderie', 'formation'],
-  transport: ['jardin', 'creche', 'garderie', 'formation'],
-  events: ['jardin', 'creche', 'garderie', 'formation'],
-  staff: ['jardin', 'creche', 'garderie', 'formation'],
-  activites: ['jardin', 'creche', 'garderie', 'formation'],
-  competences: ['jardin', 'creche', 'garderie', 'formation'],
-};
+export function moduleCenterTypes(): Record<string, readonly CenterType[]> {
+  const map: Record<string, CenterType[]> = {};
+  for (const { centerType, moduleKey } of getCatalogSnapshot().centerTypeModuleKeys) {
+    const list = map[moduleKey] || (map[moduleKey] = []);
+    list.push(centerType as CenterType);
+  }
+  return map;
+}
 
 /**
  * True when the module may be offered to / used by a center of this type.
- * Unknown or empty type → true (legacy passthrough, same rule as above).
- * A key missing from `moduleCenterTypes` is served to no known type.
+ * Unknown or empty type → true (legacy passthrough). A module key with no
+ * `center_type_modules` row is served to no known type.
  */
 export function isModuleCompatible(moduleKey: string, centerType?: string | null): boolean {
   if (!isKnownType(centerType)) return true;
-  const served = moduleCenterTypes[String(moduleKey)];
-  return !!served && served.includes(String(centerType) as CenterType);
+  const served = getCatalogSnapshot().centerTypeModuleKeys
+    .filter(p => p.moduleKey === String(moduleKey))
+    .map(p => p.centerType);
+  return served.includes(String(centerType));
 }
 
 /**
@@ -100,10 +98,16 @@ export function incompatibleModules(keys: readonly string[], centerType?: string
   return keys.filter(key => !isModuleCompatible(key, centerType));
 }
 
-/** Display labels for the four center types (badges, banners, remarks). */
-export const CENTER_TYPE_LABELS: Record<CenterType, { fr: string; ar: string }> = {
-  creche: { fr: 'Crèche', ar: 'الحضانة' },
-  jardin: { fr: "Jardin d'enfants", ar: 'روض الأطفال' },
-  garderie: { fr: 'Garderie', ar: 'الحضيرة المدرسية' },
-  formation: { fr: 'Formation', ar: 'مركز تكوين' },
-};
+/** Libellé d'un type de centre (fr par défaut, ar possible) ; repli : la clé brute. */
+export function centerTypeLabel(key: string, lang: 'fr' | 'ar' = 'fr'): string {
+  const entry = centerTypes().find(t => t.key === key);
+  if (!entry) return String(key);
+  return lang === 'ar' ? (entry.labelAr || entry.label) : (entry.label || String(key));
+}
+
+/** Hint d'un type de centre (fr/ar) ; repli : ''. */
+export function centerTypeHint(key: string, lang: 'fr' | 'ar' = 'fr'): string {
+  const entry = centerTypes().find(t => t.key === key);
+  if (!entry) return '';
+  return lang === 'ar' ? (entry.hintAr || '') : (entry.hint || '');
+}

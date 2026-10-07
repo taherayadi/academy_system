@@ -15,12 +15,37 @@ import {
 } from 'lucide-react';
 import type { SubscriptionPlan } from '../types';
 import { isModuleCompatible } from './centerType';
+import { getCatalogSnapshot } from './catalogStore';
 
 /**
  * Catalogue des modules facturables + offres, partagé par le simulateur de la
- * page d'accueil et le module « Renouvellement » du centre : une seule source
- * de vérité pour les clés, les libellés et le calcul du prix.
+ * page d'accueil et le module « Renouvellement » du centre.
+ *
+ * ⚠️ Tout est lu à l'EXÉCUTION depuis /api/catalog via catalogStore — table
+ * `modules` (clés/labels/icônes/drapeaux isBasic/isUnbilled/isHidden) et table
+ * `center_type_modules` (compatibilité, via centerType.ts). Aucune liste
+ * codée en dur, aucun fichier généré : la base est la seule source.
+ * Les prix vivent dans `module_prices` et sont chargés à l'EXÉCUTION via
+ * /api/public-pricing.
  */
+
+/** Nom d'icône lucide (colonne `modules.icon`) → composant. Fallback : Shapes. */
+const MODULE_ICONS: Record<string, any> = {
+  GraduationCap,
+  DollarSign,
+  Clock,
+  BookOpen,
+  Users,
+  Award,
+  Sparkles,
+  Utensils,
+  Bus,
+  Calendar,
+  ShieldCheck,
+  Shapes,
+  Brain,
+};
+const iconForModule = (name: string): any => MODULE_ICONS[name] || Shapes;
 
 export interface PricedModule {
   key: string;
@@ -30,26 +55,33 @@ export interface PricedModule {
   bundled?: boolean;
 }
 
-export const BASE_KEYS = ['scolaire', 'studentTimeSheets', 'finance'] as const;
+/** Catalogue vendable = modules non masqués (`modules.isHidden = 0`), ordre de la table. */
+export function allModules(): readonly PricedModule[] {
+  return getCatalogSnapshot().modules
+    .filter(m => !m.isHidden)
+    .map(m => ({
+      key: m.key,
+      label: m.label,
+      icon: iconForModule(m.icon),
+      description: m.description,
+      bundled: m.isUnbilled || undefined,
+    }));
+}
 
-export const ALL_MODULES: readonly PricedModule[] = [
-  { key: 'scolaire', label: 'Scolaire & Notes', icon: GraduationCap, description: 'Fiches élèves, notes, moyennes et bulletins par trimestre.' },
-  { key: 'finance', label: 'Finance & Paiements', icon: DollarSign, description: 'Reçus, encaissements, chèques et statistiques de revenus.' },
-  { key: 'studentTimeSheets', label: 'Jd. Horaires', icon: Clock, description: 'Pointage journalier des entrées/sorties des élèves — offert avec la base.', bundled: true },
-  { key: 'etude', label: 'Étude Surveillée', icon: BookOpen, description: 'Planning hebdomadaire, présences, horaires.' },
-  { key: 'coursParticuliers', label: 'Cours Particuliers', icon: Users, description: 'Cours 1-à-1, tarification, enseignants.' },
-  { key: 'revision', label: 'Révision Examens', icon: Award, description: 'Séances de révision, groupes, présences.' },
-  { key: 'formations', label: 'Formations', icon: Sparkles, description: 'Ateliers, stages vacances, plannings.' },
-  { key: 'cantine', label: 'Cantine & Repas', icon: Utensils, description: 'Menus hebdomadaires, abonnements, pointage.' },
-  { key: 'transport', label: 'Transport Scolaire', icon: Bus, description: 'Circuits, feuilles de route, chauffeurs.' },
-  { key: 'events', label: 'Événements & Sorties', icon: Calendar, description: 'Inscriptions, sorties scolaires.' },
-  { key: 'staff', label: 'Personnel & Salaires', icon: ShieldCheck, description: 'Équipe, paie, pointages, congés.' },
-  { key: 'activites', label: 'Activités & Planning', icon: Shapes, description: 'Planning hebdomadaire des activités : motricité, art, musique, jeu.' },
-  { key: 'competences', label: 'Compétences & Skills', icon: Brain, description: 'Catalogue de compétences et évaluations par enfant avec rapport imprimable.' },
-];
+/** Base non retirable = lignes `modules.isBasic = 1`. */
+export function baseKeys(): readonly string[] {
+  return getCatalogSnapshot().modules.filter(m => m.isBasic).map(m => m.key);
+}
 
-export const ADDON_MODULES = ALL_MODULES.filter(m => !(BASE_KEYS as readonly string[]).includes(m.key));
-export const BASE_MODULES = ALL_MODULES.filter(m => (BASE_KEYS as readonly string[]).includes(m.key));
+export function addonModules(): readonly PricedModule[] {
+  const base = new Set<string>(baseKeys());
+  return allModules().filter(m => !base.has(m.key));
+}
+
+export function baseModules(): readonly PricedModule[] {
+  const base = new Set<string>(baseKeys());
+  return allModules().filter(m => base.has(m.key));
+}
 
 /** Somme des prix des modules demandés (un module inconnu vaut 0). */
 export const modulesPrice = (keys: readonly string[], prices: Record<string, number>): number =>
@@ -98,15 +130,24 @@ export const cycleDays = (cycle?: string | null): number => (String(cycle) === '
  * Modules inclus par offre. Une offre agit comme un préréglage du simulateur :
  * le centre peut ensuite affiner en cochant / décochant des modules, exactement
  * comme sur la page d'accueil.
+ *
+ * Dérivés du catalogue live à chaque appel : starter = modules isBasic=1,
+ * pro = tout le catalogue vendable.
+ * ⚠️ Pas encore de table pour les préréglages d'offre : le preset « growth »
+ * reste une sélection métier (base + modules scolaires et activités) en
+ * attendant une table dédiée (ex. plan_presets).
  */
-export const PLAN_PRESET_MODULES: Record<string, string[]> = {
-  starter: ['scolaire', 'studentTimeSheets', 'finance'],
-  growth: ['scolaire', 'studentTimeSheets', 'finance', 'etude', 'coursParticuliers', 'revision', 'activites', 'competences'],
-  pro: ALL_MODULES.map(m => m.key),
-};
+export function planPresetModules(): Record<string, string[]> {
+  return {
+    starter: [...baseKeys()],
+    growth: [...baseKeys(), 'etude', 'coursParticuliers', 'revision', 'activites', 'competences'],
+    pro: allModules().map(m => m.key),
+  };
+}
 
 export function modulesForPlan(plan?: string | null, centerType?: string | null): string[] {
-  const preset = PLAN_PRESET_MODULES[String(plan || '')] || PLAN_PRESET_MODULES.starter;
+  const presets = planPresetModules();
+  const preset = presets[String(plan || '')] || presets.starter;
   // Revision C (remark 7): a type-aware preset only proposes type-compatible
   // modules — the Pro preset for a crèche IS its applicable set. No type →
   // today's preset verbatim (legacy passthrough, FR-006 baseline frozen).
@@ -116,12 +157,13 @@ export function modulesForPlan(plan?: string | null, centerType?: string | null)
 
 /**
  * Revision C (remark 7): the modules a center of this type can actually select
- * — ALL_MODULES filtered through the canonical compatibility map. Unknown or
- * empty type returns the full catalog (legacy passthrough): derivation then
- * compares against the global set exactly as before this revision.
+ * — the live catalog filtered through the compatibility rows (table
+ * `center_type_modules`). Unknown or empty type returns the full catalog
+ * (legacy passthrough): derivation then compares against the global set
+ * exactly as before this revision.
  */
 export function applicableModuleKeys(centerType?: string | null): string[] {
-  return ALL_MODULES.map(m => m.key).filter(key => isModuleCompatible(key, centerType));
+  return allModules().map(m => m.key).filter(key => isModuleCompatible(key, centerType));
 }
 
 /** Remise appliquée au règlement annuel (2 mois offerts ≈ −20 %). */
@@ -135,7 +177,7 @@ export const ANNUAL_DISCOUNT = 0.2;
  * Ainsi cocher un module fait évoluer l'offre affichée et envoyée.
  *
  * Revision C (remark 7) : « tous » = tous les modules APPLICABLES au type de
- * centre (moduleCenterTypes), pas le catalogue global — un centre crèche qui
+ * centre (center_type_modules), pas le catalogue global — un centre crèche qui
  * coche tous les modules proposés atteint bien Pro. Sans type connu, la
  * comparaison reste globale (comportement antérieur inchangé, FR-006).
  * Dérivation pure : ne mute jamais la sélection (FR-010).
@@ -143,7 +185,8 @@ export const ANNUAL_DISCOUNT = 0.2;
 export function derivePlanFromModules(selected: readonly string[], centerType?: string | null): SubscriptionPlan {
   const all = applicableModuleKeys(centerType);
   if (all.length > 0 && all.every(k => selected.includes(k))) return 'pro';
-  const hasExtra = selected.some(k => !(BASE_KEYS as readonly string[]).includes(k));
+  const base = baseKeys();
+  const hasExtra = selected.some(k => !base.includes(k));
   return hasExtra ? 'growth' : 'starter';
 }
 

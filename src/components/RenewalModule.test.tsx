@@ -38,7 +38,7 @@ const center = (over: Partial<CenterTenant> = {}): CenterTenant => ({
   id: 'c1',
   name: 'Centre Alpha',
   plan: 'starter',
-  enabledModules: ['scolaire', 'studentTimeSheets', 'finance'],
+  modules: ['scolaire', 'studentTimeSheets', 'finance'] as CenterTenant['modules'],
   status: 'active',
   trialEndsAt: null,
   subscriptionEndsAt: NOW + 12 * DAY,
@@ -281,7 +281,7 @@ describe('RenewalModule — module compatibility with the center type (T023, rem
   it('never offers study addons to a crèche but keeps an enabled one displayed (R9)', async () => {
     render(
       <RenewalModule
-        center={center({ centerType: 'creche', enabledModules: ['scolaire', 'studentTimeSheets', 'finance', 'etude'] })}
+        center={center({ centerType: 'creche', modules: ['scolaire', 'studentTimeSheets', 'finance', 'etude'] })}
         centerType="creche"
       />
     );

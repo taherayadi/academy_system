@@ -12,14 +12,22 @@ import { render, screen, cleanup } from '@testing-library/react';
 import LandingPage from './components/LandingPage';
 import RenewalModule from './components/RenewalModule';
 import {
-  ALL_MODULES,
-  ADDON_MODULES,
-  BASE_MODULES,
-  BASE_KEYS,
-  PLAN_PRESET_MODULES,
+  allModules,
+  addonModules,
+  baseModules,
+  baseKeys,
+  planPresetModules,
   modulesForPlan,
   derivePlanFromModules
 } from './utils/pricing';
+
+// Catalogue live lu depuis catalogStore (repli généré en tests, l'API étant
+// mockée/absente) — figé une fois par module, équivalent à l'ancien const.
+const ALL_MODULES = allModules();
+const ADDON_MODULES = addonModules();
+const BASE_MODULES = baseModules();
+const BASE_KEYS = baseKeys();
+const PLAN_PRESET_MODULES = planPresetModules();
 import { isModuleCompatible } from './utils/centerType';
 import { TAB_MODULE } from './App';
 import { FORMATION_CONFIG, makeCenter } from './testing/programConfig';

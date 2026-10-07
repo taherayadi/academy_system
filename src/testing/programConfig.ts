@@ -60,7 +60,8 @@ export function makeCenter(config: Partial<ProgramConfig> = {}): CenterTenant {
     name: 'Program Center',
     plan: 'growth',
     status: 'active',
-    enabledModules: [...resolved.enabledModules],
+    // CenterTenant.modules = la table center_modules livrée par l'API.
+    modules: [...resolved.enabledModules] as CenterTenant['modules'],
     centerType: resolved.type,
     createdAt: 0
   };

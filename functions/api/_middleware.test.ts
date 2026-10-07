@@ -21,7 +21,7 @@ describe('deployment boundary', () => {
     expect((await onRequest(context('/api/auth/login') as any)).status).toBe(405);
   });
   it('requires authentication for every protected route and method', async () => {
-    const publicKeys = new Set(['POST /api/auth/login', 'POST /api/auth/logout', ...(platform ? [] : ['POST /api/demo-requests', 'GET /api/public-pricing', 'GET /api/advertisements/active'])]);
+    const publicKeys = new Set(['POST /api/auth/login', 'POST /api/auth/logout', ...(platform ? [] : ['POST /api/demo-requests', 'GET /api/public-pricing', 'GET /api/catalog', 'GET /api/advertisements/active'])]);
     for (const [route, methods] of Object.entries(ROUTES)) for (const method of methods) {
       if (publicKeys.has(`${method} ${route}`)) continue;
       const ctx = context(route, method);
