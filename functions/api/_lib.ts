@@ -1447,11 +1447,28 @@ export async function readStudentTimeSheets(db: D1Database, centerId: string = D
 
 function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
+  // created_at/updated_at sont des colonnes STRICT INTEGER : le client envoie
+  // soit un ISO « 2026-10-07T… » (nouveau sheet), soit la valeur GET en
+  // epoch-ms sous forme de chaîne. On normalise TOUT en nombre — un bind
+  // texte ferait échouer le PUT (500) sur D1.
+  const now = Date.now();
+  const toEpoch = (v: any, fallback: number): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const t = str(v).trim();
+    if (/^\d+$/.test(t)) return Number(t);
+    const parsed = Date.parse(t);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  };
   for (const s of sheets || []) {
     const name = s.establishmentName + ' - ' + s.schoolYear;
-    stmts.push(db.prepare('INSERT INTO student_time_sheets (id, school_year, establishment_name, grade_level, branch, class_name, weekly_schedule, created_at, updated_at, name, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.establishmentName, s.gradeLevel, s.branch ?? null, s.className ?? null, JSON.stringify(s.weeklySchedule || []), s.createdAt, s.updatedAt, name, centerId));
+    const createdAt = toEpoch(s.createdAt, now);
+    const updatedAt = toEpoch(s.updatedAt, createdAt);
+    stmts.push(db.prepare('INSERT INTO student_time_sheets (id, school_year, establishment_name, grade_level, branch, class_name, weekly_schedule, created_at, updated_at, name, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.establishmentName, s.gradeLevel, s.branch ?? null, s.className ?? null, JSON.stringify(s.weeklySchedule || []), createdAt, updatedAt, name, centerId));
+    // Référencer l'établissement dans la table centralisée (comme
+    // resolveEtablissementIds) : colonnes id + center_id NOT NULL obligatoires,
+    // OR IGNORE absorbe le doublon UNIQUE (center_id, name).
     if (s.establishmentName && String(s.establishmentName).trim()) {
-      stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (name) VALUES (?)').bind(String(s.establishmentName).trim()));
+      stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (id, center_id, name) VALUES (?, ?, ?)').bind(crypto.randomUUID(), centerId, String(s.establishmentName).trim()));
     }
   }
   return stmts;

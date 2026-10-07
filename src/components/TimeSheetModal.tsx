@@ -25,6 +25,7 @@ import {
   getTimeSlotsForDay
 } from '../types';
 import { useToast } from './Toast';
+import { fetchEtablissementsApi } from '../api';
 
 interface TimeSheetModalProps {
   timeSheets: StudentTimeSheet[];
@@ -79,18 +80,42 @@ export default function TimeSheetModal({
   const [isAddingEtablissement, setIsAddingEtablissement] = useState(false);
   const [newEtablissementInput, setNewEtablissementInput] = useState('');
   const [customEtablissements, setCustomEtablissements] = useState<string[]>([]);
+  // Liste « officielle » des établissements du centre, chargée depuis la base D1
+  // (GET /api/etablissements, scope center_id dérivé de la session) à l'ouverture
+  // du modal. Les noms issus des élèves/tableaux en cours restent proposés en
+  // supplément pour ne jamais perdre une valeur saisie localement.
+  const [dbEtablissements, setDbEtablissements] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    try {
+      fetchEtablissementsApi()
+        .then(rows => {
+          if (cancelled) return;
+          setDbEtablissements((rows || []).map(r => r.name.trim()).filter(Boolean));
+        })
+        .catch(() => {
+          // Silencieux : le combo retombe sur les noms connus localement.
+        });
+    } catch {
+      // idem : fetch indisponible (tests jsdom) → fallback local
+    }
+    return () => { cancelled = true; };
+  }, []);
 
   const availableEtablissements = useMemo(() => {
-    const set = new Set<string>(customEtablissements);
+    const set = new Set<string>(dbEtablissements);
+    const set2 = new Set<string>(customEtablissements);
     students.forEach(s => {
-      if (s.etablissement?.trim()) set.add(s.etablissement.trim());
+      if (s.etablissement?.trim()) set2.add(s.etablissement.trim());
     });
     timeSheets.forEach(ts => {
-      if (ts.establishmentName?.trim()) set.add(ts.establishmentName.trim());
+      if (ts.establishmentName?.trim()) set2.add(ts.establishmentName.trim());
     });
-    if (tsEstablishment?.trim()) set.add(tsEstablishment.trim());
-    return Array.from(set).sort();
-  }, [students, timeSheets, customEtablissements, tsEstablishment]);
+    if (tsEstablishment?.trim()) set2.add(tsEstablishment.trim());
+    Array.from(set2).forEach(n => set.add(n));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [dbEtablissements, students, timeSheets, customEtablissements, tsEstablishment]);
 
   const handleAddEtablissement = () => {
     const trimmed = newEtablissementInput.trim();

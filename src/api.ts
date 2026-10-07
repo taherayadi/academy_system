@@ -354,6 +354,17 @@ async function getDomain<T>(path: string, defaultErrMsg: string): Promise<T> {
   return res.json();
 }
 
+// Établissements du centre (id + nom), issus de la table etablissements
+// (scope center_id dérivé de la session côté serveur).
+export interface EtablissementRef {
+  id: string;
+  name: string;
+}
+
+export async function fetchEtablissementsApi(): Promise<EtablissementRef[]> {
+  return getDomain<EtablissementRef[]>('/etablissements', 'تعذر تحميل قائمة المؤسسات.');
+}
+
 
 // ------------------- Full Database Boot (Concurrent Domain Load) -------------------
 
