@@ -780,15 +780,19 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
       str((s as any).studentType) || 'regular', s.firstName, s.lastName, s.birthDate || null, s.birthPlace || null,
       str((s as any).contactPhone) || null, s.allergies ?? '', s.parentalSituation || null, s.parentalComments ?? null,
       s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null,
-      str((s as any).status) || 'active', Date.now()
+      str((s as any).status) || 'active'
     ];
+    // NB: studentBind = 14 valeurs (SANS created_at). Le UPDATE n'a que 14
+    // placeholders SET + 2 WHERE : binder la 15e valeur (Date.now()) ferait
+    // échouer .bind() (« wrong number of parameters » → 500 sur tout PUT
+    // d'un élève existant).
     if (mode === 'update') {
       stmts.push(db.prepare('UPDATE students SET student_type = ?, first_name = ?, last_name = ?, birth_date = ?, birth_place = ?, contact_phone = ?, allergies = ?, parental_situation = ?, parental_comments = ?, registration_date = ?, registration_location = ?, registration_signed_electronically = ?, registration_signature_name = ?, status = ? WHERE id = ? AND center_id = ?').bind(
         ...studentBind, s.id, centerId
       ));
     } else {
       stmts.push(db.prepare('INSERT INTO students (id, center_id, student_type, first_name, last_name, birth_date, birth_place, contact_phone, allergies, parental_situation, parental_comments, registration_date, registration_location, registration_signed_electronically, registration_signature_name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
-        s.id, centerId, ...studentBind
+        s.id, centerId, ...studentBind, Date.now()
       ));
     }
 
