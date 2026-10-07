@@ -87,9 +87,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     purgeExpiredSessions(env.DB).catch(() => {});
 
     // Map the raw DB row (snake_case) to the camelCase CenterTenant shape —
-    // the client reads `enabledModules` to decide which modules a center
-    // admin can see in the menu.
-    const center = centerRow ? mapCenterRow(centerRow) : null;
+    // the client reads `modules` (table center_modules) to decide which
+    // modules a center admin can see in the menu.
+    const center = centerRow ? await mapCenterRow(env.DB, centerRow) : null;
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');

@@ -24,7 +24,7 @@ import {
   Coffee,
   Cookie
 } from 'lucide-react';
-import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType } from '../types';
+import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType, paymentMethodLabel } from '../types';
 import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent, ensureGouterAttendanceForDate, academicMonthPrefix } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
@@ -35,6 +35,10 @@ interface MealsModuleProps {
   students: Student[];
   mealPlans: MealPlanDay[];
   onUpdateStudents: (students: Student[]) => void;
+  /** Mise à jour d'un seul élève (pointages repas, compteurs) — PUT granulaire. */
+  onUpdateStudent?: (student: Student) => void;
+  /** Paiement seul via POST /api/payments — PAS de réécriture de l'élève. */
+  onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
   onUpdateMealPlans: (plans: MealPlanDay[]) => void;
   settings?: CenterSettings;
 }
@@ -43,9 +47,36 @@ export default function MealsModule({
   students,
   mealPlans,
   onUpdateStudents,
+  onUpdateStudent,
+  onRecordPayment,
   onUpdateMealPlans,
   settings
 }: MealsModuleProps) {
+  /**
+   * ÉCrit les paiements via le endpoint dédié quand il est câblé, en réutilisant
+   * onUpdateStudents pour le reste (pointages, compteurs d'abonnement).
+   * Fallback : l'ancienne réécriture complète si le parent n'expose pas le
+   * callback (rendus de tests sans props granulaires).
+   */
+  const recordPayment = (studentId: string, payment: PaymentRecord) => {
+    if (onRecordPayment) {
+      onRecordPayment(studentId, payment);
+      return;
+    }
+    onUpdateStudents(students.map(s => s.id === studentId
+      ? { ...s, payments: [...(s.payments || []), payment] }
+      : s));
+  };
+
+  /**
+   * Persist a whole-student change (attendance rows, consumed counters,
+   * enrolledServices). The granular single-student PUT rewrites child tables
+   * from the payload, so current payments are always included as-is.
+   */
+  const patchStudent = (updated: Student) => {
+    if (onUpdateStudent) onUpdateStudent(updated);
+    else onUpdateStudents(students.map(s => s.id === updated.id ? updated : s));
+  };
   const centerName = settings?.centerName || 'EduSphère';
   const toast = useToast();
   // Revision E (remark E1): the «Repas»/«Goûter» service tabs under the
@@ -209,6 +240,7 @@ export default function MealsModule({
             ? (fees?.fraisGouterMatinUnitaire ?? 0)
             : (fees?.fraisGouterSoirUnitaire ?? 0);
         if (refundedAmount > 0) {
+          // Remboursement + retrait du pointage : UN PUT élève cohérent.
           updatedStudent = {
             ...updatedStudent,
             payments: [...(st.payments || []), {
@@ -228,7 +260,7 @@ export default function MealsModule({
           };
         }
       }
-      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+      patchStudent(updatedStudent);
       toast.info(`تم إلغاء تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
     } else {
       const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
@@ -285,6 +317,19 @@ export default function MealsModule({
         ? (fees?.fraisGouterMatinUnitaire ?? 0)
         : (fees?.fraisGouterSoirUnitaire ?? 0);
     const serviceLabel = service === 'lunch' ? 'الغداء' : service === 'gouter_matin' ? 'لمجة الصباح' : 'لمجة المساء';
+    const payment: PaymentRecord = {
+      id: `pay_unit_${service}_${crypto.randomUUID()}`,
+      date: selectedDate,
+      amountPaid: unitPrice,
+      totalRequired: unitPrice,
+      remainingBalance: 0,
+      service: service === 'lunch' ? 'Repas' : 'Goûter',
+      month: `${serviceLabel} unitaire (${selectedDate})`,
+      paymentType: 'full',
+      method: 'Espèces',
+      receiptNumber: generateReceiptNumber(students, service === 'lunch' ? 'REC-REP-' : 'REC-GOUT-'),
+      notes: `${serviceLabel}: ${service === 'lunch' ? activePlan.dishName : 'استهلاك بالوحدة'}`
+    };
     const updatedStudent: Student = {
       ...st,
       mealAttendances: (st.mealAttendances || []).map(a =>
@@ -292,21 +337,12 @@ export default function MealsModule({
           ? { ...a, paid: true, paidAt: new Date().toISOString() }
           : a
       ),
-      payments: [...(st.payments || []), {
-        id: `pay_unit_${service}_${crypto.randomUUID()}`,
-        date: selectedDate,
-        amountPaid: unitPrice,
-        totalRequired: unitPrice,
-        remainingBalance: 0,
-        service: service === 'lunch' ? 'Repas' : 'Goûter',
-        month: `${serviceLabel} unitaire (${selectedDate})`,
-        paymentType: 'full',
-        method: 'Espèces',
-        receiptNumber: generateReceiptNumber(students, service === 'lunch' ? 'REC-REP-' : 'REC-GOUT-'),
-        notes: `${serviceLabel}: ${service === 'lunch' ? activePlan.dishName : 'استهلاك بالوحدة'}`
-      }]
+      payments: [...(st.payments || []), payment]
     };
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    // Pointage payé + paiement : le PUT élève rewrite les tables enfants, donc on
+    // lui passe la liste incluant le nouveau paiement ; le endpoint dédié n'est
+    // PAS appelé pour ce flux (pointage et paiement envoient le même état).
+    patchStudent(updatedStudent);
     toast.success(`تم تسجيل خلاص ${serviceLabel} (${unitPrice} د.ت).`);
   };
 
@@ -472,24 +508,26 @@ export default function MealsModule({
     const attendance = getAttendance(st);
     if (!attendance || attendance.type !== 'unit' || attendance.paid) return;
     const unitPrice = settings ? getFeesForYear(settings, schoolYear).fraisParRepas : (st.mealSubscription?.unitPrice || 8);
+    const payment: PaymentRecord = {
+      id: `pay_meal_unit_${crypto.randomUUID()}`,
+      date: selectedDate,
+      amountPaid: unitPrice,
+      totalRequired: unitPrice,
+      remainingBalance: 0,
+      service: 'Repas',
+      month: `Repas unitaire (${selectedDate})`,
+      paymentType: 'full',
+      method: 'Espèces',
+      receiptNumber: generateReceiptNumber(students, 'REC-REP-'),
+      notes: `وجبة اليوم: ${activePlan.dishName}`
+    };
     const updatedStudent: Student = {
       ...st,
       mealAttendances: (st.mealAttendances || []).map(a => a.date === selectedDate ? { ...a, paid: true, paidAt: new Date().toISOString() } : a),
-      payments: [...(st.payments || []), {
-        id: `pay_meal_unit_${crypto.randomUUID()}`,
-        date: selectedDate,
-        amountPaid: unitPrice,
-        totalRequired: unitPrice,
-        remainingBalance: 0,
-        service: 'Repas',
-        month: `Repas unitaire (${selectedDate})`,
-        paymentType: 'full',
-        method: 'Espèces',
-        receiptNumber: generateReceiptNumber(students, 'REC-REP-'),
-        notes: `وجبة اليوم: ${activePlan.dishName}`
-      }]
+      payments: [...(st.payments || []), payment]
     };
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    // Pointage payé + paiement dans le PUT élève (voir handlePayUnitService).
+    patchStudent(updatedStudent);
     toast.success(`تم تسجيل دفع وجبة اليوم (${unitPrice} د.ت).`);
   };
 
@@ -506,6 +544,7 @@ export default function MealsModule({
       const refundedAmount = settings
         ? getFeesForYear(settings, schoolYear).fraisParRepas
         : (st.mealSubscription?.unitPrice || 8);
+      // Remboursement = ligne de paiement seule, intégrée au même PUT élève.
       updatedStudent = {
         ...updatedStudent,
         payments: [...(st.payments || []), {
@@ -533,7 +572,7 @@ export default function MealsModule({
       };
     }
 
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    patchStudent(updatedStudent);
     setRemoveAttendanceStudent(null);
     toast.success(attendance.type === 'unit' && attendance.paid
       ? 'تم إزالة التلميذ واسترجاع ثمن الوجبة المنفردة.'
@@ -799,7 +838,9 @@ export default function MealsModule({
         : `خلاص اشتراك ${isGouter ? 'اللمجة' : 'المطعم'} لشهر ${paymentMonth} (${schoolYear})`),
       discount: numDiscount > 0 ? numDiscount : undefined
     };
-    // Update student
+    // Mise à jour des métadonnées du service (meals flag / abonnement actif) et
+    // du paiement dans UN SEUL PUT élève — le endpoint dédié n'est pas doublé ici
+    // car le PUT granulaire réécrit les paiements depuis le payload complet.
     const updatedStudent: Student = isGouter ? {
       ...selectedStudentForPayment,
       payments: [...(selectedStudentForPayment.payments || []), newPayment]
@@ -816,7 +857,7 @@ export default function MealsModule({
         : selectedStudentForPayment.mealSubscription,
       payments: [...(selectedStudentForPayment.payments || []), newPayment]
     };
-    onUpdateStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+    patchStudent(updatedStudent);
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
     toast.success(isGouter
@@ -963,7 +1004,8 @@ export default function MealsModule({
       payments: [...(refundingStudent.payments || []), ...refundRecords]
     };
 
-    onUpdateStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+    // Remboursements + arrêt/relance du service = UN PUT élève cohérent.
+    patchStudent(updatedStudent);
     setIsRefundModalOpen(false);
     setRefundingStudent(null);
     setRefundAmounts({});
@@ -1752,7 +1794,7 @@ export default function MealsModule({
                                   <td className="p-2 font-mono text-slate-700">{p.date}</td>
                                   <td className="p-2 font-mono text-slate-500 text-[10px]">{p.receiptNumber}</td>
                                   <td className="p-2 text-slate-800 font-medium">
-                                    <span className="font-bold">{p.method}</span>
+                                    <span className="font-bold">{paymentMethodLabel(p.method)}</span>
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
                                     {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>

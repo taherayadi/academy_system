@@ -4,7 +4,7 @@ This is the **center and public landing application**. Do not reintroduce platfo
 
 - Frontend: `src/App.tsx`, center modules under `src/components`, React/Vite/Tailwind.
 - Backend: Cloudflare Pages Functions in `functions/api`; shared tenant data helpers in `_lib.ts`.
-- Authentication: center roles `admin`, `super_admin`, `restricted_admin` only. `platform_super_admin` belongs to the other application.
+- Authentication: center roles `admin`, `super_admin` only. `platform_super_admin` belongs to the other application.
 - `_deployment.ts` is fixed source configuration. `_middleware.ts` maintains the exact route/method inventory; update it when adding routes.
 - `center_sessions` and host-only `tc_center_session` are isolated from the other application's credentials. Never accept the legacy shared session table/cookie.
 - Derive center identity from the authenticated context; every data query/mutation must verify tenant ownership.

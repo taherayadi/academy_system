@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup, fireEvent } from '@testing-library/react';
 import FinanceModule from './FinanceModule';
-import { Student, CenterSettings, initialStudentFeeSet, getCurrentAcademicYear } from '../types';
+import { Student, CenterSettings, feeSetToServicePrices, getCurrentAcademicYear } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -34,7 +34,10 @@ const settings = (mode: 'external_traiteur' | 'in_house_kitchen') =>
   ({
     centerName: 'Test Center',
     mealOperatingMode: mode,
-    fees: initialStudentFeeSet
+    servicePrices: feeSetToServicePrices({
+      fraisAbonnementRepas: 150, fraisParRepas: 8, prixPlatTraiteur: 6,
+      fraisGouterMatinMensuel: 15, fraisGouterSoirMensuel: 30, fraisDeuxGoutersMensuel: 30
+    })
   } as unknown as CenterSettings);
 
 beforeEach(() => {
@@ -458,7 +461,7 @@ describe('FinanceModule — Goûter status cross-surface agreement (feature 008)
   const gouterSettings = {
     centerName: 'Test Center',
     mealOperatingMode: 'external_traiteur',
-    fees: { ...initialStudentFeeSet, fraisGouterMatinMensuel: 15 }
+    servicePrices: feeSetToServicePrices({ fraisGouterMatinMensuel: 15 })
   } as unknown as CenterSettings;
 
   it('FR-009: the settled Goûter month renders مسدد on the finance Goûter table', () => {

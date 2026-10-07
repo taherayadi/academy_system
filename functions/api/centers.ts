@@ -7,5 +7,5 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const row = await env.DB.prepare('SELECT * FROM centers WHERE id = ?')
     .bind(session.centerId).first<any>();
   if (!row) return json({ error: 'Center not found' }, 404);
-  return json({ centers: [mapCenterRow(row)] });
+  return json({ centers: [await mapCenterRow(env.DB, row)] });
 };

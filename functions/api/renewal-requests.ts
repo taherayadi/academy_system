@@ -108,10 +108,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const centerId = session.centerId;
     const center = await env.DB.prepare(
-      `SELECT id, name, plan, billing_cycle, enabled_modules, subscription_ends_at, status
+      `SELECT id, name, plan, billing_cycle, subscription_ends_at, status
        FROM centers WHERE id = ?`
     ).bind(centerId).first<any>();
     if (!center) return json({ error: 'المركز غير موجود.' }, 404);
+
+    // Nouveau schéma : les modules actifs vivent dans center_modules.
+    let currentModules: string[] = [];
+    try {
+      const modRows = await env.DB.prepare(
+        'SELECT module_key FROM center_modules WHERE center_id = ? ORDER BY module_key'
+      ).bind(centerId).all<any>();
+      currentModules = (modRows.results || []).map((r) => String(r.module_key)).filter(Boolean);
+    } catch {
+      currentModules = [];
+    }
 
     const body = await readBody<any>(request);
     const requestedPlan = String(body.requestedPlan || '').trim();
@@ -141,7 +152,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       : (currentEnd > now ? currentEnd : now);
 
     const modulesJson = JSON.stringify(requestedModules);
-    const currentModulesJson = String(center.enabled_modules || '[]');
+    const currentModulesJson = JSON.stringify(currentModules);
 
     // Garde-fou anti double-clic : même demande déjà en attente.
     const duplicate = await env.DB.prepare(

@@ -198,6 +198,11 @@ export default function ExternalCoursesModule({
       monthlyFee: Number(teacherShare) + Number(centerShare),
       teacherShare: Number(teacherShare),
       centerShare: Number(centerShare),
+      // Montant d'assurance propre au cours : conservé à l'édition, initialisé
+      // au tarif du service assurance_externe à la création.
+      assuranceAmount: editingCourseId
+        ? (courses.find(c => c.id === editingCourseId)?.assuranceAmount ?? 0)
+        : (getFeesForYear(settings, schoolYear).fraisAssuranceCoursExternes || 0),
       enrolledStudents: editingCourseId 
         ? (courses.find(c => c.id === editingCourseId)?.enrolledStudents || []) 
         : []
@@ -231,7 +236,9 @@ export default function ExternalCoursesModule({
       return;
     }
 
-    const assuranceAmount = settings ? getFeesForYear(settings, extYear || selectedCourse.schoolYear || schoolYear).fraisAssuranceCoursExternes : 50;
+    // Le montant d'assurance est désormais porté par le cours lui-même
+    // (external_courses.assurance_amount).
+    const assuranceAmount = selectedCourse.assuranceAmount ?? 0;
 
     // Upsert into the global register (shared across all courses), reuse existing id
     const existing = externalStudents.find(s => s.name.toLowerCase() === extName.trim().toLowerCase());
@@ -911,7 +918,7 @@ export default function ExternalCoursesModule({
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
                   <span className="text-slate-400 text-[10px] block font-bold">رسوم التأمين المدرسي:</span>
                   <span className="font-extrabold text-slate-900">
-                    {settings ? getFeesForYear(settings, selectedCourse.schoolYear || getCurrentAcademicYear()).fraisAssuranceCoursExternes : 50} د.ت
+                    {selectedCourse.assuranceAmount ?? 0} د.ت
                   </span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
@@ -2042,7 +2049,7 @@ export default function ExternalCoursesModule({
                   <div>
                     <p className="text-xs font-black text-brand-700">التأمين المدرسي السنوي</p>
                     <p className="text-[10px] text-brand-700 font-bold">
-                      المبلغ: {(settings ? getFeesForYear(settings, extYear || selectedCourse?.schoolYear || schoolYear).fraisAssuranceCoursExternes : 50)} د.ت — يُخلّص مرة واحدة للسنة
+                      المبلغ: {selectedCourse?.assuranceAmount ?? 0} د.ت — يُخلّص مرة واحدة للسنة
                     </p>
                   </div>
                 </label>

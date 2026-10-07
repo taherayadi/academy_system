@@ -230,7 +230,7 @@ describe('clearSessionCookie', () => {
 // mapCenterRow — snake_case DB row → camelCase CenterTenant (auth login/me)
 // ---------------------------------------------------------------------------
 describe('mapCenterRow', () => {
-  it('maps a raw centers row to the camelCase API shape used by the client', () => {
+  it('maps a raw centers row to the camelCase API shape used by the client (modules from center_modules)', async () => {
     const row = {
       id: 'c1',
       name: 'Centre Test',
@@ -238,8 +238,6 @@ describe('mapCenterRow', () => {
       phone_number: '20123456',
       location_city: 'Tunis',
       plan: 'custom',
-      enabled_modules: JSON.stringify(['scolaire', 'finance', 'etude']),
-      meal_operating_mode: 'in_house_kitchen',
       status: 'trial',
       trial_ends_at: 1750000000000,
       subscription_ends_at: null,
@@ -250,15 +248,22 @@ describe('mapCenterRow', () => {
       created_at: 1700000000000
     };
 
-    expect(mapCenterRow(row)).toEqual({
+    const db = {
+      prepare: () => ({
+        bind: () => ({
+          all: async () => ({ results: [{ module_key: 'etude' }, { module_key: 'finance' }, { module_key: 'scolaire' }] })
+        })
+      })
+    };
+
+    expect(await mapCenterRow(db as any, row)).toEqual({
       id: 'c1',
       name: 'Centre Test',
       slug: 'centre-test',
       phoneNumber: '20123456',
       locationCity: 'Tunis',
       plan: 'custom',
-      enabledModules: ['scolaire', 'finance', 'etude'],
-      mealOperatingMode: 'in_house_kitchen',
+      modules: ['etude', 'finance', 'scolaire'],
       status: 'trial',
       trialEndsAt: 1750000000000,
       subscriptionEndsAt: null,
@@ -270,12 +275,19 @@ describe('mapCenterRow', () => {
     });
   });
 
-  it('parses enabled_modules and defaults to [] on invalid JSON or missing fields', () => {
-    expect(mapCenterRow({ id: 'c1', name: 'X', enabled_modules: 'not-json' }).enabledModules).toEqual([]);
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).enabledModules).toEqual([]);
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).logoUrl).toBe('');
-    expect(mapCenterRow({ id: 'c2', name: 'Y' }).plan).toBe('starter');
-    expect(mapCenterRow({ id: 'c2', name: 'Y', monthly_price: null }).monthlyPrice).toBe(0);
+  it('falls back to [] on missing/failed center_modules and keeps defaults on missing fields', async () => {
+    const failingDb = {
+      prepare: () => ({
+        bind: () => ({
+          all: async () => { throw new Error('missing table'); }
+        })
+      })
+    };
+    expect((await mapCenterRow(failingDb as any, { id: 'c1', name: 'X' })).modules).toEqual([]);
+    const mapped = await mapCenterRow(failingDb as any, { id: 'c2', name: 'Y' });
+    expect(mapped.logoUrl).toBe('');
+    expect(mapped.plan).toBe('starter');
+    expect(mapped.monthlyPrice).toBe(0);
   });
 });
 

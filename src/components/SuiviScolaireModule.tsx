@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Student, StudentTimeSheet, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth,
            getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, SuiviNotes, SuiviSubjectGrade,
-           isMathSubject, getAppSubjects, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS } from '../types';
+           isMathSubject, getAppSubjects, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, paymentMethodLabel } from '../types';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
@@ -37,6 +37,8 @@ interface SuiviScolaireModuleProps {
   students: Student[];
   onUpdateStudent: (student: Student) => void;
   onUpdateStudents: (students: Student[]) => void;
+  /** Payment-only mutation : POST /api/payments — PAS de réécriture de l'élève. */
+  onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
   studentTimeSheets: StudentTimeSheet[];
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
@@ -75,7 +77,19 @@ function upsertNotes(student: Student, year: string, trimester: 1 | 2 | 3, subje
   return newSets;
 }
 
-export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, studentTimeSheets, settings, onUpdateSettings, centerType }: SuiviScolaireModuleProps) {
+export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, onRecordPayment, studentTimeSheets, settings, onUpdateSettings, centerType }: SuiviScolaireModuleProps) {
+  /**
+   * Persist a payment without rewriting the whole student: prefer the dedicated
+   * POST /api/payments endpoint (studentId + payment only). Falls back to the
+   * legacy full-student PUT when the callback is not wired (old tests/render).
+   */
+  const recordPayment = (st: Student, payment: PaymentRecord) => {
+    if (onRecordPayment) {
+      onRecordPayment(st.id, payment);
+      return;
+    }
+    onUpdateStudent({ ...st, payments: [...(st.payments || []), payment] });
+  };
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
   const showSchoolLevel = hasSchoolLevel(centerType);
@@ -370,7 +384,10 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
         payments: [...(selectedStudentForPayment.payments || []), newPayment]
       };
 
-      onUpdateStudent(updatedStudent);
+      // Paiement atomique : endpoint dédié — l'élève n'est PAS renvoyé en
+      // entier (l'ancien flux PUT /api/students réécrivait toutes les tables
+      // enfants pour un simple paiement et échouait sur period_month).
+      recordPayment(selectedStudentForPayment, newPayment);
       setSelectedStudentForPayment(null);
       setPrintingReceipt({ student: updatedStudent, payment: newPayment });
       setIsSubmitting(false);
@@ -415,7 +432,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(selectedStudentForPayment.payments || []), newPayment]
     };
 
-    onUpdateStudent(updatedStudent);
+    recordPayment(selectedStudentForPayment, newPayment);
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
     setIsSubmitting(false);
@@ -481,7 +498,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(refundStudent.payments || []), ...refundRecords]
     };
 
-    onUpdateStudent(updatedStudent);
+    // Refunds : endpoint dédié — pas de réécriture de l'élève (CHECK is_refund
+    // / montant négatif gérés serveur via paymentMethodKey + is_refund).
+    refundRecords.forEach(r => recordPayment(refundStudent, r));
     setIsRefundModalOpen(false);
     setRefundStudent(null);
     toast.success(`تم تسجيل استرجاع بمبلغ ${totalRefund} د.ت عند خلاص ${refundRecords.length} شهر لصالح الولي (مسجّل في الميزانية)!`);
@@ -1257,7 +1276,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                                   <td className="p-2 font-mono text-slate-700">{p.date}</td>
                                   <td className="p-2 font-mono text-slate-500 text-[10px]">{p.receiptNumber}</td>
                                   <td className="p-2 text-slate-800 font-medium">
-                                    <span className="font-bold">{p.method}</span>
+                                    <span className="font-bold">{paymentMethodLabel(p.method)}</span>
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
                                     {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>

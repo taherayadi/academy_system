@@ -1,17 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CENTER_TYPES,
+  centerTypes,
+  centerTypeKeys,
   hasSchoolLevel,
   hasStudyModules,
   moduleCenterTypes,
   isModuleCompatible,
   incompatibleModules,
 } from './centerType';
-import { ALL_MODULES, applicableModuleKeys } from './pricing';
+import { allModules, applicableModuleKeys } from './pricing';
+
+// Types et catalogue live depuis catalogStore (repli généré en tests).
+const CENTER_TYPES = centerTypeKeys();
+const ALL_MODULES = allModules();
 
 describe('CENTER_TYPES', () => {
-  it('lists the four accepted types in order', () => {
-    expect(CENTER_TYPES).toEqual(['jardin', 'creche', 'garderie', 'formation']);
+  it('lists the known (gatable) types in table order', () => {
+    // « other » n'apparaît jamais dans center_type_modules → pas gatable,
+    // hors liste. L'ordre est celui de la table center_types (rowid) :
+    // garderie, creche, jardin, formation.
+    expect(CENTER_TYPES).toEqual(['garderie', 'creche', 'jardin', 'formation']);
+  });
+
+  it('serves the table rows verbatim (including non-gatable types)', () => {
+    expect(centerTypes().map(t => t.key)).toEqual(['garderie', 'creche', 'jardin', 'formation', 'other']);
   });
 });
 
@@ -59,7 +71,7 @@ describe('moduleCenterTypes', () => {
   it('covers every catalog key (no phantom gaps in either direction)', () => {
     const catalogKeys = ALL_MODULES.map(m => m.key);
     for (const key of catalogKeys) {
-      expect(moduleCenterTypes[key], `catalog key ${key} has no compatibility entry`).toBeTruthy();
+      expect(moduleCenterTypes()[key], `catalog key ${key} has no compatibility entry`).toBeTruthy();
     }
   });
 

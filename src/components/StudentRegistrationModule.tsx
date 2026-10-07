@@ -40,7 +40,6 @@ interface StudentRegistrationModuleProps {
   settings?: CenterSettings;
   openAddFormTrigger?: boolean;
   setOpenAddFormTrigger?: (val: boolean) => void;
-  hideRestrictedModules?: boolean;
   sidebarCollapsed?: boolean;
   /** Center subscription: modules enabled for this center (undefined = all, legacy compat). */
   enabledModules?: string[];
@@ -87,7 +86,6 @@ export default function StudentRegistrationModule({
   settings,
   openAddFormTrigger,
   setOpenAddFormTrigger,
-  hideRestrictedModules,
   sidebarCollapsed,
   enabledModules,
   centerType
@@ -725,12 +723,12 @@ export default function StudentRegistrationModule({
                     Bibliothèque
                   </span>
                 )}
-                {!hideRestrictedModules && st.enrolledServices?.meals && (
+                {st.enrolledServices?.meals && (
                   <span className="text-[10px] font-bold bg-brand-600/[0.06] text-brand-700 px-2 py-0.5 rounded-md border border-brand-600/20">
                     Repas (مطعم)
                   </span>
                 )}
-                {!hideRestrictedModules && (
+                {(
                   <>
                     {(st.enrolledServices?.gouterBoth || (st.enrolledServices?.gouterMatin && st.enrolledServices?.gouterSoir)) ? (
                       <span className="text-[10px] font-bold bg-brand-600/[0.06] text-brand-800 px-2 py-0.5 rounded-md border border-brand-600/20/50">
@@ -1428,9 +1426,7 @@ export default function StudentRegistrationModule({
                         )}
                       </div>
                     </label>
-                    )}
-
-                    {!hideRestrictedModules && hasModule('cantine') && (
+                    )}                      {hasModule('cantine') && (
                       <label className={`p-4 rounded-2xl border transition flex items-center gap-3 ${lockedMeals ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : mealsEnrolled ? 'bg-brand-600/[0.06] border-brand-600 text-brand-700 cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600 cursor-pointer'}`}>
                         <input 
                           type="checkbox" checked={mealsEnrolled} disabled={lockedMeals} onChange={(e) => setMealsEnrolled(e.target.checked)}
@@ -1445,9 +1441,7 @@ export default function StudentRegistrationModule({
                           )}
                         </div>
                       </label>
-                    )}
-
-                    {!hideRestrictedModules && hasModule('cantine') && (
+                    )}                      {hasModule('cantine') && (
                       <div className="col-span-2 md:col-span-4 p-4 rounded-2xl border border-brand-600/20/80 bg-brand-600/[0.06]/40 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black text-brand-800 flex items-center gap-1.5">
@@ -1897,8 +1891,8 @@ export default function StudentRegistrationModule({
                       {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Suivi Scolaire</span>}
                       {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Étude {centerName}</span>}
                       {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Bibliothèque</span>}
-                      {!hideRestrictedModules && printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-brand-600/10 text-brand-700 rounded font-bold">✓ Repas</span>}
-                      {!hideRestrictedModules && (
+                      {printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-brand-600/10 text-brand-700 rounded font-bold">✓ Repas</span>}
+                      {(
                         (printingRegistrationStudent.enrolledServices?.gouterBoth || (printingRegistrationStudent.enrolledServices?.gouterMatin && printingRegistrationStudent.enrolledServices?.gouterSoir)) ? (
                           <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ اللمجتان معاً (صباح + مساء)</span>
                         ) : printingRegistrationStudent.enrolledServices?.gouterMatin ? (

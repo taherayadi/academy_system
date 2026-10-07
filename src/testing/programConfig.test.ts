@@ -3,7 +3,7 @@ import {
   LEGACY_CONFIG,
   PRE_PROGRAM_MODULES,
   CRECHE_COMPOSED_CONFIG,
-  C5_RESTRICTED_CONFIG,
+  C5_COMPOSED_CONFIG,
   makeCenter,
   makeConfig,
   makeProgram,
@@ -20,7 +20,7 @@ describe('programConfig factory (006 R2)', () => {
   it('applies each override (type, modules, role) independently', () => {
     expect(makeConfig({ type: 'creche' }).type).toBe('creche');
     expect(makeConfig({ enabledModules: ['etude'] }).enabledModules).toEqual(['etude']);
-    expect(makeConfig({ role: 'restricted_admin' }).role).toBe('restricted_admin');
+    expect(makeConfig({ role: 'super_admin' }).role).toBe('super_admin');
     // unknown type values pass through verbatim (legacy passthrough)
     expect(makeConfig({ type: 'maternelle-1998' }).type).toBe('maternelle-1998');
   });
@@ -28,7 +28,7 @@ describe('programConfig factory (006 R2)', () => {
   it('builds the exact CenterTenant shape the app shell consumes', () => {
     const center: CenterTenant = makeCenter();
     expect(center.centerType).toBeUndefined();
-    expect(center.enabledModules).toEqual([]);
+    expect(center.modules).toEqual([]);
     expect(center.plan).toBe('growth');
     expect(center.status).toBe('active');
     expect(typeof center.id).toBe('string');
@@ -39,10 +39,10 @@ describe('programConfig factory (006 R2)', () => {
   it('carries the composed type and module list into the tenant', () => {
     const center = makeCenter(CRECHE_COMPOSED_CONFIG);
     expect(center.centerType).toBe('creche');
-    expect(center.enabledModules).toEqual([...PRE_PROGRAM_MODULES, 'activites', 'competences']);
+    expect(center.modules).toEqual([...PRE_PROGRAM_MODULES, 'activites', 'competences']);
     // no staff entitlement → the staff-lite derivation applies in App
-    expect(center.enabledModules).not.toContain('staff');
-    expect(center.enabledModules).toContain('etude');
+    expect(center.modules).not.toContain('staff');
+    expect(center.modules).toContain('etude');
   });
 
   it('builds the exact UserAccount shape, defaulting to admin', () => {
@@ -51,22 +51,22 @@ describe('programConfig factory (006 R2)', () => {
     expect(user.email).toBeTruthy();
     expect(typeof user.name).toBe('string');
     expect(typeof user.description).toBe('string');
-    expect(makeUser('restricted_admin').role).toBe('restricted_admin');
+    expect(makeUser('super_admin').role).toBe('super_admin');
   });
 
   it('makeProgram returns the login pair with the config role applied', () => {
-    const { center, user, config } = makeProgram(C5_RESTRICTED_CONFIG);
-    expect(user.role).toBe('restricted_admin');
+    const { center, user, config } = makeProgram(C5_COMPOSED_CONFIG);
+    expect(user.role).toBe('admin');
     expect(center.centerType).toBe('creche');
-    expect(center.enabledModules).toEqual(['etude', 'activites']);
+    expect(center.modules).toEqual(['etude', 'activites']);
     expect(config.type).toBe('creche');
     expect(config.enabledModules).toEqual(['etude', 'activites']);
   });
 
   it('copies the module list so callers cannot mutate the matrix rows', () => {
     const a = makeCenter(CRECHE_COMPOSED_CONFIG);
-    (a.enabledModules as string[]).push('staff');
+    (a.modules as string[]).push('staff');
     expect(CRECHE_COMPOSED_CONFIG.enabledModules).not.toContain('staff');
-    expect(makeCenter(CRECHE_COMPOSED_CONFIG).enabledModules).not.toContain('staff');
+    expect(makeCenter(CRECHE_COMPOSED_CONFIG).modules).not.toContain('staff');
   });
 });

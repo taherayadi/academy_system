@@ -9,7 +9,7 @@ vi.mock('./_lib', () => ({
 }));
 const platform = String(APPLICATION) === 'platform';
 const allowedRole = platform ? 'platform_super_admin' : 'admin';
-const foreignRoles = platform ? ['admin', 'super_admin', 'restricted_admin'] : ['platform_super_admin'];
+const foreignRoles = platform ? ['admin', 'super_admin'] : ['platform_super_admin'];
 const protectedPath = platform ? '/api/platform-billing' : '/api/state';
 function context(path: string, method = 'GET', origin?: string) {
   return { request: new Request('https://app.example' + path, { method, headers: origin ? { Origin: origin } : {} }), env: { DB: {} }, data: {}, next: vi.fn(async () => new Response('ok')) };
@@ -21,7 +21,7 @@ describe('deployment boundary', () => {
     expect((await onRequest(context('/api/auth/login') as any)).status).toBe(405);
   });
   it('requires authentication for every protected route and method', async () => {
-    const publicKeys = new Set(['POST /api/auth/login', 'POST /api/auth/logout', ...(platform ? [] : ['POST /api/demo-requests', 'GET /api/public-pricing', 'GET /api/advertisements/active'])]);
+    const publicKeys = new Set(['POST /api/auth/login', 'POST /api/auth/logout', ...(platform ? [] : ['POST /api/demo-requests', 'GET /api/public-pricing', 'GET /api/catalog', 'GET /api/advertisements/active'])]);
     for (const [route, methods] of Object.entries(ROUTES)) for (const method of methods) {
       if (publicKeys.has(`${method} ${route}`)) continue;
       const ctx = context(route, method);

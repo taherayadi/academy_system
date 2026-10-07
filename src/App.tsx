@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -38,6 +38,7 @@ import { useLiveSync, subscriptionSnapshot, LIVE_SYNC_INTERVAL_MS, LIVE_SYNC_FAS
 import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
 import { hasStudyModules } from './utils/centerType';
+import { useCatalog } from './utils/catalogStore';
 
 
 // Map sidebar tabs to subscription modules enabled for the current center.
@@ -66,6 +67,13 @@ export const TAB_MODULE: Record<string, string> = {
 const LIBRARY_ENABLED = false;
 
 export default function App() {
+  // Catalogue DB (modules + types de centre + compatibilité) chargé via
+  // GET /api/catalog : une seule souscription ici re-rend tout l'arbre quand
+  // les données arrivent — le gating par type (hasSchoolLevel,
+  // hasStudyModules…) et par modules en dépend partout dans l'espace de
+  // travail. Sans lui, le snapshot resterait vide côté espace connecté et
+  // tout passerait en visibilité « legacy » (grade affiché pour une crèche).
+  useCatalog();
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -99,7 +107,7 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: UserAccount, center?: CenterTenant | null) => {
-    if (!['admin', 'super_admin', 'restricted_admin'].includes(user.role)) {
+    if (!['admin', 'super_admin'].includes(user.role)) {
       clearSessionUser();
       toast.error('هذا التطبيق مخصص لإدارة المركز فقط.');
       return;
@@ -180,12 +188,10 @@ export default function App() {
     centerSyncFast ? LIVE_SYNC_FAST_INTERVAL_MS : LIVE_SYNC_INTERVAL_MS
   );
 
-  const hideRestrictedModules = currentUser?.role === 'restricted_admin';
-
   // ── Center subscription gating ──
   // Only the modules enabled for the connected center are visible/accessible.
   // Empty module lists retain the legacy center subscription behavior.
-  const centerModuleKeys = (currentCenter?.enabledModules as string[] | undefined) || [];
+  const centerModuleKeys = (currentCenter?.modules as string[] | undefined) || [];
   const hasCenterModule = (tabId: string): boolean => {
     const moduleKey = TAB_MODULE[tabId];
     if (!moduleKey) return true; // dashboard / settings — always available
@@ -214,12 +220,6 @@ export default function App() {
   // Logo du centre depuis centers.logo_url (ImageKit). Vide → logo par défaut
   // (icône de marque, comme sur la page de connexion).
   const menuLogoSrc = !currentCenter?.logoUrl ? brandIcon : currentCenter.logoUrl;
-
-  useEffect(() => {
-    if (hideRestrictedModules && (activeTab === 'module4' || activeTab === 'module4b' || activeTab === 'formations' || activeTab === 'module6' || activeTab === 'module8')) {
-      setActiveTab('module1');
-    }
-  }, [hideRestrictedModules, activeTab]);
 
   // If the active tab belongs to a module not enabled for this center (e.g. the
   // subscription modules changed after login), or to a study module hidden by
@@ -404,6 +404,38 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
     commitDomain(() => updateStudentApi(updatedStudent));
   };
+
+  /**
+   * Payment-only mutation : POST /api/payments (studentId + payment) — l'élève n'est
+   * PAS renvoyé en entier. Évite l'ancien PUT /api/students qui réécrivait toutes
+   * les tables enfants (parents/notes/enrollments) et violait les CHECK stricts de
+   * la table payments (method 'Espèces' vs 'cash', refund à montant négatif…).
+   */
+  const handleRecordPayment = useCallback((studentId: string, payment: PaymentRecord) => {
+    setStudents(prev => prev.map(s => s.id === studentId
+      ? { ...s, payments: [...(s.payments || []), payment] }
+      : s));
+    commitDomain(() => createPaymentApi({ ...payment, studentId }));
+  }, []);
+
+  /**
+   * Réconciliation locale : des paiements ont déjà été persistés via PUT /api/payments
+   * (encaissement de chèques). Aucun appel serveur — met uniquement à jour l'état
+   * affiché pour que تحصيل الشيكات et سجل المقبوضات se rafraîchissent immédiatement.
+   */
+  const handleMarkPaymentsPaid = useCallback((updates: { studentId: string; paymentIds: string[] }[]) => {
+    const paidByStudent = new Map<string, Set<string>>();
+    updates.forEach(u => {
+      const set = paidByStudent.get(u.studentId) ?? new Set<string>();
+      u.paymentIds.forEach(id => set.add(id));
+      paidByStudent.set(u.studentId, set);
+    });
+    setStudents(prev => prev.map(s => {
+      const paidIds = paidByStudent.get(s.id);
+      if (!paidIds || paidIds.size === 0) return s;
+      return { ...s, payments: (s.payments || []).map(p => paidIds.has(p.id) ? { ...p, chequePaid: true } : p) };
+    }));
+  }, []);
 
   const handleDeleteStudent = (id: string) => {
     setStudents(prev => prev.filter(s => s.id !== id));
@@ -933,18 +965,18 @@ export default function App() {
         { id: 'dashboard', label: 'لوحة القيادة', icon: LayoutDashboard },
         { id: 'module1', label: 'تسجيل التلاميذ', icon: GraduationCap },
         { id: 'module2', label: 'المتابعة الدراسية', icon: BookOpen },
-        !hideRestrictedModules && { id: 'studentTimeSheets', label: (currentCenter?.centerType === 'jardin' || currentCenter?.centerType === 'creche') ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
+        { id: 'studentTimeSheets', label: (currentCenter?.centerType === 'jardin' || currentCenter?.centerType === 'creche') ? 'تسجيل حضور التلاميذ' : 'جداول التوقيت', icon: CalendarCheck },
         hasStudy && { id: 'module3', label: 'تأطير Étude', icon: Clock },
-        hasStudy && !hideRestrictedModules && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
-        hasStudy && !hideRestrictedModules && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
-        hasStudy && !hideRestrictedModules && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        hasStudy && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
+        hasStudy && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
+        hasStudy && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
         { id: 'events', label: 'الفعاليات والخرجات', icon: Calendar },
         hasActivitiesModule && { id: 'activites', label: 'الأنشطة والبرنامج', icon: PuzzleIcon },
         hasSkillsModule && { id: 'competences', label: 'المهارات والكفاءات', icon: BrainIcon },
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
-        !hideRestrictedModules && { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
+        { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
-        hasStaffOrEtude && !hideRestrictedModules && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
+        hasStaffOrEtude && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
         { id: 'renewal', label: 'التجديد', icon: RefreshCw },
@@ -1162,7 +1194,6 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   openAddStudent={() => setActiveTab('module1')}
                   openAddStaff={() => setActiveTab('module8')}
-                  hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
                   centerType={currentCenter?.centerType}
                   isModuleAllowed={hasCenterModule}
@@ -1182,7 +1213,6 @@ export default function App() {
                   }}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onDeleteStudent={handleDeleteStudent}
-                  hideRestrictedModules={hideRestrictedModules}
                   sidebarCollapsed={sidebarCollapsed}
                   centerType={currentCenter?.centerType}
                   enabledModules={centerModuleKeys.length > 0 ? centerModuleKeys : undefined}
@@ -1196,12 +1226,13 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
+                  onRecordPayment={handleRecordPayment}
                   studentTimeSheets={studentTimeSheets}
                   centerType={currentCenter?.centerType}
                 />
               )}
 
-              {activeTab === 'studentTimeSheets' && !hideRestrictedModules && (
+              {activeTab === 'studentTimeSheets' && (
                 <StudentTimeSheetModule
                   students={students}
                   studentTimeSheets={studentTimeSheets}
@@ -1225,10 +1256,11 @@ export default function App() {
                   onUpdateSlots={handleUpdateSlots}
                   onUpdateTimesheets={handleUpdateTimesheets}
                   onUpdateStudent={handleUpdateSingleStudent}
+                  onRecordPayment={handleRecordPayment}
                 />
               )}
 
-              {activeTab === 'module4' && !hideRestrictedModules && (
+              {activeTab === 'module4' && (
                 <ExternalCoursesModule 
                   students={students}
                   courses={courses}
@@ -1243,7 +1275,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'module4b' && !hideRestrictedModules && (
+              {activeTab === 'module4b' && (
                 <SeanceRevisionModule
                   revisions={revisionSeances}
                   onUpdateRevisions={handleUpdateRevisionSeances}
@@ -1253,7 +1285,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'formations' && !hideRestrictedModules && (
+              {activeTab === 'formations' && (
                 <FormationModule
                   formations={formations}
                   onUpdateFormations={handleUpdateFormations}
@@ -1286,7 +1318,7 @@ export default function App() {
                   students={students}
                   currentUserRole={currentUser?.role}
                   staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
-                  canUseRoster={currentUser?.role !== 'restricted_admin'}
+                  canUseRoster={true}
                 />
               )}
 
@@ -1295,16 +1327,18 @@ export default function App() {
                   students={students}
                   settings={settings}
                   onUpdateStudent={handleUpdateSingleStudent}
+                  onRecordPayment={handleRecordPayment}
                   studentTimeSheets={studentTimeSheets}
                 />
               )}
 
-              {activeTab === 'module6' && !hideRestrictedModules && (
+              {activeTab === 'module6' && (
                 <MealsModule 
                   students={students}
                   mealPlans={mealPlans}
                   settings={settings}
                   onUpdateStudents={handleUpdateStudents}
+                  onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateMealPlans={handleUpdateMealPlans}
                 />
               )}
@@ -1326,6 +1360,7 @@ export default function App() {
                   expenses={expenses}
                   onUpdateExpenses={handleUpdateExpenses}
                   onUpdateStudent={handleUpdateSingleStudent}
+                  onMarkPaymentsPaid={handleMarkPaymentsPaid}
                   externalStudents={externalStudents}
                   courses={courses}
                   revisions={revisionSeances}
@@ -1334,9 +1369,8 @@ export default function App() {
                   onUpdateFormations={handleUpdateFormations}
                   onUpdateEvents={handleUpdateEvents}
                   slots={slots}
-                  hideRestrictedModules={hideRestrictedModules}
                   settings={settings}
-                  enabledModules={currentCenter?.enabledModules as string[] | undefined}
+                  enabledModules={currentCenter?.modules as string[] | undefined}
                   mealForfaitClosures={mealForfaitClosures}
                   onUpdateMealForfaitClosures={handleUpdateMealForfaitClosures}
                 />
@@ -1360,10 +1394,9 @@ export default function App() {
 
               {activeTab === 'settings' && (
                 <SettingsModule
-                  key={`settings_${reloadKey}_${settings?.centerName || ''}_${JSON.stringify(settings?.fees || {})}`}
+                  key={`settings_${reloadKey}_${settings?.centerName || ''}_${JSON.stringify(settings?.servicePrices || {})}`}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
-                  hideRestrictedModules={hideRestrictedModules}
                   currentUserEmail={currentUser.email}
                   onExportDatabase={handleExportDatabase}
                   onImportDatabase={handleImportDatabase}

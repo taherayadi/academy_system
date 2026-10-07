@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
 
 
 const API_BASE = '/api';
@@ -150,6 +150,25 @@ export async function updateStudentApi(student: Student): Promise<void> {
 
 export async function deleteStudentApi(studentId: string): Promise<void> {
   return deleteDomain(`/students?id=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ.');
+}
+
+/**
+ * Ajoute UN paiement d'un élève existant — sans renvoyer l'élève complet.
+ * Endpoint dédié POST /api/payments (l'ancien flux réécrivait toutes les
+ * tables enfants via PUT /api/students pour un simple paiement).
+ */
+export async function createPaymentApi(payment: PaymentRecord & { studentId: string }): Promise<void> {
+  return postDomain('/payments', payment, 'تعذر إضافة الدفعة.');
+}
+
+/** Supprime un paiement par id — sans toucher à l'élève. */
+export async function deletePaymentApi(paymentId: string): Promise<void> {
+  return deleteDomain(`/payments?id=${encodeURIComponent(paymentId)}`, 'تعذر حذف الدفعة.');
+}
+
+/** Mise à jour partielle d'un paiement (encaissement de chèque : { id, chequePaid }). */
+export async function updatePaymentApi(patch: { id: string; chequePaid?: boolean; chequeNumber?: string; chequeDate?: string; notes?: string }): Promise<void> {
+  return putDomain('/payments', patch, 'تعذر تعديل الدفعة.');
 }
 
 
@@ -530,6 +549,42 @@ export async function fetchPublicModulePricesApi(year?: string): Promise<Record<
     if (row.module_key) prices[row.module_key] = Number(row.price) || 0;
     return prices;
   }, {});
+}
+
+
+/**
+ * Catalogue public (modules, types de centre, compatibilité) chargé à
+ * l'EXÉCUTION depuis /api/catalog — tables `modules`, `center_types` et
+ * `center_type_modules`. Aucune session requise.
+ */
+export interface CatalogPayload {
+  modules: Array<{
+    key: string;
+    label: string;
+    labelAr: string;
+    isBasic: boolean;
+    isUnbilled: boolean;
+    isHidden: boolean;
+    icon: string;
+    description: string;
+    features: string[];
+  }>;
+  centerTypes: Array<{ key: string; label: string; labelAr: string; hint: string; hintAr: string }>;
+  centerTypeModules: Array<{ centerType: string; moduleKey: string }>;
+}
+
+/** Fetch the public catalog without a session. */
+export async function fetchCatalogApi(): Promise<CatalogPayload> {
+  const res = await fetch(`${API_BASE}/catalog`, {
+    credentials: 'same-origin'
+  });
+  const data: Partial<CatalogPayload> & { error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur chargement du catalogue.');
+  return {
+    modules: data.modules || [],
+    centerTypes: data.centerTypes || [],
+    centerTypeModules: data.centerTypeModules || []
+  };
 }
 
 

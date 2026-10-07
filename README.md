@@ -19,7 +19,7 @@ Browser requests use relative `/api` URLs and never call the admin backend direc
 
 | Boundary | This application |
 |---|---|
-| Roles | `admin`, `super_admin`, `restricted_admin` (all center roles) |
+| Roles | `admin`, `super_admin` (all center roles) |
 | Session table | `center_sessions` |
 | Host-only cookie | `tc_center_session` |
 | Client storage | `tc_center_user`, `tc_center_token` |

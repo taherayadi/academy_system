@@ -13,7 +13,7 @@ import {
   Calendar,
   Undo2
 } from 'lucide-react';
-import { Student, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, StudentTimeSheet } from '../types';
+import { Student, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, StudentTimeSheet, paymentMethodLabel } from '../types';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
@@ -21,6 +21,8 @@ import TimeSheetViewDialog from './TimeSheetViewDialog';
 interface LibraryModuleProps {
   students: Student[];
   onUpdateStudent: (student: Student) => void;
+  /** Payment-only mutation : POST /api/payments — PAS de réécriture de l'élève. */
+  onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
   settings?: CenterSettings;
   studentTimeSheets: StudentTimeSheet[];
 }
@@ -30,7 +32,16 @@ const ACADEMIC_INDEX: Record<AcademicMonth, number> = {
   'Janvier': 4, 'Février': 5, 'Mars': 6, 'Avril': 7, 'Mai': 8
 };
 
-export default function LibraryModule({ students, onUpdateStudent, settings, studentTimeSheets }: LibraryModuleProps) {
+export default function LibraryModule({ students, onUpdateStudent, onRecordPayment, settings, studentTimeSheets }: LibraryModuleProps) {
+  /** Payment-only mutation via POST /api/payments ; fallback PUT legacy. */
+  const recordPayment = (st: Student, payment: PaymentRecord) => {
+    if (onRecordPayment) {
+      onRecordPayment(st.id, payment);
+      return;
+    }
+    onUpdateStudent({ ...st, payments: [...(st.payments || []), payment] });
+  };
+
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
   const [searchTerm, setSearchTerm] = useState('');
@@ -300,7 +311,7 @@ export default function LibraryModule({ students, onUpdateStudent, settings, stu
         payments: [...(selectedStudentForPayment.payments || []), newPayment]
       };
 
-      onUpdateStudent(updatedStudent);
+      recordPayment(selectedStudentForPayment, newPayment);
       setSelectedStudentForPayment(null);
       setPrintingReceipt({ student: updatedStudent, payment: newPayment });
       setIsSubmitting(false);
@@ -345,7 +356,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(selectedStudentForPayment.payments || []), newPayment]
     };
 
-    onUpdateStudent(updatedStudent);
+    recordPayment(selectedStudentForPayment, newPayment);
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
     setIsSubmitting(false);
@@ -411,7 +422,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(refundStudent.payments || []), ...refundRecords]
     };
 
-    onUpdateStudent(updatedStudent);
+    // Refunds : endpoint dédié (paymentMethodKey + is_refund gérés serveur).
+    refundRecords.forEach(r => recordPayment(refundStudent, r));
     setIsRefundModalOpen(false);
     setRefundStudent(null);
     toast.success(`تم تسجيل استرجاع مكتبة بمبلغ ${totalRefund} د.ت مقابل ${refundRecords.length} شهر (مسجّل في الميزانية)!`);
@@ -1094,7 +1106,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                                   <td className="p-2 font-mono text-slate-700">{p.date}</td>
                                   <td className="p-2 font-mono text-slate-500 text-[10px]">{p.receiptNumber}</td>
                                   <td className="p-2 text-slate-800 font-medium">
-                                    <span className="font-bold">{p.method}</span>
+                                    <span className="font-bold">{paymentMethodLabel(p.method)}</span>
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
                                     {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>

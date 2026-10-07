@@ -1,4 +1,4 @@
-import { Env, json, getSessionToken, deleteSession, clearSessionCookie, getClientIp } from '../_lib';
+import { Env, json, getSessionToken, deleteSession, validateSession, clearSessionCookie, getClientIp } from '../_lib';
 import { logAudit } from '../_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
@@ -9,8 +9,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     const ip = getClientIp(request);
 
     if (token) {
-      // Resolve email for audit log before deleting
-      const session = await env.DB.prepare('SELECT email FROM center_sessions WHERE token = ?').bind(token).first<{email: string}>();
+      // Resolve the user for the audit log before deleting (auth_sessions
+      // stores user_id, not email — resolve via validateSession).
+      const session = await validateSession(env.DB, request);
       if (session?.email) {
         logAudit(env, request, { email: session.email, action: 'logout', ip }).catch(() => {});
       }

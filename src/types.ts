@@ -2,33 +2,49 @@ export type SubscriptionPlan = 'trial' | 'starter' | 'growth' | 'pro' | 'custom'
 
 export type CenterStatus = 'trial' | 'active' | 'suspended' | 'expired';
 
+// ---------------------------------------------------------------------------
+// Modules — la table `modules` est la SEULE source de vérité. Le catalogue
+// (clés, libellés, drapeaux isBasic/isUnbilled/isHidden, compatibilité par
+// type) est chargé à l'EXÉCUTION depuis GET /api/catalog via
+// src/utils/catalogStore.ts : aucune liste de clés codée en dur. Les clés de
+// module sont des strings libres — le runtime ne connaît que la base. Les
+// prix vivent dans `module_prices` (chargés via /api/public-pricing).
+// ---------------------------------------------------------------------------
 
-export type ModuleKey = 
-  | 'scolaire' 
-  | 'finance' 
-  | 'etude' 
-  | 'coursParticuliers' 
-  | 'revision' 
-  | 'formations' 
-  | 'cantine' 
-  | 'transport' 
-  | 'events' 
-  | 'bibliotheque' 
-  | 'studentTimeSheets' 
-  | 'staff'
-  | 'activites'
-  | 'competences';
+/**
+ * Clé de module — string libre miroir de `modules.key`. Aucune union fermée :
+ * un module ajouté en base existe côté code sans toucher aux sources.
+ */
+export type ModuleKey = string;
 
+/** Ligne de la table `modules`, telle que livrée par GET /api/catalog. */
+export interface ModuleDefinition {
+  key: ModuleKey;
+  label: string;
+  labelAr: string;
+  isBasic: boolean;
+  isUnbilled: boolean;
+  isHidden: boolean;
+  icon: string;
+  description: string;
+  features: string[];
+}
+
+// ─── Helpers clés de module (implémentation : catalogStore, lu sur la base) ───
+export { isModuleKey, normalizeModuleKeys } from './utils/catalogStore';
 
 export interface CenterTenant {
   id: string;
   name: string;
   slug?: string;
   phoneNumber?: string;
-  locationCity?: string;
-  plan: SubscriptionPlan;
-  enabledModules: ModuleKey[] | string[];
-  mealOperatingMode?: 'external_traiteur' | 'in_house_kitchen';
+  locationCity?: string;  plan: SubscriptionPlan;
+  // ⚠️ Nouveau schéma : les modules actifs vivent dans la table
+  // center_modules (center_id, module_key) — livrés par l'API
+  // (login / me / centers → champ `modules`). undefined/[] = legacy full-visibility.
+  modules?: ModuleKey[];
+  // Le mode cantine (external_traiteur / in_house_kitchen) vit dans
+  // center_meal_mode_history et arrive via CenterSettings.mealOperatingMode.
   status: CenterStatus;
   trialEndsAt?: number | null;
   subscriptionEndsAt?: number | null;
@@ -74,11 +90,73 @@ export function hasInterstitialPosition(positions?: string[]): boolean {
 export interface UserAccount {
   email: string;
   name: string;
-  role: 'admin' | 'super_admin' | 'restricted_admin';
+  role: 'admin' | 'super_admin';
   description: string;
   centerId?: string;
 }
 
+
+export type MealOperatingMode = 'external_traiteur' | 'in_house_kitchen';
+
+// ---------------------------------------------------------------------------
+// Nouveau schéma tarifaire — la table `services` définit le catalogue,
+// `center_service_prices` porte le prix par centre / année / période.
+// ---------------------------------------------------------------------------
+
+/** Ligne de la table `services`. */
+export interface ServiceDefinition {
+  key: string;
+  category: 'scolaire' | 'meal' | 'course' | 'other';
+  labelFr: string;
+  labelAr: string;
+  moduleKey?: string;
+}
+
+/**
+ * Périodes de facturation possibles — VOCABULAIRE DE LA BASE
+ * (CHECK billing_period IN ('month','unit','year') sur center_service_prices
+ * et payments). Ne pas « franciser » : la DB est la source de vérité.
+ */
+export type ServiceBillingPeriod = 'month' | 'year' | 'unit';
+
+/**
+ * Tarifs d'un centre pour une année scolaire :
+ * servicePrices[year][`${serviceKey}:${period}`] = price.
+ * La clé réservée « DEFAULT » porte les tarifs sans année (fallback).
+ */
+export type ServicePricesByYear = Record<string, Record<string, number>>;
+
+/** Historique du mode cantine — table center_meal_mode_history. */
+export interface CenterMealModeEntry {
+  id: number;
+  centerId: string;
+  mode: MealOperatingMode;
+  effectiveFrom: string; // YYYY-MM-DD
+  createdBy?: string;
+  createdAt: number;
+}
+
+export interface CenterSettings {
+  centerName: string;
+  phoneNumber: string;
+  locationCity: string;
+  currency: string; // center_settings.currency, ex: 'TND'
+  // ⚠️ Nouveau schéma : plus de bloc CenterFeeSet — chaque service a son
+  // prix par année dans center_service_prices. Voir servicePriceForYear().
+  servicePrices: ServicePricesByYear;
+  // Mode cantine courant — dérivé de la dernière ligne de
+  // center_meal_mode_history (lisible par le centre, écrit par la plateforme).
+  mealOperatingMode?: MealOperatingMode;
+  // Matières partagées (table subjects) et établissements (table etablissements)
+  subjects?: string[];
+  etablissements?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// LEGACY SHIM — l'ancienne nomenclature CenterFeeSet reste disponible comme
+// VUE sur servicePrices (mapping champ → service_key + billing_period).
+// À supprimer quand tous les écrans parlent « service » nativement.
+// ---------------------------------------------------------------------------
 
 export interface CenterFeeSet {
   fraisAnnuelSuivi: number;
@@ -91,72 +169,85 @@ export interface CenterFeeSet {
   fraisAnnuelEtude: number;
   fraisMensuelEtude: number;
   fraisAssuranceCoursExternes: number;
-  fraisGouterMatinMensuel?: number;
-  fraisGouterMatinUnitaire?: number;
-  fraisGouterSoirMensuel?: number;
-  fraisGouterSoirUnitaire?: number;
-  fraisDeuxGoutersMensuel?: number;
+  fraisGouterMatinMensuel: number;
+  fraisGouterMatinUnitaire: number;
+  fraisGouterSoirMensuel: number;
+  fraisGouterSoirUnitaire: number;
+  fraisDeuxGoutersMensuel: number;
 }
 
+/**
+ * Mapping champ legacy → (service_key, billing_period) dans center_service_prices.
+ * Vocabulaire DB ('month' | 'year' | 'unit'). prixPlatTraiteur (assiette
+ * traiteur externe) et fraisParRepas pointent tous deux sur lunch:unit —
+ * la DB ne porte qu'UN prix unitaire repas ; la part traiteur vit dans
+ * center_service_prices.traiteur_share.
+ */
+export const LEGACY_FEE_SERVICE_MAP: Record<keyof CenterFeeSet, { serviceKey: string; period: ServiceBillingPeriod }> = {
+  fraisAnnuelSuivi: { serviceKey: 'suivi', period: 'year' },
+  fraisMensuelSuivi: { serviceKey: 'suivi', period: 'month' },
+  fraisAnnuelBibliotheque: { serviceKey: 'bibliotheque', period: 'year' },
+  fraisMensuelBibliotheque: { serviceKey: 'bibliotheque', period: 'month' },
+  fraisAbonnementRepas: { serviceKey: 'lunch', period: 'month' },
+  fraisParRepas: { serviceKey: 'lunch', period: 'unit' },
+  prixPlatTraiteur: { serviceKey: 'lunch', period: 'unit' },
+  fraisAnnuelEtude: { serviceKey: 'etude', period: 'year' },
+  fraisMensuelEtude: { serviceKey: 'etude', period: 'month' },
+  fraisAssuranceCoursExternes: { serviceKey: 'assurance_externe', period: 'year' },
+  fraisGouterMatinMensuel: { serviceKey: 'gouter_matin', period: 'month' },
+  fraisGouterMatinUnitaire: { serviceKey: 'gouter_matin', period: 'unit' },
+  fraisGouterSoirMensuel: { serviceKey: 'gouter_apres_midi', period: 'month' },
+  fraisGouterSoirUnitaire: { serviceKey: 'gouter_apres_midi', period: 'unit' },
+  fraisDeuxGoutersMensuel: { serviceKey: 'gouter_both', period: 'month' }
+};
 
-export type MealOperatingMode = 'external_traiteur' | 'in_house_kitchen';
-
-
-export interface CenterSettings {
-  centerName: string;
-  phoneNumber: string;
-  locationCity: string;
-  mealOperatingMode?: MealOperatingMode;
-  fees: CenterFeeSet;
-  // Per-school-year fee overrides: key = "2025/2026" ...
-  feesByYear: Record<string, CenterFeeSet>;
-  // Shared list of matières (subjects) used across the whole app (Suivi notes, staff, cours)
-  subjects?: string[];
-  // Shared list of known etablissements (schools/establishments)
-  etablissements?: string[];
+/** Prix d'un service pour une année (clé composite « service:period »). */
+export function servicePriceForYear(
+  servicePrices: ServicePricesByYear | null | undefined,
+  serviceKey: string,
+  period: string,
+  year: string,
+  fallback = 0
+): number {
+  if (!servicePrices) return fallback;
+  const row = servicePrices[year] || servicePrices['DEFAULT'] || {};
+  const v = row[`${serviceKey}:${period}`] ?? row[serviceKey];
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+/** Écrit/met à jour le prix d'un service pour une année (immutable). */
+export function withServicePrice(
+  servicePrices: ServicePricesByYear,
+  year: string,
+  serviceKey: string,
+  period: string,
+  value: number
+): ServicePricesByYear {
+  const forYear = { ...(servicePrices[year] || {}) };
+  forYear[`${serviceKey}:${period}`] = value;
+  return { ...servicePrices, [year]: forYear };
+}
 
-export const initialCenterFeeSet: CenterFeeSet = {
-  fraisAnnuelSuivi: 150,
-  fraisMensuelSuivi: 250,
-  fraisAnnuelBibliotheque: 20,
-  fraisMensuelBibliotheque: 30,
-  fraisAbonnementRepas: 150,
-  fraisParRepas: 8,
-  prixPlatTraiteur: 6,
-  fraisAnnuelEtude: 100,
-  fraisMensuelEtude: 180,
-  fraisAssuranceCoursExternes: 50,
-  fraisGouterMatinMensuel: 0,
-  fraisGouterMatinUnitaire: 0,
-  fraisGouterSoirMensuel: 0,
-  fraisGouterSoirUnitaire: 0,
-  fraisDeuxGoutersMensuel: 0
-};
-
-
-// Default fees applied at student creation time
-export const initialStudentFeeSet: CenterFeeSet = {
-  fraisAnnuelSuivi: 150,
-  fraisMensuelSuivi: 250,
-  fraisAnnuelBibliotheque: 20,
-  fraisMensuelBibliotheque: 30,
-  fraisAbonnementRepas: 150,
-  fraisParRepas: 8,
-  prixPlatTraiteur: 6,
-  fraisAnnuelEtude: 100,
-  fraisMensuelEtude: 180,
-  fraisAssuranceCoursExternes: 50,
-  fraisGouterMatinMensuel: 0,
-  fraisGouterMatinUnitaire: 0,
-  fraisGouterSoirMensuel: 0,
-  fraisGouterSoirUnitaire: 0,
-  fraisDeuxGoutersMensuel: 0
-};
+/** Convertit un ancien CenterFeeSet en servicePrices (clé 'DEFAULT'). */
+export function feeSetToServicePrices(fees: Partial<CenterFeeSet> | null | undefined, year = 'DEFAULT'): ServicePricesByYear {
+  const out: ServicePricesByYear = {};
+  if (!fees || typeof fees !== 'object') return out;
+  for (const [field, map] of Object.entries(LEGACY_FEE_SERVICE_MAP)) {
+    const v = (fees as any)[field];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out[year] = { ...(out[year] || {}), [`${map.serviceKey}:${map.period}`]: v };
+    }
+  }
+  return out;
+}
 
 
 // Shared default list of matières used across the whole app (Suivi notes devoirs, staff enseignant, cours)
+/**
+ * Liste de secours des matières — la source de vérité est la TABLE `subjects`.
+ * L'API livre `settings.subjects` depuis la table ; cette constante n'est plus
+ * le catalogue officiel, seulement le repli quand la table est vide.
+ */
 export const APP_SUBJECTS = [
   'الرياضيات (Mathématiques)',
   'الفيزياء والكيمياء (Physique-Chimie)',
@@ -171,22 +262,14 @@ export const APP_SUBJECTS = [
 ];
 
 
+// Tarifs par défaut appliqués à la création d'un élève quand le service
+// n'a pas encore de prix dans center_service_prices (0 = non configuré).
 export const initialCenterSettings: CenterSettings = {
   centerName: 'EduSphère',
-  phoneNumber: '+216 71 000 000',
-  locationCity: 'Sfax / تونس',
-  mealOperatingMode: 'external_traiteur',
-  fees: initialStudentFeeSet,
-  feesByYear: {
-    '2022/2023': initialStudentFeeSet,
-    '2023/2024': initialStudentFeeSet,
-    '2024/2025': initialStudentFeeSet,
-    '2025/2026': initialStudentFeeSet,
-    '2026/2027': initialStudentFeeSet,
-    '2027/2028': initialStudentFeeSet,
-    '2028/2029': initialStudentFeeSet
-  },
-  subjects: APP_SUBJECTS
+  phoneNumber: '',
+  locationCity: '',
+  currency: 'TND',
+  servicePrices: {}
 };
 
 
@@ -264,70 +347,124 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
 
 export function normalizeSettings(raw: any, topLevelFees?: any, topLevelFeesByYear?: any): CenterSettings {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  
-  let rawBaseFees = src.fees || topLevelFees;
-  if (!rawBaseFees || typeof rawBaseFees !== 'object') {
-    if (src.fraisAnnuelSuivi != null || src.frais_annuel_suivi != null || src.fraisMensuelSuivi != null) {
-      rawBaseFees = src;
+
+  // Nouveau schéma : servicePrices[year]["service:period"] — tolère aussi la
+  // structure plate { "service:period": n } sans année.
+  const servicePrices: ServicePricesByYear = {};
+  const rawSp = (src.servicePrices && typeof src.servicePrices === 'object' && !Array.isArray(src.servicePrices))
+    ? src.servicePrices
+    : {};
+  for (const [year, prices] of Object.entries(rawSp)) {
+    if (year && prices && typeof prices === 'object' && !Array.isArray(prices)) {
+      const row: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prices as Record<string, unknown>)) {
+        const n = Number(v);
+        if (k && Number.isFinite(n)) row[k] = n;
+      }
+      servicePrices[year] = row;
     }
   }
-
-  const baseFees = normalizeFeeSet(rawBaseFees, null);
-
-  const rawByYear = (src.feesByYear && typeof src.feesByYear === 'object' && !Array.isArray(src.feesByYear))
-    ? src.feesByYear
-    : (topLevelFeesByYear && typeof topLevelFeesByYear === 'object' && !Array.isArray(topLevelFeesByYear))
-      ? topLevelFeesByYear
-      : {};
-
-  const feesByYear: Record<string, CenterFeeSet> = {};
-
-  for (const [year, yFees] of Object.entries(rawByYear)) {
-    if (year && typeof yFees === 'object' && yFees !== null) {
-      feesByYear[year] = normalizeFeeSet(yFees, baseFees);
+  if (Object.keys(servicePrices).length === 0 && Object.keys(src).length > 0) {
+    // Payload plat (import legacy) : "suivi:monthly" sans conteneur d'année.
+    const flat: Record<string, number> = {};
+    for (const [k, v] of Object.entries(src)) {
+      if (k.includes(':')) { const n = Number(v); if (Number.isFinite(n)) flat[k] = n; }
     }
+    if (Object.keys(flat).length > 0) servicePrices['DEFAULT'] = flat;
   }
 
-  DEFAULT_ACADEMIC_YEARS.forEach(yr => {
-    if (!feesByYear[yr]) {
-      feesByYear[yr] = { ...baseFees };
+  // Ancien bloc fees/feesByYear embarqué → converti en servicePrices
+  // (chemin legacy : anciens snapshots, anciens payloads API).
+  const mergeLegacyInto = (rawFees: any, year: string) => {
+    if (!rawFees || typeof rawFees !== 'object') return;
+    const feeSet = normalizeFeeSet(rawFees, null);
+    for (const [field, map] of Object.entries(LEGACY_FEE_SERVICE_MAP) as [keyof CenterFeeSet, { serviceKey: string; period: string }][]) {
+      const v = (feeSet as any)[field];
+      if (typeof v !== 'number') continue;
+      const key = `${map.serviceKey}:${map.period}`;
+      // prixPlatTraiteur (valeur d'affichage par défaut, souvent 6) ne doit
+      // JAMAIS écraser un vrai prix unitaire repas : la DB ne porte qu'UN
+      // prix lunch:unit (fraisParRepas) — la part traiteur vit dans traiteur_share.
+      if (field === 'prixPlatTraiteur' && servicePrices[year]?.[key] != null) continue;
+      if (v !== 0 || field === 'prixPlatTraiteur') {
+        servicePrices[year] = { ...(servicePrices[year] || {}), [key]: v };
+      }
     }
-  });
+  };
+  if (Object.keys(servicePrices).length === 0) {
+    if (src.fees && typeof src.fees === 'object') mergeLegacyInto(src.fees, 'DEFAULT');
+    if (src.feesByYear && typeof src.feesByYear === 'object' && !Array.isArray(src.feesByYear)) {
+      for (const [year, yFees] of Object.entries(src.feesByYear)) {
+        if (year && yFees && typeof yFees === 'object') mergeLegacyInto(yFees, year);
+      }
+    }
+  }
 
   const subjects: string[] = Array.isArray(src.subjects) && src.subjects.length > 0
     ? (Array.from(new Set(src.subjects.map((s: any) => String(s).trim()).filter(Boolean))) as string[])
-    : [...APP_SUBJECTS];
+    : [];
+
+  const mode = src.mealOperatingMode || src.meal_operating_mode;
 
   return {
     centerName: src.centerName || src.center_name || 'EduSphère',
     phoneNumber: src.phoneNumber || src.phone_number || '',
     locationCity: src.locationCity || src.location_city || '',
-    mealOperatingMode: src.mealOperatingMode || src.meal_operating_mode || 'external_traiteur',
-    fees: baseFees,
-    feesByYear,
-    subjects
+    currency: src.currency || 'TND',
+    servicePrices,
+    ...(mode ? { mealOperatingMode: mode === 'in_house_kitchen' ? 'in_house_kitchen' : 'external_traiteur' } : {}),
+    ...(Array.isArray(src.etablissements) ? { etablissements: src.etablissements.map((e: any) => String(e)).filter(Boolean) } : {}),
+    ...(topLevelFees || topLevelFeesByYear ? normalizeLegacyFeePayload(topLevelFees, topLevelFeesByYear, servicePrices) : {})
   };
 }
 
-
-// Returns the fees to apply for a given academic year
-export function getFeesForYear(settings: CenterSettings | null | undefined, year: string): CenterFeeSet {
-  if (!settings) {
-    return {
-      fraisAnnuelSuivi: 0,
-      fraisMensuelSuivi: 0,
-      fraisAnnuelBibliotheque: 0,
-      fraisMensuelBibliotheque: 0,
-      fraisAbonnementRepas: 0,
-      fraisParRepas: 0,
-      prixPlatTraiteur: 6,
-      fraisAnnuelEtude: 0,
-      fraisMensuelEtude: 0,
-      fraisAssuranceCoursExternes: 0
-    };
+/** Fusionne un ancien payload fees/feesByYear dans servicePrices (chemin d'import legacy). */
+function normalizeLegacyFeePayload(topLevelFees: any, topLevelFeesByYear: any, servicePrices: ServicePricesByYear): Partial<CenterSettings> {
+  const mergeLegacy = (rawFees: any, year: string) => {
+    const feeSet = normalizeFeeSet(rawFees, null);
+    for (const [field, map] of Object.entries(LEGACY_FEE_SERVICE_MAP) as [keyof CenterFeeSet, { serviceKey: string; period: string }][]) {
+      const v = (feeSet as any)[field];
+      if (typeof v !== 'number') continue;
+      const key = `${map.serviceKey}:${map.period}`;
+      // prixPlatTraiteur (valeur d'affichage par défaut, souvent 6) ne doit
+      // JAMAIS écraser un vrai prix unitaire repas : la DB ne porte qu'UN
+      // prix lunch:unit (fraisParRepas) — la part traiteur vit dans traiteur_share.
+      if (field === 'prixPlatTraiteur' && servicePrices[year]?.[key] != null) continue;
+      if (v !== 0 || field === 'prixPlatTraiteur') {
+        servicePrices[year] = { ...(servicePrices[year] || {}), [key]: v };
+      }
+    }
+  };
+  if (topLevelFeesByYear && typeof topLevelFeesByYear === 'object' && !Array.isArray(topLevelFeesByYear)) {
+    for (const [year, yFees] of Object.entries(topLevelFeesByYear)) {
+      if (year && yFees && typeof yFees === 'object') mergeLegacy(yFees, year);
+    }
   }
-  const raw = (settings.feesByYear && settings.feesByYear[year]) || settings.fees;
-  return normalizeFeeSet(raw, settings.fees);
+  if (topLevelFees && typeof topLevelFees === 'object') mergeLegacy(topLevelFees, 'DEFAULT');
+  return {};
+}
+
+
+// Returns the fees to apply for a given academic year (VUE legacy sur servicePrices)
+export function getFeesForYear(settings: CenterSettings | null | undefined, year: string): CenterFeeSet {
+  const empty: CenterFeeSet = {
+    fraisAnnuelSuivi: 0, fraisMensuelSuivi: 0,
+    fraisAnnuelBibliotheque: 0, fraisMensuelBibliotheque: 0,
+    fraisAbonnementRepas: 0, fraisParRepas: 0,
+    prixPlatTraiteur: 6,
+    fraisAnnuelEtude: 0, fraisMensuelEtude: 0,
+    fraisAssuranceCoursExternes: 0,
+    fraisGouterMatinMensuel: 0, fraisGouterMatinUnitaire: 0,
+    fraisGouterSoirMensuel: 0, fraisGouterSoirUnitaire: 0,
+    fraisDeuxGoutersMensuel: 0
+  };
+  const sp = settings?.servicePrices;
+  if (!sp) return empty;
+  const out = { ...empty };
+  for (const [field, map] of Object.entries(LEGACY_FEE_SERVICE_MAP) as [keyof CenterFeeSet, { serviceKey: string; period: string }][]) {
+    (out as any)[field] = servicePriceForYear(sp, map.serviceKey, map.period, year, field === 'prixPlatTraiteur' ? 6 : 0);
+  }
+  return out;
 }
 
 
@@ -440,21 +577,48 @@ export interface AcademicHistoryEntry {
 export interface PaymentRecord {
   id: string;
   date: string;
-  amountPaid: number;
-  totalRequired: number;
+  amountPaid: number;      // payments.amount
+  totalRequired: number;   // payments.total_required
+  // Dérivé côté client (total_required - amount_paid) — plus de colonne.
   remainingBalance: number;
-  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Événements' | 'Autres';
-  month: string; // e.g. "Octobre"
+  // Libellé du service (affichage). Le schéma nouveau stocke service_key ;
+  // le mapping clé → libellé vient de la table `services`.
+  service: 'Suivi' | 'Inscription Suivi' | 'Étude' | 'Inscription Étude' | 'Cours Particuliers' | 'Revision' | 'Formation' | 'Bibliothèque' | 'Inscription Bibliothèque' | 'Repas' | 'Goûter' | 'Assurance' | 'Événements' | 'Autres' | string;
+  // ⚠️ Nouveau schéma : service_key (ex: 'suivi', 'lunch', 'assurance_externe')
+  serviceKey?: string;
+  // ⚠️ Nouveau schéma : billing_period ('monthly' | 'annual' | 'unit')
+  billingPeriod?: ServiceBillingPeriod | string;
+  // ⚠️ Nouveau schéma : period_month (ex: 'Octobre' ou '2026-10')
+  month: string;
+  // ⚠️ Nouveau schéma : school_year (ex: '2026/2027')
+  schoolYear?: string;
   paymentType: 'full' | 'advance' | 'balance'; // Payé / Avance (acompte) / Solde
-  method: 'Espèces' | 'Chèque' | 'Virement';
+  method: 'Espèces' | 'Chèque' | 'Virement' | string;
   chequeNumber?: string;
   chequeDate?: string;
-  chequePaid?: boolean; // true when the cheque has been cashed/received
-  receiptNumber: string;
+  chequePaid?: boolean; // payments.cheque_paid — chèque encaissé
+  receiptNumber: string; // payments.receipt_number
   notes?: string;
-  discount?: number;  // discount granted on this month/registration fee (حسم / تخفيض)
-  refund?: boolean;       // true when this record is a refund (remboursement)
-  refundOf?: string;      // id of the original payment being refunded
+  discount?: number;      // payments.discount (حسم / تخفيض)
+  refund?: boolean;       // payments.is_refund — remboursement
+  refundOf?: string;      // payments.refund_of — id du paiement remboursé
+  // ⚠️ Nouveau schéma : ref_type/ref_id — rattachement optionnel à une entité
+  // (inscription, événement, cours…)
+  refType?: string;
+  refId?: string;
+}
+
+/**
+ * Libellé d'affichage « طريقة الخلاص » : clé brute (nouveau schéma DB :
+ * cash/cheque/transfer/card) → libellé FR lisible côté centre.
+ * « Espèces » est la valeur par défaut partout dans l'UI.
+ */
+export function paymentMethodLabel(method: unknown): string {
+  const m = typeof method === 'string' ? method.trim().toLowerCase() : '';
+  if (m === 'cheque') return 'Chèque';
+  if (m === 'transfer') return 'Virement';
+  if (m === 'card') return 'Carte';
+  return 'Espèces'; // 'cash', 'espèces', valeur absente/inconnue
 }
 
 
@@ -490,6 +654,32 @@ export interface StudentRegistration {
   signatureName?: string;
 }
 
+
+/**
+ * Ligne 1:1 de la TABLE `students` (nouveau schéma normalisé). L'interface
+ * `Student` ci-dessous reste la VUE AGGREGÉE de l'application : le serveur
+ * l'assemble depuis students + student_parents + student_years +
+ * student_service_enrollments + payments + meal_attendances.
+ */
+export interface StudentDbRow {
+  id: string;
+  centerId: string;
+  studentType: string; // 'regular' | …
+  firstName: string;
+  lastName: string;
+  birthDate?: string | null;
+  birthPlace?: string | null;
+  contactPhone?: string | null;
+  allergies: string;
+  parentalSituation?: string | null;
+  parentalComments?: string | null;
+  registrationDate?: string | null;
+  registrationLocation?: string | null;
+  registrationSignedElectronically: boolean;
+  registrationSignatureName?: string | null;
+  status: string; // 'active' | …
+  createdAt: number;
+}
 
 export interface Student {
   id: string;
@@ -904,6 +1094,8 @@ export interface ExternalCourse {
   monthlyFee: number;  // ex: 80 DT
   teacherShare: number; // ex: 70 DT
   centerShare: number;  // ex: 10 DT
+  // Montant de l'assurance scolaire propre à CE cours (table external_courses.assurance_amount)
+  assuranceAmount: number;
   enrolledStudents: ExternalCourseStudent[];
 }
 

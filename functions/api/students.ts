@@ -61,6 +61,12 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     return json({ ok: true });
   } catch (err) {
     console.error('Error:', err);
+    const message = err instanceof Error ? err.message : '';
+    // FK RESTRICT (formation_enrollments / meal_forfait_closure_items) :
+    // message clair plutôt qu'un 500 générique.
+    if (message.includes('FOREIGN KEY')) {
+      return json({ error: 'تعذر حذف التلميذ: مرتبط بتسجيلات تكوين أو بجرد وجبات — أزل الارتباط أولاً.' }, 409);
+    }
     return json({ error: 'تعذر حذف التلميذ.' }, 500);
   }
 };

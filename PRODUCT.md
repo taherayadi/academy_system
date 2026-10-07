@@ -11,7 +11,7 @@ web
 Two audiences, two surfaces, one deployment:
 
 - **Public landing:** Tunisian after-school center (سنتر) directors evaluating System Academy. They arrive curious, evaluate in French, and the success action is submitting a demo/trial request (confirmed by the owner — the funnel's front door, not login traffic).
-- **Center workspace:** the same center's directors and staff (roles `admin`, `super_admin`, `restricted_admin`) running daily operations. Platform operators are **not** users here — the SaaS admin console is a separate product in a separate repo (`taherayadi/academy_system_admin`).
+- **Center workspace:** the same center's directors and staff (roles `admin`, `super_admin`) running daily operations. Platform operators are **not** users here — the SaaS admin console is a separate product in a separate repo (`taherayadi/academy_system_admin`).
 
 ## Product Purpose
 
@@ -31,7 +31,7 @@ System Academy is the only all-in-one Arabic/RTL management platform for Tunisia
 ## Capabilities and Constraints
 
 - React 19 + Vite SPA + Cloudflare Pages Functions, bound to the shared D1 database `academy-system-v2` shared with the admin app. The two applications are separate deployments, not a runtime mode switch. Browser requests use relative `/api` URLs and never call the admin backend directly.
-- Access: center roles only (`admin`, `super_admin`, `restricted_admin`); `platform_super_admin` cannot log in here. Sessions in `center_sessions`, host-only cookie `tc_center_session`. Realtime is a read-only PubNub `center.{id}` channel with graceful degradation to polling.
+- Access: center roles only (`admin`, `super_admin`); `platform_super_admin` cannot log in here. Sessions in `center_sessions`, host-only cookie `tc_center_session`. Realtime is a read-only PubNub `center.{id}` channel with graceful degradation to polling.
 - Renewal requests: centers submit and view their own; approval lives in the admin console only.
 - Landing sections: hero, base offer, modules, pricing, FAQ, contact + demo request form.
 - No marketing assets, testimonials, or benchmarks exist in the repo; none may be fabricated.

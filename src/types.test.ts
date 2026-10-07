@@ -8,7 +8,8 @@ import {
   isMathSubject,
   generateReceiptNumber,
   buildExternalGradeOptions,
-  initialCenterFeeSet,
+  servicePriceForYear,
+  withServicePrice,
   APP_SUBJECTS,
   type CenterSettings,
   type Student,
@@ -16,16 +17,24 @@ import {
 } from './types';
 
 // ---------------------------------------------------------------------------
-// getFeesForYear
+// getFeesForYear (vue legacy sur servicePrices — nouveau schéma)
 // ---------------------------------------------------------------------------
 describe('getFeesForYear', () => {
   const settings: CenterSettings = {
     centerName: 'Test',
     phoneNumber: '000',
     locationCity: 'Tunis',
-    fees: initialCenterFeeSet,
-    feesByYear: {
-      '2025/2026': { ...initialCenterFeeSet, fraisMensuelSuivi: 300 },
+    currency: 'TND',
+    servicePrices: {
+      '2025/2026': {
+        'suivi:month': 300,
+        'suivi:year': 150,
+        'lunch:traiteur': 6,
+      },
+      DEFAULT: {
+        'suivi:month': 250,
+        'lunch:traiteur': 6,
+      },
     },
   };
 
@@ -36,12 +45,34 @@ describe('getFeesForYear', () => {
 
   it('falls back to default fees for unknown year', () => {
     const fees = getFeesForYear(settings, '2099/2100');
-    expect(fees.fraisMensuelSuivi).toBe(initialCenterFeeSet.fraisMensuelSuivi);
+    expect(fees.fraisMensuelSuivi).toBe(250);
   });
 
   it('always returns prixPlatTraiteur', () => {
     const fees = getFeesForYear(settings, '2025/2026');
     expect(fees.prixPlatTraiteur).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// servicePriceForYear / withServicePrice (center_service_prices model)
+// ---------------------------------------------------------------------------
+describe('servicePriceForYear', () => {
+  it('reads a composite service:period key for the year', () => {
+    const sp = { '2026/2027': { 'suivi:month': 42 } };
+    expect(servicePriceForYear(sp, 'suivi', 'month', '2026/2027')).toBe(42);
+  });
+
+  it('falls back to DEFAULT year then to the fallback value', () => {
+    const sp = { DEFAULT: { 'etude:year': 100 } };
+    expect(servicePriceForYear(sp, 'etude', 'year', '2026/2027')).toBe(100);
+    expect(servicePriceForYear(sp, 'lunch', 'unit', '2026/2027', 8)).toBe(8);
+  });
+
+  it('withServicePrice writes immutably', () => {
+    const sp = withServicePrice({}, '2026/2027', 'suivi', 'month', 42);
+    expect(servicePriceForYear(sp, 'suivi', 'month', '2026/2027')).toBe(42);
+    expect(Object.keys(sp)).toEqual(['2026/2027']);
   });
 });
 
@@ -265,10 +296,11 @@ describe('Decimal fee parsing — revision D, remark S1', () => {
     expect(parseDecimalFee('abc')).toBe(0);
   });
 
-  it('stores decimal fees through normalizeFeeSet without rounding', async () => {
-    const { normalizeFeeSet, initialCenterFeeSet } = await import('./types');
-    const normalized = normalizeFeeSet({ ...initialCenterFeeSet, fraisGouterMatinMensuel: 2.5, fraisGouterSoirUnitaire: 0.75 });
-    expect(normalized.fraisGouterMatinMensuel).toBe(2.5);
-    expect(normalized.fraisGouterSoirUnitaire) .toBe(0.75);
+  it('stores decimal service prices without rounding (nouveau schéma)', async () => {
+    const { withServicePrice, servicePriceForYear } = await import('./types');
+    let sp = withServicePrice({}, '2026/2027', 'gouter_matin', 'month', 2.5);
+    sp = withServicePrice(sp, '2026/2027', 'gouter_apres_midi', 'unit', 0.75);
+    expect(servicePriceForYear(sp, 'gouter_matin', 'month', '2026/2027')).toBe(2.5);
+    expect(servicePriceForYear(sp, 'gouter_apres_midi', 'unit', '2026/2027')).toBe(0.75);
   });
 });

@@ -60,7 +60,8 @@ export function makeCenter(config: Partial<ProgramConfig> = {}): CenterTenant {
     name: 'Program Center',
     plan: 'growth',
     status: 'active',
-    enabledModules: [...resolved.enabledModules],
+    // CenterTenant.modules = la table center_modules livrée par l'API.
+    modules: [...resolved.enabledModules] as CenterTenant['modules'],
     centerType: resolved.type,
     createdAt: 0
   };
@@ -120,9 +121,9 @@ export const GARDERIE_CONFIG: Partial<ProgramConfig> = {
   role: 'admin'
 };
 
-/** C5: crèche (type layer) + étude-only (subscription layer) + restricted_admin (role layer). */
-export const C5_RESTRICTED_CONFIG: Partial<ProgramConfig> = {
+/** C5: crèche (type layer) + étude-only (subscription layer), admin. */
+export const C5_COMPOSED_CONFIG: Partial<ProgramConfig> = {
   type: 'creche',
   enabledModules: ['etude', 'activites'],
-  role: 'restricted_admin'
+  role: 'admin'
 };

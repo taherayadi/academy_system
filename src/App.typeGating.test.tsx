@@ -53,7 +53,7 @@ function makeCenter(centerType: string | undefined, enabledModules: string[]): C
     name: 'Test Center',
     plan: 'growth',
     status: 'active',
-    enabledModules,
+    modules: enabledModules as CenterTenant['modules'],
     centerType,
     createdAt: 0
   };

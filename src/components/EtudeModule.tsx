@@ -37,7 +37,8 @@ import {
   EXTERNAL_GRADE_LEVELS,
   EXTERNAL_GRADE_OPTIONS,
   generateReceiptNumber,
-  getCurrentAcademicYear
+  getCurrentAcademicYear,
+  paymentMethodLabel
 } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -58,6 +59,8 @@ interface EtudeModuleProps {
   onUpdateSlots: (slots: EtudeSlot[]) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
   onUpdateStudent: (student: Student) => void;
+  /** Payment-only mutation : POST /api/payments — PAS de réécriture de l'élève. */
+  onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
   settings?: CenterSettings;
   sidebarCollapsed?: boolean;
 }
@@ -99,9 +102,19 @@ export default function EtudeModule({
   onUpdateSlots,
   onUpdateTimesheets,
   onUpdateStudent,
+  onRecordPayment,
   settings,
   sidebarCollapsed
 }: EtudeModuleProps) {
+  /** Payment-only mutation via POST /api/payments ; fallback PUT legacy. */
+  const recordPayment = (st: Student, payment: PaymentRecord) => {
+    if (onRecordPayment) {
+      onRecordPayment(st.id, payment);
+      return;
+    }
+    onUpdateStudent({ ...st, payments: [...(st.payments || []), payment] });
+  };
+
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
   const [selectedDay, setSelectedDay] = useState<EtudeDay>(() => {
@@ -421,7 +434,7 @@ export default function EtudeModule({
         payments: [...(selectedStudentForPayment.payments || []), newPayment]
       };
 
-      onUpdateStudent(updatedStudent);
+      recordPayment(selectedStudentForPayment, newPayment);
       setSelectedStudentForPayment(null);
       setPrintingReceipt({ student: updatedStudent, payment: newPayment });
       setIsSubmitting(false);
@@ -465,7 +478,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(selectedStudentForPayment.payments || []), newPayment]
     };
 
-    onUpdateStudent(updatedStudent);
+    recordPayment(selectedStudentForPayment, newPayment);
     setSelectedStudentForPayment(null);
     setPrintingReceipt({ student: updatedStudent, payment: newPayment });
     setIsSubmitting(false);
@@ -531,7 +544,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       payments: [...(refundStudent.payments || []), ...refundRecords]
     };
 
-    onUpdateStudent(updatedStudent);
+    // Refunds : endpoint dédié (paymentMethodKey + is_refund gérés serveur).
+    refundRecords.forEach(r => recordPayment(refundStudent, r));
     setIsRefundModalOpen(false);
     setRefundStudent(null);
     toast.success(`تم تسجيل استرجاع تأطير بمبلغ ${totalRefund} د.ت (${refundRecords.length} شهر، سُجّل في الميزانية)!`);
@@ -1746,7 +1760,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                                   <td className="p-2 font-mono text-slate-700">{p.date}</td>
                                   <td className="p-2 font-mono text-slate-500 text-[10px]">{p.receiptNumber}</td>
                                   <td className="p-2 text-slate-800 font-medium">
-                                    <span className="font-bold">{p.method}</span>
+                                    <span className="font-bold">{paymentMethodLabel(p.method)}</span>
                                     {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
                                     {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
                                   </td>

@@ -7,7 +7,7 @@ const clickSave = () => {
   fireEvent.submit(form!);
 };
 import SettingsModule from './SettingsModule';
-import { CenterSettings, initialCenterSettings } from '../types';
+import { CenterSettings, initialCenterSettings, servicePriceForYear, getCurrentAcademicYear } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -60,7 +60,7 @@ describe('SettingsModule — decimal goûter pricing (revision D, remark S1)', (
     fireEvent.change(input, { target: { value: '2,5' } });
     clickSave();
     const saved = onUpdate.mock.calls[0][0] as CenterSettings;
-    expect(saved.fees.fraisGouterMatinMensuel).toBe(2.5);
+    expect(servicePriceForYear(saved.servicePrices, 'gouter_matin', 'month', getCurrentAcademicYear())).toBe(2.5);
   });
 
   it('a goûter fee keeps its dot-decimal value through the save round-trip', () => {
@@ -69,7 +69,7 @@ describe('SettingsModule — decimal goûter pricing (revision D, remark S1)', (
     fireEvent.change(input, { target: { value: '0.75' } });
     clickSave();
     const saved = onUpdate.mock.calls[0][0] as CenterSettings;
-    expect(saved.fees.fraisGouterSoirUnitaire).toBe(0.75);
+    expect(servicePriceForYear(saved.servicePrices, 'gouter_apres_midi', 'unit', getCurrentAcademicYear())).toBe(0.75);
   });
 
   it('integer goûter entry keeps working (no regression to strings or NaN)', () => {
@@ -78,6 +78,6 @@ describe('SettingsModule — decimal goûter pricing (revision D, remark S1)', (
     fireEvent.change(input, { target: { value: '30' } });
     clickSave();
     const saved = onUpdate.mock.calls[0][0] as CenterSettings;
-    expect(saved.fees.fraisDeuxGoutersMensuel).toBe(30);
+    expect(servicePriceForYear(saved.servicePrices, 'gouter_both', 'month', getCurrentAcademicYear())).toBe(30);
   });
 });

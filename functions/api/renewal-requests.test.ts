@@ -73,7 +73,6 @@ function req(method: string, body?: Record<string, unknown>, url = 'https://x.te
 
 const CENTER = {
   id: 'c1', name: 'Centre Alpha', plan: 'starter', billing_cycle: 'monthly',
-  enabled_modules: JSON.stringify(['scolaire', 'finance']),
   subscription_ends_at: NOW + 10 * DAY, status: 'active',
 };
 
@@ -82,6 +81,9 @@ const sessionRows = (role = 'admin') => ({
   'FROM centers WHERE id = ?': CENTER,
   'SELECT id FROM renewal_requests LIMIT 1': { id: 'x' },
 });
+
+// Nouveau schéma : les modules actifs viennent de center_modules.
+const CENTER_MODULE_RESULTS = { 'FROM center_modules': [{ module_key: 'scolaire' }, { module_key: 'finance' }] };
 
 beforeEach(() => {
   loggedHistory.length = 0;
@@ -94,7 +96,7 @@ afterEach(() => {
 
 describe('renewal-requests POST — the center asks for a renewal', () => {
   it('stores a pending request and targets the current end date', async () => {
-    const db = makeDb(sessionRows());
+    const db = makeDb(sessionRows(), CENTER_MODULE_RESULTS);
     const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
       kind: 'renewal',
       requestedPlan: 'starter',
@@ -112,7 +114,7 @@ describe('renewal-requests POST — the center asks for a renewal', () => {
     expect(insert!.args).toContain('starter');
     expect(insert!.args).toContain(NOW + 10 * DAY);              // effectiveAt = échéance en cours
     expect(insert!.args).toContain(JSON.stringify(['scolaire', 'finance', 'etude']));
-    expect(insert!.args).toContain(CENTER.enabled_modules);      // photographie des modules actuels
+    expect(insert!.args).toContain(JSON.stringify(['scolaire', 'finance'])); // photographie des modules actuels (center_modules)
     expect(insert!.args).toContain('active');                    // statut du centre au moment de la demande
   });
 
@@ -142,7 +144,7 @@ describe('renewal-requests POST — the center asks for a renewal', () => {
     const db = makeDb({
       ...sessionRows(),
       'FROM centers WHERE id = ?': { ...CENTER, status: 'trial' },
-    });
+    }, CENTER_MODULE_RESULTS);
     await onRequestPost({ env: { DB: db }, request: req('POST', {
       kind: 'renewal', requestedPlan: 'starter', requestedModules: [], billingCycle: 'monthly',
     }) } as any);
@@ -162,7 +164,7 @@ describe('renewal-requests POST — the center asks for a renewal', () => {
     const db = makeDb({
       ...sessionRows(),
       "AND status = 'pending' AND kind": { id: 'already' },
-    });
+    }, CENTER_MODULE_RESULTS);
     const res = await onRequestPost({ env: { DB: db }, request: req('POST', {
       kind: 'renewal', requestedPlan: 'starter', requestedModules: [], billingCycle: 'monthly', amount: 0,
     }) } as any);
@@ -183,7 +185,7 @@ describe('renewal-requests — signaux PubNub publiés', () => {
     },
     'FROM centers WHERE id = ?': {
       id: 'c1', status: 'active', plan: 'starter', billing_cycle: 'monthly',
-      subscription_ends_at: NOW + 5 * DAY, trial_ends_at: null, enabled_modules: '[]',
+      subscription_ends_at: NOW + 5 * DAY, trial_ends_at: null,
     },
   });
 

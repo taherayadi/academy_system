@@ -10,6 +10,9 @@ const own: string = String(APPLICATION);
 const foreign = own === 'center' ? 'platform' : 'center';
 const role = own === 'center' ? 'admin' : 'platform_super_admin';
 const wrongRole = own === 'center' ? 'platform_super_admin' : 'super_admin';
+// Nouveau schéma : l'app centre écrit dans auth_sessions (token_hash + user_id).
+const OWN_TABLE = own === 'center' ? 'auth_sessions' : 'platform_sessions';
+const FOREIGN_TABLE = own === 'center' ? 'platform_sessions' : 'auth_sessions';
 const password = 'integration-test-only-password';
 const hash = hashSync(password, 4); // Fast fixture; production hashPassword uses 10 rounds.
 let sqlite: DatabaseSync;
@@ -19,13 +22,13 @@ function request(token?: string, cookie = false) {
 }
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(`CREATE TABLE users (email TEXT PRIMARY KEY, name TEXT, role TEXT, description TEXT, password_hash TEXT, center_id TEXT);
+  sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, role TEXT, description TEXT, password_hash TEXT, center_id TEXT);
     CREATE TABLE centers (id TEXT PRIMARY KEY, name TEXT, status TEXT, trial_ends_at INTEGER, subscription_ends_at INTEGER);
     CREATE TABLE rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL);
-    CREATE TABLE center_sessions (token TEXT PRIMARY KEY, email TEXT, center_id TEXT, expires_at INTEGER, created_at INTEGER);
+    CREATE TABLE auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT, center_id TEXT, expires_at INTEGER, created_at INTEGER);
     CREATE TABLE platform_sessions (token TEXT PRIMARY KEY, email TEXT, center_id TEXT, expires_at INTEGER, created_at INTEGER);
     INSERT INTO centers VALUES ('c1', 'Center 1', 'active', 0, 0);`);
-  sqlite.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)').run('user@example.invalid', 'Test user', role, '', hash, own === 'center' ? 'c1' : null);
+  sqlite.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)').run('u1', 'user@example.invalid', 'Test user', role, '', hash, own === 'center' ? 'c1' : null);
   db = {
     prepare(sql: string) {
       let args: any[] = [];
@@ -43,8 +46,8 @@ afterEach(() => sqlite.close());
 describe('real SQL session isolation', () => {
   it('writes only its own session table and accepts its own bearer/cookie', async () => {
     const token = await createSession(db, 'user@example.invalid', 'c1');
-    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${own}_sessions`).get()!.n).toBe(1);
-    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${foreign}_sessions`).get()!.n).toBe(0);
+    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${OWN_TABLE}`).get()!.n).toBe(1);
+    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${FOREIGN_TABLE}`).get()!.n).toBe(0);
     expect((await validateSession(db, request(token)))?.role).toBe(role);
     expect((await validateSession(db, request(token, true)))?.role).toBe(role);
   });
@@ -71,7 +74,7 @@ describe('real SQL session isolation', () => {
   });
   it('rejects expired sessions', async () => {
     const token = await createSession(db, 'user@example.invalid', 'c1');
-    sqlite.exec(`UPDATE ${own}_sessions SET expires_at = 0`);
+    sqlite.exec(`UPDATE ${OWN_TABLE} SET expires_at = 0`);
     expect(await validateSession(db, request(token))).toBeNull();
   });
   it('logs in only its own role and creates no foreign session', async () => {
@@ -81,14 +84,14 @@ describe('real SQL session isolation', () => {
     expect(ok.headers.get('Set-Cookie')).toContain(`tc_${own}_session=`);
     sqlite.prepare('UPDATE users SET role = ?').run(wrongRole);
     expect((await login({ env: { DB: db }, request: req() } as any)).status).toBe(401);
-    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${own}_sessions`).get()!.n).toBe(1);
-    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${foreign}_sessions`).get()!.n).toBe(0);
+    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${OWN_TABLE}`).get()!.n).toBe(1);
+    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${FOREIGN_TABLE}`).get()!.n).toBe(0);
   });
   it('revokes the presented token on logout even if the center was suspended', async () => {
     const token = await createSession(db, 'user@example.invalid', 'c1');
     sqlite.exec("UPDATE centers SET status = 'suspended'");
     expect((await logout({ env: { DB: db }, request: request(token) } as any)).status).toBe(200);
-    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${own}_sessions`).get()!.n).toBe(0);
+    expect(sqlite.prepare(`SELECT COUNT(*) n FROM ${OWN_TABLE}`).get()!.n).toBe(0);
   });
   if (own === 'center') {
     it('rejects missing, suspended or reassigned centers', async () => {

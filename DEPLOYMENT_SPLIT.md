@@ -10,7 +10,7 @@
 | Center creation, plan/pricing management, invoices, ads, renewal decisions | No | Yes |
 | Database migrations | No | Sole owner |
 | Sessions/cookie | center_sessions / tc_center_session | platform_sessions / tc_platform_session |
-| Allowed account roles | admin, super_admin, restricted_admin | platform_super_admin |
+| Allowed account roles | admin, super_admin | platform_super_admin |
 
 The same `users` and `centers` rows remain in the existing database. Center `super_admin`
 is **not** a platform role. Neither role promotion nor password changes are performed
