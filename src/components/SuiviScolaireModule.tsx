@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   GraduationCap, 
@@ -29,6 +29,7 @@ import { Student, StudentTimeSheet, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADE
            getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, SuiviNotes, SuiviSubjectGrade,
            isMathSubject, getAppSubjects, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, paymentMethodLabel } from '../types';
 import { useToast } from './Toast';
+import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
 import { hasSchoolLevel } from '../utils/centerType';
@@ -39,6 +40,8 @@ interface SuiviScolaireModuleProps {
   onUpdateStudents: (students: Student[]) => void;
   /** Payment-only mutation : POST /api/payments — PAS de réécriture de l'élève. */
   onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
+  /** Note-only mutation : POST /api/suivi-notes — seule la note est envoyée (l'élève n'est PAS réécrit). */
+  onSaveSuiviNote?: (studentId: string, note: { schoolYear: string; trimester: number; subject: string; devoir1?: number | null; devoir2?: number | null; synthese?: number | null }) => void;
   studentTimeSheets: StudentTimeSheet[];
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
@@ -77,7 +80,7 @@ function upsertNotes(student: Student, year: string, trimester: 1 | 2 | 3, subje
   return newSets;
 }
 
-export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, onRecordPayment, studentTimeSheets, settings, onUpdateSettings, centerType }: SuiviScolaireModuleProps) {
+export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdateStudents, onRecordPayment, onSaveSuiviNote, studentTimeSheets, settings, onUpdateSettings, centerType }: SuiviScolaireModuleProps) {
   /**
    * Persist a payment without rewriting the whole student: prefer the dedicated
    * POST /api/payments endpoint (studentId + payment only). Falls back to the
@@ -121,13 +124,28 @@ export default function SuiviScolaireModule({ students, onUpdateStudent, onUpdat
   const [newNotesSubject, setNewNotesSubject] = useState('');
 
   // Shared subject list (from settings so it stays in sync across the app)
-  const appSubjects = getAppSubjects(settings);
+  // Matières : liste depuis /api/subjects (table subjects, id UUID).
+  // Plus de liste codée en dur : fallback settings uniquement si l'API échoue.
+  const [apiSubjects, setApiSubjects] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubjectsApi()
+      .then(list => { if (!cancelled) setApiSubjects(list.map(s => s.name)); })
+      .catch(() => { /* silencieux : fallback sur settings */ });
+    return () => { cancelled = true; };
+  }, []);
+  const appSubjects = apiSubjects.length ? apiSubjects : getAppSubjects(settings);
 
-  const handleAddNotesSubject = () => {
-    if (!newNotesSubject.trim() || !onUpdateSettings || !settings) return;
+  const handleAddNotesSubject = async () => {
     const sub = newNotesSubject.trim();
-    if (!appSubjects.includes(sub)) {
-      onUpdateSettings({ ...settings, subjects: [...appSubjects, sub] });
+    if (!sub) return;
+    try {
+      // POST /api/subjects : la matière vit dans la table subjects (id UUID
+      // serveur), PAS dans le modèle settings/élève.
+      const created = await createSubjectApi(sub);
+      setApiSubjects(prev => prev.includes(created.name) ? prev : [...prev, created.name]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر إضافة المادة.');
     }
     setNewNotesSubject('');
   };
@@ -542,18 +560,47 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
   // Clear all grades for the active trimester (persist immediately)
   const handleClearTrimesterNotes = () => {
     if (!notesStudent) return;
+    const currentSubjects = getTrimesterSubjects(notesStudent, schoolYear, notesTrimester);
     const updatedStudent: Student = {
       ...notesStudent,
       suiviNotes: upsertNotes(notesStudent, schoolYear, notesTrimester, {})
     };
     setNotesStudent(updatedStudent);
-    onUpdateStudent(updatedStudent);
+    if (onSaveSuiviNote) {
+      // Upsert avec notes NULL via /api/suivi-notes (pas de réécriture de l'élève :
+      // un PUT élève ne supprime plus suivi_notes côté serveur).
+      Object.keys(currentSubjects).forEach(subject => {
+        onSaveSuiviNote(notesStudent.id, { schoolYear, trimester: notesTrimester, subject, devoir1: null, devoir2: null, synthese: null });
+      });
+    } else {
+      onUpdateStudent(updatedStudent);
+    }
     toast.success(`تم مسح نقاط الثلاثي ${notesTrimester} للتلميذ (${notesStudent.firstName} ${notesStudent.lastName}).`);
   };
 
   const handleSaveNotes = () => {
     if (!notesStudent) return;
-    onUpdateStudent(notesStudent);
+    const subjects = getTrimesterSubjects(notesStudent, schoolYear, notesTrimester);
+    if (onSaveSuiviNote) {
+      // Endpoint dédié POST /api/suivi-notes : seule la note est envoyée
+      // (studentId + matière + notes), PAS l'élève entier. L'id est un UUID
+      // serveur, donc aucun conflit possible entre centres. L'état local est
+      // déjà à jour (handleGradeChange), pas besoin de onUpdateStudent.
+      Object.entries(subjects).forEach(([subject, g]) => {
+        if (!g) return;
+        onSaveSuiviNote(notesStudent.id, {
+          schoolYear,
+          trimester: notesTrimester,
+          subject,
+          devoir1: g.devoir1 ?? null,
+          devoir2: g.devoir2 ?? null,
+          synthese: g.synthese ?? null
+        });
+      });
+    } else {
+      // Fallback (tests / ancien flux) : PUT élève complet.
+      onUpdateStudent(notesStudent);
+    }
     toast.success(`تم حفظ نقط التلميذ (${notesStudent.firstName} ${notesStudent.lastName}) للثلاثي ${notesTrimester} (السنة ${schoolYear}) بنجاح!`);
   };
 

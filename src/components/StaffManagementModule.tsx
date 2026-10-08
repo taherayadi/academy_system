@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { StaffMember, TimesheetEntry, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, StaffRole, StaffScheduleSlot, MONTH_BY_CALENDAR_INDEX, CenterSettings, CenterExpense, getAppSubjects, EtudeSlot, ETUDE_DAYS } from '../types';
 import { useToast } from './Toast';
+import { fetchSubjectsApi, createSubjectApi } from '../api';
 import ConfirmDialog from './ConfirmDialog';
 import DateField from './DateField';
 import { capitalizeFirst } from '../utils/format';
@@ -145,7 +146,16 @@ export default function StaffManagementModule({
   // Subjects state (shared list from settings so it stays in sync across the app)
   const [newSubjectInput, setNewSubjectInput] = useState('');
   const [isAddingSubject, setIsAddingSubject] = useState(false);
-  const availableSubjects = getAppSubjects(settings);
+  // Matières : liste depuis /api/subjects (table subjects, id UUID).
+  const [apiSubjects, setApiSubjects] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubjectsApi()
+      .then(list => { if (!cancelled) setApiSubjects(list.map(s => s.name)); })
+      .catch(() => { /* silencieux : fallback sur settings */ });
+    return () => { cancelled = true; };
+  }, []);
+  const availableSubjects = apiSubjects.length ? apiSubjects : getAppSubjects(settings);
 
   // Form states for staff member
   const [firstName, setFirstName] = useState('');
@@ -156,8 +166,8 @@ export default function StaffManagementModule({
   const [address, setAddress] = useState('');
   const [cin, setCin] = useState('');
   const [cnssNumber, setCnssNumber] = useState('');
-  const [baseSalary, setBaseSalary] = useState(850);
-  const [cnssAmount, setCnssAmount] = useState(78);
+  const [baseSalary, setBaseSalary] = useState(0);
+  const [cnssAmount, setCnssAmount] = useState(0);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(['الرياضيات (Mathématiques)']);
 
   // Emploi du temps (schedule) form state
@@ -254,13 +264,15 @@ export default function StaffManagementModule({
   const staffCurrentPage = Math.min(Math.max(1, staffPage), staffTotalPages);
   const paginatedStaff = filteredStaff.slice((staffCurrentPage - 1) * staffPageSize, staffCurrentPage * staffPageSize);
 
-  const handleAddSubject = () => {
-    if (!newSubjectInput.trim()) return;
+  const handleAddSubject = async () => {
     const sub = newSubjectInput.trim();
-    if (!availableSubjects.includes(sub)) {
-      if (settings && onUpdateSettings) {
-        onUpdateSettings({ ...settings, subjects: [...availableSubjects, sub] });
-      }
+    if (!sub) return;
+    try {
+      // POST /api/subjects : la matière vit dans la table subjects (id UUID serveur).
+      const created = await createSubjectApi(sub);
+      setApiSubjects(prev => prev.includes(created.name) ? prev : [...prev, created.name]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر إضافة المادة.');
     }
     if (!selectedSubjects.includes(sub)) {
       setSelectedSubjects([...selectedSubjects, sub]);
@@ -287,8 +299,8 @@ export default function StaffManagementModule({
     setEmail('');
     setAddress('');
     setCnssNumber('');
-    setBaseSalary(850);
-    setCnssAmount(78);
+    setBaseSalary(0);
+    setCnssAmount(0);
     setSelectedSubjects(['الرياضيات (Mathématiques)']);
     setScheduleForm(WEEKDAYS.map(d => d === 'Samedi' ? { day: d, slots: ['08:00 - 12:00'] } : { day: d, slots: ['08:00 - 12:00', '14:00 - 18:00'] }));
     setIsStaffModalOpen(true);
@@ -304,8 +316,8 @@ export default function StaffManagementModule({
     setEmail(s.email || '');
     setAddress(s.address || '');
     setCnssNumber(s.cnssNumber || '');
-    setBaseSalary(s.baseSalary || s.salary || 850);
-    setCnssAmount(s.cnssAmount || 78);
+    setBaseSalary(s.baseSalary || s.salary || 0);
+    setCnssAmount(s.cnssAmount || 0);
     setSelectedSubjects(s.subjects || []);
     setScheduleForm(s.schedule && s.schedule.length ? s.schedule : WEEKDAYS.map(d => d === 'Samedi' ? { day: d, slots: ['08:00 - 12:00'] } : { day: d, slots: ['08:00 - 12:00', '14:00 - 18:00'] }));
     setIsStaffModalOpen(true);

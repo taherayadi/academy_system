@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   GraduationCap,
@@ -37,6 +37,7 @@ import {
 } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
+import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
 import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
@@ -117,7 +118,16 @@ export default function FormationModule({
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [refundReason, setRefundReason] = useState<string>('');
 
-  const availableSubjects = getAppSubjects(settings || undefined);
+  // Matières : liste depuis /api/subjects (table subjects, id UUID).
+  const [apiSubjects, setApiSubjects] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubjectsApi()
+      .then(list => { if (!cancelled) setApiSubjects(list.map(s => s.name)); })
+      .catch(() => { /* silencieux : fallback sur settings */ });
+    return () => { cancelled = true; };
+  }, []);
+  const availableSubjects = apiSubjects.length ? apiSubjects : getAppSubjects(settings || undefined);
 
   const formBranches = useMemo(() => getTimesheetBranches(formGrade), [formGrade]);
 
@@ -246,18 +256,19 @@ export default function FormationModule({
     }
   };
 
-  const handleAddNewSubject = () => {
+  const handleAddNewSubject = async () => {
     const trimmed = newSubjectInput.trim();
     if (!trimmed) {
       toast.error('يرجى كتابة اسم المادة الجديدة');
       return;
     }
-    // Save into global settings if not present
-    if (settings && onUpdateSettings && !availableSubjects.includes(trimmed)) {
-      onUpdateSettings({
-        ...settings,
-        subjects: [...availableSubjects, trimmed]
-      });
+    // POST /api/subjects : la matière vit dans la table subjects (id UUID
+    // serveur), PAS dans le modèle settings.
+    try {
+      const created = await createSubjectApi(trimmed);
+      setApiSubjects(prev => prev.includes(created.name) ? prev : [...prev, created.name]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر إضافة المادة.');
     }
     if (!selectedSubjectNames.includes(trimmed)) {
       setSelectedSubjectNames([...selectedSubjectNames, trimmed]);

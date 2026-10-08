@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BookOpen, 
@@ -22,6 +22,7 @@ import {
 import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, getFeesForYear, EXTERNAL_GRADE_OPTIONS, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
+import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import { capitalizeFirst } from '../utils/format';
 
@@ -77,13 +78,26 @@ export default function ExternalCoursesModule({
   const [isAddingCourseSubject, setIsAddingCourseSubject] = useState(false);
   const [newCourseSubject, setNewCourseSubject] = useState('');
 
-  const appSubjects = getAppSubjects(settings);
+  // Matières : liste depuis /api/subjects (table subjects, id UUID).
+  // Ajout via POST /api/subjects — plus via le modèle settings.
+  const [apiSubjects, setApiSubjects] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubjectsApi()
+      .then(list => { if (!cancelled) setApiSubjects(list.map(s => s.name)); })
+      .catch(() => { /* silencieux : fallback sur settings */ });
+    return () => { cancelled = true; };
+  }, []);
+  const appSubjects = apiSubjects.length ? apiSubjects : getAppSubjects(settings);
 
-  const handleAddCourseSubject = () => {
-    if (!newCourseSubject.trim() || !settings || !onUpdateSettings) return;
+  const handleAddCourseSubject = async () => {
     const sub = newCourseSubject.trim();
-    if (!appSubjects.includes(sub)) {
-      onUpdateSettings({ ...settings, subjects: [...appSubjects, sub] });
+    if (!sub) return;
+    try {
+      const created = await createSubjectApi(sub);
+      setApiSubjects(prev => prev.includes(created.name) ? prev : [...prev, created.name]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر إضافة المادة.');
     }
     setSubject(sub);
     setNewCourseSubject('');

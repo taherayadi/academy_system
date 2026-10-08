@@ -171,6 +171,53 @@ export async function updatePaymentApi(patch: { id: string; chequePaid?: boolean
   return putDomain('/payments', patch, 'تعذر تعديل الدفعة.');
 }
 
+/**
+ * Matières du centre : liste depuis /api/subjects (id UUID + nom), seedée
+ * automatiquement au login si le centre n'en a aucune. Plus de liste codée
+ * en dur.
+ */
+export interface SubjectRef { id: string; name: string }
+
+export async function fetchSubjectsApi(): Promise<SubjectRef[]> {
+  const data = await getDomain<{ subjects: SubjectRef[] }>('/subjects', 'تعذر تحميل المواد.');
+  return data.subjects || [];
+}
+
+/** Ajoute UNE matière — POST /api/subjects, id UUID serveur. */
+export async function createSubjectApi(name: string): Promise<SubjectRef> {
+  const res = await fetch(`${API_BASE}/subjects`, {
+    method: 'POST',
+    headers: authHeaders(true),
+    credentials: 'include',
+    body: JSON.stringify({ name })
+  });
+  if (res.status === 401) throw new UnauthorizedError();
+  const data: { ok?: boolean; id?: string; name?: string; error?: string } = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'تعذر إضافة المادة.');
+  return { id: data.id || '', name: data.name || name };
+}
+
+/**
+ * Enregistre UNE note de suivi — endpoint dédié /api/suivi-notes. Le client
+ * n'envoie que la note (l'élève n'est plus renvoyé entier via PUT /api/students).
+ * L'id est un UUID généré côté serveur, donc aucun conflit entre centres.
+ */
+export async function saveSuiviNoteApi(note: { studentId: string; schoolYear: string; trimester: number; subject: string; devoir1?: number | null; devoir2?: number | null; synthese?: number | null }): Promise<void> {
+  return postDomain('/suivi-notes', note, 'تعذر حفظ النقطة.');
+}
+
+/** Supprime une note de suivi par id (retourné par GET /api/suivi-notes). */
+export async function deleteSuiviNoteApi(noteId: string): Promise<void> {
+  return deleteDomain(`/suivi-notes?id=${encodeURIComponent(noteId)}`, 'تعذر حذف النقطة.');
+}
+
+/** Notes de suivi du centre (ou d'un élève si studentId est fourni). */
+export async function fetchSuiviNotesApi(studentId?: string): Promise<Record<string, any>[]> {
+  const qs = studentId ? `?studentId=${encodeURIComponent(studentId)}` : '';
+  const data = await getDomain<{ notes: Record<string, any>[] }>(`/suivi-notes${qs}`, 'تعذر تحميل النقط.');
+  return data.notes || [];
+}
+
 
 export async function createStaffApi(staff: StaffMember): Promise<void> {
   return postDomain('/staff', staff, 'تعذر إضافة عضو الإطار.');

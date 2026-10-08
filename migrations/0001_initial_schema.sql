@@ -274,7 +274,7 @@ CREATE TABLE external_courses (
   school_year      TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
   trimester        TEXT NOT NULL,
   grade_level      TEXT NOT NULL,
-  subject          TEXT NOT NULL,
+  subject_id       TEXT NOT NULL REFERENCES subjects(id),
   teacher_name     TEXT NOT NULL,
   teacher_phone    TEXT NOT NULL,
   monthly_fee  REAL NOT NULL CHECK (monthly_fee >= 0),
@@ -465,7 +465,7 @@ CREATE TABLE formation_enrollments (
 CREATE TABLE formation_matieres (
   id           TEXT PRIMARY KEY,
   formation_id TEXT NOT NULL REFERENCES formations(id) ON DELETE CASCADE,
-  subject      TEXT NOT NULL
+  subject_id   TEXT NOT NULL REFERENCES subjects(id)
 ) STRICT;
 
 -- ─── Table : formation_enrollment_matieres ─────────────────────────────
@@ -552,7 +552,7 @@ CREATE TABLE revision_seances (
   school_year       TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
   trimester         TEXT NOT NULL,
   grade_level       TEXT NOT NULL,
-  subject           TEXT NOT NULL,
+  subject_id        TEXT NOT NULL REFERENCES subjects(id),
   teacher_name      TEXT NOT NULL,
   teacher_phone     TEXT NOT NULL,
   date              TEXT NOT NULL,
@@ -682,9 +682,9 @@ CREATE TABLE staff_schedule (
 
 -- ─── Table : staff_subjects ────────────────────────────────────────────
 CREATE TABLE staff_subjects (
-  staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
-  subject  TEXT NOT NULL,
-  PRIMARY KEY (staff_id, subject)
+  staff_id   TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  subject_id TEXT NOT NULL REFERENCES subjects(id),
+  PRIMARY KEY (staff_id, subject_id)
 ) STRICT;
 
 -- ─── Table : student_attendance ────────────────────────────────────────
@@ -762,15 +762,15 @@ CREATE TABLE student_years (
 
 -- ─── Table : suivi_notes ───────────────────────────────────────────────
 CREATE TABLE suivi_notes (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          TEXT PRIMARY KEY,
   student_id  TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   school_year TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
   trimester   INTEGER NOT NULL CHECK (trimester IN (1,2,3)),
-  subject     TEXT NOT NULL,
+  subject_id  TEXT NOT NULL REFERENCES subjects(id),
   devoir1     REAL,
   devoir2     REAL,
   synthese    REAL,
-  UNIQUE (student_id, school_year, trimester, subject)
+  UNIQUE (student_id, school_year, trimester, subject_id)
 ) STRICT;
 
 -- ─── Table : timesheets ────────────────────────────────────────────────
@@ -793,9 +793,10 @@ CREATE TABLE platform_sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL, cre
 
 -- ─── Table : subjects ──────────────────────────────────────────────────
 CREATE TABLE "subjects" (
-  center_id TEXT NOT NULL DEFAULT '' ,
+  id        TEXT PRIMARY KEY,
+  center_id TEXT NOT NULL DEFAULT '',
   name      TEXT NOT NULL,
-  PRIMARY KEY (center_id, name)
+  UNIQUE (center_id, name)
 ) STRICT;
 
 -- ─── Table : meal_attendances ──────────────────────────────────────────

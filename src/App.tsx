@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -441,6 +441,29 @@ export default function App() {
     setStudents(prev => prev.filter(s => s.id !== id));
     commitDomain(() => deleteStudentApi(id));
   };
+
+  /**
+   * Note-only mutation : POST /api/suivi-notes — une seule note est envoyée
+   * (l'élève n'est PAS renvoyé entier, comme pour les paiements). L'id est un
+   * UUID généré côté serveur, donc aucun conflit entre centres.
+   */
+  const handleSaveSuiviNote = useCallback((studentId: string, note: { schoolYear: string; trimester: number; subject: string; devoir1?: number | null; devoir2?: number | null; synthese?: number | null }) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id !== studentId) return s;
+      const existing = s.suiviNotes || [];
+      const yearSet = existing.find(n => n.schoolYear === note.schoolYear);
+      const subjects = { ...(yearSet?.trimesters.find(t => t.trimester === note.trimester)?.subjects || {}), [note.subject]: { devoir1: note.devoir1 ?? undefined, devoir2: note.devoir2 ?? undefined, synthese: note.synthese ?? undefined } };
+      const trimesters = [
+        ...(yearSet?.trimesters.filter(t => t.trimester !== note.trimester) || []),
+        { trimester: note.trimester as 1 | 2 | 3, subjects }
+      ];
+      const newSets = yearSet
+        ? existing.map(n => n.schoolYear === note.schoolYear ? { ...n, trimesters } : n)
+        : [...existing, { schoolYear: note.schoolYear, trimesters }];
+      return { ...s, suiviNotes: newSets };
+    }));
+    commitDomain(() => saveSuiviNoteApi({ studentId, ...note }));
+  }, []);
 
   const handleUpdateStudents = (updated: Student[]) => {
     if (updated.length === students.length + 1) {
@@ -1227,6 +1250,7 @@ export default function App() {
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
                   onRecordPayment={handleRecordPayment}
+                  onSaveSuiviNote={handleSaveSuiviNote}
                   studentTimeSheets={studentTimeSheets}
                   centerType={currentCenter?.centerType}
                 />

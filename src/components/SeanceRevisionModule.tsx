@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen,
@@ -19,6 +19,7 @@ import {
 import { RevisionSeance, RevisionSeanceStudent, CenterSettings, EXTERNAL_GRADE_OPTIONS, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
+import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import { capitalizeFirst } from '../utils/format';
 
@@ -84,7 +85,16 @@ export default function SeanceRevisionModule({
   // Students list collapsed (default: expanded)
   const [studentsCollapsed, setStudentsCollapsed] = useState(false);
 
-  const appSubjects = getAppSubjects(settings);
+  // Matières : liste depuis /api/subjects (table subjects, id UUID).
+  const [apiSubjects, setApiSubjects] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubjectsApi()
+      .then(list => { if (!cancelled) setApiSubjects(list.map(s => s.name)); })
+      .catch(() => { /* silencieux : fallback sur settings */ });
+    return () => { cancelled = true; };
+  }, []);
+  const appSubjects = apiSubjects.length ? apiSubjects : getAppSubjects(settings);
   const seanceFee = teacherShare + centerShare;
 
   const filteredRevisions = revisions.filter(r => {
@@ -107,11 +117,15 @@ export default function SeanceRevisionModule({
     ...revisions.map(r => r.subject).filter(Boolean)
   ]));
 
-  const handleAddSubject = () => {
-    if (!newSubject.trim() || !settings || !onUpdateSettings) return;
+  const handleAddSubject = async () => {
     const sub = newSubject.trim();
-    if (!appSubjects.includes(sub)) {
-      onUpdateSettings({ ...settings, subjects: [...appSubjects, sub] });
+    if (!sub) return;
+    try {
+      // POST /api/subjects : la matière vit dans la table subjects (id UUID serveur).
+      const created = await createSubjectApi(sub);
+      setApiSubjects(prev => prev.includes(created.name) ? prev : [...prev, created.name]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'تعذر إضافة المادة.');
     }
     setSubject(sub);
     setNewSubject('');

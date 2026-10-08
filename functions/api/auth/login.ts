@@ -1,5 +1,5 @@
 import { isDeploymentRole } from '../_deployment';
-import { Env, json, readBody, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, mapCenterRow, getCenterAccessState, getClientIp } from '../_lib';
+import { Env, json, readBody, verifyPassword, createSession, makeSessionCookie, purgeExpiredSessions, consumeAuthRateLimit, resetAuthRateLimit, mapCenterRow, getCenterAccessState, getClientIp, ensureCenterSubjects } from '../_lib';
 import { logAudit } from '../_audit';
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
@@ -80,6 +80,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
 
     // Create a server-side session and return it as an HttpOnly cookie.
     const token = await createSession(env.DB, cleanEmail, centerId);
+    // Catalogue de matières : si le centre n'en a aucune, seed du catalogue
+    // de départ (UUID par centre) — jamais de liste codée en dur côté client.
+    try { await ensureCenterSubjects(env.DB, centerId); } catch { /* non bloquant */ }
 
     logAudit(env, request, { email: cleanEmail, action: 'login_success', entityType: 'center', entityId: centerId, ip }).catch(() => {});
 

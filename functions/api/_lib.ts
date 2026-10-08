@@ -484,7 +484,7 @@ function buildSuiviNotes(rows: any[]): any[] {
     const year = byYear[r.schoolYear];
     let tr = year.trimesters.find((t: any) => t.trimester === r.trimester);
     if (!tr) { tr = { trimester: r.trimester, subjects: {} }; year.trimesters.push(tr); }
-    tr.subjects[r.subject] = { devoir1: r.devoir1 == null ? undefined : r.devoir1, devoir2: r.devoir2 == null ? undefined : r.devoir2, synthese: r.synthese == null ? undefined : r.synthese };
+    tr.subjects[r.subjectName ?? r.subject_id] = { devoir1: r.devoir1 == null ? undefined : r.devoir1, devoir2: r.devoir2 == null ? undefined : r.devoir2, synthese: r.synthese == null ? undefined : r.synthese };
   });
   return Object.values(byYear);
 }
@@ -601,7 +601,7 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
     db.prepare('SELECT se.* FROM student_service_enrollments se JOIN students s ON se.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT pay.* FROM payments pay JOIN students s ON pay.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT m.* FROM meal_attendances m JOIN students s ON m.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
-    db.prepare('SELECT n.* FROM suivi_notes n JOIN students s ON n.student_id = s.id WHERE s.center_id = ?').bind(centerId).all()
+    db.prepare('SELECT n.*, sub.name AS subject_name FROM suivi_notes n JOIN students s ON n.student_id = s.id LEFT JOIN subjects sub ON sub.id = n.subject_id WHERE s.center_id = ?').bind(centerId).all()
   ]);
   const parentsByStudent: Record<string, any> = {};
   parentsRows.results.forEach((r: any) => { const key = str(r.student_id); if (!parentsByStudent[key]) parentsByStudent[key] = {}; parentsByStudent[key][r.role] = { name: str(r.name), birthDate: str(r.birth_date), profession: str(r.profession), address: str(r.address), phoneFixed: str(r.phone_fixed), phoneMobile: str(r.phone_mobile), email: str(r.email), extraPhones: parseJson(r.extra_phones, undefined) }; });
@@ -743,7 +743,7 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
         consumedMealsCount: consumedSubscription,
         active: !!lunchRow
       },
-      mealAttendances: attended, payments: paymentsByStudent[id] || [], suiviNotes: buildSuiviNotes(notesByStudent[id] || []),
+      mealAttendances: attended, payments: paymentsByStudent[id] || [], suiviNotes: buildSuiviNotes((notesByStudent[id] || []).map((r: any) => ({ ...r, schoolYear: r.school_year ?? r.schoolYear, trimester: r.trimester, subjectName: r.subject_name }))),
       timeSheetId: yr?.time_sheet_id == null ? undefined : str(yr.time_sheet_id),
       _schoolYear: schoolYear
     };
@@ -758,6 +758,68 @@ async function resolveEtablissementIds(db: D1Database, centerId: string, names: 
   }
   if (clean.length > 0) {
     const rows = await db.prepare(`SELECT name, id FROM etablissements WHERE center_id = ? AND name IN (${clean.map(() => '?').join(',')})`).bind(centerId, ...clean).all();
+    (rows.results || []).forEach((r: any) => { map[str(r.name)] = str(r.id); });
+  }
+  for (const n of clean) map[n] = map[n] || null;
+  return map;
+}
+
+// ─── Subjects : catalogue par centre avec UUID serveur ──────────────────────
+// La table subjects porte un id UUID (migration 0002) : les matières sont
+// référencées par subject_id dans suivi_notes, external_courses,
+// revision_seances, staff_subjects et formation_matieres. L'ajout passe par
+// POST /api/subjects — plus par le modèle settings/élève.
+
+const DEFAULT_SUBJECT_NAMES = [
+  'الرياضيات (Mathématiques)', 'الفيزياء والكيمياء (Physique-Chimie)',
+  'علوم الحياة والأرض (SVT)', 'اللغة العربية (Arabe)',
+  'اللغة الفرنسية (Français)', 'اللغة الإنجليزية (Anglais)',
+  'الإعلامية (Informatique)', 'الفلسفة (Philosophie)',
+  'التاريخ والجغرافيا (Histoire-Géo)', 'الإقتصاد والتصرف (Économie-Gestion)'
+];
+
+/**
+ * Au login (et au premier GET /api/subjects) : si le centre n'a AUCUNE
+ * matière, on lui insère le catalogue de départ. Chaque centre obtient ses
+ * propres lignes (center_id) avec des UUID, donc aucune collision.
+ */
+export async function ensureCenterSubjects(db: D1Database, centerId: string): Promise<void> {
+  const row = await db.prepare('SELECT 1 AS ok FROM subjects WHERE center_id = ? LIMIT 1').bind(centerId).first<any>();
+  if (row) return;
+  const stmts = DEFAULT_SUBJECT_NAMES.map(name => db.prepare('INSERT OR IGNORE INTO subjects (id, center_id, name) VALUES (?, ?, ?)').bind(crypto.randomUUID(), centerId, name));
+  if (stmts.length) await db.batch(stmts);
+}
+
+export async function readSubjects(db: D1Database, centerId: string): Promise<any[]> {
+  await ensureCenterSubjects(db, centerId);
+  const res = await db.prepare('SELECT id, name FROM subjects WHERE center_id = ? ORDER BY name COLLATE NOCASE').bind(centerId).all();
+  return res.results || [];
+}
+
+/** Ajoute UNE matière (idempotent par (center_id, name)) — retourne l'id. */
+export async function createSingleSubject(db: D1Database, name: string, centerId: string): Promise<string> {
+  const clean = str(name).trim();
+  if (!clean) throw new Error('اسم المادة مطلوب.');
+  if (clean.length > 120) throw new Error('اسم المادة طويل جداً.');
+  const id = crypto.randomUUID();
+  await db.prepare('INSERT INTO subjects (id, center_id, name) VALUES (?, ?, ?) ON CONFLICT (center_id, name) DO NOTHING').bind(id, centerId, clean).run();
+  const row = await db.prepare('SELECT id FROM subjects WHERE center_id = ? AND name = ?').bind(centerId, clean).first<any>();
+  return str(row?.id) || id;
+}
+
+/**
+ * Résout des noms de matières → subject_id (auto-création au besoin, comme
+ * resolveEtablissementIds). Le centre reçoit TOUJOURS sa propre ligne —
+ * jamais une référence au catalogue global ''.
+ */
+async function resolveSubjectIds(db: D1Database, centerId: string, names: string[]): Promise<Record<string, string | null>> {
+  const map: Record<string, string | null> = {};
+  const clean = Array.from(new Set(names.map(n => str(n).trim()).filter(Boolean)));
+  for (const n of clean) {
+    await db.prepare('INSERT OR IGNORE INTO subjects (id, center_id, name) VALUES (?, ?, ?)').bind(crypto.randomUUID(), centerId, n).run();
+  }
+  if (clean.length > 0) {
+    const rows = await db.prepare(`SELECT name, id FROM subjects WHERE center_id = ? AND name IN (${clean.map(() => '?').join(',')})`).bind(centerId, ...clean).all();
     (rows.results || []).forEach((r: any) => { map[str(r.name)] = str(r.id); });
   }
   for (const n of clean) map[n] = map[n] || null;
@@ -852,7 +914,11 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
         m.paid ? 'paid' : 'unpaid', m.traiteurPrice != null ? num(m.traiteurPrice) : null, Date.now()
       ));
     }
-    for (const yr of s.suiviNotes || []) for (const tr of yr.trimesters || []) for (const [subject, grades] of Object.entries(tr.subjects || {})) { const g = grades as any; stmts.push(db.prepare('INSERT OR IGNORE INTO suivi_notes (student_id, school_year, trimester, subject, devoir1, devoir2, synthese) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(s.id, yr.schoolYear, tr.trimester, subject, g?.devoir1 ?? null, g?.devoir2 ?? null, g?.synthese ?? null)); }
+    // Notes : PK = UUID serveur + référence subject_id (migration 0002). Le
+    // flux normal passe par POST /api/suivi-notes (l'élève n'est plus renvoyé
+    // entier) ; cette boucle ne sert qu'aux restaurations bulk.
+    const subjectIdsForStudent = await resolveSubjectIds(db, centerId, (s.suiviNotes || []).flatMap((yr: any) => (yr.trimesters || []).flatMap((tr: any) => Object.keys(tr.subjects || {}))));
+    for (const yr of s.suiviNotes || []) for (const tr of yr.trimesters || []) for (const [subject, grades] of Object.entries(tr.subjects || {})) { const g = grades as any; const sid = subjectIdsForStudent[subject]; if (!sid) continue; stmts.push(db.prepare('INSERT OR IGNORE INTO suivi_notes (id, student_id, school_year, trimester, subject_id, devoir1, devoir2, synthese) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), s.id, yr.schoolYear, tr.trimester, sid, g?.devoir1 ?? null, g?.devoir2 ?? null, g?.synthese ?? null)); }
   }
   return stmts;
 }
@@ -889,7 +955,10 @@ export async function updateSingleStudent(db: D1Database, student: any, centerId
   const deleteStmts: D1PreparedStatement[] = [
     db.prepare('DELETE FROM payments WHERE student_id = ?').bind(student.id),
     db.prepare('DELETE FROM meal_attendances WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM suivi_notes WHERE student_id = ?').bind(student.id),
+    // NB : suivi_notes n'est PAS supprimé ici — les notes sont gérées par
+    // l'endpoint dédié /api/suivi-notes et ne font plus partie du payload
+    // PUT /api/students. Un DELETE reconstruirait les notes depuis un
+    // payload potentiellement périmé et les effacerait.
     db.prepare('DELETE FROM academic_history WHERE student_id = ?').bind(student.id),
     db.prepare('DELETE FROM authorized_persons WHERE student_id = ?').bind(student.id),
     db.prepare('DELETE FROM siblings WHERE student_id = ?').bind(student.id),
@@ -924,7 +993,7 @@ export async function deleteSingleStudent(db: D1Database, studentId: string, cen
 export async function readStaff(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [staffRows, subjectsRows, scheduleRows, paymentRows, payslipRows, leaveRows, advanceRows] = await Promise.all([
     db.prepare('SELECT * FROM staff WHERE center_id = ?').bind(centerId).all(),
-    db.prepare('SELECT sub.* FROM staff_subjects sub JOIN staff st ON sub.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT sub.*, sj.name AS subject_name FROM staff_subjects sub LEFT JOIN subjects sj ON sj.id = sub.subject_id JOIN staff st ON sub.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT sc.* FROM staff_schedule sc JOIN staff st ON sc.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT p.* FROM staff_payments p JOIN staff st ON p.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT ps.* FROM staff_payslips ps JOIN staff st ON ps.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all(),
@@ -932,7 +1001,7 @@ export async function readStaff(db: D1Database, centerId: string = DEFAULT_CENTE
     db.prepare('SELECT a.* FROM staff_advances a JOIN staff st ON a.staff_id = st.id WHERE st.center_id = ?').bind(centerId).all()
   ]);
   const subjectsByStaff: Record<string, string[]> = {};
-  subjectsRows.results.forEach((r: any) => { (subjectsByStaff[str(r.staff_id)] = subjectsByStaff[str(r.staff_id)] || []).push(str(r.subject)); });
+  subjectsRows.results.forEach((r: any) => { const nm = str(r.subject_name); if (nm) (subjectsByStaff[str(r.staff_id)] = subjectsByStaff[str(r.staff_id)] || []).push(nm); });
   const scheduleByStaff: Record<string, any[]> = {};
   scheduleRows.results.forEach((r: any) => { (scheduleByStaff[str(r.staff_id)] = scheduleByStaff[str(r.staff_id)] || []).push({ day: str(r.day), slots: parseJson(r.slots, []) }); });
   const paymentsByStaff: Record<string, any[]> = {};
@@ -954,12 +1023,13 @@ function staffMonthKey(label: unknown): string {
   return monthKeyFromLabel(label) || new Date().toISOString().slice(0, 7);
 }
 
-function buildStaffStmts(db: D1Database, staff: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+function buildStaffStmts(db: D1Database, staff: any[], centerId: string = DEFAULT_CENTER_ID, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
+  const ids = subjectIds || {};
   for (const s of staff || []) {
     // Nouveau schéma : base_salary NOT NULL (plus de salary/hire_date).
     stmts.push(db.prepare('INSERT INTO staff (id, center_id, first_name, last_name, cin, cnss_number, phone, email, address, role, contract_type, contract_start_date, base_salary, cnss_amount, hourly_rate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, centerId, s.firstName, s.lastName, str(s.cin), s.cnssNumber ?? null, s.phone, s.email ?? null, s.address ?? null, s.role, s.contractType ?? null, s.contractStartDate, num(s.baseSalary ?? s.salary), s.cnssAmount ?? null, s.hourlyRate ?? null, 'active'));
-    for (const sub of s.subjects || []) stmts.push(db.prepare('INSERT INTO staff_subjects (staff_id, subject) VALUES (?, ?)').bind(s.id, sub));
+    for (const sub of s.subjects || []) { const sid = ids[str(sub).trim()] ?? null; if (!sid) continue; stmts.push(db.prepare('INSERT INTO staff_subjects (staff_id, subject_id) VALUES (?, ?)').bind(s.id, sid)); }
     for (const slot of s.schedule || []) stmts.push(db.prepare('INSERT INTO staff_schedule (staff_id, day, slots) VALUES (?, ?, ?)').bind(s.id, slot.day, JSON.stringify(slot.slots || [])));
     for (const p of s.payments || []) stmts.push(db.prepare('INSERT INTO staff_payments (id, center_id, staff_id, month, amount_paid, bonus, deduction, net_salary, date, receipt_number, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(p.id, centerId, s.id, staffMonthKey(p.month), num(p.amountPaid), num(p.bonus ?? 0), num(p.deduction ?? 0), num(p.netSalary), p.date, p.receiptNumber, p.notes ?? null));
     for (const pl of s.payslips || []) stmts.push(db.prepare('INSERT INTO staff_payslips (id, center_id, staff_id, month, base_salary, bonus, bonus_reason, cnss_deduction, absence_deductions, advance_deducted, net_salary, issue_date, days_present, days_absent, days_retard, extra_hours, extra_hour_rate, extra_hours_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(pl.id, centerId, s.id, staffMonthKey(pl.month), num(pl.baseSalary), num(pl.bonus), pl.bonusReason ?? null, num(pl.cnssDeduction), num(pl.absenceDeductions), num(pl.advanceDeducted), num(pl.netSalary), pl.issueDate, pl.daysPresent ?? null, pl.daysAbsent ?? null, pl.daysRetard ?? null, pl.extraHours ?? null, pl.extraHourRate ?? null, pl.extraHoursAmount ?? null));
@@ -970,6 +1040,7 @@ function buildStaffStmts(db: D1Database, staff: any[], centerId: string = DEFAUL
 }
 
 export async function writeStaff(db: D1Database, staff: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const subjectIds = await resolveSubjectIds(db, centerId, (staff || []).flatMap((s: any) => s.subjects || []));
   const stmts: D1PreparedStatement[] = [
     db.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
@@ -978,13 +1049,14 @@ export async function writeStaff(db: D1Database, staff: any[], centerId: string 
     db.prepare('DELETE FROM staff_schedule WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM staff_subjects WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM staff WHERE center_id = ?').bind(centerId),
-    ...buildStaffStmts(db, staff, centerId)
+    ...buildStaffStmts(db, staff, centerId, subjectIds)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
 export async function createSingleStaff(db: D1Database, staffMember: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
-  const stmts = buildStaffStmts(db, [staffMember], centerId);
+  const subjectIds = await resolveSubjectIds(db, centerId, staffMember?.subjects || []);
+  const stmts = buildStaffStmts(db, [staffMember], centerId, subjectIds);
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
@@ -998,7 +1070,8 @@ export async function updateSingleStaff(db: D1Database, staffMember: any, center
     db.prepare('DELETE FROM staff_subjects WHERE staff_id = ?').bind(staffMember.id),
     db.prepare('DELETE FROM staff WHERE id = ? AND center_id = ?').bind(staffMember.id, centerId)
   ];
-  const insertStmts = buildStaffStmts(db, [staffMember], centerId);
+  const subjectIds = await resolveSubjectIds(db, centerId, staffMember?.subjects || []);
+  const insertStmts = buildStaffStmts(db, [staffMember], centerId, subjectIds);
   const all = [...deleteStmts, ...insertStmts];
   for (let i = 0; i < all.length; i += 500) await db.batch(all.slice(i, i + 500));
 }
@@ -1078,7 +1151,7 @@ export async function writeSlots(db: D1Database, slots: any[], centerId: string 
 
 export async function readCourses(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [courseRows, enrollRows] = await Promise.all([
-    db.prepare('SELECT * FROM external_courses WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT c.*, sub.name AS subject_name FROM external_courses c LEFT JOIN subjects sub ON sub.id = c.subject_id WHERE c.center_id = ?').bind(centerId).all(),
     // Table course_enrollments: simple (course_id, student_id) join. The
     // per-student roster fields (name, phone, assurance…) live on the
     // external_students register / per-student data — the course row keeps
@@ -1089,7 +1162,7 @@ export async function readCourses(db: D1Database, centerId: string = DEFAULT_CEN
   const enrollByCourse: Record<string, string[]> = {};
   enrollRows.forEach((r: any) => { (enrollByCourse[str(r.course_id)] = enrollByCourse[str(r.course_id)] || []).push(str(r.student_id)); });
   return courseRows.results.map((r: any) => ({
-    id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject),
+    id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject_name), subjectId: str(r.subject_id),
     teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone),
     monthlyFee: num(r.monthly_fee), teacherShare: num(r.teacher_share), centerShare: num(r.center_share),
     // Montant d'assurance propre à ce cours (synchro DEFAULT du service assurance_externe)
@@ -1112,10 +1185,13 @@ async function readCourseEnrollments(db: D1Database, centerId: string): Promise<
   }
 }
 
-function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID, skipEnrollments = false): D1PreparedStatement[] {
+function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID, skipEnrollments = false, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
+  const ids = subjectIds || {};
   for (const c of courses || []) {
-    stmts.push(db.prepare('INSERT INTO external_courses (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, monthly_fee, teacher_share, center_share, assurance_amount, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, c.schoolYear, c.trimester, c.gradeLevel, c.subject, c.teacherName, c.teacherPhone, num(c.monthlyFee), num(c.teacherShare), num(c.centerShare), c.assuranceAmount != null ? num(c.assuranceAmount) : 0, centerId));
+    const sid = ids[str(c.subject).trim()] ?? null;
+    if (!sid) continue;
+    stmts.push(db.prepare('INSERT INTO external_courses (id, school_year, trimester, grade_level, subject_id, teacher_name, teacher_phone, monthly_fee, teacher_share, center_share, assurance_amount, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, c.schoolYear, c.trimester, c.gradeLevel, sid, c.teacherName, c.teacherPhone, num(c.monthlyFee), num(c.teacherShare), num(c.centerShare), c.assuranceAmount != null ? num(c.assuranceAmount) : 0, centerId));
     if (skipEnrollments) continue;
     for (const es of c.enrolledStudents || []) { const studentId = str(es.studentId || es.id); if (studentId) stmts.push(db.prepare('INSERT OR IGNORE INTO course_enrollments (course_id, student_id, enrolled_at) VALUES (?, ?, ?)').bind(c.id, studentId, Date.now())); }
   }
@@ -1123,6 +1199,7 @@ function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DE
 }
 
 export async function writeCourses(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const subjectIds = await resolveSubjectIds(db, centerId, (courses || []).map((c: any) => c.subject));
   const stmts = [
     db.prepare('DELETE FROM course_enrollments WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(centerId)
@@ -1130,11 +1207,11 @@ export async function writeCourses(db: D1Database, courses: any[], centerId: str
   for (let i = 0; i < courses.length; i += 500) {
     const slice = (courses || []).slice(i, i + 500);
     try {
-      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId)));
+      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId, false, subjectIds)));
     } catch {
       // Table course_enrollments absente (déploiement antérieur) : réessaie
       // en insérant les cours seuls.
-      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId, true)));
+      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId, true, subjectIds)));
     }
   }
 }
@@ -1411,28 +1488,32 @@ export async function writeMealForfaitClosures(db: D1Database, closures: any[], 
 
 export async function readRevisionSeances(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [seanceRows, studentRows] = await Promise.all([
-    db.prepare('SELECT * FROM revision_seances WHERE center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT r.*, sub.name AS subject_name FROM revision_seances r LEFT JOIN subjects sub ON sub.id = r.subject_id WHERE r.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT st.* FROM revision_seance_students st JOIN revision_seances s ON st.seance_id = s.id WHERE s.center_id = ?').bind(centerId).all()
   ]);
   const studentsBySeance: Record<string, any[]> = {};
   studentRows.results.forEach((r: any) => { (studentsBySeance[str(r.seance_id)] = studentsBySeance[str(r.seance_id)] || []).push({ id: str(r.student_id), studentId: str(r.student_id), name: str(r.student_id), studentName: str(r.student_id), parentPhone: '', paidSeance: r.paid_payment_id != null, present: !!r.present }); });
-  return seanceRows.results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject), teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone), date: str(r.date), teacherShare: num(r.teacher_share), centerShare: num(r.center_share), students: studentsBySeance[str(r.id)] || [] }));
+  return seanceRows.results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject_name), subjectId: str(r.subject_id), teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone), date: str(r.date), teacherShare: num(r.teacher_share), centerShare: num(r.center_share), students: studentsBySeance[str(r.id)] || [] }));
 }
 
-function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
+  const ids = subjectIds || {};
   for (const s of seances || []) {
-    stmts.push(db.prepare('INSERT INTO revision_seances (id, school_year, trimester, grade_level, subject, teacher_name, teacher_phone, date, teacher_share, center_share, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.trimester, s.gradeLevel, s.subject, s.teacherName, s.teacherPhone, s.date, num(s.teacherShare), num(s.centerShare), centerId));
+    const sid = ids[str(s.subject).trim()] ?? null;
+    if (!sid) continue;
+    stmts.push(db.prepare('INSERT INTO revision_seances (id, school_year, trimester, grade_level, subject_id, teacher_name, teacher_phone, date, teacher_share, center_share, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.trimester, s.gradeLevel, sid, s.teacherName, s.teacherPhone, s.date, num(s.teacherShare), num(s.centerShare), centerId));
     for (const st of s.students || []) { const studentId = str(st.studentId || st.id); if (studentId) stmts.push(db.prepare('INSERT INTO revision_seance_students (seance_id, student_id, student_name, parent_phone, paid_seance, present) VALUES (?, ?, ?, ?, ?, ?)').bind(s.id, studentId, str(st.studentName || st.name || ''), str(st.parentPhone || ''), st.paidSeance ? 1 : 0, st.present ? 1 : 0)); }
   }
   return stmts;
 }
 
 export async function writeRevisionSeances(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const subjectIds = await resolveSubjectIds(db, centerId, (seances || []).map((s: any) => s.subject));
   const stmts = [
     db.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(centerId),
-    ...buildRevisionSeancesStmts(db, seances, centerId)
+    ...buildRevisionSeancesStmts(db, seances, centerId, subjectIds)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
@@ -1544,7 +1625,7 @@ export async function writeStudentAttendance(db: D1Database, records: any[], cen
 export async function readFormations(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [formationRows, matiereRows, enrollmentRows, paymentRows] = await Promise.all([
     db.prepare('SELECT * FROM formations WHERE center_id = ?').bind(centerId).all(),
-    db.prepare('SELECT m.* FROM formation_matieres m JOIN formations f ON m.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
+    db.prepare('SELECT m.*, sub.name AS subject_name FROM formation_matieres m LEFT JOIN subjects sub ON sub.id = m.subject_id JOIN formations f ON m.formation_id = f.id WHERE f.center_id = ?').bind(centerId).all(),
     db.prepare(`SELECT fe.*, s.first_name, s.last_name, s.contact_phone FROM formation_enrollments fe
                 JOIN formations f ON fe.formation_id = f.id
                 LEFT JOIN students s ON s.id = fe.student_id
@@ -1556,7 +1637,7 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
   const matieresByFormation: Record<string, any[]> = {};
   matiereRows.results.forEach((m: any) => {
     const fid = str(m.formation_id);
-    (matieresByFormation[fid] = matieresByFormation[fid] || []).push({ id: str(m.id), subject: str(m.subject) });
+    (matieresByFormation[fid] = matieresByFormation[fid] || []).push({ id: str(m.id), subject: str(m.subject_name), subjectId: str(m.subject_id) });
   });
   const matieresByEnrollment: Record<string, string[]> = {};
   try {
@@ -1621,8 +1702,9 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
   });
 }
 
-async function buildFormationsStmts(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): Promise<D1PreparedStatement[]> {
+async function buildFormationsStmts(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID, subjectIds?: Record<string, string | null>): Promise<D1PreparedStatement[]> {
   const stmts: D1PreparedStatement[] = [];
+  const ids = subjectIds || {};
   // Nom d'élève de formation → students.id (créé au besoin, type 'formation').
   const ensureFormationStudent = async (name: string, phone: string): Promise<string | null> => {
     const clean = str(name).trim();
@@ -1641,7 +1723,7 @@ async function buildFormationsStmts(db: D1Database, formations: any[], centerId:
 
   for (const f of formations || []) {
     stmts.push(db.prepare('INSERT INTO formations (id, center_id, name, school_year, start_date, end_date, pack_price, schedule, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(f.id, centerId, f.name, f.schoolYear, f.startDate, f.endDate, num(f.packPrice), JSON.stringify(f.schedule || []), num(f.createdAt) || Date.now()));
-    for (const m of f.matieres || []) stmts.push(db.prepare('INSERT INTO formation_matieres (id, formation_id, subject) VALUES (?, ?, ?)').bind(m.id, f.id, m.subject));
+    for (const m of f.matieres || []) { const sid = ids[str(m.subject).trim()] ?? null; if (!sid) continue; stmts.push(db.prepare('INSERT INTO formation_matieres (id, formation_id, subject_id) VALUES (?, ?, ?)').bind(m.id, f.id, sid)); }
     const validMatIds = new Set((f.matieres || []).map((m: any) => m.id));
     for (const st of f.students || []) {
       const studentId = await ensureFormationStudent(st.studentName, st.parentPhone);
@@ -1672,6 +1754,7 @@ async function buildFormationsStmts(db: D1Database, formations: any[], centerId:
 }
 
 export async function writeFormations(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const subjectIds = await resolveSubjectIds(db, centerId, (formations || []).flatMap((f: any) => (f.matieres || []).map((m: any) => m.subject)));
   const deleteStmts: D1PreparedStatement[] = [
     db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))").bind(centerId),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
@@ -1680,7 +1763,7 @@ export async function writeFormations(db: D1Database, formations: any[], centerI
     db.prepare('DELETE FROM formations WHERE center_id = ?').bind(centerId)
   ];
   for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
-  const insertStmts = await buildFormationsStmts(db, formations, centerId);
+  const insertStmts = await buildFormationsStmts(db, formations, centerId, subjectIds);
   for (let i = 0; i < insertStmts.length; i += 500) await db.batch(insertStmts.slice(i, i + 500));
 }
 
@@ -2130,17 +2213,17 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
 
   const allDataStmts = [
     ...(await buildStudentsStmts(db, dedupe(state.students), centerId)),
-    ...buildStaffStmts(db, dedupe(state.staff), centerId),
+    ...buildStaffStmts(db, dedupe(state.staff), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.staff) || []).flatMap((s: any) => s.subjects || []))),
     ...buildSlotsStmts(db, dedupe(state.slots), centerId),
-    ...buildCoursesStmts(db, dedupe(state.courses), centerId),
+    ...buildCoursesStmts(db, dedupe(state.courses), centerId, false, await resolveSubjectIds(db, centerId, (dedupe(state.courses) || []).map((c: any) => c.subject))),
     ...buildSessionsStmts(db, dedupe(state.sessions), centerId),
     ...buildMealPlansStmts(db, dedupe(state.mealPlans), centerId),
     ...buildExpensesStmts(db, dedupe(state.expenses), centerId),
     ...buildTimesheetsStmts(db, dedupe(state.timesheets), centerId),
     ...buildExternalStudentsStmts(db, dedupe(state.externalStudents), centerId),
-    ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances), centerId),
+    ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.revisionSeances) || []).map((s: any) => s.subject))),
     ...buildStudentTimeSheetsStmts(db, dedupe(state.studentTimeSheets), centerId),
-    ...(await buildFormationsStmts(db, dedupe(state.formations), centerId)),
+    ...(await buildFormationsStmts(db, dedupe(state.formations), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.formations) || []).flatMap((f: any) => (f.matieres || []).map((m: any) => m.subject))))),
     ...buildMealForfaitClosuresStmts(dedupe(state.mealForfaitClosures))
   ];
 
@@ -2242,4 +2325,82 @@ export async function mapCenterRow(db: D1Database, c: any): Promise<any> {
     logoUrl: c.logo_url || '',
     createdAt: c.created_at || Date.now()
   };
+}
+
+// ===========================================================================
+// SUIVI NOTES (notes / devoirs) — endpoint dédié /api/suivi-notes
+// ===========================================================================
+
+/**
+ * GET /api/suivi-notes?studentId=… — toutes les notes d'un élève du centre,
+ * ou toutes les notes du centre si studentId est absent.
+ */
+export async function readSuiviNotes(db: D1Database, centerId: string, studentId?: string | null): Promise<any[]> {
+  if (studentId) {
+    const res = await db.prepare(
+      'SELECT n.*, sub.name AS subject FROM suivi_notes n JOIN students s ON n.student_id = s.id LEFT JOIN subjects sub ON sub.id = n.subject_id WHERE s.center_id = ? AND n.student_id = ? ORDER BY n.school_year, n.trimester, sub.name'
+    ).bind(centerId, studentId).all();
+    return res.results || [];
+  }
+  const res = await db.prepare(
+    'SELECT n.*, sub.name AS subject FROM suivi_notes n JOIN students s ON n.student_id = s.id LEFT JOIN subjects sub ON sub.id = n.subject_id WHERE s.center_id = ? ORDER BY n.school_year, n.trimester, sub.name'
+  ).bind(centerId).all();
+  return res.results || [];
+}
+
+export interface SuiviNoteInput {
+  studentId: string;
+  schoolYear: string;
+  trimester: number;
+  /** Nom de la matière (résolu en subject_id serveur) — ou subjectId direct. */
+  subject?: string;
+  subjectId?: string;
+  devoir1?: number | null;
+  devoir2?: number | null;
+  synthese?: number | null;
+}
+
+/**
+ * Insère (ou met à jour) UNE note — l'élève n'est PAS renvoyé entier.
+ * L'id est un UUID v4 généré côté serveur (crypto.randomUUID) : deux centres
+ * ne peuvent pas entrer en collision. L'unicité (student_id, school_year,
+ * trimester, subject) rend l'upsert idempotent : re-saisir une note pour la
+ * même matière remplace la valeur au lieu de dupliquer la ligne.
+ */
+export async function upsertSingleSuiviNote(db: D1Database, note: SuiviNoteInput, centerId: string): Promise<void> {
+  if (!note || typeof note !== 'object' || !str(note.studentId)) throw new Error('معرّف التلميذ مطلوب.');
+  const trimester = num(note.trimester);
+  if (![1, 2, 3].includes(trimester)) throw new Error('الثلاثي غير صالح (1، 2 أو 3).');
+  const schoolYear = str(note.schoolYear);
+  if (!/^\d{4}\/\d{4}$/.test(schoolYear)) throw new Error('السنة الدراسية غير صالحة (مثال: 2026/2027).');
+  const gradeVal = (v: unknown) => (v == null || v === '' ? null : num(v));
+  // Tenancy precheck : le FK student_id seul ne connaît pas le centre.
+  const owner = await db.prepare('SELECT 1 AS ok FROM students WHERE id = ? AND center_id = ?').bind(str(note.studentId), centerId).first<any>();
+  if (!owner) throw new Error('التلميذ غير موجود في هذا المركز.');
+  // subjectId direct du client (liste /api/subjects) OU nom résolu serveur.
+  let subjectId = str(note.subjectId);
+  if (subjectId) {
+    const sub = await db.prepare('SELECT 1 AS ok FROM subjects WHERE id = ? AND center_id = ?').bind(subjectId, centerId).first<any>();
+    if (!sub) throw new Error('المادة غير موجودة في هذا المركز.');
+  } else {
+    if (!str(note.subject)) throw new Error('المادة مطلوبة.');
+    const resolved = await resolveSubjectIds(db, centerId, [str(note.subject)]);
+    subjectId = resolved[str(note.subject)] || '';
+    if (!subjectId) throw new Error('المادة غير موجودة في هذا المركز.');
+  }
+  const grades = [gradeVal(note.devoir1), gradeVal(note.devoir2), gradeVal(note.synthese)];
+  if (grades.some(g => g !== null && (g < 0 || g > 20))) throw new Error('النقطة يجب أن تكون بين 0 و 20.');
+  await db.prepare(
+    `INSERT INTO suivi_notes (id, student_id, school_year, trimester, subject_id, devoir1, devoir2, synthese)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (student_id, school_year, trimester, subject_id) DO UPDATE SET
+       devoir1 = excluded.devoir1, devoir2 = excluded.devoir2, synthese = excluded.synthese`
+  ).bind(crypto.randomUUID(), str(note.studentId), schoolYear, trimester, subjectId, grades[0], grades[1], grades[2]).run();
+}
+
+/** Supprime UNE note par id, scoppée au centre. */
+export async function deleteSingleSuiviNote(db: D1Database, noteId: string, centerId: string): Promise<void> {
+  await db.prepare(
+    'DELETE FROM suivi_notes WHERE id = ? AND student_id IN (SELECT id FROM students WHERE center_id = ?)'
+  ).bind(noteId, centerId).run();
 }
