@@ -34,6 +34,7 @@ beforeEach(() => {
       name TEXT NOT NULL DEFAULT '',
       school_year TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
       establishment_name TEXT NOT NULL,
+      etablissement_id TEXT REFERENCES etablissements(id) ON DELETE SET NULL,
       grade_level TEXT NOT NULL,
       branch TEXT,
       class_name TEXT,

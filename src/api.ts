@@ -413,6 +413,37 @@ export async function fetchEtablissementsApi(): Promise<EtablissementRef[]> {
 }
 
 
+// ─── Student years (table student_years) — mutations ciblées ──────────
+// L'élève n'est PAS renvoyé entier : on ne poste que la ligne
+// { studentId, schoolYear, … } à créer/modifier (comme /api/payments).
+export interface StudentYearRef {
+  studentId: string;
+  schoolYear: string;
+  grade?: string;
+  etablissementId?: string;
+  etablissementName?: string;
+  timeSheetId?: string;
+}
+
+export async function fetchStudentYearsApi(): Promise<StudentYearRef[]> {
+  return getDomain<StudentYearRef[]>('/student-years', 'تعذر تحميل سنوات التلاميذ.');
+}
+
+/** Insère ou met à jour la ligne (studentId, schoolYear) — champs partiels acceptés. */
+export async function upsertStudentYearApi(input: StudentYearRef): Promise<void> {
+  return postDomain('/student-years', input, 'تعذر حفظ سنة التلميذ.');
+}
+
+/** Mise à jour partielle d'une ligne existante (404 si absente). */
+export async function updateStudentYearApi(input: StudentYearRef): Promise<void> {
+  return putDomain('/student-years', input, 'تعذر تعديل سنة التلميذ.');
+}
+
+export async function deleteStudentYearApi(studentId: string, schoolYear: string): Promise<void> {
+  return deleteDomain(`/student-years?studentId=${encodeURIComponent(studentId)}&schoolYear=${encodeURIComponent(schoolYear)}`, 'تعذر حذف سنة التلميذ.');
+}
+
+
 // ------------------- Full Database Boot (Concurrent Domain Load) -------------------
 
 export async function fetchDatabase(): Promise<DatabaseState> {

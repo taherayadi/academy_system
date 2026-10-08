@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -463,6 +463,30 @@ export default function App() {
       return { ...s, suiviNotes: newSets };
     }));
     commitDomain(() => saveSuiviNoteApi({ studentId, ...note }));
+  }, []);
+
+  /**
+   * Assignation ciblée d'un emploi du temps : POST/PUT /api/student-years
+   * (table student_years) — l'élève n'est PAS renvoyé entier (comme
+   * /api/payments et /api/suivi-notes). L'état local timeSheetId reste la
+   * source d'affichage (grille et compteur « تلميذ مُسنَد »).
+   */
+  const handleAssignTimeSheet = useCallback((timeSheetId: string, schoolYear: string, grade: string | undefined, assign: string[], unassign: string[]) => {
+    setStudents(prev => prev.map(s => {
+      if (assign.includes(s.id)) return { ...s, timeSheetId };
+      if (unassign.includes(s.id)) return { ...s, timeSheetId: undefined };
+      return s;
+    }));
+    commitDomain(async () => {
+      const ops: Promise<void>[] = [];
+      for (const id of assign) {
+        ops.push(upsertStudentYearApi({ studentId: id, schoolYear, grade, timeSheetId }));
+      }
+      for (const id of unassign) {
+        ops.push(updateStudentYearApi({ studentId: id, schoolYear, timeSheetId: null }));
+      }
+      await Promise.all(ops);
+    });
   }, []);
 
   const handleUpdateStudents = (updated: Student[]) => {
@@ -1263,6 +1287,7 @@ export default function App() {
                   onUpdateStudentTimeSheets={handleUpdateStudentTimeSheets}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
+                  onAssignStudents={handleAssignTimeSheet}
                   centerType={currentCenter?.centerType}
                   studentAttendance={studentAttendance}
                   onUpdateStudentAttendance={handleUpdateStudentAttendance}

@@ -589,11 +589,8 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
   const handleSaveSlot = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherId) {
-      toast.warning('اختر الأستاذ/المشرف المعني بالحصّة');
-      return;
-    }
-
+    // L'auteur (enseignant) est OPTIONNEL : une séance sans encadrant est
+    // permise (elle s'affiche « غير محدد ») — plus de blocage à la saisie.
     if (!modalStartTime || !modalEndTime) {
       toast.error('حدد وقت بداية ونهاية الحصّة!');
       return;
@@ -604,13 +601,15 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       return;
     }
 
-    // Cannot schedule the same teacher twice at overlapping times
-    const duplicateTeacherSlot = slots.find(s =>
-      s.id !== editingSlotId &&
-      s.day === modalDay &&
-      s.teacherId === teacherId &&
-      timesOverlap(modalStartTime, modalEndTime, s.startTime, s.endTime)
-    );
+    // Cannot schedule the same teacher twice at overlapping times (only when a teacher is set)
+    const duplicateTeacherSlot = teacherId
+      ? slots.find(s =>
+          s.id !== editingSlotId &&
+          s.day === modalDay &&
+          s.teacherId === teacherId &&
+          timesOverlap(modalStartTime, modalEndTime, s.startTime, s.endTime)
+        )
+      : undefined;
     if (duplicateTeacherSlot) {
       toast.error('عذراً، هذا الأستاذ مسجل بالفعل في حصّة أخرى بنفس الفترة!');
       return;
@@ -718,7 +717,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       </div>
 
       {/* Filter and Academic Year Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row gap-3 items-center justify-between no-print">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between no-print">
         <div className="relative w-full sm:w-80">
           <Search className="absolute right-3.5 top-3 h-4 w-4 text-slate-400" />
           <input 
@@ -743,7 +742,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Filter className="h-4 w-4 text-brand-600 shrink-0" />
           <select
             value={gradeFilter}
@@ -1147,7 +1146,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">الأستاذ / التأطير *</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">الأستاذ / التأطير (اختياري)</label>
                   <select
                     value={teacherId} onChange={(e) => setTeacherId(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"

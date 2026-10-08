@@ -207,6 +207,13 @@ ALTER TABLE formation_matieres_new RENAME TO formation_matieres;
 
 -- ── 7. Seed du catalogue de départ pour les centres sans matière ─────────
 INSERT OR IGNORE INTO subjects (id, center_id, name)
+WITH g(name) AS (VALUES
+  ('الرياضيات (Mathématiques)'), ('الفيزياء والكيمياء (Physique-Chimie)'),
+  ('علوم الحياة والأرض (SVT)'), ('اللغة العربية (Arabe)'),
+  ('اللغة الفرنسية (Français)'), ('اللغة الإنجليزية (Anglais)'),
+  ('الإعلامية (Informatique)'), ('الفلسفة (Philosophie)'),
+  ('التاريخ والجغرافيا (Histoire-Géo)'), ('الإقتصاد والتصرف (Économie-Gestion)')
+)
 SELECT lower(
          hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' ||
          substr(hex(randomblob(2)), 2) || '-' ||
@@ -215,11 +222,5 @@ SELECT lower(
        ),
        c.id, g.name
 FROM centers c
-CROSS JOIN (VALUES
-  ('الرياضيات (Mathématiques)'), ('الفيزياء والكيمياء (Physique-Chimie)'),
-  ('علوم الحياة والأرض (SVT)'), ('اللغة العربية (Arabe)'),
-  ('اللغة الفرنسية (Français)'), ('اللغة الإنجليزية (Anglais)'),
-  ('الإعلامية (Informatique)'), ('الفلسفة (Philosophie)'),
-  ('التاريخ والجغرافيا (Histoire-Géo)'), ('الإقتصاد والتصرف (Économie-Gestion)')
-) AS g(name)
+CROSS JOIN g
 WHERE NOT EXISTS (SELECT 1 FROM subjects s WHERE s.center_id = c.id);

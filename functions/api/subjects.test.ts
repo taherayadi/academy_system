@@ -70,13 +70,20 @@ describe('GET /api/subjects', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { subjects: any[] };
     expect(body.subjects.length).toBeGreaterThanOrEqual(10);
-    // Toutes les lignes seedées appartiennent au centre (pas de catalogue '')
+    // Toutes les lignes seedées appartiennent au centre
     expect(body.subjects.every((s: any) => s.center_id === CENTER || s.center_id === undefined)).toBe(true);
     expect(body.subjects.every((s: any) => /^[0-9a-f-]{36}$/.test(s.id))).toBe(true);
     // idempotent : un deuxième GET ne duplique pas
     await onRequestGet(ctx('GET'));
     const n = (sqlite.prepare('SELECT COUNT(*) AS n FROM subjects WHERE center_id = ?').get(CENTER) as any).n;
     expect(n).toBe(body.subjects.length);
+  });
+
+  it('includes the global catalogue rows (pre-migration references)', async () => {
+    sqlite.prepare("INSERT INTO subjects (id, center_id, name) VALUES ('g1', '', 'Globale (Globale)')").run();
+    const res = await onRequestGet(ctx('GET'));
+    const body = await res.json() as { subjects: any[] };
+    expect(body.subjects.some((s: any) => s.name === 'Globale (Globale)')).toBe(true);
   });
 
   it('does not leak another center subjects (fresh seed, own ids)', async () => {

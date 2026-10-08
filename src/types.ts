@@ -950,6 +950,34 @@ export function buildExternalGradeOptions(): { value: string; label: string }[] 
 export const EXTERNAL_GRADE_OPTIONS = buildExternalGradeOptions();
 
 
+// Arabic labels for the Tunisian grade levels stored in French (« Primaire 1ère »…).
+// Used for bilingual display (عربي + français) in the timesheet surfaces; the stored
+// values remain the French strings so existing rows keep matching.
+export const GRADE_LABELS_AR: Record<string, string> = {
+  'Primaire 1ère': 'السنة الأولى ابتدائي',
+  'Primaire 2ème': 'السنة الثانية ابتدائي',
+  'Primaire 3ème': 'السنة الثالثة ابتدائي',
+  'Primaire 4ème': 'السنة الرابعة ابتدائي',
+  'Primaire 5ème': 'السنة الخامسة ابتدائي',
+  'Primaire 6ème': 'السنة السادسة ابتدائي',
+  'Collège 7ème': 'السابعة أساسي',
+  'Collège 8ème': 'الثامنة أساسي',
+  'Collège 9ème': 'التاسعة أساسي',
+  'Lycée 1ère': 'السنة الأولى ثانوي',
+  'Lycée 2ème': 'السنة الثانية ثانوي',
+  'Lycée 3ème': 'السنة الثالثة ثانوي',
+  'Baccalauréat': 'الباكالوريا'
+};
+
+
+/** « السنة الأولى ابتدائي (Primaire 1ère) » — falls back to the raw value. */
+export function gradeLabelBilingual(grade?: string | null): string {
+  if (!grade) return '';
+  const ar = GRADE_LABELS_AR[grade];
+  return ar ? `${ar} (${grade})` : grade;
+}
+
+
 // ─── Student TimeSheet ────────────────────────────────────────────────
 
 export const TIMESHEET_DAYS = ['الأثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] as const;
@@ -969,6 +997,8 @@ export interface StudentTimeSheet {
   id: string;
   schoolYear: string;
   establishmentName: string;
+  /** UUID of the matching row in `etablissements` (resolved server-side by name). */
+  etablissementId?: string;
   gradeLevel: string;
   branch?: string;
   className?: string;

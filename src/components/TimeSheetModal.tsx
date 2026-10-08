@@ -22,16 +22,19 @@ import {
   DEFAULT_ACADEMIC_YEARS,
   EXTERNAL_GRADE_LEVELS,
   getTimesheetBranches,
-  getTimeSlotsForDay
+  getTimeSlotsForDay,
+  gradeLabelBilingual
 } from '../types';
 import { useToast } from './Toast';
-import { fetchEtablissementsApi } from '../api';
+import { fetchEtablissementsApi, EtablissementRef } from '../api';
 
 interface TimeSheetModalProps {
   timeSheets: StudentTimeSheet[];
   students: Student[];
   onSaveTimeSheet: (sheets: StudentTimeSheet[]) => void;
   onUpdateStudents: (students: Student[]) => void;
+  /** Assignation ciblée /api/student-years (optionnelle — fallback legacy PUT /students). */
+  onAssignStudents?: (timeSheetId: string, schoolYear: string, grade: string | undefined, assign: string[], unassign: string[]) => void;
   onClose: () => void;
   editingTimeSheet?: StudentTimeSheet | null;
 }
@@ -61,6 +64,7 @@ export default function TimeSheetModal({
   students,
   onSaveTimeSheet,
   onUpdateStudents,
+  onAssignStudents,
   onClose,
   editingTimeSheet
 }: TimeSheetModalProps) {
@@ -84,7 +88,7 @@ export default function TimeSheetModal({
   // (GET /api/etablissements, scope center_id dérivé de la session) à l'ouverture
   // du modal. Les noms issus des élèves/tableaux en cours restent proposés en
   // supplément pour ne jamais perdre une valeur saisie localement.
-  const [dbEtablissements, setDbEtablissements] = useState<string[]>([]);
+  const [dbEtablissements, setDbEtablissements] = useState<EtablissementRef[]>([]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -92,7 +96,7 @@ export default function TimeSheetModal({
       fetchEtablissementsApi()
         .then(rows => {
           if (cancelled) return;
-          setDbEtablissements((rows || []).map(r => r.name.trim()).filter(Boolean));
+          setDbEtablissements(rows || []);
         })
         .catch(() => {
           // Silencieux : le combo retombe sur les noms connus localement.
@@ -104,7 +108,7 @@ export default function TimeSheetModal({
   }, []);
 
   const availableEtablissements = useMemo(() => {
-    const set = new Set<string>(dbEtablissements);
+    const set = new Set<string>(dbEtablissements.map(r => r.name.trim()).filter(Boolean));
     const set2 = new Set<string>(customEtablissements);
     students.forEach(s => {
       if (s.etablissement?.trim()) set2.add(s.etablissement.trim());
@@ -128,6 +132,15 @@ export default function TimeSheetModal({
     setIsAddingEtablissement(false);
     toast.success(`تمت إضافة المؤسسة "${trimmed}" بنجاح!`);
   };
+
+  const dbEtabIdByName = useMemo(() => {
+    const map: Record<string, string> = {};
+    dbEtablissements.forEach(r => {
+      const n = r.name.trim();
+      if (n && r.id) map[n] = r.id;
+    });
+    return map;
+  }, [dbEtablissements]);
 
   const tsBranches = useMemo(() => getTimesheetBranches(tsGradeLevel), [tsGradeLevel]);
 
@@ -165,6 +178,7 @@ export default function TimeSheetModal({
         ...existing,
         schoolYear: tsSchoolYear,
         establishmentName: tsEstablishment,
+        etablissementId: dbEtabIdByName[tsEstablishment] || existing.etablissementId,
         gradeLevel: tsGradeLevel,
         branch: tsBranch || undefined,
         className: tsClassName || undefined,
@@ -178,6 +192,7 @@ export default function TimeSheetModal({
         id: crypto.randomUUID(),
         schoolYear: tsSchoolYear,
         establishmentName: tsEstablishment,
+        etablissementId: dbEtabIdByName[tsEstablishment],
         gradeLevel: tsGradeLevel,
         branch: tsBranch || undefined,
         className: tsClassName || undefined,
@@ -208,7 +223,20 @@ export default function TimeSheetModal({
       s.timeSheetId === tsId ? { ...s, timeSheetId: undefined } : s
     );
     onSaveTimeSheet(remaining);
-    onUpdateStudents(updatedStudents);
+    if (onAssignStudents) {
+      // Désassignation ciblée : /api/student-years (time_sheet_id → NULL),
+      // l'élève n'est PAS renvoyé entier.
+      const unassignIds = students.filter(s => s.timeSheetId === tsId).map(s => s.id);
+      onAssignStudents(
+        tsId,
+        students.find(s => s.timeSheetId === tsId)?.academicYear || '',
+        undefined,
+        [],
+        unassignIds
+      );
+    } else {
+      onUpdateStudents(updatedStudents);
+    }
     toast.success('تم حذف جدول التوقيت');
     setDeleteConfirmId(null);
     if (editingId === tsId) resetForm();
@@ -307,7 +335,7 @@ export default function TimeSheetModal({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                   >
                     {GRADE_LEVELS.map(g => (
-                      <option key={g} value={g}>{g}</option>
+                      <option key={g} value={g}>{gradeLabelBilingual(g)}</option>
                     ))}
                   </select>
                 </div>

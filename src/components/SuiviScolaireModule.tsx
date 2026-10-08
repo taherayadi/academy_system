@@ -657,7 +657,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       </div>
 
       {/* Filter and Academic Year Bar (NO TOP MONTH SELECTOR) */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row gap-3 items-center justify-between no-print">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between no-print">
         <div className="relative w-full sm:w-80">
           <Search className="absolute right-3.5 top-3 h-4 w-4 text-slate-400" />
           <input 
@@ -684,7 +684,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         </div>
 
         {showSchoolLevel && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Filter className="h-4 w-4 text-brand-600 shrink-0" />
           <select
             value={gradeFilter}

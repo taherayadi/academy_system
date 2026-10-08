@@ -383,7 +383,7 @@ CREATE TABLE etude_slots (
   start_time  TEXT NOT NULL,
   end_time    TEXT NOT NULL,
   grade_level TEXT NOT NULL,
-  teacher_id  TEXT NOT NULL REFERENCES staff(id) ON DELETE RESTRICT,
+  teacher_id  TEXT REFERENCES staff(id) ON DELETE SET NULL,
   is_extra    INTEGER NOT NULL DEFAULT 0 CHECK (is_extra IN (0,1)),
   CHECK (end_time > start_time)
 ) STRICT;
@@ -740,6 +740,7 @@ CREATE TABLE student_time_sheets (
   name              TEXT NOT NULL DEFAULT '',
   school_year       TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
   establishment_name TEXT NOT NULL,
+  etablissement_id  TEXT REFERENCES etablissements(id) ON DELETE SET NULL,
   grade_level       TEXT NOT NULL,
   branch            TEXT,
   class_name        TEXT,

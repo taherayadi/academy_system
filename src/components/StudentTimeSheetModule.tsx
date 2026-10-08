@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Plus, Trash2, Users, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { Student, StudentTimeSheet, StudentAttendanceRecord, EXTERNAL_GRADE_OPTIONS } from '../types';
+import { Student, StudentTimeSheet, StudentAttendanceRecord, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual } from '../types';
 import { useToast } from './Toast';
 import StudentAttendanceModule from './StudentAttendanceModule';
 import { AnimatePresence, motion } from 'motion/react';
@@ -14,6 +14,11 @@ interface StudentTimeSheetModuleProps {
   onUpdateStudentTimeSheets: (sheets: StudentTimeSheet[]) => void;
   onUpdateStudent: (student: Student) => void;
   onUpdateStudents: (students: Student[]) => void;
+  /**
+   * Assignation ciblée via /api/student-years (table student_years) :
+   * seuls les studentId concernés sont envoyés, jamais la liste d'élèves entière.
+   */
+  onAssignStudents?: (timeSheetId: string, schoolYear: string, grade: string | undefined, assign: string[], unassign: string[]) => void;
   centerType?: string; // 'jardin' → Pointage Élèves, 'formation' → Jd. Horaires
   studentAttendance: StudentAttendanceRecord[];
   onUpdateStudentAttendance: (records: StudentAttendanceRecord[]) => void;
@@ -25,6 +30,7 @@ export default function StudentTimeSheetModule({
   onUpdateStudentTimeSheets,
   onUpdateStudent,
   onUpdateStudents,
+  onAssignStudents,
   centerType,
   studentAttendance,
   onUpdateStudentAttendance,
@@ -141,7 +147,7 @@ export default function StudentTimeSheetModule({
                   className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-600/30 cursor-pointer"
                 >
                   <option value="">كل المستويات</option>
-                  {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  {EXTERNAL_GRADE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{gradeLabelBilingual(opt.value)}</option>)}
                 </select>
               </div>
             </div>
@@ -178,7 +184,7 @@ export default function StudentTimeSheetModule({
                                     {ts.establishmentName} - {ts.schoolYear}
                                   </p>
                                   <p className="text-xs text-slate-500 font-bold mt-1">
-                                    {ts.gradeLevel}{ts.branch ? ` / ${ts.branch}` : ''}{ts.className ? ` / ${ts.className}` : ''}
+                                    {gradeLabelBilingual(ts.gradeLevel)}{ts.branch ? ` / ${ts.branch}` : ''}{ts.className ? ` / ${ts.className}` : ''}
                                   </p>
                                   <p className="text-xs text-brand-600 font-bold mt-1 flex items-center gap-1">
                                     <Users className="h-3 w-3" />
@@ -282,6 +288,7 @@ export default function StudentTimeSheetModule({
           onUpdateStudents={(updated) => {
             for (const u of updated) onUpdateStudent(u);
           }}
+          onAssignStudents={onAssignStudents}
           onClose={() => { setIsTimeSheetModalOpen(false); setEditingTimeSheet(null); }}
           editingTimeSheet={editingTimeSheet}
         />
@@ -293,18 +300,39 @@ export default function StudentTimeSheetModule({
           students={students}
           onAssign={(studentIds) => {
             const currentStudents = studentsRef.current;
-            const updatedStudents = currentStudents.map(s =>
-              studentIds.includes(s.id) ? { ...s, timeSheetId: assignTimeSheet.id } : s
-            );
-            onUpdateStudents(updatedStudents);
+            if (onAssignStudents) {
+              onAssignStudents(
+                assignTimeSheet.id,
+                assignTimeSheet.schoolYear,
+                currentStudents.find(s => studentIds.includes(s.id))?.grade,
+                studentIds,
+                []
+              );
+            } else {
+              // Fallback legacy : ancien PUT /students complet (tests).
+              const updatedStudents = currentStudents.map(s =>
+                studentIds.includes(s.id) ? { ...s, timeSheetId: assignTimeSheet.id } : s
+              );
+              onUpdateStudents(updatedStudents);
+            }
             toast.success(`تم إسناد جدول التوقيت لـ ${studentIds.length} تلميذ`);
           }}
           onUnassign={(studentIds) => {
-            const currentStudents = studentsRef.current;
-            const updatedStudents = currentStudents.map(s =>
-              studentIds.includes(s.id) ? { ...s, timeSheetId: undefined } : s
-            );
-            onUpdateStudents(updatedStudents);
+            if (onAssignStudents) {
+              const currentStudents = studentsRef.current;
+              onAssignStudents(
+                assignTimeSheet.id,
+                assignTimeSheet.schoolYear,
+                currentStudents.find(s => studentIds.includes(s.id))?.grade,
+                [],
+                studentIds
+              );
+            } else {
+              const updatedStudents = studentsRef.current.map(s =>
+                studentIds.includes(s.id) ? { ...s, timeSheetId: undefined } : s
+              );
+              onUpdateStudents(updatedStudents);
+            }
           }}
           onClose={() => { setIsAssignModalOpen(false); setAssignTimeSheet(null); }}
         />
@@ -340,11 +368,26 @@ export default function StudentTimeSheetModule({
                   onClick={() => {
                     const currentStudents = studentsRef.current;
                     const remaining = studentTimeSheets.filter(t => t.id !== deleteTimeSheet.id);
-                    const updatedStudents = currentStudents.map(s =>
-                      s.timeSheetId === deleteTimeSheet.id ? { ...s, timeSheetId: undefined } : s
-                    );
+                    const unassignIds = currentStudents
+                      .filter(s => s.timeSheetId === deleteTimeSheet.id)
+                      .map(s => s.id);
                     onUpdateStudentTimeSheets(remaining);
-                    onUpdateStudents(updatedStudents);
+                    if (onAssignStudents) {
+                      // Désassignation ciblée : /api/student-years (time_sheet_id → NULL).
+                      onAssignStudents(
+                        deleteTimeSheet.id,
+                        deleteTimeSheet.schoolYear,
+                        undefined,
+                        [],
+                        unassignIds
+                      );
+                    } else {
+                      // Fallback legacy : ancien PUT /students complet (tests).
+                      const updatedStudents = currentStudents.map(s =>
+                        s.timeSheetId === deleteTimeSheet.id ? { ...s, timeSheetId: undefined } : s
+                      );
+                      onUpdateStudents(updatedStudents);
+                    }
                     toast.success('تم حذف جدول التوقيت');
                     setDeleteTimeSheet(null);
                   }}

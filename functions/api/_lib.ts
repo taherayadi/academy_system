@@ -792,7 +792,9 @@ export async function ensureCenterSubjects(db: D1Database, centerId: string): Pr
 
 export async function readSubjects(db: D1Database, centerId: string): Promise<any[]> {
   await ensureCenterSubjects(db, centerId);
-  const res = await db.prepare('SELECT id, name FROM subjects WHERE center_id = ? ORDER BY name COLLATE NOCASE').bind(centerId).all();
+  // Comme readSettings : les matières du centre + le catalogue global ('')
+  // (des lignes pré-migration peuvent référencer le catalogue global).
+  const res = await db.prepare("SELECT id, name FROM subjects WHERE center_id = ? OR center_id = '' ORDER BY name COLLATE NOCASE").bind(centerId).all();
   return res.results || [];
 }
 
@@ -1130,7 +1132,7 @@ function buildSlotsStmts(db: D1Database, slots: any[], centerId: string = DEFAUL
   const stmts: D1PreparedStatement[] = [];
   for (const s of slots || []) {
     const weekday = SLOT_DAY_NUMBERS[str(s.day)] || 1;
-    stmts.push(db.prepare('INSERT INTO etude_slots (id, center_id, weekday, start_time, end_time, grade_level, teacher_id, is_extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, centerId, weekday, s.startTime, s.endTime, s.gradeLevel, s.teacherId, s.isExtra ? 1 : 0));
+    stmts.push(db.prepare('INSERT INTO etude_slots (id, center_id, weekday, start_time, end_time, grade_level, teacher_id, is_extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, centerId, weekday, s.startTime, s.endTime, s.gradeLevel, s.teacherId ? str(s.teacherId) : null, s.isExtra ? 1 : 0));
     for (const sid of s.enrolledStudentIds || []) stmts.push(db.prepare('INSERT INTO slot_enrollments (slot_id, student_id) VALUES (?, ?)').bind(s.id, sid));
   }
   return stmts;
@@ -1523,10 +1525,10 @@ export async function writeRevisionSeances(db: D1Database, seances: any[], cente
 // ===========================================================================
 
 export async function readStudentTimeSheets(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
-  return (await db.prepare('SELECT * FROM student_time_sheets WHERE center_id = ?').bind(centerId).all()).results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), establishmentName: str(r.establishment_name), gradeLevel: str(r.grade_level), branch: r.branch == null ? undefined : str(r.branch), className: r.class_name == null ? undefined : str(r.class_name), weeklySchedule: parseJson(r.weekly_schedule, []), createdAt: str(r.created_at), updatedAt: str(r.updated_at) }));
+  return (await db.prepare('SELECT * FROM student_time_sheets WHERE center_id = ?').bind(centerId).all()).results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), establishmentName: str(r.establishment_name), etablissementId: r.etablissement_id == null ? undefined : str(r.etablissement_id), gradeLevel: str(r.grade_level), branch: r.branch == null ? undefined : str(r.branch), className: r.class_name == null ? undefined : str(r.class_name), weeklySchedule: parseJson(r.weekly_schedule, []), createdAt: str(r.created_at), updatedAt: str(r.updated_at) }));
 }
 
-function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID, etabIds?: Record<string, string | null>): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   // created_at/updated_at sont des colonnes STRICT INTEGER : le client envoie
   // soit un ISO « 2026-10-07T… » (nouveau sheet), soit la valeur GET en
@@ -1551,14 +1553,30 @@ function buildStudentTimeSheetsStmts(db: D1Database, sheets: any[], centerId: st
     if (s.establishmentName && String(s.establishmentName).trim()) {
       stmts.push(db.prepare('INSERT OR IGNORE INTO etablissements (id, center_id, name) VALUES (?, ?, ?)').bind(crypto.randomUUID(), centerId, String(s.establishmentName).trim()));
     }
+    // Lien établissement : id client s'il est valide pour ce centre,
+    // sinon résolution par nom dans la map déjà résolue par l'appelant.
+    if (etabIds) {
+      const byName = s.establishmentName ? etabIds[String(s.establishmentName).trim()] : null;
+      const etabId = (s.etablissementId && etabIds['id:' + str(s.etablissementId)]) || byName || null;
+      if (etabId) {
+        stmts.push(db.prepare('UPDATE student_time_sheets SET etablissement_id = ? WHERE id = ? AND center_id = ?').bind(etabId, s.id, centerId));
+      }
+    }
   }
   return stmts;
 }
 
 export async function writeStudentTimeSheets(db: D1Database, sheets: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  // Résolution nom → id établissement (table centralisée, scope centre)
+  // une seule fois pour tout le lot, comme resolveSubjectIds pour les notes.
+  const etabIds = await resolveEtablissementIds(db, centerId, (sheets || []).map((s: any) => s.establishmentName));
+  // id:… → client peut transmettre directement l'uuid d'un établissement connu.
+  for (const s of sheets || []) {
+    if (s.etablissementId) etabIds['id:' + str(s.etablissementId)] = str(s.etablissementId);
+  }
   const stmts = [
     db.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(centerId),
-    ...buildStudentTimeSheetsStmts(db, sheets, centerId)
+    ...buildStudentTimeSheetsStmts(db, sheets, centerId, etabIds)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
@@ -2403,4 +2421,121 @@ export async function deleteSingleSuiviNote(db: D1Database, noteId: string, cent
   await db.prepare(
     'DELETE FROM suivi_notes WHERE id = ? AND student_id IN (SELECT id FROM students WHERE center_id = ?)'
   ).bind(noteId, centerId).run();
+}
+
+
+// ===========================================================================
+// STUDENT YEARS — endpoint dédié /api/student-years
+// Mutations ciblées de la table student_years (grade / établissement /
+// emploi du temps par année scolaire) : l'élève n'est PAS renvoyé entier,
+// comme pour /api/payments et /api/suivi-notes.
+// ===========================================================================
+
+export interface StudentYearInput {
+  studentId: string;
+  schoolYear: string;
+  grade?: string;
+  etablissementId?: string | null;
+  timeSheetId?: string | null;
+}
+
+const YEAR_GLOB = /^\d{4}\/\d{4}$/;
+
+/**
+ * GET /api/student-years — toutes les lignes student_years du centre
+ * (jointure établissement pour le nom d'affichage).
+ */
+export async function readStudentYears(db: D1Database, centerId: string): Promise<any[]> {
+  const res = await db.prepare(
+    'SELECT y.student_id, y.school_year, y.grade, y.etablissement_id, y.time_sheet_id, e.name AS etablissement_name FROM student_years y JOIN students s ON y.student_id = s.id LEFT JOIN etablissements e ON e.id = y.etablissement_id WHERE s.center_id = ? ORDER BY y.school_year, y.student_id'
+  ).bind(centerId).all();
+  return (res.results || []).map((r: any) => ({
+    studentId: str(r.student_id),
+    schoolYear: str(r.school_year),
+    grade: str(r.grade),
+    etablissementId: r.etablissement_id == null ? undefined : str(r.etablissement_id),
+    etablissementName: r.etablissement_name == null ? undefined : str(r.etablissement_name),
+    timeSheetId: r.time_sheet_id == null ? undefined : str(r.time_sheet_id)
+  }));
+}
+
+async function assertStudentYearRef(db: D1Database, input: StudentYearInput, centerId: string): Promise<void> {
+  if (!input || typeof input !== 'object' || !str(input.studentId)) throw new Error('معرّف التلميذ مطلوب.');
+  if (!YEAR_GLOB.test(str(input.schoolYear))) throw new Error('السنة الدراسية غير صالحة (مثال: 2026/2027).');
+  const owner = await db.prepare('SELECT 1 AS ok FROM students WHERE id = ? AND center_id = ?').bind(str(input.studentId), centerId).first<any>();
+  if (!owner) throw new Error('التلميذ غير موجود في هذا المركز.');
+  if (input.timeSheetId) {
+    const ts = await db.prepare('SELECT 1 AS ok FROM student_time_sheets WHERE id = ? AND center_id = ?').bind(str(input.timeSheetId), centerId).first<any>();
+    if (!ts) throw new Error('جدول التوقيت غير موجود في هذا المركز.');
+  }
+  if (input.etablissementId) {
+    const et = await db.prepare('SELECT 1 AS ok FROM etablissements WHERE id = ? AND center_id = ?').bind(str(input.etablissementId), centerId).first<any>();
+    if (!et) throw new Error('المؤسسة غير موجودة في هذا المركز.');
+  }
+}
+
+/** Insère (ou met à jour) UNE ligne student_year. */
+export async function upsertSingleStudentYear(db: D1Database, input: StudentYearInput, centerId: string): Promise<void> {
+  await assertStudentYearRef(db, input, centerId);
+  // grade est NOT NULL : absent/'' → '' à l'INSERT (fallback), et le DO UPDATE
+  // garde la valeur existante quand excluded.grade = '' (upsert partiel).
+  await db.prepare(
+    `INSERT INTO student_years (student_id, center_id, school_year, grade, etablissement_id, time_sheet_id)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (student_id, school_year) DO UPDATE SET
+       grade = CASE WHEN excluded.grade <> '' THEN excluded.grade ELSE student_years.grade END,
+       etablissement_id = COALESCE(excluded.etablissement_id, student_years.etablissement_id),
+       time_sheet_id = COALESCE(excluded.time_sheet_id, student_years.time_sheet_id)`
+  ).bind(
+    str(input.studentId), centerId, str(input.schoolYear),
+    input.grade != null && input.grade !== '' ? str(input.grade) : '',
+    input.etablissementId ? str(input.etablissementId) : null,
+    input.timeSheetId ? str(input.timeSheetId) : null
+  ).run();
+}
+
+/**
+ * Mise à jour partielle d'une ligne student_year existante. Sémantique tri-état :
+ * champ ABSENT de l'objet → inchangé ; champ PRÉSENT → réécrit tel quel
+ * (null/'' = effacer, sauf grade NOT NULL où '' est ignoré). COALESCE ne peut
+ * pas exprimer « effacer avec null » (COALESCE(NULL, col) garde l'ancien),
+ * donc la clause SET est construite dynamiquement — comme updateSinglePayment.
+ */
+export async function updateSingleStudentYear(db: D1Database, input: StudentYearInput, centerId: string): Promise<void> {
+  await assertStudentYearRef(db, input, centerId);
+  const has = (k: keyof StudentYearInput) => Object.prototype.hasOwnProperty.call(input, k);
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (has('grade') && input.grade && str(input.grade)) {
+    sets.push('grade = ?');
+    binds.push(str(input.grade));
+  }
+  if (has('etablissementId')) {
+    sets.push('etablissement_id = ?');
+    binds.push(input.etablissementId ? str(input.etablissementId) : null);
+  }
+  if (has('timeSheetId')) {
+    sets.push('time_sheet_id = ?');
+    binds.push(input.timeSheetId ? str(input.timeSheetId) : null);
+  }
+  if (sets.length === 0) throw new Error('لا توجد حقول للتعديل.');
+  const res = await db.prepare(
+    `UPDATE student_years SET ${sets.join(', ')}
+     WHERE student_id = ? AND school_year = ?
+       AND student_id IN (SELECT id FROM students WHERE center_id = ?)`
+  ).bind(
+    ...binds,
+    str(input.studentId), str(input.schoolYear), centerId
+  ).run();
+  if (!res.meta.changes) throw new Error('سنة التلميذ غير موجودة في هذا المركز.');
+}
+
+/** Supprime UNE ligne student_year (désinscription de l'élève pour une année). */
+export async function deleteSingleStudentYear(db: D1Database, studentId: string, schoolYear: string, centerId: string): Promise<void> {
+  if (!str(studentId)) throw new Error('معرّف التلميذ مطلوب.');
+  if (!YEAR_GLOB.test(str(schoolYear))) throw new Error('السنة الدراسية غير صالحة (مثال: 2026/2027).');
+  const res = await db.prepare(
+    'DELETE FROM student_years WHERE student_id = ? AND school_year = ? AND student_id IN (SELECT id FROM students WHERE center_id = ?)'
+  ).bind(str(studentId), str(schoolYear), centerId).run();
+  if (!res.meta.changes) throw new Error('سنة التلميذ غير موجودة في هذا المركز.');
 }

@@ -14,7 +14,8 @@ import {
   StudentTimeSheet,
   Student,
   TimesheetDay,
-  TIMESHEET_DAYS
+  TIMESHEET_DAYS,
+  gradeLabelBilingual
 } from '../types';
 import { useToast } from './Toast';
 
@@ -128,7 +129,7 @@ export default function AssignTimeSheetModal({
           <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 mb-4">
             <p className="text-xs font-bold text-brand-800">
               <span className="font-black">{timeSheet.establishmentName} - {timeSheet.schoolYear}</span>
-              {' '}— {timeSheet.gradeLevel}
+              {' '}— {gradeLabelBilingual(timeSheet.gradeLevel)}
               {timeSheet.branch ? ` / ${timeSheet.branch}` : ''}
               {timeSheet.className ? ` / ${timeSheet.className}` : ''}
             </p>
@@ -190,7 +191,7 @@ export default function AssignTimeSheetModal({
                   >
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-bold text-slate-900">{st.firstName} {st.lastName}</span>
-                      <span className="text-[10px] text-slate-400 mr-2 ml-2">{st.grade}</span>
+                      <span className="text-[10px] text-slate-400 mr-2 ml-2">{gradeLabelBilingual(st.grade)}</span>
                     </div>
                     <button
                       onClick={() => handleRemoveStudent(st.id, `${st.firstName} ${st.lastName}`)}
@@ -249,7 +250,7 @@ export default function AssignTimeSheetModal({
                       />
                       <div className="flex-1 min-w-0">
                         <span className="text-xs font-bold text-slate-900">{st.firstName} {st.lastName}</span>
-                        <span className="text-[10px] text-slate-400 mr-2 ml-2">{st.grade}</span>
+                        <span className="text-[10px] text-slate-400 mr-2 ml-2">{gradeLabelBilingual(st.grade)}</span>
                       </div>
                     </label>
                   ))
