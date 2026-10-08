@@ -33,6 +33,7 @@ import {
   getCurrentAcademicYear,
   DEFAULT_ACADEMIC_YEARS,
   EXTERNAL_GRADE_LEVELS,
+  gradeLabelBilingual,
   getTimesheetBranches
 } from '../types';
 import ConfirmDialog from './ConfirmDialog';
@@ -627,7 +628,7 @@ export default function FormationModule({
             >
               <option value="all">المستوى: الكل</option>
               {EXTERNAL_GRADE_LEVELS.map(g => (
-                <option key={g.level} value={g.level}>{g.level}</option>
+                <option key={g.level} value={g.level}>{gradeLabelBilingual(g.level)}</option>
               ))}
             </select>
 
@@ -1222,7 +1223,7 @@ export default function FormationModule({
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {EXTERNAL_GRADE_LEVELS.map(g => (
-                        <option key={g.level} value={g.level}>{g.level}</option>
+                        <option key={g.level} value={g.level}>{gradeLabelBilingual(g.level)}</option>
                       ))}
                     </select>
                   </div>

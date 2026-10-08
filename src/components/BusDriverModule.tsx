@@ -28,6 +28,7 @@ import {
   TIMESHEET_DAYS, 
   TimesheetDay 
 } from '../types';
+import { gradeLabelBilingual } from '../types';
 import logo from '../assets/logo.png';
 
 interface BusDriverModuleProps {
@@ -841,7 +842,7 @@ export default function BusDriverModule({
                                       </td>
                                       <td className="p-3">
                                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md font-bold text-[11px]">
-                                          {p.gradeLevel}
+                                          {gradeLabelBilingual(p.gradeLevel)}
                                         </span>
                                       </td>
                                       <td className="p-3">
@@ -961,7 +962,7 @@ export default function BusDriverModule({
                       <div key={st.id} className="py-2 flex items-center justify-between text-xs">
                         <div>
                           <span className="font-black text-slate-800 block">{st.lastName} {st.firstName}</span>
-                          <span className="text-[10px] text-slate-400 font-bold">{st.grade}</span>
+                          <span className="text-[10px] text-slate-400 font-bold">{gradeLabelBilingual(st.grade)}</span>
                         </div>
                         <span className="font-mono text-slate-600 text-[11px]" dir="ltr">
                           {st.father?.phoneMobile || st.mother?.phoneMobile || '—'}
@@ -1106,7 +1107,7 @@ export default function BusDriverModule({
                                 {st.lastName} {st.firstName}
                               </span>
                               <span className="text-[10px] text-slate-400 font-bold block truncate">
-                                {st.grade} — {st.etablissement || 'مؤسسة غير محددة'}
+                                {gradeLabelBilingual(st.grade)} — {st.etablissement || 'مؤسسة غير محددة'}
                               </span>
                             </div>
                             {checked && <CheckCircle2 className="h-4 w-4 text-brand-600 shrink-0" />}
@@ -1237,7 +1238,7 @@ export default function BusDriverModule({
                                 <td className="p-2 border-l border-slate-300 font-black text-slate-950">
                                   {p.student.lastName} {p.student.firstName}
                                 </td>
-                                <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{p.gradeLevel}</td>
+                                <td className="p-2 border-l border-slate-300 font-bold text-slate-700">{gradeLabelBilingual(p.gradeLevel)}</td>
                                 <td className="p-2 border-l border-slate-300 font-black text-slate-900">{p.etablissement}</td>
                                 <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
                                   {p.student.father?.phoneMobile || p.student.mother?.phoneMobile || '—'}

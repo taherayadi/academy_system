@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Clock } from 'lucide-react';
-import { StudentTimeSheet, TIMESHEET_DAYS, getTimeSlotsForDay } from '../types';
+import { StudentTimeSheet, TIMESHEET_DAYS, getTimeSlotsForDay, gradeLabelBilingual } from '../types';
 
 interface TimeSheetViewDialogProps {
   key?: React.Key;
@@ -36,7 +36,7 @@ export default function TimeSheetViewDialog({ timeSheet, studentName, onClose }:
             <div>
               <h3 className="text-sm font-black">{timeSheet.establishmentName} — {timeSheet.schoolYear}</h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {timeSheet.gradeLevel}
+                {gradeLabelBilingual(timeSheet.gradeLevel)}
                 {timeSheet.branch ? ` / ${timeSheet.branch}` : ''}
                 {timeSheet.className ? ` / ${timeSheet.className}` : ''}
               </p>

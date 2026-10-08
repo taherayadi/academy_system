@@ -937,19 +937,6 @@ export const EXTERNAL_GRADE_LEVELS: { level: string; branches: string[] }[] = [
 ];
 
 
-// Build a grade list ("Primaire 1ère", ..., "Baccalauréat") for dropdowns — same labels as student fiche
-export function buildExternalGradeOptions(): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = [];
-  EXTERNAL_GRADE_LEVELS.forEach(({ level }) => {
-    options.push({ value: level, label: level.replace(' Année', '') });
-  });
-  return options;
-}
-
-
-export const EXTERNAL_GRADE_OPTIONS = buildExternalGradeOptions();
-
-
 // Arabic labels for the Tunisian grade levels stored in French (« Primaire 1ère »…).
 // Used for bilingual display (عربي + français) in the timesheet surfaces; the stored
 // values remain the French strings so existing rows keep matching.
@@ -970,12 +957,29 @@ export const GRADE_LABELS_AR: Record<string, string> = {
 };
 
 
-/** « السنة الأولى ابتدائي (Primaire 1ère) » — falls back to the raw value. */
+/** « السنة الأولى ابتدائي (Primaire 1ère) » — falls back to the raw value.
+ *  Accepts both stored forms (« Primaire 1ère » and « Primaire 1ère Année »);
+ *  the short French form is always shown in parentheses. */
 export function gradeLabelBilingual(grade?: string | null): string {
   if (!grade) return '';
-  const ar = GRADE_LABELS_AR[grade];
-  return ar ? `${ar} (${grade})` : grade;
+  const short = grade.replace(' Année', '');
+  const ar = GRADE_LABELS_AR[short] ?? GRADE_LABELS_AR[grade];
+  return ar ? `${ar} (${short})` : grade;
 }
+
+
+// Build a grade list for dropdowns — values stay the stored French strings,
+// labels are bilingual (عربي + français) everywhere in the app.
+export function buildExternalGradeOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [];
+  EXTERNAL_GRADE_LEVELS.forEach(({ level }) => {
+    options.push({ value: level, label: gradeLabelBilingual(level) });
+  });
+  return options;
+}
+
+
+export const EXTERNAL_GRADE_OPTIONS = buildExternalGradeOptions();
 
 
 // ─── Student TimeSheet ────────────────────────────────────────────────

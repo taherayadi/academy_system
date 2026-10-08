@@ -25,7 +25,7 @@ import {
   Lock,
   Cookie
 } from 'lucide-react';
-import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
+import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
 import { hasSchoolLevel } from '../utils/centerType';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -644,7 +644,7 @@ export default function StudentRegistrationModule({
                   <div className="flex items-center gap-1.5">
                     {showSchoolLevel && (
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-700 bg-brand-600/[0.06] border border-brand-600/20 px-2.5 py-0.5 rounded-md">
-                      {st.grade}
+                      {gradeLabelBilingual(st.grade)}
                     </span>
                     )}
                     <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
@@ -2018,7 +2018,7 @@ export default function StudentRegistrationModule({
 
                       return importableStudents.map(st => (
                         <option key={st.id} value={st.id}>
-                          {st.firstName} {st.lastName} ({st.grade}) — سنة: {st.academicYear || getCurrentAcademicYear()}
+                          {st.firstName} {st.lastName} ({gradeLabelBilingual(st.grade)}) — سنة: {st.academicYear || getCurrentAcademicYear()}
                         </option>
                       ));
                     })()}

@@ -24,7 +24,7 @@ import {
   Coffee,
   Cookie
 } from 'lucide-react';
-import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType, paymentMethodLabel } from '../types';
+import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType, paymentMethodLabel, gradeLabelBilingual } from '../types';
 import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent, ensureGouterAttendanceForDate, academicMonthPrefix } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
@@ -1372,7 +1372,7 @@ export default function MealsModule({
                         <td className="p-4 font-extrabold text-slate-900">
                           <div>
                             <span className="block font-black text-slate-900">{st.firstName} {st.lastName}</span>
-                            <span className="text-[10px] text-slate-400">{st.grade}</span>
+                            <span className="text-[10px] text-slate-400">{gradeLabelBilingual(st.grade)}</span>
                           </div>
                         </td>
 
@@ -1532,7 +1532,7 @@ export default function MealsModule({
                       <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
                         <div>
                           <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
-                          <p className="text-[10px] text-slate-400">{st.grade} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                          <p className="text-[10px] text-slate-400">{gradeLabelBilingual(st.grade)} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
                         </div>
                         <button
                           onClick={() => handleEnrollStudent(st)}
@@ -2222,7 +2222,7 @@ export default function MealsModule({
                       <tr key={st.id} className="hover:bg-slate-50/80 transition">
                         <td className="p-3.5 font-bold">
                           <span className="text-slate-900 block">{st.firstName} {st.lastName}</span>
-                          <span className="text-[10px] text-slate-400">{st.grade}</span>
+                          <span className="text-[10px] text-slate-400">{gradeLabelBilingual(st.grade)}</span>
                         </td>
 
                         {/* Lunch Column */}
@@ -2828,7 +2828,7 @@ export default function MealsModule({
                             >
                               <div className="flex-1">
                                 <p className="font-extrabold text-xs text-slate-900">{s.firstName} {s.lastName}</p>
-                                <p className="text-[10px] text-slate-400">{s.grade} — ولي الأمر: <span dir="ltr">{s.father?.phoneMobile || s.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                                <p className="text-[10px] text-slate-400">{gradeLabelBilingual(s.grade)} — ولي الأمر: <span dir="ltr">{s.father?.phoneMobile || s.mother?.phoneMobile || 'لا يوجد'}</span></p>
                                 {refundedForMonth(s) && (
                                   <span className="inline-block mt-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded-md border border-amber-200">
                                     مسترجع الشهر الحالي — يُدفع عند الاستلام

@@ -49,7 +49,7 @@ for (let h = 7; h <= 20; h++) {
 
 function getSheetDisplayName(ts: StudentTimeSheet): string {
   let name = `${ts.establishmentName} - ${ts.schoolYear}`;
-  if (ts.gradeLevel) name += ` / ${ts.gradeLevel}`;
+  if (ts.gradeLevel) name += ` / ${gradeLabelBilingual(ts.gradeLevel)}`;
   if (ts.branch) name += ` / ${ts.branch}`;
   if (ts.className) name += ` / ${ts.className}`;
   return name;

@@ -19,7 +19,7 @@ import {
   X,
   ChevronDown
 } from 'lucide-react';
-import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, getFeesForYear, EXTERNAL_GRADE_OPTIONS, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
+import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, getFeesForYear, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { fetchSubjectsApi, createSubjectApi } from '../api';
@@ -865,7 +865,7 @@ export default function ExternalCoursesModule({
                       <span className="block w-fit mt-1.5 text-[10px] font-black uppercase text-brand-700 bg-brand-600/10 px-2 py-0.5 rounded-md">
                         {c.subject}
                       </span>
-                      <h4 className="text-base font-black text-slate-900 mt-1.5">{c.gradeLevel}</h4>
+                      <h4 className="text-base font-black text-slate-900 mt-1.5">{gradeLabelBilingual(c.gradeLevel)}</h4>
                     </div>
                     
                     <button 
@@ -923,7 +923,7 @@ export default function ExternalCoursesModule({
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <span className="text-xs font-bold text-brand-700 whitespace-nowrap">{selectedCourse.trimester} — {selectedCourse.schoolYear}</span>
-                  <h3 className="text-2xl font-black text-slate-900">{selectedCourse.gradeLevel} — {selectedCourse.subject}</h3>
+                  <h3 className="text-2xl font-black text-slate-900">{gradeLabelBilingual(selectedCourse.gradeLevel)} — {selectedCourse.subject}</h3>
                 </div>
               </div>
 
@@ -1683,7 +1683,7 @@ export default function ExternalCoursesModule({
                 </div>
                 {selectedCourse && (
                   <p className="text-[10px] text-slate-400 font-bold mt-1">
-                    الكورس الحالي: {selectedCourse.trimester} — {selectedCourse.gradeLevel} {selectedCourse.subject} — اضغط «إرفاق بالكورس» لتسجيل تلميذ مسبق.
+                    الكورس الحالي: {selectedCourse.trimester} — {gradeLabelBilingual(selectedCourse.gradeLevel)} {selectedCourse.subject} — اضغط «إرفاق بالكورس» لتسجيل تلميذ مسبق.
                   </p>
                 )}
               </div>
@@ -1934,7 +1934,7 @@ export default function ExternalCoursesModule({
                     <div className="space-y-3">
                       <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                         <span className="text-slate-500 font-bold">اسم التلميذ(ة):</span>
-                        <span className="font-extrabold text-slate-900">{student?.studentName || studentId} ({selectedCourse.gradeLevel})</span>
+                        <span className="font-extrabold text-slate-900">{student?.studentName || studentId} ({gradeLabelBilingual(selectedCourse.gradeLevel)})</span>
                       </div>
 
                       <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
@@ -1999,7 +1999,7 @@ export default function ExternalCoursesModule({
                   <UserPlus className="h-5 w-5 text-brand-600" />
                   <div>
                     <h3 className="text-lg font-black">تسجيل تلميذ خارجي</h3>
-                    <p className="text-xs text-slate-300">في الكورس: {selectedCourse.subject} — {selectedCourse.gradeLevel}</p>
+                    <p className="text-xs text-slate-300">في الكورس: {selectedCourse.subject} — {gradeLabelBilingual(selectedCourse.gradeLevel)}</p>
                   </div>
                 </div>
                 <button
@@ -2119,7 +2119,7 @@ export default function ExternalCoursesModule({
         message={
           courseDeletion ? (
             <>
-              هل أنت متأكد من حذف الكورس <strong>{courseDeletion.subject} — {courseDeletion.gradeLevel}</strong> نهائياً؟
+              هل أنت متأكد من حذف الكورس <strong>{courseDeletion.subject} — {gradeLabelBilingual(courseDeletion.gradeLevel)}</strong> نهائياً؟
               <p className="mt-2 text-[11px] text-slate-400 font-bold">سيتم حذف الكورس وجميع حصصه.</p>
             </>
           ) : undefined
@@ -2131,7 +2131,7 @@ export default function ExternalCoursesModule({
             onUpdateCourses(courses.filter(c => c.id !== deletedId));
             onUpdateSessions(sessions.filter(s => s.courseId !== deletedId));
             if (selectedCourse?.id === deletedId) setSelectedCourse(courses.find(c => c.id !== deletedId) || null);
-            toast.success(`تم حذف الكورس (${courseDeletion.subject} — ${courseDeletion.gradeLevel}) نهائياً.`);
+            toast.success(`تم حذف الكورس (${courseDeletion.subject} — ${gradeLabelBilingual(courseDeletion.gradeLevel)}) نهائياً.`);
             setCourseDeletion(null);
           }
         }}

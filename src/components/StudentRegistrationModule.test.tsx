@@ -91,7 +91,7 @@ describe('StudentRegistrationModule type-aware fields', () => {
 
     expect(screen.getByText(/المستوى الدراسي/)).toBeTruthy();
     expect(screen.getAllByText(/المؤسسة التعليمية/).length).toBeGreaterThan(0);
-    const select = screen.getByDisplayValue('Lycée 1ère') as unknown as HTMLSelectElement;
+    const select = screen.getByDisplayValue('السنة الأولى ثانوي (Lycée 1ère)') as unknown as HTMLSelectElement;
     expect(select.required).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe('StudentRegistrationModule type-aware fields', () => {
 
   it('shows the grade badge in list cards for a formation center', () => {
     renderModule({ centerType: 'formation', students: [makeStudent()] });
-    expect(screen.getAllByText('Collège 7ème Année').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('السابعة أساسي (Collège 7ème)').length).toBeGreaterThan(0);
     expect(screen.getByText('كل المستويات')).toBeTruthy();
   });
 });

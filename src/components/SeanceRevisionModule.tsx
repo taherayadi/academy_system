@@ -16,7 +16,7 @@ import {
   ClipboardCheck,
   ChevronDown
 } from 'lucide-react';
-import { RevisionSeance, RevisionSeanceStudent, CenterSettings, EXTERNAL_GRADE_OPTIONS, getAppSubjects, getCurrentAcademicYear } from '../types';
+import { RevisionSeance, RevisionSeanceStudent, CenterSettings, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { fetchSubjectsApi, createSubjectApi } from '../api';
@@ -338,7 +338,7 @@ export default function SeanceRevisionModule({
                           {r.subject}
                         </span>
                       </div>
-                      <h4 className="text-base font-black text-slate-900">{r.gradeLevel}</h4>
+                      <h4 className="text-base font-black text-slate-900">{gradeLabelBilingual(r.gradeLevel)}</h4>
                       <p className="text-[10px] text-slate-400 font-mono" dir="ltr">📅 {r.date}</p>
                     </div>
 
@@ -384,7 +384,7 @@ export default function SeanceRevisionModule({
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <span className="text-xs font-bold text-brand-700 whitespace-nowrap">{selected.trimester} — {selected.schoolYear}</span>
-                  <h3 className="text-2xl font-black text-slate-900">{selected.gradeLevel} — {selected.subject}</h3>
+                  <h3 className="text-2xl font-black text-slate-900">{gradeLabelBilingual(selected.gradeLevel)} — {selected.subject}</h3>
                   <p className="text-[11px] text-slate-400 font-mono mt-0.5" dir="ltr">📅 {selected.date}</p>
                 </div>
                 <button
@@ -729,7 +729,7 @@ export default function SeanceRevisionModule({
                   <UserPlus className="h-5 w-5 text-brand-600" />
                   <div>
                     <h3 className="text-lg font-black">إضافة تلميذ إلى الحصة</h3>
-                    <p className="text-xs text-slate-300">{selected.subject} — {selected.gradeLevel}</p>
+                    <p className="text-xs text-slate-300">{selected.subject} — {gradeLabelBilingual(selected.gradeLevel)}</p>
                   </div>
                 </div>
                 <button
@@ -934,7 +934,7 @@ export default function SeanceRevisionModule({
         message={
           deletion ? (
             <>
-              هل أنت متأكد من حذف حصة المراجعة <strong>{deletion.subject} — {deletion.gradeLevel}</strong> نهائياً؟
+              هل أنت متأكد من حذف حصة المراجعة <strong>{deletion.subject} — {gradeLabelBilingual(deletion.gradeLevel)}</strong> نهائياً؟
               <p className="mt-2 text-[11px] text-slate-400 font-bold">سيتم حذف الحصة وجميع بيانات تلاميذها.</p>
             </>
           ) : undefined

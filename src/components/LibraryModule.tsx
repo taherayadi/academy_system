@@ -13,7 +13,7 @@ import {
   Calendar,
   Undo2
 } from 'lucide-react';
-import { Student, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, StudentTimeSheet, paymentMethodLabel } from '../types';
+import { Student, PaymentRecord, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getCurrentAcademicIndex, monthToArabic, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, StudentTimeSheet, paymentMethodLabel, gradeLabelBilingual } from '../types';
 import { useToast } from './Toast';
 import DateField from './DateField';
 import TimeSheetViewDialog from './TimeSheetViewDialog';
@@ -732,7 +732,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                       <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
                         <div>
                           <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
-                          <p className="text-[10px] text-slate-400">{st.grade} — ولي: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                          <p className="text-[10px] text-slate-400">{gradeLabelBilingual(st.grade)} — ولي: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
                         </div>
                         <button
                           onClick={() => handleEnrollStudent(st)}

@@ -36,6 +36,7 @@ import {
   DEFAULT_ACADEMIC_YEARS,
   EXTERNAL_GRADE_LEVELS,
   EXTERNAL_GRADE_OPTIONS,
+  gradeLabelBilingual,
   generateReceiptNumber,
   getCurrentAcademicYear,
   paymentMethodLabel
@@ -1021,7 +1022,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                         <UserCheck className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-black text-slate-900 text-sm truncate">{slot.gradeLevel}</p>
+                        <p className="font-black text-slate-900 text-sm truncate">{gradeLabelBilingual(slot.gradeLevel)}</p>
                         <p className="text-[11px] text-brand-700 font-bold truncate">
                           👨‍🏫 {teacher ? `${teacher.firstName} ${teacher.lastName}` : 'غير محدد'}
                           {teacher?.subjects?.length ? ` — ${teacher.subjects.join(', ')}` : ''}
@@ -1140,13 +1141,13 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     {EXTERNAL_GRADE_LEVELS.map(g => (
-                      <option key={g.level} value={g.level}>{g.level.replace(' Année', '')}</option>
+                      <option key={g.level} value={g.level}>{gradeLabelBilingual(g.level)}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">الأستاذ / التأطير (اختياري)</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">الأستاذ / التأطير *</label>
                   <select
                     value={teacherId} onChange={(e) => setTeacherId(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
@@ -1195,7 +1196,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   </label>
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-40 overflow-y-auto space-y-1.5">
                     {filteredEtudeStudents.length === 0 ? (
-                      <p className="text-[11px] text-slate-400">لا يوجد تلاميذ من مستوى «{gradeLevel}» سدّدوا رسوم التسجيل السنوي.</p>
+                      <p className="text-[11px] text-slate-400">لا يوجد تلاميذ من مستوى «{gradeLabelBilingual(gradeLevel)}» سدّدوا رسوم التسجيل السنوي.</p>
                     ) : (
                       filteredEtudeStudents.map(st => {
                         const isChecked = enrolledStudentIds.includes(st.id);
@@ -1215,7 +1216,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                               }}
                               className="h-4 w-4 rounded text-brand-600 focus:ring-brand-600 shrink-0"
                             />
-                            <span className="flex-1 truncate">{st.firstName} {st.lastName} ({st.grade})</span>
+                            <span className="flex-1 truncate">{st.firstName} {st.lastName} ({gradeLabelBilingual(st.grade)})</span>
                             {monthlyUnpaid && (
                               <span
                                 className="shrink-0 text-[9px] font-black text-red-600 bg-red-50 border border-red-200 rounded-md px-1.5 py-0.5"
@@ -1240,7 +1241,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer"
+                    disabled={!teacherId}
+                    title={!teacherId ? 'اختر الأستاذ أولاً' : undefined}
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     حفظ الحصّة
                   </button>
@@ -1384,7 +1387,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
                       <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
                         <div>
                           <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
-                          <p className="text-[10px] text-slate-400">{st.grade} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                          <p className="text-[10px] text-slate-400">{gradeLabelBilingual(st.grade)} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
                         </div>
                         <button
                           onClick={() => handleEnrollStudent(st)}
@@ -1937,7 +1940,7 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
               هل أنت متأكد من حذف هذه الحصة من الجدول؟
               <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
                 <p><span className="text-slate-400">اليوم:</span> <strong>{ARABIC_ETUDE_DAYS[slotToDelete.day]}</strong> — <span className="text-slate-400">التوقيت:</span> <strong className="font-mono">{slotToDelete.startTime} - {slotToDelete.endTime}</strong></p>
-                <p><span className="text-slate-400">المستوى:</span> <strong>{slotToDelete.gradeLevel}</strong></p>
+                <p><span className="text-slate-400">المستوى:</span> <strong>{gradeLabelBilingual(slotToDelete.gradeLevel)}</strong></p>
               </div>
             </>
           ) : undefined

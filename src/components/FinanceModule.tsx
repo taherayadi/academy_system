@@ -24,7 +24,7 @@ import {
   ChevronDown,
   ChevronLeft
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, Formation, MealServiceType, MealForfaitClosure, paymentMethodLabel } from '../types';
+import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, gradeLabelBilingual, Formation, MealServiceType, MealForfaitClosure, paymentMethodLabel } from '../types';
 import { academicMonthPrefix, isLunchAttendance } from '../utils/mealLogic';
 import { updatePaymentApi } from '../api';
 import GouterConsumptionTable from './GouterConsumptionTable';
@@ -1286,7 +1286,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                         <tr key={st.id} className="hover:bg-slate-50/80 transition font-bold">
                           <td className="p-4 font-black text-slate-900">{st.firstName} {st.lastName}</td>
                           <td className="p-4 font-mono text-slate-500">{st.academicYear || getCurrentAcademicYear()}</td>
-                          <td className="p-4 text-slate-500">{st.grade}</td>
+                          <td className="p-4 text-slate-500">{gradeLabelBilingual(st.grade)}</td>
                           <td className="p-4">
                             {hasSuiviPaid ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
                           </td>
@@ -1989,7 +1989,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                 <div className="flex flex-col items-center gap-1">
                                   {enrolledCourses.map(c => (
                                     <span key={c.id} className="block w-fit px-2 py-0.5 bg-brand-600/10 text-brand-700 rounded-lg text-[10px] font-bold text-center">
-                                      {c.subject} — {c.gradeLevel} ({c.schoolYear})
+                                      {c.subject} — {gradeLabelBilingual(c.gradeLevel)} ({c.schoolYear})
                                     </span>
                                   ))}
                                 </div>
@@ -2749,7 +2749,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       paginatedResto.map(s => (
                         <tr key={s.id} className="hover:bg-slate-50/50">
                           <td className="p-3 font-bold text-slate-800">{s.name}</td>
-                          <td className="p-3 text-slate-600">{s.grade}</td>
+                          <td className="p-3 text-slate-600">{gradeLabelBilingual(s.grade)}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
                               s.isRefunded ? 'bg-amber-100 text-amber-700' : s.isSubscribed ? 'bg-brand-600/10 text-brand-700' : s.isEnrolled ? 'bg-brand-600/10 text-brand-700' : 'bg-slate-100 text-slate-700'

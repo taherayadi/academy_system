@@ -265,12 +265,13 @@ describe('buildExternalGradeOptions', () => {
     expect(options.length).toBe(13);
   });
 
-  it('strips " Année" from labels', () => {
+  it('strips " Année" from labels and shows them bilingual', () => {
     const options = buildExternalGradeOptions();
     const labels = options.map(o => o.label);
     expect(labels).not.toContain('Lycée 1ère Année');
-    expect(labels).toContain('Lycée 1ère');
-    expect(labels).toContain('Primaire 1ère');
+    expect(labels).not.toContain('Lycée 1ère');
+    expect(labels).toContain('السنة الأولى ثانوي (Lycée 1ère)');
+    expect(labels).toContain('السنة الأولى ابتدائي (Primaire 1ère)');
   });
 
   it('preserves values as-is', () => {
