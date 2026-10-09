@@ -19,7 +19,7 @@ import {
   X,
   ChevronDown
 } from 'lucide-react';
-import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, getFeesForYear, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
+import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import { fetchSubjectsApi, createSubjectApi } from '../api';
@@ -66,6 +66,7 @@ export default function ExternalCoursesModule({
   const [teacherPhone, setTeacherPhone] = useState('');
   const [teacherShare, setTeacherShare] = useState(70);
   const [centerShare, setCenterShare] = useState(10);
+  const [assuranceFee, setAssuranceFee] = useState(0);
 
   // Filter state for the courses list
   const [filterYear, setFilterYear] = useState('all');
@@ -178,6 +179,7 @@ export default function ExternalCoursesModule({
     setTeacherPhone('');
     setTeacherShare(70);
     setCenterShare(10);
+    setAssuranceFee(0);
     setIsCourseModalOpen(true);
   };
 
@@ -191,6 +193,7 @@ export default function ExternalCoursesModule({
     setTeacherPhone(c.teacherPhone);
     setTeacherShare(c.teacherShare);
     setCenterShare(c.centerShare);
+    setAssuranceFee(c.assuranceAmount ?? 0);
     setIsCourseModalOpen(true);
   };
 
@@ -212,11 +215,9 @@ export default function ExternalCoursesModule({
       monthlyFee: Number(teacherShare) + Number(centerShare),
       teacherShare: Number(teacherShare),
       centerShare: Number(centerShare),
-      // Montant d'assurance propre au cours : conservé à l'édition, initialisé
-      // au tarif du service assurance_externe à la création.
-      assuranceAmount: editingCourseId
-        ? (courses.find(c => c.id === editingCourseId)?.assuranceAmount ?? 0)
-        : (getFeesForYear(settings, schoolYear).fraisAssuranceCoursExternes || 0),
+      // Montant d'assurance propre au cours : saisi dans le formulaire
+      // (external_courses.assurance_amount).
+      assuranceAmount: Number(assuranceFee) || 0,
       enrolledStudents: editingCourseId 
         ? (courses.find(c => c.id === editingCourseId)?.enrolledStudents || []) 
         : []
@@ -1415,6 +1416,22 @@ export default function ExternalCoursesModule({
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-400">الإجمالي الشهري للتلميذ = {teacherShare + centerShare} د.ت</p>
+                </div>
+
+                {/* Assurance scolaire propre à ce cours */}
+                <div className="p-4 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 space-y-1">
+                  <label className="text-xs font-bold text-brand-700 block">🛡️ رسوم التأمين المدرسي (د.ت) *</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min="0"
+                      value={assuranceFee}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setAssuranceFee(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-brand-600/30 rounded-xl text-xs font-bold text-brand-700"
+                    />
+                    <span className="text-xs font-black text-slate-500">د.ت</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">يُخلّص مرة واحدة في السنة لكل تلميذ مسجّل في هذا الكورس.</p>
                 </div>
 
                 <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">

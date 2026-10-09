@@ -646,40 +646,6 @@ export default function SettingsModule({ settings, onUpdateSettings, onExportDat
             </div>
             )}
 
-            {/* Cours Particuliers — module requis au plan */}
-            {hasModule('coursParticuliers') && (
-              <div className="bg-brand-600/[0.06]/40 p-4 rounded-2xl border border-brand-600/20/60 space-y-3 lg:col-span-2">
-                <span className="text-xs font-extrabold text-brand-800 block border-b border-brand-600/20/60 pb-1">
-                  الدروس الخصوصية
-                </span>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                      رسوم التأمين للدروس الخصوصية
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={currentYearFees.fraisAssuranceCoursExternes}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => updateFee('fraisAssuranceCoursExternes', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
-                      />
-                      <span className="text-xs font-black text-slate-500">د.ت</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-end">
-                    <p className="text-[11px] text-slate-500 leading-relaxed bg-white/80 p-2 rounded-xl border border-brand-600/20/50">
-                      تُطبق تلقائياً عند تسجيل المقبوضات الجديدة.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
           </div>
         </div>
 
