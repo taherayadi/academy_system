@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { onRequestGet, onRequestPut } from './timesheets';
+import { onRequestGet, onRequestPut, onRequestPost } from './timesheets';
 
 // Régression : les pointages doublons (staff + date + créneau) ne devono
 // jamais créer plusieurs lignes. writeTimesheets déduplique côté serveur,
@@ -14,6 +14,10 @@ let db: any;
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
   sqlite.exec(`
+    CREATE TABLE staff (
+      id TEXT PRIMARY KEY,
+      center_id TEXT NOT NULL
+    ) STRICT;
     CREATE TABLE timesheets (
       id TEXT PRIMARY KEY,
       center_id TEXT NOT NULL,
@@ -94,6 +98,41 @@ describe('/api/timesheets — upsert par (staff, date, créneau)', () => {
     expect(rows.length).toBe(2); // t1 (créneau) + t2 (journée, dédoublonné)
     const dayRow = rows.find(r => r.staff_id === 't2');
     expect(dayRow.status).toBe('retard');
+  });
+
+  it('POST upsert UN pointage sans renvoyer le domaine', async () => {
+    sqlite.exec("INSERT INTO staff (id, center_id) VALUES ('t1', '" + CENTER + "'), ('t2', '" + CENTER + "');");
+    // Un premier pointage existe déjà
+    await onRequestPut(ctx('PUT', [
+      { id: 'existing', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'retard' },
+    ]));
+
+    // Le client ne POSTe QUE la nouvelle ligne (autre créneau)
+    const res1 = await onRequestPost(ctx('POST', { id: 'n1', staffId: 't2', date: '2026-10-09', slotTime: '16:00 - 18:00', status: 'present' }));
+    expect(res1.status).toBe(200);
+
+    // Puis il re-pointe le même créneau → la ligne existante est remplacée (pas dupliquée)
+    const res2 = await onRequestPost(ctx('POST', { id: 'n2', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'present' }));
+    expect(res2.status).toBe(200);
+
+    const rows = sqlite.prepare('SELECT * FROM timesheets ORDER BY staff_id, slot_time').all() as any[];
+    expect(rows.length).toBe(2);
+    const mark = rows.find(r => r.staff_id === 't1');
+    expect(mark.status).toBe('present');
+    expect(mark.id).toBe('n2');
+  });
+
+  it('POST refuse un staff d\'un autre centre (tenancy)', async () => {
+    sqlite.exec("INSERT INTO staff (id, center_id) VALUES ('mine', '" + CENTER + "'), ('theirs', 'c2');");
+    const res = await onRequestPost(ctx('POST', { id: 'x', staffId: 'theirs', date: '2026-10-09', status: 'absent' }));
+    expect(res.status).toBe(400);
+    const rows = sqlite.prepare('SELECT * FROM timesheets').all() as any[];
+    expect(rows.length).toBe(0);
+  });
+
+  it('POST refuse un statut invalide', async () => {
+    const res = await onRequestPost(ctx('POST', { id: 'x', staffId: 't1', date: '2026-10-09', status: 'nope' }));
+    expect(res.status).toBe(400);
   });
 
   it('GET lit les données sauvegardées', async () => {

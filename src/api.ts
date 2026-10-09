@@ -286,6 +286,13 @@ export async function saveTimesheets(timesheets: TimesheetEntry[]): Promise<void
 }
 
 
+/** Upsert d'UN pointage (marquage présent/absent d'un créneau) — le client
+ *  n'envoie que la ligne touchée, pas tout le domaine. */
+export async function upsertTimesheetApi(entry: TimesheetEntry): Promise<void> {
+  return postDomain('/timesheets', entry, 'تعذر حفظ سجل الحضور.');
+}
+
+
 export async function saveExternalStudents(externalStudents: ExternalStudentRegister[]): Promise<void> {
   return putDomain('/external-students', externalStudents, 'تعذر حفظ بيانات التلاميذ الخارجيين.');
 }

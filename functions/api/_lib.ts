@@ -2505,6 +2505,36 @@ export async function upsertSingleStudentYear(db: D1Database, input: StudentYear
 }
 
 /**
+ * Upsert d'un pointage unique (téléphone du staff, date, créneau) — utilisé
+ * par le marquage d'attendance du module Étude : le client n'envoie QUE la
+ * ligne touchée, pas tout le domain. Vérifie d'abord que le staff appartient
+ * bien au même center (tenancy), puis supprime toute ligne existante pour la
+ * même clé (staff_id + date + slot_time, slot_time NULL/absent = journée
+ * entière) et insère la nouvelle ligne avec l'id du client.
+ */
+export async function upsertSingleTimesheet(db: D1Database, t: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const staffId = str(t.staffId);
+  const date = str(t.date);
+  if (!staffId || !date) {
+    throw new Error('سجل الحضور يجب أن يحتوي على الأستاذ والتاريخ.');
+  }
+  if (t.status !== 'present' && t.status !== 'retard' && t.status !== 'absent' && t.status !== 'conge') {
+    throw new Error('حالة الحضور غير صالحة.');
+  }
+  const owner = await db.prepare('SELECT id FROM staff WHERE id = ? AND center_id = ?').bind(staffId, centerId).first();
+  if (!owner) {
+    throw new Error('الأستاذ غير موجود في هذا المركز.');
+  }
+  const slotTime = t.slotTime == null || t.slotTime === '' ? null : str(t.slotTime);
+  await db.batch([
+    db.prepare('DELETE FROM timesheets WHERE center_id = ? AND staff_id = ? AND date = ? AND (slot_time = ? OR (slot_time IS NULL AND ? IS NULL))')
+      .bind(centerId, staffId, date, slotTime, slotTime),
+    db.prepare('INSERT INTO timesheets (id, center_id, staff_id, date, slot_time, status, leave_reason, leave_status, notes, hours_worked, extra_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(str(t.id) || (str(staffId) + '_' + date + '_' + (slotTime ?? '')), centerId, staffId, date, slotTime, str(t.status), t.leaveReason == null ? null : str(t.leaveReason), t.leaveStatus == null ? null : str(t.leaveStatus), t.notes == null ? null : str(t.notes), t.hoursWorked == null ? null : num(t.hoursWorked), t.extraHours == null ? null : num(t.extraHours))
+  ]);
+}
+
+/**
  * Mise à jour partielle d'une ligne student_year existante. Sémantique tri-état :
  * champ ABSENT de l'objet → inchangé ; champ PRÉSENT → réécrit tel quel
  * (null/'' = effacer, sauf grade NOT NULL où '' est ignoré). COALESCE ne peut

@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -595,6 +595,19 @@ export default function App() {
     setTimesheets(updated);
     commitDomain(() => saveTimesheets(updated));
   };
+
+  // Upsert d'UN pointage (marquage Étude) : le module n'envoie que la ligne
+  // touchée — App fusionne localement (dédoublonnage par staff+date+créneau)
+  // et POSTe uniquement ce record au serveur.
+  const handleUpsertTimesheet = useCallback((entry: TimesheetEntry) => {
+    const key = (t: TimesheetEntry) => `${t.staffId}|${t.date}|${t.slotTime ?? ''}`;
+    const existing = timesheets.find(t => key(t) === key(entry));
+    const next = existing
+      ? timesheets.map(t => (t.id === existing.id ? { ...entry, id: existing.id } : t))
+      : [...timesheets, entry];
+    setTimesheets(next);
+    commitDomain(() => upsertTimesheetApi(entry));
+  }, [timesheets]);
 
   const handleUpdateExternalStudents = (updated: ExternalStudentRegister[]) => {
     setExternalStudents(updated);
@@ -1304,6 +1317,7 @@ export default function App() {
                   sidebarCollapsed={sidebarCollapsed}
                   onUpdateSlots={handleUpdateSlots}
                   onUpdateTimesheets={handleUpdateTimesheets}
+                  onUpsertTimesheet={handleUpsertTimesheet}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onRecordPayment={handleRecordPayment}
                 />
