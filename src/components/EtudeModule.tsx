@@ -590,8 +590,12 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
 
   const handleSaveSlot = (e: React.FormEvent) => {
     e.preventDefault();
-    // L'auteur (enseignant) est OPTIONNEL : une séance sans encadrant est
-    // permise (elle s'affiche « غير محدد ») — plus de blocage à la saisie.
+    // L'auteur (enseignant) est OBLIGATOIRE : impossible d'enregistrer une
+    // séance sans avoir sélectionné un staff (enseignant) dans la liste.
+    if (!teacherId) {
+      toast.error('يجب اختيار الأستاذ / التأطير قبل حفظ الحصّة!');
+      return;
+    }
     if (!modalStartTime || !modalEndTime) {
       toast.error('حدد وقت بداية ونهاية الحصّة!');
       return;
