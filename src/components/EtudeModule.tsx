@@ -679,7 +679,17 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       leaveStatus: tsStatus === 'conge' ? 'en_attente' : undefined
     };
 
-    onUpdateTimesheets([...timesheets, newTs]);
+    // Upsert : si une ligne existe déjà pour le même staff + date + créneau,
+    // on met à jour son statut au lieu d'ajouter une nouvelle ligne.
+    const slotTimeKey = newTs.slotTime;
+    const existing = timesheets.find(
+      t => t.staffId === newTs.staffId && t.date === newTs.date && (t.slotTime || '') === slotTimeKey
+    );
+    const updatedTimesheets = existing
+      ? timesheets.map(t => (t.id === existing.id ? { ...newTs, id: existing.id } : t))
+      : [...timesheets, newTs];
+
+    onUpdateTimesheets(updatedTimesheets);
     setMarkingTimesheetSlot(null);
     toast.success('تم تسجيل ورقة الحضور للأستاذ بنجاح!');
   };

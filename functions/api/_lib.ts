@@ -1105,7 +1105,17 @@ function buildTimesheetsStmts(db: D1Database, timesheets: any[], centerId: strin
 }
 
 export async function writeTimesheets(db: D1Database, timesheets: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
-  const stmts = [db.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(centerId), ...buildTimesheetsStmts(db, timesheets, centerId)];
+  // Upsert semantics: one row per (staff_id, date, slot_time) per center.
+  // Marking the same teacher/day/créneau again updates the existing status
+  // instead of adding a duplicate line (last occurrence wins). Whole-day
+  // entries have no slot_time and are keyed with an empty slot_time.
+  const byKey = new Map<string, any>();
+  for (const t of timesheets || []) {
+    const key = `${str(t.staffId)}|${str(t.date)}|${t.slotTime == null ? '' : str(t.slotTime)}`;
+    byKey.set(key, t);
+  }
+  const deduped = Array.from(byKey.values());
+  const stmts = [db.prepare('DELETE FROM timesheets WHERE center_id = ?').bind(centerId), ...buildTimesheetsStmts(db, deduped, centerId)];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
