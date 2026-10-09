@@ -130,7 +130,7 @@ export default function EtudeModule({
   const [modalStartTime, setModalStartTime] = useState<string>('08:00');
   const [modalEndTime, setModalEndTime] = useState<string>('10:00');
   const [gradeLevel, setGradeLevel] = useState(EXTERNAL_GRADE_LEVELS[0].level);
-  const [teacherId, setTeacherId] = useState(staff[0]?.id || '');
+  const [teacherId, setTeacherId] = useState('');
   const [enrolledStudentIds, setEnrolledStudentIds] = useState<string[]>([]);
   const [slotIsExtra, setSlotIsExtra] = useState(false);
 
@@ -565,7 +565,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
     setModalStartTime(preStart || '08:00');
     setModalEndTime(preEnd || '10:00');
     setGradeLevel(EXTERNAL_GRADE_LEVELS[0].level);
-    setTeacherId(staff.find(s => s.role === 'enseignant')?.id || staff[0]?.id || '');
+    // L'enseignant n'est jamais présélectionné : l'utilisateur doit le choisir
+    // explicitement dans la liste (un chauffeur ne doit pas être retenu par défaut).
+    setTeacherId('');
     setEnrolledStudentIds([]);
     setSlotIsExtra(false);
     setIsSlotModalOpen(true);
