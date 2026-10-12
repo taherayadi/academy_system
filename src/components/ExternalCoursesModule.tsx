@@ -692,6 +692,19 @@ export default function ExternalCoursesModule({
     setIsSessionModalOpen(true);
   };
 
+  // A student who joined after this seance is locked by default (no history for that
+  // date). The manager can explicitly unlock them to record attendance/payment here.
+  const unlockSeanceStudent = (studentId: string) => {
+    if (!selectedCourse) return;
+    const cycleState = getStudentCycleState(selectedCourse, studentId, editingSessionId || undefined);
+    const covered = cycleState.isNextCycleCovered && cycleState.nextPastDebt === 0;
+    setAttendanceMap(prev => ({ ...prev, [studentId]: 'present' }));
+    setPaymentModeMap(prev => ({ ...prev, [studentId]: covered ? 'present' : 'paie_mois' }));
+    setMonthPaidLockMap(prev => ({ ...prev, [studentId]: covered }));
+    setSeanceAmountMap(prev => ({ ...prev, [studentId]: covered ? 0 : (cycleState.totalOutstanding > 0 ? cycleState.totalOutstanding : cycleState.nextCycleTarget) }));
+    setDisabledSeanceStudents(prev => ({ ...prev, [studentId]: false }));
+  };
+
   const handleSaveSession = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourse) return;
@@ -1700,6 +1713,14 @@ export default function ExternalCoursesModule({
                                       <span className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-slate-100 text-slate-400 border border-slate-200">
                                         🔒 غير مسجّل في هذا التاريخ
                                       </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => unlockSeanceStudent(st.studentId)}
+                                        className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 cursor-pointer"
+                                        title="تسجيل هذا التلميذ في هذه الحصّة"
+                                      >
+                                        🔓 تسجيل حضور ودفع في هذه الحصّة
+                                      </button>
                                     </div>
                                   ) : (
                                     <div className="flex flex-col items-center gap-1">
