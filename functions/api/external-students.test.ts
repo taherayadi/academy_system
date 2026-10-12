@@ -338,6 +338,23 @@ describe('external students persistence', () => {
     expect(groups.find(g => g.service_key === 'external_course').n).toBe(1);
   });
 
+  it('persists the discounted amount due (course fee minus discount) across reloads', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    // Assurance 50 − تخفيض 10 = 40 dus ; 20 versés.
+    await writeExternalStudents(db, [makeRegister({
+      assurancePaid: false, assuranceAmount: 20, assuranceRequired: 40,
+      assuranceMethod: 'Espèces', assuranceChequeNumber: undefined, assuranceChequeDate: undefined,
+      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 20, method: 'Espèces' }]
+    })], CENTER);
+
+    const list = await readExternalStudents(db, CENTER);
+    expect(list[0].assuranceRequired).toBe(40);
+    expect(list[0].assuranceAmount).toBe(20);
+    expect(list[0].assurancePaid).toBe(false);
+    const row = sqlite.prepare("SELECT total_required FROM payments WHERE service_key = 'assurance_externe'").get() as any;
+    expect(row.total_required).toBe(40);
+  });
+
   it('stores cash assurance with null cheque fields and null refs (no CHECK violation)', async () => {
     await writeCourses(db, [makeCourse()], CENTER);
     await writeExternalStudents(db, [makeRegister({

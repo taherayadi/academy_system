@@ -116,4 +116,28 @@ describe('ExternalCoursesModule — assurance payment from the « تأمين ✗
     expect(updated[0]).toMatchObject({ assurancePaid: true, assuranceAmount: 50, assuranceRequired: 50 });
     expect(updated[0].assurancePayments).toHaveLength(2);
   });
+
+  it('keeps the discounted amount due (not the full course fee) when topping up', async () => {
+    // Assurance 50, تخفيض 10 → dû 40 ; 20 déjà versés → reste 20 (et non 30).
+    const discountedCourse: ExternalCourse = {
+      ...course,
+      enrolledStudents: [{ ...course.enrolledStudents[0], assuranceAmount: 20, assuranceRequired: 40 }]
+    };
+    const discountedRegister: ExternalStudentRegister = {
+      ...register,
+      assuranceAmount: 20,
+      assuranceRequired: 40,
+      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 20, method: 'Espèces' }]
+    };
+    const { onUpdateExternalStudents } = renderModule({ courses: [discountedCourse], externalStudents: [discountedRegister] });
+    await act(async () => { await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole('button', { name: /تأمين 20\/40/ }));
+    expect((screen.getByDisplayValue('20') as HTMLInputElement).value).toBe('20');
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الدفع وطباعة الوصل' }));
+
+    const updated = onUpdateExternalStudents.mock.calls[0][0] as ExternalStudentRegister[];
+    expect(updated[0]).toMatchObject({ assurancePaid: true, assuranceAmount: 40, assuranceRequired: 40 });
+    expect(updated[0].assurancePayments).toHaveLength(2);
+  });
 });

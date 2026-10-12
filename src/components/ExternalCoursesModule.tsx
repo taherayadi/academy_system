@@ -324,7 +324,10 @@ export default function ExternalCoursesModule({
 
   const openAssurancePayment = (course: ExternalCourse, st: ExternalCourseStudent) => {
     const reg = externalStudents.find(r => r.id === st.studentId);
-    const required = Math.max(0, course.assuranceAmount || reg?.assuranceRequired || 0);
+    // Le montant dû est figé au 1er versement (assurance annuelle moins le
+    // تخفيض éventuel) : on le relit du registre, sinon on retombe sur le tarif
+    // du cours pour un nouvel élève.
+    const required = Math.max(0, reg?.assuranceRequired || st.assuranceRequired || course.assuranceAmount || 0);
     const already = Math.max(0, reg ? reg.assuranceAmount : (st.assuranceAmount || 0));
     setAssurancePayment({ course, student: st });
     setAssurancePayRequired(required);
@@ -1148,7 +1151,7 @@ export default function ExternalCoursesModule({
                                     className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-md text-[9px] font-black cursor-pointer border border-amber-300"
                                     title="التأمين مدفوع جزئياً — اضغط لإتمام الخلاص"
                                   >
-                                    تأمين {st.assuranceAmount}/{selectedCourse.assuranceAmount || 0} د.ت
+                                    تأمين {st.assuranceAmount}/{st.assuranceRequired || selectedCourse.assuranceAmount || 0} د.ت
                                   </button>
                                 ) : (
                                   <button
