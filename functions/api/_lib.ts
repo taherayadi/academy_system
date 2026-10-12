@@ -1189,6 +1189,7 @@ export async function readCourses(db: D1Database, centerId: string = DEFAULT_CEN
       const studentId = str(e.student_id);
       const name = `${str(e.first_name)} ${str(e.last_name)}`.trim();
       const assur = assuranceByStudent[studentId];
+      const assurRequired = assur ? assur.required : 0;
       return {
         studentId,
         studentName: name,
@@ -1196,8 +1197,9 @@ export async function readCourses(db: D1Database, centerId: string = DEFAULT_CEN
         // Un externe porte student_type='external' ; toute ligne sans élèves
         // correspondant (orpheline) est traitée comme externe elle aussi.
         isExternal: str(e.student_type) !== 'regular',
-        assurancePaid: !!assur,
+        assurancePaid: !!assur && assurRequired > 0 && assur.amount >= assurRequired,
         assuranceAmount: assur ? assur.amount : 0,
+        assuranceRequired: assurRequired,
         assuranceDate: assur ? assur.date : undefined,
         enrolledAt: e.enrolled_at == null ? undefined : new Date(num(e.enrolled_at)).toISOString().slice(0, 10)
       };
@@ -1221,18 +1223,26 @@ async function readCourseEnrollments(db: D1Database, centerId: string): Promise<
   }
 }
 
-// Assurance scolaire des élèves externes, indexée par student_id (dernière
-// ligne gagnante). Alimente enrolledStudents[].assurancePaid côté cours.
-async function readExternalAssurance(db: D1Database, centerId: string): Promise<Record<string, { amount: number; date: string }>> {
+// Assurance scolaire des élèves externes, indexée par student_id : montant
+// total versé, montant annuel dû (dernière ligne) et date du dernier versement.
+// Alimente enrolledStudents[].assurancePaid côté cours.
+async function readExternalAssurance(db: D1Database, centerId: string): Promise<Record<string, { amount: number; required: number; date: string }>> {
   try {
     const out = await db.prepare(
-      `SELECT p.student_id, p.amount, p.date FROM payments p
+      `SELECT p.student_id, p.amount, p.total_required, p.date FROM payments p
        JOIN students s ON s.id = p.student_id AND s.center_id = p.center_id
        WHERE p.center_id = ? AND s.student_type = 'external' AND p.service_key = 'assurance_externe'
        ORDER BY p.created_at, p.date`
     ).bind(centerId).all();
-    const map: Record<string, { amount: number; date: string }> = {};
-    (out.results || []).forEach((r: any) => { map[str(r.student_id)] = { amount: num(r.amount), date: str(r.date) }; });
+    const map: Record<string, { amount: number; required: number; date: string }> = {};
+    (out.results || []).forEach((r: any) => {
+      const key = str(r.student_id);
+      const acc = map[key] || { amount: 0, required: 0, date: '' };
+      acc.amount += num(r.amount);
+      acc.required = num(r.total_required); // la dernière ligne gagne
+      acc.date = str(r.date);
+      map[key] = acc;
+    });
     return map;
   } catch {
     return {};
@@ -1380,12 +1390,11 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
   });
 
   const coursePayByStudent: Record<string, any[]> = {};
-  const assuranceByStudent: Record<string, any> = {};
+  const assuranceRowsByStudent: Record<string, any[]> = {};
   paymentRows.results.forEach((r: any) => {
     const key = str(r.student_id);
     if (str(r.service_key) === 'assurance_externe') {
-      const cur = assuranceByStudent[key];
-      if (!cur || num(r.created_at) >= num(cur.created_at)) assuranceByStudent[key] = r;
+      (assuranceRowsByStudent[key] = assuranceRowsByStudent[key] || []).push(r);
       return;
     }
     (coursePayByStudent[key] = coursePayByStudent[key] || []).push(r);
@@ -1397,20 +1406,33 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
   return studentRows.results.map((r: any) => {
     const id = str(r.id);
     const yr = yearByStudent[id];
-    const assur = assuranceByStudent[id];
     const createdMs = num(r.created_at);
+    const assurRows = (assuranceRowsByStudent[id] || []).slice().sort((a, b) => num(a.created_at) - num(b.created_at));
+    const assurancePayments = assurRows.map((p: any) => ({
+      id: str(p.id),
+      date: str(p.date),
+      amount: num(p.amount),
+      method: paymentMethodLabelKey(p.method),
+      chequeNumber: p.cheque_number != null ? str(p.cheque_number) : undefined,
+      chequeDate: p.cheque_date != null ? str(p.cheque_date) : undefined
+    }));
+    const assurTotal = assurRows.reduce((sum, p) => sum + num(p.amount), 0);
+    const lastAssur = assurRows[assurRows.length - 1];
+    const assurRequired = lastAssur ? num(lastAssur.total_required) : 0;
     return {
       id,
       name: `${str(r.first_name)} ${str(r.last_name)}`.trim(),
       parentPhone: str(r.contact_phone),
       grade: yr ? str(yr.grade) : '',
       schoolYear: yr ? str(yr.school_year) : currentAcademicYear(),
-      assurancePaid: !!assur,
-      assuranceAmount: assur ? num(assur.amount) : 0,
-      assuranceDate: assur ? str(assur.date) : undefined,
-      assuranceMethod: assur ? paymentMethodLabelKey(assur.method) : undefined,
-      assuranceChequeNumber: assur && assur.cheque_number != null ? str(assur.cheque_number) : undefined,
-      assuranceChequeDate: assur && assur.cheque_date != null ? str(assur.cheque_date) : undefined,
+      assurancePaid: !!lastAssur && assurRequired > 0 && assurTotal >= assurRequired,
+      assuranceAmount: assurTotal,
+      assuranceRequired: assurRequired,
+      assuranceDate: lastAssur ? str(lastAssur.date) : undefined,
+      assuranceMethod: lastAssur ? paymentMethodLabelKey(lastAssur.method) : undefined,
+      assuranceChequeNumber: lastAssur && lastAssur.cheque_number != null ? str(lastAssur.cheque_number) : undefined,
+      assuranceChequeDate: lastAssur && lastAssur.cheque_date != null ? str(lastAssur.cheque_date) : undefined,
+      assurancePayments,
       createdAt: createdMs > 0 ? new Date(createdMs).toISOString().slice(0, 10) : '',
       payments: (coursePayByStudent[id] || []).map((p: any) => ({
         id: str(p.id),
@@ -1490,18 +1512,37 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
       ));
     }
 
-    if (s.assurancePaid && num(s.assuranceAmount) > 0) {
-      const amount = num(s.assuranceAmount);
-      const assurDate = isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10)));
+    // Assurance : un paiement PAR versement (l'assurance annuelle peut être
+    // réglée en plusieurs fois). `total_required` porte le montant annuel dû,
+    // ce qui permet de savoir plus tard s'il reste à payer.
+    const assurRows: any[] = Array.isArray(s.assurancePayments) && s.assurancePayments.length
+      ? s.assurancePayments
+      : (s.assurancePaid && num(s.assuranceAmount) > 0
+          ? [{ id: 'asr_' + id, date: s.assuranceDate, amount: num(s.assuranceAmount), method: s.assuranceMethod, chequeNumber: s.assuranceChequeNumber, chequeDate: s.assuranceChequeDate }]
+          : []);
+    const assurRequired = Math.max(num(s.assuranceRequired), num(s.assuranceAmount));
+    let assurSeq = 0;
+    for (const ap of assurRows) {
+      const amount = num(ap.amount);
+      if (amount <= 0) continue;
+      const method = paymentMethodKey(ap.method);
+      const isCheque = method === 'cheque';
+      const apDate = isoDateOr(ap.date, isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10))));
+      const apId = str(ap.id) || `asr_${id}_${assurSeq++}`;
       stmts.push(db.prepare(
         'INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, refund_of, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
-        'asr_' + id, centerId, id, assurDate,
+        apId, centerId, id, apDate,
         'assurance_externe', 'year', null, schoolYear,
-        'full', paymentMethodKey(s.assuranceMethod), amount, amount, 0,
-        'ASR-' + id, null,
-        str(s.assuranceChequeNumber) || null, isoDateOr(s.assuranceChequeDate, assurDate), 0, 0, null,
-        'external_course', null, Date.now()
+        'full', method, amount, Math.max(assurRequired, amount), 0,
+        'ASR-' + apId, null,
+        // CHECK: un paiement non-chèque doit avoir cheque_number/date NULL.
+        isCheque ? (str(ap.chequeNumber) || null) : null,
+        isCheque ? isoDateOr(ap.chequeDate, apDate) : null,
+        0, 0, null,
+        // CHECK ((ref_type IS NULL) = (ref_id IS NULL)) : l'assurance n'est liée
+        // à aucun cours → les deux restent NULL.
+        null, null, Date.now()
       ));
     }
   }

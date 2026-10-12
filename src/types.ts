@@ -1072,7 +1072,8 @@ export interface ExternalCourseStudent {
   parentPhone: string;
   isExternal?: boolean;        // true when not a registered center student
   assurancePaid?: boolean;     // assurance scolaire paid for the year
-  assuranceAmount?: number;    // ex: 50 DT
+  assuranceAmount?: number;    // amount paid so far (ex: 50 DT)
+  assuranceRequired?: number;  // yearly amount due for this course
   assuranceDate?: string;
   enrolledAt?: string;         // date of enrollment in course
 }
@@ -1102,18 +1103,32 @@ export interface ExternalAttendanceRecord {
 }
 
 
+// One assurance payment entry (the yearly school-insurance may be paid in
+// several instalments: 30 now, 20 later…).
+export interface ExternalAssurancePayment {
+  id: string;
+  date: string;
+  amount: number;
+  method: 'Espèces' | 'Chèque' | 'Virement';
+  chequeNumber?: string;
+  chequeDate?: string;
+}
+
+
 export interface ExternalStudentRegister {
   id: string;
   name: string;
   parentPhone: string;
   grade: string;
   schoolYear?: string; // ex: "2026/2027" — registration year
-  assurancePaid: boolean;
-  assuranceAmount: number;
+  assurancePaid: boolean; // true once the total paid reaches assuranceRequired
+  assuranceAmount: number; // total assurance paid so far
+  assuranceRequired?: number; // yearly amount due (course assurance fee)
   assuranceDate?: string;
   assuranceMethod?: 'Espèces' | 'Chèque' | 'Virement';
   assuranceChequeNumber?: string;
   assuranceChequeDate?: string;
+  assurancePayments?: ExternalAssurancePayment[];
   payments: ExternalRegistrationRecord[];
   attendance: ExternalAttendanceRecord[];
   createdAt: string;

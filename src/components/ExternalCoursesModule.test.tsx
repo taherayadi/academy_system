@@ -83,6 +83,7 @@ describe('ExternalCoursesModule — assurance payment from the « تأمين ✗
     expect(onUpdateExternalStudents).toHaveBeenCalledTimes(1);
     const updatedRegister = onUpdateExternalStudents.mock.calls[0][0] as ExternalStudentRegister[];
     expect(updatedRegister[0]).toMatchObject({ id: REG_ID, assurancePaid: true, assuranceAmount: 50 });
+    expect(updatedRegister[0].assurancePayments).toHaveLength(1);
 
     expect(onUpdateCourses).toHaveBeenCalledTimes(1);
     const updatedCourses = onUpdateCourses.mock.calls[0][0] as ExternalCourse[];
@@ -90,5 +91,29 @@ describe('ExternalCoursesModule — assurance payment from the « تأمين ✗
       studentId: REG_ID, assurancePaid: true, assuranceAmount: 50
     });
     expect(updatedCourses[0].enrolledStudents[0].assuranceDate).toBeTruthy();
+  });
+
+  it('tops up the remaining balance when the assurance was partially paid', async () => {
+    const partialCourse: ExternalCourse = {
+      ...course,
+      enrolledStudents: [{ ...course.enrolledStudents[0], assuranceAmount: 30, assuranceRequired: 50 }]
+    };
+    const partialRegister: ExternalStudentRegister = {
+      ...register,
+      assuranceAmount: 30,
+      assuranceRequired: 50,
+      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 30, method: 'Espèces' }]
+    };
+    const { onUpdateExternalStudents } = renderModule({ courses: [partialCourse], externalStudents: [partialRegister] });
+    await act(async () => { await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole('button', { name: /تأمين 30\/50/ }));
+    // Remaining balance (50 - 30) is pre-filled.
+    expect((screen.getByDisplayValue('20') as HTMLInputElement).value).toBe('20');
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الدفع وطباعة الوصل' }));
+
+    const updated = onUpdateExternalStudents.mock.calls[0][0] as ExternalStudentRegister[];
+    expect(updated[0]).toMatchObject({ assurancePaid: true, assuranceAmount: 50, assuranceRequired: 50 });
+    expect(updated[0].assurancePayments).toHaveLength(2);
   });
 });

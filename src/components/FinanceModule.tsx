@@ -304,26 +304,33 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         centerShare
       });
     });
-    if (reg.assurancePaid && reg.assuranceAmount > 0) {
+    const assurRequired = reg.assuranceRequired || reg.assuranceAmount || 0;
+    const ledger = (reg.assurancePayments && reg.assurancePayments.length)
+      ? reg.assurancePayments
+      : (reg.assurancePaid && reg.assuranceAmount > 0
+          ? [{ id: 'asr_' + reg.id, date: reg.assuranceDate || reg.createdAt || '', amount: reg.assuranceAmount, method: reg.assuranceMethod || 'Espèces' }]
+          : []);
+    ledger.forEach((ap, i) => {
+      if (!(ap.amount > 0)) return;
       recs.push({
-        id: 'asr_' + reg.id,
-        date: reg.assuranceDate || reg.createdAt || '',
-        amountPaid: reg.assuranceAmount,
-        totalRequired: reg.assuranceAmount,
+        id: ap.id || ('asr_' + reg.id + '_' + i),
+        date: ap.date,
+        amountPaid: ap.amount,
+        totalRequired: assurRequired,
         remainingBalance: 0,
         service: 'Assurance',
         month: 'Annuel',
         paymentType: 'full',
-        method: reg.assuranceMethod || 'Espèces',
-        receiptNumber: `ASR-${reg.id.slice(-4)}`,
+        method: ap.method || reg.assuranceMethod || 'Espèces',
+        receiptNumber: `ASR-${reg.id.slice(-4)}-${(ap.date || '').replace(/-/g, '')}${i ? '-' + i : ''}`,
         notes: 'تأمين مدرسي (Assurance) - كراس خارجي',
         studentName: reg.name,
         studentGrade: reg.grade,
         studentYear: reg.schoolYear || '2026/2027',
         teacherShare: 0,
-        centerShare: reg.assuranceAmount
+        centerShare: ap.amount
       });
-    }
+    });
     return recs;
   });
 
@@ -1886,7 +1893,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                  (reg.parentPhone || '').includes(searchTerm);
         });
 
-        const totalAssurance = filteredExtStudents.filter(r => r.assurancePaid).reduce((s, r) => s + r.assuranceAmount, 0);
+        const totalAssurance = filteredExtStudents.filter(r => (r.assuranceAmount || 0) > 0).reduce((s, r) => s + r.assuranceAmount, 0);
         const totalCoursePayments = filteredExtStudents.reduce((s, r) => s + (r.payments || []).reduce((ps, p) => ps + p.amountPaid, 0), 0);
         const totalExtRevenue = totalAssurance + totalCoursePayments;
         const assurancePaidCount = filteredExtStudents.filter(r => r.assurancePaid).length;
@@ -1950,7 +1957,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     ) : (
                       filteredExtStudents.map(reg => {
                         const coursePaymentsTotal = (reg.payments || []).reduce((s, p) => s + p.amountPaid, 0);
-                        const studentTotal = coursePaymentsTotal + (reg.assurancePaid ? reg.assuranceAmount : 0);
+                        const studentTotal = coursePaymentsTotal + (reg.assuranceAmount || 0);
                         // Find which courses this student is enrolled in
                         const enrolledCourses = courses.filter(c =>
                           c.enrolledStudents.some(s => s.studentId === reg.id)
@@ -1968,6 +1975,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                   {reg.assuranceDate && (
                                     <span className="text-[9px] font-bold text-brand-600">{reg.assuranceDate}</span>
                                   )}
+                                </div>
+                              ) : (reg.assuranceAmount || 0) > 0 ? (
+                                <div className="flex flex-col items-center text-center gap-0.5 bg-amber-100 text-amber-800 rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
+                                  <span>◑ جزئي — {fmt(reg.assuranceAmount)} / {fmt(reg.assuranceRequired || 0)} د.ت</span>
+                                  <span className="text-[9px] font-bold text-amber-700">المتبقي {fmt(Math.max(0, (reg.assuranceRequired || 0) - reg.assuranceAmount))} د.ت</span>
                                 </div>
                               ) : (
                                 <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-lg font-black text-[11px]">
@@ -2024,7 +2036,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             {/* Per-student payment detail */}
-            {filteredExtStudents.some(r => (r.payments || []).length > 0 || r.assurancePaid) && (() => {
+            {filteredExtStudents.some(r => (r.payments || []).length > 0 || (r.assuranceAmount || 0) > 0) && (() => {
               // Build full flat list: course payments + assurance rows
               const allDetailRows: { id: string; date: string; name: string; courseName: string; amount: number; method: string; isAssurance: boolean }[] = [];
               filteredExtStudents.forEach(reg => {
@@ -2039,15 +2051,22 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     method: p.method || 'Espèces',
                     isAssurance: false
                   }));
-                if (reg.assurancePaid && reg.assuranceAmount > 0) {
-                  allDetailRows.push({
-                    id: 'asr_' + reg.id,
-                    date: reg.assuranceDate || '',
-                    name: reg.name,
-                    courseName: 'تأمين مدرسي (Assurance) 🛡️',
-                    amount: reg.assuranceAmount,
-                    method: reg.assuranceMethod || 'Espèces',
-                    isAssurance: true
+                if ((reg.assuranceAmount || 0) > 0) {
+                  const ledger = (reg.assurancePayments && reg.assurancePayments.length)
+                    ? reg.assurancePayments
+                    : [{ id: 'asr_' + reg.id, date: reg.assuranceDate || '', amount: reg.assuranceAmount, method: reg.assuranceMethod || 'Espèces' }];
+                  ledger.forEach((ap, i) => {
+                    if (!(ap.amount > 0)) return;
+                    if (monthFilter !== 'all' && monthFromDate(ap.date || '') !== monthFilter) return;
+                    allDetailRows.push({
+                      id: ap.id || ('asr_' + reg.id + '_' + i),
+                      date: ap.date || '',
+                      name: reg.name,
+                      courseName: 'تأمين مدرسي (Assurance) 🛡️',
+                      amount: ap.amount,
+                      method: ap.method || reg.assuranceMethod || 'Espèces',
+                      isAssurance: true
+                    });
                   });
                 }
               });

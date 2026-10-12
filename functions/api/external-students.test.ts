@@ -146,19 +146,24 @@ beforeEach(() => {
       period_month TEXT,
       school_year TEXT NOT NULL,
       payment_type TEXT NOT NULL,
-      method TEXT NOT NULL,
+      method TEXT NOT NULL CHECK (method IN ('cash','cheque','transfer','card')),
       amount REAL NOT NULL CHECK (amount > 0),
-      total_required REAL NOT NULL,
-      discount REAL NOT NULL DEFAULT 0,
+      total_required REAL NOT NULL CHECK (total_required >= 0),
+      discount REAL NOT NULL DEFAULT 0 CHECK (discount >= 0),
       receipt_number TEXT NOT NULL,
-      notes TEXT, cheque_number TEXT, cheque_date TEXT,
-      cheque_paid INTEGER NOT NULL DEFAULT 0,
-      is_refund INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      cheque_number TEXT, cheque_date TEXT,
+      cheque_paid INTEGER NOT NULL DEFAULT 0 CHECK (cheque_paid IN (0,1)),
+      is_refund INTEGER NOT NULL DEFAULT 0 CHECK (is_refund IN (0,1)),
       refund_of TEXT,
-      ref_type TEXT, ref_id TEXT,
+      ref_type TEXT CHECK (ref_type IS NULL OR ref_type IN ('external_course','revision_seance','formation','event')),
+      ref_id TEXT,
       created_by TEXT, created_at INTEGER NOT NULL,
       UNIQUE (center_id, id),
-      UNIQUE (center_id, receipt_number)
+      UNIQUE (center_id, receipt_number),
+      CHECK (method = 'cheque' OR (cheque_number IS NULL AND cheque_date IS NULL AND cheque_paid = 0)),
+      CHECK ((ref_type IS NULL) = (ref_id IS NULL)),
+      FOREIGN KEY (center_id, student_id) REFERENCES students(center_id, id) ON DELETE RESTRICT
     ) STRICT;
     CREATE TABLE meal_attendances (
       center_id TEXT NOT NULL, student_id TEXT NOT NULL, date TEXT NOT NULL,
@@ -292,6 +297,60 @@ describe('external students persistence', () => {
     // Le paiement cours + l'assurance vivent dans `payments`.
     const services = sqlite.prepare('SELECT service_key FROM payments WHERE student_id = ? ORDER BY service_key').all(REG_ID).map((r: any) => r.service_key);
     expect(services).toEqual(['assurance_externe', 'external_course']);
+  });
+
+  it('supports assurance paid in instalments (top-up)', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await writeExternalStudents(db, [makeRegister({
+      assurancePaid: false,
+      assuranceAmount: 30,
+      assuranceRequired: 50,
+      assuranceMethod: 'Espèces',
+      assuranceChequeNumber: undefined,
+      assuranceChequeDate: undefined,
+      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 30, method: 'Espèces' }]
+    })], CENTER);
+
+    let list = await readExternalStudents(db, CENTER);
+    expect(list[0].assuranceAmount).toBe(30);
+    expect(list[0].assuranceRequired).toBe(50);
+    expect(list[0].assurancePaid).toBe(false);
+    expect(list[0].assurancePayments).toHaveLength(1);
+    expect(list[0].assurancePayments![0]).toMatchObject({ amount: 30, method: 'Espèces' });
+
+    // Deuxième versement : le solde est soldé -> assurance payée.
+    const first = list[0];
+    await writeExternalStudents(db, [makeRegister({
+      ...first,
+      assurancePaid: true,
+      assuranceAmount: 50,
+      assuranceRequired: 50,
+      assurancePayments: [...(first.assurancePayments || []), { id: 'asr_b', date: '2026-10-20', amount: 20, method: 'Espèces' }]
+    })], CENTER);
+
+    list = await readExternalStudents(db, CENTER);
+    expect(list[0].assuranceAmount).toBe(50);
+    expect(list[0].assurancePaid).toBe(true);
+    expect(list[0].assurancePayments).toHaveLength(2);
+    const groups = sqlite.prepare('SELECT service_key, COUNT(*) AS n FROM payments WHERE student_id = ? GROUP BY service_key').all(REG_ID) as any[];
+    // 1 paiement de cours + 2 versements d'assurance.
+    expect(groups.find(g => g.service_key === 'assurance_externe').n).toBe(2);
+    expect(groups.find(g => g.service_key === 'external_course').n).toBe(1);
+  });
+
+  it('stores cash assurance with null cheque fields and null refs (no CHECK violation)', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await writeExternalStudents(db, [makeRegister({
+      assurancePaid: true, assuranceAmount: 50, assuranceRequired: 50,
+      assuranceMethod: 'Espèces', assuranceChequeNumber: undefined, assuranceChequeDate: undefined,
+      assurancePayments: [{ id: 'asr_cash', date: '2026-10-09', amount: 50, method: 'Espèces' }]
+    })], CENTER);
+    const row = sqlite.prepare("SELECT method, cheque_number, cheque_date, ref_type, ref_id FROM payments WHERE service_key = 'assurance_externe'").get() as any;
+    expect(row.method).toBe('cash');
+    expect(row.cheque_number).toBeNull();
+    expect(row.cheque_date).toBeNull();
+    expect(row.ref_type).toBeNull();
+    expect(row.ref_id).toBeNull();
   });
 
   it('removes externals dropped from the payload (and their payments)', async () => {
