@@ -1901,10 +1901,54 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const assurancePaidCount = filteredExtStudents.filter(r => r.assurancePaid).length;
         const assuranceUnpaidCount = filteredExtStudents.filter(r => !r.assurancePaid).length;
 
+        // Répartition des frais de cours (hors assurance, qui revient à 100% au centre)
+        // entre la part du centre et la part de chaque professeur.
+        const courseShareRows = filteredExtStudents.flatMap(reg =>
+          (reg.payments || []).map(p => {
+            const course = courses.find(c => c.id === p.courseId);
+            const total = (course?.teacherShare ?? 0) + (course?.centerShare ?? 0);
+            const centerShare = total > 0 ? Math.round((p.amountPaid * (course?.centerShare ?? 0)) / total) : p.amountPaid;
+            return {
+              reg,
+              payment: p,
+              course,
+              teacherName: (course?.teacherName || '—').trim() || '—',
+              courseLabel: course
+                ? `${course.subject} — ${gradeLabelBilingual(course.gradeLevel)} (${course.schoolYear})`
+                : (p.courseName || '—'),
+              amountPaid: p.amountPaid,
+              centerShare,
+              teacherShare: p.amountPaid - centerShare
+            };
+          })
+        );
+        const centerPartTotal = courseShareRows.reduce((s, r) => s + r.centerShare, 0);
+        const teacherPartTotal = courseShareRows.reduce((s, r) => s + r.teacherShare, 0);
+
+        // Regroupement par professeur puis par cours (مناب الأستاذ حسب الدروس).
+        type TeacherCourseStat = { label: string; count: number; teacher: number; center: number };
+        type TeacherStat = { teacherName: string; count: number; gross: number; teacher: number; center: number; courses: Map<string, TeacherCourseStat> };
+        const teacherMap = new Map<string, TeacherStat>();
+        courseShareRows.forEach(r => {
+          let t = teacherMap.get(r.teacherName);
+          if (!t) { t = { teacherName: r.teacherName, count: 0, gross: 0, teacher: 0, center: 0, courses: new Map() }; teacherMap.set(r.teacherName, t); }
+          t.count += 1;
+          t.gross += r.amountPaid;
+          t.teacher += r.teacherShare;
+          t.center += r.centerShare;
+          const cKey = r.course?.id || r.courseLabel;
+          let c = t.courses.get(cKey);
+          if (!c) { c = { label: r.courseLabel, count: 0, teacher: 0, center: 0 }; t.courses.set(cKey, c); }
+          c.count += 1;
+          c.teacher += r.teacherShare;
+          c.center += r.centerShare;
+        });
+        const teacherRows = Array.from(teacherMap.values()).sort((a, b) => b.teacher - a.teacher);
+
         return (
           <div className="space-y-4 no-print">
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="bg-brand-600/5 p-4 rounded-2xl border border-brand-600/20 space-y-1">
                 <span className="text-[11px] font-bold text-brand-700 block">إجمالي التلاميذ الخارجيين</span>
                 <p className="text-xl font-black text-brand-800">{filteredExtStudents.length} تلميذ</p>
@@ -1921,6 +1965,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-1">
                 <span className="text-[11px] font-bold text-slate-300 block">المجموع الكلي (دروس + تأمين)</span>
                 <p className="text-xl font-black text-white font-mono">{fmt(totalExtRevenue)} د.ت</p>
+              </div>
+              <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-1">
+                <span className="text-[11px] font-bold text-emerald-700 block">مناب السنتر من الكورسات</span>
+                <p className="text-xl font-black text-emerald-700 font-mono">{fmt(centerPartTotal)} د.ت</p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-1">
+                <span className="text-[11px] font-bold text-amber-700 block">مناب الأساتذة من الكورسات</span>
+                <p className="text-xl font-black text-amber-700 font-mono">{fmt(teacherPartTotal)} د.ت</p>
               </div>
             </div>
 
@@ -2035,6 +2087,77 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   {assuranceUnpaidCount} تلميذ لم يدفع التأمين المدرسي السنوي
                 </div>
               )}
+            </div>
+
+            {/* Teacher share breakdown */}
+            <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
+              <div className="p-5 border-b border-slate-100 bg-amber-50/60 flex justify-between items-center">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">👨‍🏫 مناب الأساتذة حسب الدروس ({teacherRows.length})</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">توزيع مداخيل الكورسات بين مناب الأستاذ ومناب السنتر (دون التأمين)</p>
+                </div>
+                <div className="text-left">
+                  <p className="text-[11px] text-slate-500 font-bold">إجمالي مناب الأساتذة</p>
+                  <p className="text-xl font-black text-amber-700 font-mono">{fmt(teacherPartTotal)} د.ت</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-[720px] w-full text-right text-xs">
+                  <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-4">الأستاذ</th>
+                      <th className="p-4">الدروس والكورسات</th>
+                      <th className="p-4">عدد الدفعات</th>
+                      <th className="p-4">المجموع المقبوض</th>
+                      <th className="p-4">مناب الأستاذ</th>
+                      <th className="p-4">مناب السنتر</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {teacherRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">لا توجد مداخيل كورسات مسجلة بعد.</td>
+                      </tr>
+                    ) : (
+                      teacherRows.map(t => (
+                        <tr key={t.teacherName} className="hover:bg-amber-50/40 transition align-top">
+                          <td className="p-4 font-black text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 text-amber-600" />
+                              {t.teacherName}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col gap-1">
+                              {Array.from(t.courses.values()).map((c, i) => (
+                                <span key={i} className="flex flex-col w-fit px-2 py-0.5 bg-amber-50 text-amber-800 rounded-lg text-[10px] font-bold">
+                                  {c.label}
+                                  <span className="text-[9px] font-normal text-slate-500">{c.count} دفعة — مناب الأستاذ {fmt(c.teacher)} د.ت</span>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-4 font-mono font-black text-slate-600">{t.count}</td>
+                          <td className="p-4 font-mono font-black text-slate-900">{fmt(t.gross)} د.ت</td>
+                          <td className="p-4 font-mono font-black text-amber-700">{fmt(t.teacher)} د.ت</td>
+                          <td className="p-4 font-mono font-black text-emerald-700">{fmt(t.center)} د.ت</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {teacherRows.length > 0 && (
+                    <tfoot className="bg-slate-50 border-t border-slate-200">
+                      <tr>
+                        <td colSpan={3} className="p-4 font-black text-slate-700 text-xs">الإجماليات</td>
+                        <td className="p-4 font-mono font-black text-slate-900 text-xs">{fmt(totalCoursePayments)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-amber-700 text-xs">{fmt(teacherPartTotal)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-emerald-700 text-xs">{fmt(centerPartTotal)} د.ت</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
 
             {/* Per-student payment detail */}
