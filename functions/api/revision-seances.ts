@@ -1,4 +1,4 @@
-import { Env, json, readBody, readRevisionSeances, writeRevisionSeances, getContextCenterId } from './_lib';
+import { Env, json, readBody, readRevisionSeances, writeRevisionSeances, createRevisionSeance, getContextCenterId } from './_lib';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
@@ -8,6 +8,21 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   } catch (err) {
     console.error('Error:', err);
     return json({ error: 'تعذر قراءة بيانات جلسات المراجعة.' }, 500);
+  }
+};
+
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  try {
+    const centerId = getContextCenterId(context);
+    const seance = await readBody(context.request);
+    if (!seance || typeof seance !== 'object' || Array.isArray(seance)) {
+      return json({ error: 'بيانات حصة المراجعة غير صالحة.' }, 400);
+    }
+    await createRevisionSeance(context.env.DB, seance, centerId);
+    return json({ ok: true });
+  } catch (err) {
+    console.error('Error:', err);
+    return json({ error: 'تعذر حفظ حصة المراجعة.' }, 500);
   }
 };
 

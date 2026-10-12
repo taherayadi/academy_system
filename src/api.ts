@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
 
 
 const API_BASE = '/api';
@@ -300,6 +300,18 @@ export async function saveExternalStudents(externalStudents: ExternalStudentRegi
 
 export async function saveRevisionSeances(revisionSeances: RevisionSeance[]): Promise<void> {
   return putDomain('/revision-seances', revisionSeances, 'تعذر حفظ بيانات حصص المراجعة.');
+}
+
+
+/** Creates ONE revision seance (and its students) without rewriting the domain. */
+export async function createRevisionSeanceApi(seance: RevisionSeance): Promise<void> {
+  return postDomain('/revision-seances', seance, 'تعذر إضافة حصة المراجعة.');
+}
+
+
+/** Adds ONE student to an existing revision seance without rewriting the domain. */
+export async function addRevisionStudentApi(seanceId: string, student: RevisionSeanceStudent): Promise<void> {
+  return postDomain('/revision-students', { seanceId, student }, 'تعذر إضافة التلميذ إلى حصة المراجعة.');
 }
 
 

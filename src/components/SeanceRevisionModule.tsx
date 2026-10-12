@@ -26,6 +26,8 @@ import { capitalizeFirst } from '../utils/format';
 interface SeanceRevisionModuleProps {
   revisions: RevisionSeance[];
   onUpdateRevisions: (list: RevisionSeance[]) => void;
+  onCreateRevision?: (seance: RevisionSeance) => void;
+  onAddRevisionStudent?: (seanceId: string, student: RevisionSeanceStudent) => void;
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   sidebarCollapsed?: boolean;
@@ -36,6 +38,8 @@ const YEARS = ['2022/2023', '2023/2024', '2024/2025', '2025/2026', '2026/2027', 
 export default function SeanceRevisionModule({
   revisions,
   onUpdateRevisions,
+  onCreateRevision,
+  onAddRevisionStudent,
   settings,
   onUpdateSettings,
   sidebarCollapsed
@@ -184,7 +188,9 @@ export default function SeanceRevisionModule({
         centerShare,
         students: []
       };
-      onUpdateRevisions([...revisions, newRev]);
+      // Granulaire : n'envoie QUE la nouvelle séance, pas toute la liste.
+      if (onCreateRevision) onCreateRevision(newRev);
+      else onUpdateRevisions([...revisions, newRev]);
       setSelectedId(newRev.id);
       toast.success('تم إنشاء حصة المراجعة بنجاح!');
     }
@@ -204,8 +210,12 @@ export default function SeanceRevisionModule({
       paidSeance: stPaid,
       present: true
     };
-    const updated = revisions.map(r => r.id === selected.id ? { ...r, students: [...r.students, newStudent] } : r);
-    onUpdateRevisions(updated);
+    // Granulaire : n'envoie QUE le nouvel élève pour cette séance.
+    if (onAddRevisionStudent) onAddRevisionStudent(selected.id, newStudent);
+    else {
+      const updated = revisions.map(r => r.id === selected.id ? { ...r, students: [...r.students, newStudent] } : r);
+      onUpdateRevisions(updated);
+    }
     setStName('');
     setStPhone('');
     setStPaid(false);
@@ -768,7 +778,7 @@ export default function SeanceRevisionModule({
                   />
                   <div>
                     <p className="text-xs font-black text-brand-700">دفع حصة المراجعة</p>
-                    <p className="text-[10px] text-brand-700 font-bold">المبلغ: {seanceFee} د.ت — يُدفع مرة واحدة للحصة</p>
+                    <p className="text-[10px] text-brand-700 font-bold">المبلغ: {(selected?.teacherShare || 0) + (selected?.centerShare || 0)} د.ت — يُدفع مرة واحدة للحصة</p>
                   </div>
                 </label>
 

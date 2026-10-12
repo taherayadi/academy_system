@@ -136,6 +136,26 @@ beforeEach(() => {
       date TEXT NOT NULL,
       status TEXT NOT NULL
     ) STRICT;
+    CREATE TABLE revision_seances (
+      id TEXT PRIMARY KEY,
+      center_id TEXT NOT NULL REFERENCES centers(id) ON DELETE CASCADE,
+      school_year TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
+      trimester TEXT NOT NULL,
+      grade_level TEXT NOT NULL,
+      subject_id TEXT NOT NULL REFERENCES subjects(id),
+      teacher_name TEXT NOT NULL,
+      teacher_phone TEXT NOT NULL,
+      date TEXT NOT NULL,
+      teacher_share REAL NOT NULL CHECK (teacher_share >= 0),
+      center_share REAL NOT NULL CHECK (center_share >= 0)
+    ) STRICT;
+    CREATE TABLE revision_seance_students (
+      seance_id TEXT NOT NULL REFERENCES revision_seances(id) ON DELETE CASCADE,
+      student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      present INTEGER NOT NULL DEFAULT 0 CHECK (present IN (0,1)),
+      paid_payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+      PRIMARY KEY (seance_id, student_id)
+    ) STRICT;
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
       center_id TEXT NOT NULL REFERENCES centers(id) ON DELETE CASCADE,

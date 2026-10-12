@@ -1375,7 +1375,7 @@ function isoDateOr(value: unknown, fallback: string): string {
 
 export async function readExternalStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [studentRows, yearRows, paymentRows, attendanceRows] = await Promise.all([
-    db.prepare("SELECT * FROM students WHERE center_id = ? AND student_type = 'external'").bind(centerId).all(),
+    db.prepare("SELECT * FROM students WHERE center_id = ? AND student_type = 'external' AND id NOT IN (SELECT student_id FROM revision_seance_students)").bind(centerId).all(),
     db.prepare("SELECT y.* FROM student_years y JOIN students s ON s.id = y.student_id AND s.center_id = y.center_id WHERE y.center_id = ? AND s.student_type = 'external'").bind(centerId).all(),
     db.prepare("SELECT p.* FROM payments p JOIN students s ON s.id = p.student_id AND s.center_id = p.center_id WHERE p.center_id = ? AND s.student_type = 'external' AND p.service_key IN ('external_course','assurance_externe')").bind(centerId).all(),
     db.prepare("SELECT a.*, c.grade_level AS course_grade, sub.name AS course_subject FROM external_attendance a JOIN students s ON s.id = a.student_id AND s.center_id = a.center_id AND s.student_type = 'external' LEFT JOIN external_courses c ON c.id = a.course_id LEFT JOIN subjects sub ON sub.id = c.subject_id WHERE a.center_id = ?").bind(centerId).all()
@@ -1476,9 +1476,10 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
   ).bind(centerId, centerId));
 
   // 2. Externes absents du payload : leur retrait CASCADE (student_years,
-  // course_enrollments, external_attendance).
+  // course_enrollments, external_attendance). Les élèves référencés par une
+  // séance de révision sont préservés (identité portée hors registre externe).
   stmts.push(db.prepare(
-    `DELETE FROM students WHERE center_id = ? AND student_type = 'external'${ids.length ? ` AND id NOT IN (${ph})` : ''}`
+    `DELETE FROM students WHERE center_id = ? AND student_type = 'external' AND id NOT IN (SELECT student_id FROM revision_seance_students)${ids.length ? ` AND id NOT IN (${ph})` : ''}`
   ).bind(centerId, ...ids));
 
   for (const s of rows) {
@@ -1772,14 +1773,49 @@ export async function writeMealForfaitClosures(db: D1Database, closures: any[], 
 // REVISION SEANCES
 // ===========================================================================
 
+// Un tuteur de révision est stocké comme un `students` (student_type='external')
+// afin de satisfaire la clé étrangère revision_seance_students.student_id →
+// students(id). Ces étudiants sont ensuite exclus du registre externe
+// (readExternalStudents / writeExternalStudents) : leur identité vit dans la
+// table `students`, l'identifiant garde le préfixe 'rev_st_'.
+const REVISION_SEANCE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function readRevisionSeances(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [seanceRows, studentRows] = await Promise.all([
     db.prepare('SELECT r.*, sub.name AS subject_name FROM revision_seances r LEFT JOIN subjects sub ON sub.id = r.subject_id WHERE r.center_id = ?').bind(centerId).all(),
-    db.prepare('SELECT st.* FROM revision_seance_students st JOIN revision_seances s ON st.seance_id = s.id WHERE s.center_id = ?').bind(centerId).all()
+    db.prepare('SELECT st.seance_id, st.student_id, st.present, st.paid_payment_id, s.first_name, s.last_name, s.contact_phone FROM revision_seance_students st JOIN revision_seances r ON st.seance_id = r.id LEFT JOIN students s ON s.id = st.student_id WHERE r.center_id = ?').bind(centerId).all()
   ]);
   const studentsBySeance: Record<string, any[]> = {};
-  studentRows.results.forEach((r: any) => { (studentsBySeance[str(r.seance_id)] = studentsBySeance[str(r.seance_id)] || []).push({ id: str(r.student_id), studentId: str(r.student_id), name: str(r.student_id), studentName: str(r.student_id), parentPhone: '', paidSeance: r.paid_payment_id != null, present: !!r.present }); });
+  studentRows.results.forEach((r: any) => {
+    const studentId = str(r.student_id);
+    const fullName = `${str(r.first_name)} ${str(r.last_name)}`.trim();
+    (studentsBySeance[str(r.seance_id)] = studentsBySeance[str(r.seance_id)] || []).push({ id: studentId, studentId, name: fullName || studentId, studentName: fullName || studentId, parentPhone: str(r.contact_phone), paidSeance: r.paid_payment_id != null, present: !!r.present });
+  });
   return seanceRows.results.map((r: any) => ({ id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject_name), subjectId: str(r.subject_id), teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone), date: str(r.date), teacherShare: num(r.teacher_share), centerShare: num(r.center_share), students: studentsBySeance[str(r.id)] || [] }));
+}
+
+// Un élève payé à la séance est matérialisé par une ligne `payments`
+// (service_key='revision', ref_type='revision_seance', ref_id=seance.id) que
+// revision_seance_students.paid_payment_id référence.
+function buildRevisionStudentStmts(db: D1Database, seance: any, st: any, centerId: string): D1PreparedStatement[] {
+  const studentId = str(st.studentId || st.id);
+  if (!studentId) return [];
+  const [firstName, lastName] = splitDisplayName(st.studentName || st.name || '');
+  const stmts: D1PreparedStatement[] = [
+    db.prepare("INSERT INTO students (id, center_id, student_type, first_name, last_name, contact_phone, allergies, status, created_at) VALUES (?, ?, 'external', ?, ?, ?, '', 'active', ?) ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, contact_phone = excluded.contact_phone")
+      .bind(studentId, centerId, firstName, lastName, str(st.parentPhone) || null, Date.now())
+  ];
+  const seanceId = str(seance.id);
+  const amount = Math.round((num(seance.teacherShare) + num(seance.centerShare)) * 100) / 100;
+  let paidPaymentId: string | null = null;
+  if (st.paidSeance && amount > 0 && REVISION_SEANCE_DATE.test(str(seance.date))) {
+    paidPaymentId = `revpay_${seanceId}_${studentId}`;
+    stmts.push(db.prepare("INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, is_refund, cheque_paid, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, 'revision', 'unit', ?, 'full', 'cash', ?, ?, 0, ?, ?, 0, 0, 'revision_seance', ?, ?) ON CONFLICT(id) DO UPDATE SET date = excluded.date, amount = excluded.amount, total_required = excluded.total_required, school_year = excluded.school_year")
+      .bind(paidPaymentId, centerId, studentId, str(seance.date), str(seance.schoolYear) || currentAcademicYear(), amount, amount, paidPaymentId, `حصة مراجعة: ${str(seance.subject) || ''}`.trim(), seanceId, Date.now()));
+  }
+  stmts.push(db.prepare('INSERT INTO revision_seance_students (seance_id, student_id, present, paid_payment_id) VALUES (?, ?, ?, ?) ON CONFLICT(seance_id, student_id) DO UPDATE SET present = excluded.present, paid_payment_id = excluded.paid_payment_id')
+    .bind(seanceId, studentId, st.present ? 1 : 0, paidPaymentId));
+  return stmts;
 }
 
 function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
@@ -1789,7 +1825,7 @@ function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: str
     const sid = ids[str(s.subject).trim()] ?? null;
     if (!sid) continue;
     stmts.push(db.prepare('INSERT INTO revision_seances (id, school_year, trimester, grade_level, subject_id, teacher_name, teacher_phone, date, teacher_share, center_share, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, s.schoolYear, s.trimester, s.gradeLevel, sid, s.teacherName, s.teacherPhone, s.date, num(s.teacherShare), num(s.centerShare), centerId));
-    for (const st of s.students || []) { const studentId = str(st.studentId || st.id); if (studentId) stmts.push(db.prepare('INSERT INTO revision_seance_students (seance_id, student_id, student_name, parent_phone, paid_seance, present) VALUES (?, ?, ?, ?, ?, ?)').bind(s.id, studentId, str(st.studentName || st.name || ''), str(st.parentPhone || ''), st.paidSeance ? 1 : 0, st.present ? 1 : 0)); }
+    for (const st of s.students || []) stmts.push(...buildRevisionStudentStmts(db, s, st, centerId));
   }
   return stmts;
 }
@@ -1797,11 +1833,39 @@ function buildRevisionSeancesStmts(db: D1Database, seances: any[], centerId: str
 export async function writeRevisionSeances(db: D1Database, seances: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const subjectIds = await resolveSubjectIds(db, centerId, (seances || []).map((s: any) => s.subject));
   const stmts = [
+    db.prepare("DELETE FROM payments WHERE ref_type = 'revision_seance' AND ref_id IN (SELECT id FROM revision_seances WHERE center_id = ?)").bind(centerId),
     db.prepare('DELETE FROM revision_seance_students WHERE seance_id IN (SELECT id FROM revision_seances WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM revision_seances WHERE center_id = ?').bind(centerId),
     ...buildRevisionSeancesStmts(db, seances, centerId, subjectIds)
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+// Insère (ou remplace) UNE seule séance de révision et ses élèves, sans toucher
+// aux autres séances du centre.
+export async function createRevisionSeance(db: D1Database, seance: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  if (!seance || typeof seance !== 'object' || Array.isArray(seance)) throw new Error('حصة المراجعة غير صالحة.');
+  const seanceId = str(seance.id);
+  if (!seanceId) throw new Error('معرّف حصة المراجعة مفقود.');
+  const subjectIds = await resolveSubjectIds(db, centerId, [seance.subject]);
+  const stmts = [
+    db.prepare("DELETE FROM payments WHERE ref_type = 'revision_seance' AND ref_id = ?").bind(seanceId),
+    db.prepare('DELETE FROM revision_seance_students WHERE seance_id = ?').bind(seanceId),
+    db.prepare('DELETE FROM revision_seances WHERE id = ? AND center_id = ?').bind(seanceId, centerId),
+    ...buildRevisionSeancesStmts(db, [seance], centerId, subjectIds)
+  ];
+  await db.batch(stmts);
+}
+
+// Ajoute (ou met à jour) UN seul élève dans une séance existante du centre.
+export async function addRevisionStudent(db: D1Database, seanceId: string, student: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  if (!str(seanceId)) throw new Error('معرّف حصة المراجعة مفقود.');
+  if (!student || typeof student !== 'object' || Array.isArray(student)) throw new Error('بيانات التلميذ غير صالحة.');
+  const seance = await db.prepare('SELECT r.*, sub.name AS subject_name FROM revision_seances r LEFT JOIN subjects sub ON sub.id = r.subject_id WHERE r.id = ? AND r.center_id = ?').bind(str(seanceId), centerId).first<any>();
+  if (!seance) throw new Error('حصة المراجعة غير موجودة.');
+  const stmts = buildRevisionStudentStmts(db, { id: str(seance.id), date: str(seance.date), schoolYear: str(seance.school_year), subject: str(seance.subject_name), teacherShare: num(seance.teacher_share), centerShare: num(seance.center_share) }, student, centerId);
+  if (!stmts.length) throw new Error('بيانات التلميذ غير صالحة.');
+  await db.batch(stmts);
 }
 
 // ===========================================================================

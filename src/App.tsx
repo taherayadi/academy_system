@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, addRevisionStudentApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -617,6 +617,18 @@ export default function App() {
   const handleUpdateRevisionSeances = (updated: RevisionSeance[]) => {
     setRevisionSeances(updated);
     commitDomain(() => saveRevisionSeances(updated));
+  };
+
+  const handleCreateRevisionSeance = (seance: RevisionSeance) => {
+    setRevisionSeances(prev => [...prev.filter(s => s.id !== seance.id), seance]);
+    commitDomain(() => createRevisionSeanceApi(seance));
+  };
+
+  const handleAddRevisionStudent = (seanceId: string, student: RevisionSeanceStudent) => {
+    setRevisionSeances(prev => prev.map(s => s.id === seanceId
+      ? { ...s, students: [...s.students.filter(x => x.studentId !== student.studentId), student] }
+      : s));
+    commitDomain(() => addRevisionStudentApi(seanceId, student));
   };
 
   const handleUpdateMealForfaitClosures = (updated: MealForfaitClosure[]) => {
@@ -1342,6 +1354,8 @@ export default function App() {
                 <SeanceRevisionModule
                   revisions={revisionSeances}
                   onUpdateRevisions={handleUpdateRevisionSeances}
+                  onCreateRevision={handleCreateRevisionSeance}
+                  onAddRevisionStudent={handleAddRevisionStudent}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
                   sidebarCollapsed={sidebarCollapsed}
