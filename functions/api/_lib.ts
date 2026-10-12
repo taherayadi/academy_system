@@ -592,7 +592,11 @@ function paymentServiceKey(serviceLabel: unknown, month: unknown): { serviceKey:
 
 export async function readStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [studentsRows, parentsRows, siblingsRows, authRows, histRows, yearRows, enrollRows, paymentRows, mealRows, notesRows] = await Promise.all([
-    db.prepare('SELECT * FROM students WHERE center_id = ?').bind(centerId).all(),
+    // Les élèves « externes » (student_type='external') appartiennent au
+    // registre hors-liste (readExternalStudents) : on les exclut ici pour
+    // qu'ils n'apparaissent pas dans le module Élèves ni ne double-comptent
+    // leurs paiements dans FinanceModule.
+    db.prepare("SELECT * FROM students WHERE center_id = ? AND student_type <> 'external'").bind(centerId).all(),
     db.prepare('SELECT p.* FROM student_parents p JOIN students s ON p.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT sib.* FROM siblings sib JOIN students s ON sib.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
     db.prepare('SELECT a.* FROM authorized_persons a JOIN students s ON a.student_id = s.id WHERE s.center_id = ?').bind(centerId).all(),
@@ -926,17 +930,21 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
 }
 
 export async function writeStudents(db: D1Database, students: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  // Le registre hors-liste (student_type='external') est écrit par
+  // buildExternalStudentsStmts, PAS ici : sans ce filtre, tout PUT /api/students
+  // supprimerait les élèves externes (et leurs présences/inscriptions en CASCADE).
+  const notExternal = "student_id IN (SELECT id FROM students WHERE center_id = ? AND student_type <> 'external')";
   const stmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_service_enrollments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_years WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM students WHERE center_id = ?').bind(centerId),
+    db.prepare(`DELETE FROM payments WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_service_enrollments WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_years WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM meal_attendances WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM suivi_notes WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM academic_history WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM authorized_persons WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM siblings WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_parents WHERE ${notExternal}`).bind(centerId),
+    db.prepare("DELETE FROM students WHERE center_id = ? AND student_type <> 'external'").bind(centerId),
     ...(await buildStudentsStmts(db, students, centerId))
   ];
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
@@ -1162,34 +1170,50 @@ export async function writeSlots(db: D1Database, slots: any[], centerId: string 
 // ===========================================================================
 
 export async function readCourses(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
-  const [courseRows, enrollRows] = await Promise.all([
+  const [courseRows, enrollRows, assuranceByStudent] = await Promise.all([
     db.prepare('SELECT c.*, sub.name AS subject_name FROM external_courses c LEFT JOIN subjects sub ON sub.id = c.subject_id WHERE c.center_id = ?').bind(centerId).all(),
-    // Table course_enrollments: simple (course_id, student_id) join. The
-    // per-student roster fields (name, phone, assurance…) live on the
-    // external_students register / per-student data — the course row keeps
-    // only the IDs. When the table is absent (older deployment) the roster
-    // falls back to empty and enrollments are skipped on write.
-    readCourseEnrollments(db, centerId)
+    // Roster hydraté : le client affiche studentName/parentPhone/isExternal et
+    // l'assurance sans avoir à re-croiser le registre hors-liste.
+    readCourseEnrollments(db, centerId),
+    readExternalAssurance(db, centerId)
   ]);
-  const enrollByCourse: Record<string, string[]> = {};
-  enrollRows.forEach((r: any) => { (enrollByCourse[str(r.course_id)] = enrollByCourse[str(r.course_id)] || []).push(str(r.student_id)); });
+  const enrollByCourse: Record<string, any[]> = {};
+  enrollRows.forEach((r: any) => { (enrollByCourse[str(r.course_id)] = enrollByCourse[str(r.course_id)] || []).push(r); });
   return courseRows.results.map((r: any) => ({
     id: str(r.id), schoolYear: str(r.school_year), trimester: str(r.trimester), gradeLevel: str(r.grade_level), subject: str(r.subject_name), subjectId: str(r.subject_id),
     teacherName: str(r.teacher_name), teacherPhone: str(r.teacher_phone),
     monthlyFee: num(r.monthly_fee), teacherShare: num(r.teacher_share), centerShare: num(r.center_share),
     // Montant d'assurance propre à ce cours (synchro DEFAULT du service assurance_externe)
     assuranceAmount: r.assurance_amount == null ? 0 : num(r.assurance_amount),
-    // Legacy external-student roster rows are no longer stored per course:
-    // enrolledStudents keeps only real students (the UI derives the display
-    // roster from externalStudents via studentId).
-    enrolledStudents: (enrollByCourse[str(r.id)] || []).map((sid: string) => ({ studentId: sid }))
+    enrolledStudents: (enrollByCourse[str(r.id)] || []).map((e: any) => {
+      const studentId = str(e.student_id);
+      const name = `${str(e.first_name)} ${str(e.last_name)}`.trim();
+      const assur = assuranceByStudent[studentId];
+      return {
+        studentId,
+        studentName: name,
+        parentPhone: str(e.contact_phone),
+        // Un externe porte student_type='external' ; toute ligne sans élèves
+        // correspondant (orpheline) est traitée comme externe elle aussi.
+        isExternal: str(e.student_type) !== 'regular',
+        assurancePaid: !!assur,
+        assuranceAmount: assur ? assur.amount : 0,
+        assuranceDate: assur ? assur.date : undefined,
+        enrolledAt: e.enrolled_at == null ? undefined : new Date(num(e.enrolled_at)).toISOString().slice(0, 10)
+      };
+    })
   }));
 }
 
 async function readCourseEnrollments(db: D1Database, centerId: string): Promise<any[]> {
   try {
     const out = await db.prepare(
-      'SELECT e.course_id, e.student_id FROM course_enrollments e JOIN external_courses c ON e.course_id = c.id WHERE c.center_id = ?'
+      `SELECT e.course_id, e.student_id, e.enrolled_at,
+              s.first_name, s.last_name, s.contact_phone, s.student_type
+       FROM course_enrollments e
+       JOIN external_courses c ON e.course_id = c.id
+       LEFT JOIN students s ON s.id = e.student_id AND s.center_id = c.center_id
+       WHERE c.center_id = ?`
     ).bind(centerId).all();
     return out.results || [];
   } catch {
@@ -1197,35 +1221,57 @@ async function readCourseEnrollments(db: D1Database, centerId: string): Promise<
   }
 }
 
-function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID, skipEnrollments = false, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
+// Assurance scolaire des élèves externes, indexée par student_id (dernière
+// ligne gagnante). Alimente enrolledStudents[].assurancePaid côté cours.
+async function readExternalAssurance(db: D1Database, centerId: string): Promise<Record<string, { amount: number; date: string }>> {
+  try {
+    const out = await db.prepare(
+      `SELECT p.student_id, p.amount, p.date FROM payments p
+       JOIN students s ON s.id = p.student_id AND s.center_id = p.center_id
+       WHERE p.center_id = ? AND s.student_type = 'external' AND p.service_key = 'assurance_externe'
+       ORDER BY p.created_at, p.date`
+    ).bind(centerId).all();
+    const map: Record<string, { amount: number; date: string }> = {};
+    (out.results || []).forEach((r: any) => { map[str(r.student_id)] = { amount: num(r.amount), date: str(r.date) }; });
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+function buildCoursesStmts(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID, subjectIds?: Record<string, string | null>): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   const ids = subjectIds || {};
   for (const c of courses || []) {
     const sid = ids[str(c.subject).trim()] ?? null;
     if (!sid) continue;
     stmts.push(db.prepare('INSERT INTO external_courses (id, school_year, trimester, grade_level, subject_id, teacher_name, teacher_phone, monthly_fee, teacher_share, center_share, assurance_amount, center_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(c.id, c.schoolYear, c.trimester, c.gradeLevel, sid, c.teacherName, c.teacherPhone, num(c.monthlyFee), num(c.teacherShare), num(c.centerShare), c.assuranceAmount != null ? num(c.assuranceAmount) : 0, centerId));
-    if (skipEnrollments) continue;
-    for (const es of c.enrolledStudents || []) { const studentId = str(es.studentId || es.id); if (studentId) stmts.push(db.prepare('INSERT OR IGNORE INTO course_enrollments (course_id, student_id, enrolled_at) VALUES (?, ?, ?)').bind(c.id, studentId, Date.now())); }
+    for (const es of c.enrolledStudents || []) {
+      const studentId = str(es.studentId || es.id);
+      if (!studentId) continue;
+      // On privilégie la date d'inscription du client ; à défaut, maintenant.
+      const enrolledMs = str(es.enrolledAt) && Number.isFinite(Date.parse(str(es.enrolledAt))) ? Date.parse(str(es.enrolledAt)) : Date.now();
+      stmts.push(db.prepare('INSERT OR IGNORE INTO course_enrollments (course_id, student_id, enrolled_at) VALUES (?, ?, ?)').bind(c.id, studentId, enrolledMs));
+    }
   }
   return stmts;
 }
 
 export async function writeCourses(db: D1Database, courses: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const subjectIds = await resolveSubjectIds(db, centerId, (courses || []).map((c: any) => c.subject));
-  const stmts = [
+  // Les DELETE ne sont émis QU'UNE fois : les concaténer à chaque tranche de
+  // 500 les rejouait et effaçait les tranches précédentes.
+  const deleteStmts = [
     db.prepare('DELETE FROM course_enrollments WHERE course_id IN (SELECT id FROM external_courses WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM external_courses WHERE center_id = ?').bind(centerId)
   ];
-  for (let i = 0; i < courses.length; i += 500) {
-    const slice = (courses || []).slice(i, i + 500);
-    try {
-      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId, false, subjectIds)));
-    } catch {
-      // Table course_enrollments absente (déploiement antérieur) : réessaie
-      // en insérant les cours seuls.
-      await db.batch(stmts.concat(buildCoursesStmts(db, slice, centerId, true, subjectIds)));
-    }
-  }
+  for (let i = 0; i < deleteStmts.length; i += 500) await db.batch(deleteStmts.slice(i, i + 500));
+
+  // Pas de repli « sans enrollments » : il masquait les échecs de FK
+  // (élève externe absent de `students`) et effaçait silencieusement TOUS les
+  // effectifs. Une erreur remonte désormais au client.
+  const insertStmts = buildCoursesStmts(db, courses || [], centerId, subjectIds);
+  for (let i = 0; i < insertStmts.length; i += 500) await db.batch(insertStmts.slice(i, i + 500));
 }
 
 // ===========================================================================
@@ -1295,29 +1341,202 @@ export async function writeSessions(db: D1Database, sessions: any[], centerId: s
 }
 
 // ===========================================================================
-// EXTERNAL STUDENTS
-// ===========================================================================
-
-// ===========================================================================
 // EXTERNAL STUDENTS (hors-liste)
-// Nouveau schéma : les tables external_students / external_payments n'existent
-// plus. Un externe est un `students` (student_type='external') ; ses paiements
-// vivront dans `payments` (service_key 'external_course' / 'assurance_externe')
-// et ses présences dans external_attendance. En attendant la refonte UI du
-// registre, l'API répond une liste vide et absorbe les écritures — le module
-// reste utilisable sans crash, le registre se vide au rechargement.
+// Un externe est un `students` (student_type='external') : son identité vit
+// donc dans `students` / `student_years`, ses paiements dans `payments`
+// (service_key 'external_course' / 'assurance_externe') et ses présences dans
+// `external_attendance`. Cette partition est la SEULE écrite ici :
+// readStudents / writeStudents l'excluent (student_type <> 'external').
 // ===========================================================================
 
-export async function readExternalStudents(_db: D1Database, _centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
-  return [];
+// Nom affiché « Ali ayadi » → (first_name, last_name). Découpe sur le dernier
+// espace : l'UI ne collecte qu'une seule chaîne.
+function splitDisplayName(name: unknown): [string, string] {
+  const full = str(name).replace(/\s+/g, ' ').trim();
+  if (!full) return ['', ''];
+  const sp = full.lastIndexOf(' ');
+  return sp <= 0 ? [full, ''] : [full.slice(0, sp), full.slice(sp + 1)];
 }
 
-function buildExternalStudentsStmts(_db: D1Database, _externalStudents: any[], _centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
-  return [];
+function isoDateOr(value: unknown, fallback: string): string {
+  const s = str(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : fallback;
 }
 
-export async function writeExternalStudents(_db: D1Database, _externalStudents: any[], _centerId: string = DEFAULT_CENTER_ID): Promise<void> {
-  // no-op volontaire — voir note ci-dessus.
+export async function readExternalStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  const [studentRows, yearRows, paymentRows, attendanceRows] = await Promise.all([
+    db.prepare("SELECT * FROM students WHERE center_id = ? AND student_type = 'external'").bind(centerId).all(),
+    db.prepare("SELECT y.* FROM student_years y JOIN students s ON s.id = y.student_id AND s.center_id = y.center_id WHERE y.center_id = ? AND s.student_type = 'external'").bind(centerId).all(),
+    db.prepare("SELECT p.* FROM payments p JOIN students s ON s.id = p.student_id AND s.center_id = p.center_id WHERE p.center_id = ? AND s.student_type = 'external' AND p.service_key IN ('external_course','assurance_externe')").bind(centerId).all(),
+    db.prepare("SELECT a.*, c.grade_level AS course_grade, sub.name AS course_subject FROM external_attendance a JOIN students s ON s.id = a.student_id AND s.center_id = a.center_id AND s.student_type = 'external' LEFT JOIN external_courses c ON c.id = a.course_id LEFT JOIN subjects sub ON sub.id = c.subject_id WHERE a.center_id = ?").bind(centerId).all()
+  ]);
+
+  // Année courante de chaque externe = dernière ligne de student_years.
+  const yearByStudent: Record<string, any> = {};
+  yearRows.results.forEach((r: any) => {
+    const key = str(r.student_id);
+    const cur = yearByStudent[key];
+    if (!cur || String(r.school_year) > String(cur.school_year)) yearByStudent[key] = r;
+  });
+
+  const coursePayByStudent: Record<string, any[]> = {};
+  const assuranceByStudent: Record<string, any> = {};
+  paymentRows.results.forEach((r: any) => {
+    const key = str(r.student_id);
+    if (str(r.service_key) === 'assurance_externe') {
+      const cur = assuranceByStudent[key];
+      if (!cur || num(r.created_at) >= num(cur.created_at)) assuranceByStudent[key] = r;
+      return;
+    }
+    (coursePayByStudent[key] = coursePayByStudent[key] || []).push(r);
+  });
+
+  const attendanceByStudent: Record<string, any[]> = {};
+  attendanceRows.results.forEach((r: any) => { (attendanceByStudent[str(r.student_id)] = attendanceByStudent[str(r.student_id)] || []).push(r); });
+
+  return studentRows.results.map((r: any) => {
+    const id = str(r.id);
+    const yr = yearByStudent[id];
+    const assur = assuranceByStudent[id];
+    const createdMs = num(r.created_at);
+    return {
+      id,
+      name: `${str(r.first_name)} ${str(r.last_name)}`.trim(),
+      parentPhone: str(r.contact_phone),
+      grade: yr ? str(yr.grade) : '',
+      schoolYear: yr ? str(yr.school_year) : currentAcademicYear(),
+      assurancePaid: !!assur,
+      assuranceAmount: assur ? num(assur.amount) : 0,
+      assuranceDate: assur ? str(assur.date) : undefined,
+      createdAt: createdMs > 0 ? new Date(createdMs).toISOString().slice(0, 10) : '',
+      payments: (coursePayByStudent[id] || []).map((p: any) => ({
+        id: str(p.id),
+        studentId: id,
+        courseId: str(p.ref_id),
+        courseName: str(p.notes),
+        schoolYear: str(p.school_year),
+        amountPaid: num(p.amount),
+        date: str(p.date),
+        method: paymentMethodLabelKey(p.method)
+      })),
+      attendance: (attendanceByStudent[id] || []).map((a: any) => {
+        const subject = str(a.course_subject);
+        const grade = str(a.course_grade);
+        return {
+          id: str(a.id),
+          studentId: id,
+          courseId: str(a.course_id),
+          courseName: subject ? (grade ? `${subject} (${grade})` : subject) : grade,
+          date: str(a.date),
+          status: str(a.status) === 'absent' ? 'absent' : 'present'
+        };
+      })
+    };
+  });
+}
+
+function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const rows = (externalStudents || []).filter(s => s && str(s.id).trim());
+  const ids = rows.map(s => str(s.id));
+  const ph = ids.map(() => '?').join(',');
+  const stmts: D1PreparedStatement[] = [];
+
+  // 1. Les paiements externes n'ont PAS de FK vers `students` : les effacer
+  // avant tout retrait d'élève, sinon ils resteraient orphelins.
+  stmts.push(db.prepare(
+    "DELETE FROM payments WHERE center_id = ? AND service_key IN ('external_course','assurance_externe') AND student_id IN (SELECT id FROM students WHERE center_id = ? AND student_type = 'external')"
+  ).bind(centerId, centerId));
+
+  // 2. Externes absents du payload : leur retrait CASCADE (student_years,
+  // course_enrollments, external_attendance).
+  stmts.push(db.prepare(
+    `DELETE FROM students WHERE center_id = ? AND student_type = 'external'${ids.length ? ` AND id NOT IN (${ph})` : ''}`
+  ).bind(centerId, ...ids));
+
+  for (const s of rows) {
+    const id = str(s.id);
+    const [firstName, lastName] = splitDisplayName(s.name);
+    const schoolYear = /^\d{4}\/\d{4}$/.test(str(s.schoolYear)) ? str(s.schoolYear) : currentAcademicYear();
+    const createdMs = Date.parse(str(s.createdAt));
+
+    // Upsert : jamais INSERT OR REPLACE, qui ferait un DELETE+INSERT et
+    // CASCADE-effacerait les course_enrollments de l'élève.
+    stmts.push(db.prepare(
+      "INSERT INTO students (id, center_id, student_type, first_name, last_name, contact_phone, allergies, status, created_at) VALUES (?, ?, 'external', ?, ?, ?, '', 'active', ?) ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, contact_phone = excluded.contact_phone WHERE students.center_id = excluded.center_id"
+    ).bind(id, centerId, firstName, lastName, str(s.parentPhone) || null, Number.isFinite(createdMs) ? createdMs : Date.now()));
+
+    stmts.push(db.prepare(
+      'INSERT INTO student_years (student_id, center_id, school_year, grade) VALUES (?, ?, ?, ?) ON CONFLICT(student_id, school_year) DO UPDATE SET grade = excluded.grade'
+    ).bind(id, centerId, schoolYear, str(s.grade) || ''));
+
+    for (const p of s.payments || []) {
+      const payId = str(p.id);
+      const amount = num(p.amountPaid);
+      if (!payId || amount <= 0) continue;
+      // receipt_number doit être unique par centre : l'id de paiement l'est.
+      // FinanceModule affiche de toute façon EXT-… / ASR-… synthétiquement.
+      stmts.push(db.prepare(
+        'INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, refund_of, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        payId, centerId, id, isoDateOr(p.date, new Date().toISOString().slice(0, 10)),
+        'external_course', 'unit', null, schoolYear,
+        'full', paymentMethodKey(p.method), amount, amount, 0,
+        payId, str(p.courseName) || null,
+        null, null, 0, 0, null,
+        'external_course', str(p.courseId) || null, Date.now()
+      ));
+    }
+
+    if (s.assurancePaid && num(s.assuranceAmount) > 0) {
+      const amount = num(s.assuranceAmount);
+      stmts.push(db.prepare(
+        'INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, refund_of, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        'asr_' + id, centerId, id, isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10))),
+        'assurance_externe', 'year', null, schoolYear,
+        'full', 'cash', amount, amount, 0,
+        'ASR-' + id, null,
+        null, null, 0, 0, null,
+        'external_course', null, Date.now()
+      ));
+    }
+  }
+
+  return stmts;
+}
+
+// Présences hors-liste. Isolé du bloc identité/paiements car il doit s'exécuter
+// APRÈS la (re)création des cours : les deux contraintes de FK (élève avant
+// course_enrollments, cours avant external_attendance) imposent cet ordre.
+function buildExternalAttendanceStmts(db: D1Database, externalStudents: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
+  const rows = (externalStudents || []).filter(s => s && str(s.id).trim());
+  const ids = rows.map(s => str(s.id));
+  const ph = ids.map(() => '?').join(',');
+  const stmts: D1PreparedStatement[] = [];
+
+  if (ids.length) stmts.push(db.prepare(`DELETE FROM external_attendance WHERE center_id = ? AND student_id IN (${ph})`).bind(centerId, ...ids));
+  // Garde-fou FK : une présence dont le cours n'existe plus ferait échouer
+  // l'insert ; on purge les orphelines avant de ré-insérer.
+  stmts.push(db.prepare('DELETE FROM external_attendance WHERE center_id = ? AND course_id IS NOT NULL AND course_id NOT IN (SELECT id FROM external_courses)').bind(centerId));
+  for (const s of rows) {
+    const id = str(s.id);
+    for (const a of s.attendance || []) {
+      const attId = str(a.id);
+      if (!attId) continue;
+      stmts.push(db.prepare(
+        'INSERT INTO external_attendance (id, center_id, student_id, course_id, date, status) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(attId, centerId, id, str(a.courseId) || null, str(a.date), str(a.status) === 'absent' ? 'absent' : 'present'));
+    }
+  }
+  return stmts;
+}
+
+export async function writeExternalStudents(db: D1Database, externalStudents: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const stmts = [
+    ...buildExternalStudentsStmts(db, externalStudents, centerId),
+    ...buildExternalAttendanceStmts(db, externalStudents, centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
 // ===========================================================================
@@ -2167,17 +2386,18 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
     return out;
   };
 
+  const notExternal = "student_id IN (SELECT id FROM students WHERE center_id = ? AND student_type <> 'external')";
   const deleteStmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM payments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_service_enrollments WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_years WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM meal_attendances WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM suivi_notes WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM academic_history WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM authorized_persons WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM siblings WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM student_parents WHERE student_id IN (SELECT id FROM students WHERE center_id = ?)').bind(centerId),
-    db.prepare('DELETE FROM students WHERE center_id = ?').bind(centerId),
+    db.prepare(`DELETE FROM payments WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_service_enrollments WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_years WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM meal_attendances WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM suivi_notes WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM academic_history WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM authorized_persons WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM siblings WHERE ${notExternal}`).bind(centerId),
+    db.prepare(`DELETE FROM student_parents WHERE ${notExternal}`).bind(centerId),
+    db.prepare("DELETE FROM students WHERE center_id = ? AND student_type <> 'external'").bind(centerId),
 
     db.prepare('DELETE FROM staff_payslips WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM staff_payments WHERE staff_id IN (SELECT id FROM staff WHERE center_id = ?)').bind(centerId),
@@ -2243,12 +2463,15 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
     ...(await buildStudentsStmts(db, dedupe(state.students), centerId)),
     ...buildStaffStmts(db, dedupe(state.staff), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.staff) || []).flatMap((s: any) => s.subjects || []))),
     ...buildSlotsStmts(db, dedupe(state.slots), centerId),
-    ...buildCoursesStmts(db, dedupe(state.courses), centerId, false, await resolveSubjectIds(db, centerId, (dedupe(state.courses) || []).map((c: any) => c.subject))),
+    // Externes AVANT les cours : les course_enrollments référencent students(id).
+    ...buildExternalStudentsStmts(db, dedupe(state.externalStudents), centerId),
+    ...buildCoursesStmts(db, dedupe(state.courses), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.courses) || []).map((c: any) => c.subject))),
     ...buildSessionsStmts(db, dedupe(state.sessions), centerId),
+    // Présences externes APRÈS les cours : external_attendance.course_id → external_courses.
+    ...buildExternalAttendanceStmts(db, dedupe(state.externalStudents), centerId),
     ...buildMealPlansStmts(db, dedupe(state.mealPlans), centerId),
     ...buildExpensesStmts(db, dedupe(state.expenses), centerId),
     ...buildTimesheetsStmts(db, dedupe(state.timesheets), centerId),
-    ...buildExternalStudentsStmts(db, dedupe(state.externalStudents), centerId),
     ...buildRevisionSeancesStmts(db, dedupe(state.revisionSeances), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.revisionSeances) || []).map((s: any) => s.subject))),
     ...buildStudentTimeSheetsStmts(db, dedupe(state.studentTimeSheets), centerId),
     ...(await buildFormationsStmts(db, dedupe(state.formations), centerId, await resolveSubjectIds(db, centerId, (dedupe(state.formations) || []).flatMap((f: any) => (f.matieres || []).map((m: any) => m.subject))))),
