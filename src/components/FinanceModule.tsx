@@ -312,6 +312,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           : []);
     ledger.forEach((ap, i) => {
       if (!(ap.amount > 0)) return;
+      const disc = ap.discount || (i === 0 ? (reg.assuranceDiscount || 0) : 0);
       recs.push({
         id: ap.id || ('asr_' + reg.id + '_' + i),
         date: ap.date,
@@ -324,6 +325,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         method: ap.method || reg.assuranceMethod || 'Espèces',
         receiptNumber: `ASR-${reg.id.slice(-4)}-${(ap.date || '').replace(/-/g, '')}${i ? '-' + i : ''}`,
         notes: 'تأمين مدرسي (Assurance) - كراس خارجي',
+        discount: disc > 0 ? disc : undefined,
         studentName: reg.name,
         studentGrade: reg.grade,
         studentYear: reg.schoolYear || '2026/2027',
@@ -2038,7 +2040,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             {/* Per-student payment detail */}
             {filteredExtStudents.some(r => (r.payments || []).length > 0 || (r.assuranceAmount || 0) > 0) && (() => {
               // Build full flat list: course payments + assurance rows
-              const allDetailRows: { id: string; date: string; name: string; courseName: string; amount: number; method: string; isAssurance: boolean }[] = [];
+              const allDetailRows: { id: string; date: string; name: string; courseName: string; amount: number; method: string; discount?: number; isAssurance: boolean }[] = [];
               filteredExtStudents.forEach(reg => {
                 (reg.payments || [])
                   .filter(p => monthFilter === 'all' || monthFromDate(p.date) === monthFilter)
@@ -2055,19 +2057,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                   const ledger = (reg.assurancePayments && reg.assurancePayments.length)
                     ? reg.assurancePayments
                     : [{ id: 'asr_' + reg.id, date: reg.assuranceDate || '', amount: reg.assuranceAmount, method: reg.assuranceMethod || 'Espèces' }];
-                  ledger.forEach((ap, i) => {
-                    if (!(ap.amount > 0)) return;
-                    if (monthFilter !== 'all' && monthFromDate(ap.date || '') !== monthFilter) return;
-                    allDetailRows.push({
-                      id: ap.id || ('asr_' + reg.id + '_' + i),
-                      date: ap.date || '',
-                      name: reg.name,
-                      courseName: 'تأمين مدرسي (Assurance) 🛡️',
-                      amount: ap.amount,
-                      method: ap.method || reg.assuranceMethod || 'Espèces',
-                      isAssurance: true
+                    ledger.forEach((ap, i) => {
+                      if (!(ap.amount > 0)) return;
+                      if (monthFilter !== 'all' && monthFromDate(ap.date || '') !== monthFilter) return;
+                      const disc = ap.discount || (i === 0 ? (reg.assuranceDiscount || 0) : 0);
+                      allDetailRows.push({
+                        id: ap.id || ('asr_' + reg.id + '_' + i),
+                        date: ap.date || '',
+                        name: reg.name,
+                        courseName: 'تأمين مدرسي (Assurance) 🛡️',
+                        amount: ap.amount,
+                        method: ap.method || reg.assuranceMethod || 'Espèces',
+                        discount: disc > 0 ? disc : undefined,
+                        isAssurance: true
+                      });
                     });
-                  });
                 }
               });
 
@@ -2093,13 +2097,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                           <th className="p-4">التلميذ</th>
                           <th className="p-4">الكورس / الخدمة</th>
                           <th className="p-4">المبلغ المقبوض</th>
+                          <th className="p-4">التخفيض</th>
                           <th className="p-4">طريقة الخلاص</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedDetailRows.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">لا توجد دفعات موافقة للتصفية المحددة.</td>
+                            <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">لا توجد دفعات موافقة للتصفية المحددة.</td>
                           </tr>
                         ) : (
                           paginatedDetailRows.map(row => (
@@ -2110,6 +2115,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               <td className="p-4 font-black text-slate-900">{row.name}</td>
                               <td className={`p-4 font-bold ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{row.courseName}</td>
                               <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{fmt(row.amount)} د.ت</td>
+                              <td className="p-4 font-mono font-black text-brand-700">{row.discount ? `${fmt(row.discount)} د.ت` : '—'}</td>
                               <td className="p-4 text-slate-600 font-bold">{paymentMethodLabel(row.method)}</td>
                             </tr>
                           ))

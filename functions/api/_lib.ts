@@ -1414,11 +1414,13 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
       amount: num(p.amount),
       method: paymentMethodLabelKey(p.method),
       chequeNumber: p.cheque_number != null ? str(p.cheque_number) : undefined,
-      chequeDate: p.cheque_date != null ? str(p.cheque_date) : undefined
+      chequeDate: p.cheque_date != null ? str(p.cheque_date) : undefined,
+      discount: num(p.discount) > 0 ? num(p.discount) : undefined
     }));
     const assurTotal = assurRows.reduce((sum, p) => sum + num(p.amount), 0);
     const lastAssur = assurRows[assurRows.length - 1];
     const assurRequired = lastAssur ? num(lastAssur.total_required) : 0;
+    const assurDiscount = assurRows.reduce((sum, p) => sum + num(p.discount), 0);
     return {
       id,
       name: `${str(r.first_name)} ${str(r.last_name)}`.trim(),
@@ -1428,6 +1430,7 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
       assurancePaid: !!lastAssur && assurRequired > 0 && assurTotal >= assurRequired,
       assuranceAmount: assurTotal,
       assuranceRequired: assurRequired,
+      assuranceDiscount: assurDiscount,
       assuranceDate: lastAssur ? str(lastAssur.date) : undefined,
       assuranceMethod: lastAssur ? paymentMethodLabelKey(lastAssur.method) : undefined,
       assuranceChequeNumber: lastAssur && lastAssur.cheque_number != null ? str(lastAssur.cheque_number) : undefined,
@@ -1521,6 +1524,8 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
           ? [{ id: 'asr_' + id, date: s.assuranceDate, amount: num(s.assuranceAmount), method: s.assuranceMethod, chequeNumber: s.assuranceChequeNumber, chequeDate: s.assuranceChequeDate }]
           : []);
     const assurRequired = Math.max(num(s.assuranceRequired), num(s.assuranceAmount));
+    const assurDiscountTotal = num(s.assuranceDiscount);
+    let assurDiscApplied = false;
     let assurSeq = 0;
     for (const ap of assurRows) {
       const amount = num(ap.amount);
@@ -1529,12 +1534,17 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
       const isCheque = method === 'cheque';
       const apDate = isoDateOr(ap.date, isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10))));
       const apId = str(ap.id) || `asr_${id}_${assurSeq++}`;
+      // تخفيض : porté par le versement qui le déclare, sinon par le 1er versement
+      // (registre). total_required porte le montant DÛ (tarif − تخفيض), donc la
+      // colonne discount est un montant d'audit : tarif = total_required + discount.
+      const rowDiscount = num(ap.discount) || (!assurDiscApplied && assurDiscountTotal > 0 ? assurDiscountTotal : 0);
+      if (rowDiscount > 0) assurDiscApplied = true;
       stmts.push(db.prepare(
         'INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, refund_of, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
         apId, centerId, id, apDate,
         'assurance_externe', 'year', null, schoolYear,
-        'full', method, amount, Math.max(assurRequired, amount), 0,
+        'full', method, amount, Math.max(assurRequired, amount), rowDiscount,
         'ASR-' + apId, null,
         // CHECK: un paiement non-chèque doit avoir cheque_number/date NULL.
         isCheque ? (str(ap.chequeNumber) || null) : null,

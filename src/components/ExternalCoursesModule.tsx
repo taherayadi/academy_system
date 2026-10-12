@@ -402,13 +402,15 @@ export default function ExternalCoursesModule({
       amount: paid,
       method: assurancePayMethod,
       chequeNumber: assurancePayMethod === 'Chèque' ? assurancePayChequeNumber : undefined,
-      chequeDate: assurancePayMethod === 'Chèque' ? assurancePayChequeDate : undefined
+      chequeDate: assurancePayMethod === 'Chèque' ? assurancePayChequeDate : undefined,
+      discount: disc > 0 ? disc : undefined
     } as const;
     const updatedReg: ExternalStudentRegister = {
       ...base,
       assurancePaid: fullyPaid,
       assuranceAmount: newTotal,
       assuranceRequired: effectiveRequired,
+      assuranceDiscount: disc > 0 ? disc : base.assuranceDiscount,
       assuranceDate: date,
       assuranceMethod: assurancePayMethod,
       assuranceChequeNumber: newEntry.chequeNumber,

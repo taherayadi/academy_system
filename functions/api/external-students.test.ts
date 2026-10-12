@@ -342,17 +342,21 @@ describe('external students persistence', () => {
     await writeCourses(db, [makeCourse()], CENTER);
     // Assurance 50 − تخفيض 10 = 40 dus ; 20 versés.
     await writeExternalStudents(db, [makeRegister({
-      assurancePaid: false, assuranceAmount: 20, assuranceRequired: 40,
+      assurancePaid: false, assuranceAmount: 20, assuranceRequired: 40, assuranceDiscount: 10,
       assuranceMethod: 'Espèces', assuranceChequeNumber: undefined, assuranceChequeDate: undefined,
-      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 20, method: 'Espèces' }]
+      assurancePayments: [{ id: 'asr_a', date: '2026-10-09', amount: 20, method: 'Espèces', discount: 10 }]
     })], CENTER);
 
     const list = await readExternalStudents(db, CENTER);
     expect(list[0].assuranceRequired).toBe(40);
     expect(list[0].assuranceAmount).toBe(20);
     expect(list[0].assurancePaid).toBe(false);
-    const row = sqlite.prepare("SELECT total_required FROM payments WHERE service_key = 'assurance_externe'").get() as any;
+    expect(list[0].assuranceDiscount).toBe(10);
+    expect(list[0].assurancePayments![0]).toMatchObject({ amount: 20, discount: 10 });
+    const row = sqlite.prepare("SELECT total_required, discount FROM payments WHERE service_key = 'assurance_externe'").get() as any;
+    // tarif 50 = dû 40 + تخفيض 10
     expect(row.total_required).toBe(40);
+    expect(row.discount).toBe(10);
   });
 
   it('stores cash assurance with null cheque fields and null refs (no CHECK violation)', async () => {

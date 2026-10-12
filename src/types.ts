@@ -1112,6 +1112,7 @@ export interface ExternalAssurancePayment {
   method: 'Espèces' | 'Chèque' | 'Virement';
   chequeNumber?: string;
   chequeDate?: string;
+  discount?: number; // تخفيض appliqué (payments.discount) — porté par le 1er versement
 }
 
 
@@ -1123,7 +1124,8 @@ export interface ExternalStudentRegister {
   schoolYear?: string; // ex: "2026/2027" — registration year
   assurancePaid: boolean; // true once the total paid reaches assuranceRequired
   assuranceAmount: number; // total assurance paid so far
-  assuranceRequired?: number; // yearly amount due (course assurance fee)
+  assuranceRequired?: number; // amount due (course fee minus any discount)
+  assuranceDiscount?: number; // تخفيض appliqué sur l'assurance annuelle
   assuranceDate?: string;
   assuranceMethod?: 'Espèces' | 'Chèque' | 'Virement';
   assuranceChequeNumber?: string;
