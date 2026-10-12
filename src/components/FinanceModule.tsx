@@ -2075,11 +2075,21 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 }
               });
 
-              allDetailRows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+              allDetailRows.sort((a, b) => sortCompare((a.name || '—'), (b.name || '—')) || (b.date || '').localeCompare(a.date || ''));
 
               const detailTotalPages = Math.ceil(allDetailRows.length / pageSize) || 1;
               const detailCurrentPage = Math.min(Math.max(1, extDetailPage), detailTotalPages);
               const paginatedDetailRows = allDetailRows.slice((detailCurrentPage - 1) * pageSize, detailCurrentPage * pageSize);
+
+              // Regroupement par élève : une ligne d'en-tête par élève récapitule le
+              // nombre de paiements et son total (cours + assurance) sur la page.
+              const detailPageStats: Record<string, { count: number; total: number }> = {};
+              paginatedDetailRows.forEach(row => {
+                const name = row.name || '—';
+                if (!detailPageStats[name]) detailPageStats[name] = { count: 0, total: 0 };
+                detailPageStats[name].count += 1;
+                detailPageStats[name].total += row.amount;
+              });
 
               return (
                 <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5">
@@ -2107,18 +2117,49 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">لا توجد دفعات موافقة للتصفية المحددة.</td>
                           </tr>
                         ) : (
-                          paginatedDetailRows.map(row => (
-                            <tr key={row.id} className={`transition ${
-                              row.isAssurance ? 'hover:bg-brand-600/[0.05] bg-brand-600/[0.06]/20' : 'hover:bg-slate-50/70'
-                            }`}>
-                              <td className="p-4 font-mono text-slate-600">{row.date || '—'}</td>
-                              <td className="p-4 font-black text-slate-900">{row.name}</td>
-                              <td className={`p-4 font-bold ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{row.courseName}</td>
-                              <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{fmt(row.amount)} د.ت</td>
-                              <td className="p-4 font-mono font-black text-brand-700">{row.discount ? `${fmt(row.discount)} د.ت` : '—'}</td>
-                              <td className="p-4 text-slate-600 font-bold">{paymentMethodLabel(row.method)}</td>
-                            </tr>
-                          ))
+                          paginatedDetailRows.map((row, idx) => {
+                            const studentName = row.name || '—';
+                            const showHeader = idx === 0 || (paginatedDetailRows[idx - 1].name || '—') !== studentName;
+                            const st = detailPageStats[studentName];
+                            const extGroupKey = `extDetail:${studentName}`;
+                            const extExpanded = isStudentGroupExpanded(extGroupKey);
+                            return (
+                              <React.Fragment key={row.id}>
+                                {showHeader && (
+                                  <tr
+                                    onClick={() => toggleStudentGroup(extGroupKey)}
+                                    className="bg-brand-600/[0.07] border-y border-brand-600/10 cursor-pointer select-none hover:bg-brand-600/[0.12] transition"
+                                    title={extExpanded ? 'طي المجموعة' : 'فتح المجموعة'}
+                                    aria-expanded={extExpanded}
+                                  >
+                                    <td colSpan={6} className="p-2.5 px-4">
+                                      <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1.5 font-black text-brand-800 text-[11px]">
+                                          <User className="h-3.5 w-3.5" />
+                                          {studentName}
+                                          <span className="text-[9px] font-bold text-slate-400">({st?.count ?? 0} دفعة)</span>
+                                          {extExpanded ? <ChevronDown className="h-3.5 w-3.5 text-brand-600" /> : <ChevronLeft className="h-3.5 w-3.5 text-slate-400" />}
+                                        </span>
+                                        <span className="font-mono font-black text-brand-700 text-[11px]">{fmt(st?.total ?? 0)} د.ت</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                                {extExpanded && (
+                                  <tr className={`transition ${
+                                    row.isAssurance ? 'hover:bg-brand-600/[0.05] bg-brand-600/[0.06]/20' : 'hover:bg-slate-50/70'
+                                  }`}>
+                                    <td className="p-4 font-mono text-slate-600">{row.date || '—'}</td>
+                                    <td className="p-4 font-black text-slate-900">{row.name}</td>
+                                    <td className={`p-4 font-bold ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{row.courseName}</td>
+                                    <td className={`p-4 font-mono font-black ${row.isAssurance ? 'text-brand-700' : 'text-brand-700'}`}>{fmt(row.amount)} د.ت</td>
+                                    <td className="p-4 font-mono font-black text-brand-700">{row.discount ? `${fmt(row.discount)} د.ت` : '—'}</td>
+                                    <td className="p-4 text-slate-600 font-bold">{paymentMethodLabel(row.method)}</td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
