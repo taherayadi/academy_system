@@ -29,11 +29,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const centerId = getContextCenterId(context);
-    const seances = await readBody(context.request);
-    if (!Array.isArray(seances)) {
+    const body = await readBody(context.request);
+    // Tableau = réécriture complète du domaine ; objet = mise à jour d'UNE
+    // séance (pointage / édition), sans toucher aux autres séances.
+    if (Array.isArray(body)) {
+      await writeRevisionSeances(context.env.DB, body, centerId);
+    } else if (body && typeof body === 'object') {
+      await createRevisionSeance(context.env.DB, body, centerId);
+    } else {
       return json({ error: 'بيانات جلسات المراجعة غير صالحة.' }, 400);
     }
-    await writeRevisionSeances(context.env.DB, seances, centerId);
     return json({ ok: true });
   } catch (err) {
     console.error('Error:', err);

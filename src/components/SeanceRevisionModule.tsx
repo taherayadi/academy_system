@@ -27,6 +27,7 @@ interface SeanceRevisionModuleProps {
   revisions: RevisionSeance[];
   onUpdateRevisions: (list: RevisionSeance[]) => void;
   onCreateRevision?: (seance: RevisionSeance) => void;
+  onUpdateRevision?: (seance: RevisionSeance) => void;
   onAddRevisionStudent?: (seanceId: string, student: RevisionSeanceStudent) => void;
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
@@ -39,6 +40,7 @@ export default function SeanceRevisionModule({
   revisions,
   onUpdateRevisions,
   onCreateRevision,
+  onUpdateRevision,
   onAddRevisionStudent,
   settings,
   onUpdateSettings,
@@ -224,8 +226,15 @@ export default function SeanceRevisionModule({
   };
 
   const handleToggleStudentPaid = (seance: RevisionSeance, studentId: string) => {
-    const updated = revisions.map(r => r.id === seance.id ? { ...r, students: r.students.map(s => s.studentId === studentId ? { ...s, paidSeance: !s.paidSeance } : s) } : r);
-    onUpdateRevisions(updated);
+    const toggled = seance.students.find(s => s.studentId === studentId);
+    if (!toggled) return;
+    const updatedStudent = { ...toggled, paidSeance: !toggled.paidSeance };
+    // Granulaire : n'envoie QUE l'élève modifié, pas toute la liste.
+    if (onAddRevisionStudent) onAddRevisionStudent(seance.id, updatedStudent);
+    else {
+      const updated = revisions.map(r => r.id === seance.id ? { ...r, students: r.students.map(s => s.studentId === studentId ? updatedStudent : s) } : r);
+      onUpdateRevisions(updated);
+    }
   };
 
   const openPointage = (seance: RevisionSeance) => {
@@ -246,7 +255,9 @@ export default function SeanceRevisionModule({
       paidSeance: !!paymentMap[s.studentId]
     }));
     const updated = revisions.map(r => r.id === selected.id ? { ...r, students: updatedStudents, date: seanceDate } : r);
-    onUpdateRevisions(updated);
+    // Granulaire : n'envoie QUE la séance pointée, pas toute la liste.
+    if (onUpdateRevision) onUpdateRevision({ ...selected, students: updatedStudents, date: seanceDate });
+    else onUpdateRevisions(updated);
     setIsPointageOpen(false);
     toast.success('تم تسجيل الحضور والدفع لحصة المراجعة!');
   };

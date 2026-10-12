@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, addRevisionStudentApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -622,6 +622,11 @@ export default function App() {
   const handleCreateRevisionSeance = (seance: RevisionSeance) => {
     setRevisionSeances(prev => [...prev.filter(s => s.id !== seance.id), seance]);
     commitDomain(() => createRevisionSeanceApi(seance));
+  };
+
+  const handleUpdateRevisionSeance = (seance: RevisionSeance) => {
+    setRevisionSeances(prev => prev.map(s => s.id === seance.id ? seance : s));
+    commitDomain(() => updateRevisionSeanceApi(seance));
   };
 
   const handleAddRevisionStudent = (seanceId: string, student: RevisionSeanceStudent) => {
@@ -1355,6 +1360,7 @@ export default function App() {
                   revisions={revisionSeances}
                   onUpdateRevisions={handleUpdateRevisionSeances}
                   onCreateRevision={handleCreateRevisionSeance}
+                  onUpdateRevision={handleUpdateRevisionSeance}
                   onAddRevisionStudent={handleAddRevisionStudent}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}

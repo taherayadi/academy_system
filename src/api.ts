@@ -309,6 +309,12 @@ export async function createRevisionSeanceApi(seance: RevisionSeance): Promise<v
 }
 
 
+/** Upserts ONE revision seance (pointage / édition) without rewriting the domain. */
+export async function updateRevisionSeanceApi(seance: RevisionSeance): Promise<void> {
+  return putDomain('/revision-seances', seance, 'تعذر حفظ حصة المراجعة.');
+}
+
+
 /** Adds ONE student to an existing revision seance without rewriting the domain. */
 export async function addRevisionStudentApi(seanceId: string, student: RevisionSeanceStudent): Promise<void> {
   return postDomain('/revision-students', { seanceId, student }, 'تعذر إضافة التلميذ إلى حصة المراجعة.');

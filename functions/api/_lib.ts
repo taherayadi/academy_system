@@ -1865,6 +1865,13 @@ export async function addRevisionStudent(db: D1Database, seanceId: string, stude
   if (!seance) throw new Error('حصة المراجعة غير موجودة.');
   const stmts = buildRevisionStudentStmts(db, { id: str(seance.id), date: str(seance.date), schoolYear: str(seance.school_year), subject: str(seance.subject_name), teacherShare: num(seance.teacher_share), centerShare: num(seance.center_share) }, student, centerId);
   if (!stmts.length) throw new Error('بيانات التلميذ غير صالحة.');
+  // Passage au non-payé : on supprime le paiement détaché (sinon orphelin).
+  if (!student.paidSeance) {
+    const existing = await db.prepare('SELECT paid_payment_id FROM revision_seance_students WHERE seance_id = ? AND student_id = ?').bind(str(seanceId), str(student.studentId || student.id)).first<any>();
+    if (existing && existing.paid_payment_id) {
+      stmts.push(db.prepare("DELETE FROM payments WHERE id = ? AND ref_type = 'revision_seance'").bind(str(existing.paid_payment_id)));
+    }
+  }
   await db.batch(stmts);
 }
 

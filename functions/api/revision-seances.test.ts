@@ -235,6 +235,30 @@ describe('revision seances persistence', () => {
     await expect(addRevisionStudent(db, 'rev_1', { studentId: 'rev_st_c', studentName: 'Omar', parentPhone: '', paidSeance: false, present: false }, 'other_center')).rejects.toThrow('غير موجود');
   });
 
+  it('unpays a student with a single call and removes the detached payment', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await addRevisionStudent(db, 'rev_1', { studentId: 'rev_st_a', studentName: 'Ali Ben Salah', parentPhone: '98111111', paidSeance: false, present: true }, CENTER);
+
+    expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE service_key = 'revision'").get() as any).n).toBe(0);
+    const read = await readRevisionSeances(db, CENTER);
+    expect(read[0].students.find((s: any) => s.studentId === 'rev_st_a').paidSeance).toBe(false);
+  });
+
+  it('single-seance PUT (pointage) rewrites only that seance', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await createRevisionSeance(db, seance({ id: 'rev_2' }), CENTER);
+    await createRevisionSeance(db, seance({ id: 'rev_1', students: [{ studentId: 'rev_st_a', studentName: 'Ali Ben Salah', parentPhone: '98111111', paidSeance: false, present: true }] }), CENTER);
+
+    const seances = sqlite.prepare('SELECT * FROM revision_seances').all() as any[];
+    expect(seances.map((s: any) => s.id).sort()).toEqual(['rev_1', 'rev_2']);
+    const read = await readRevisionSeances(db, CENTER);
+    const rev1 = read.find((s: any) => s.id === 'rev_1');
+    expect(rev1.students).toHaveLength(1);
+    expect(rev1.students[0].paidSeance).toBe(false);
+    const rev2 = read.find((s: any) => s.id === 'rev_2');
+    expect(rev2.students).toHaveLength(2);
+  });
+
   it('hides revision tutors from the external register and preserves them', async () => {
     await createRevisionSeance(db, seance(), CENTER);
     await writeExternalStudents(db, [{ id: 'ext_1', name: 'Externe Réel', schoolYear: YEAR, grade: 'Baccalauréat', payments: [], assurancePayments: [] }], CENTER);
