@@ -1111,6 +1111,9 @@ export interface ExternalStudentRegister {
   assurancePaid: boolean;
   assuranceAmount: number;
   assuranceDate?: string;
+  assuranceMethod?: 'Espèces' | 'Chèque' | 'Virement';
+  assuranceChequeNumber?: string;
+  assuranceChequeDate?: string;
   payments: ExternalRegistrationRecord[];
   attendance: ExternalAttendanceRecord[];
   createdAt: string;

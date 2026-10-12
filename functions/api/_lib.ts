@@ -1408,6 +1408,9 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
       assurancePaid: !!assur,
       assuranceAmount: assur ? num(assur.amount) : 0,
       assuranceDate: assur ? str(assur.date) : undefined,
+      assuranceMethod: assur ? paymentMethodLabelKey(assur.method) : undefined,
+      assuranceChequeNumber: assur && assur.cheque_number != null ? str(assur.cheque_number) : undefined,
+      assuranceChequeDate: assur && assur.cheque_date != null ? str(assur.cheque_date) : undefined,
       createdAt: createdMs > 0 ? new Date(createdMs).toISOString().slice(0, 10) : '',
       payments: (coursePayByStudent[id] || []).map((p: any) => ({
         id: str(p.id),
@@ -1489,14 +1492,15 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
 
     if (s.assurancePaid && num(s.assuranceAmount) > 0) {
       const amount = num(s.assuranceAmount);
+      const assurDate = isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10)));
       stmts.push(db.prepare(
         'INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, refund_of, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
-        'asr_' + id, centerId, id, isoDateOr(s.assuranceDate, isoDateOr(s.createdAt, new Date().toISOString().slice(0, 10))),
+        'asr_' + id, centerId, id, assurDate,
         'assurance_externe', 'year', null, schoolYear,
-        'full', 'cash', amount, amount, 0,
+        'full', paymentMethodKey(s.assuranceMethod), amount, amount, 0,
         'ASR-' + id, null,
-        null, null, 0, 0, null,
+        str(s.assuranceChequeNumber) || null, isoDateOr(s.assuranceChequeDate, assurDate), 0, 0, null,
         'external_course', null, Date.now()
       ));
     }

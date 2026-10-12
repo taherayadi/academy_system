@@ -232,6 +232,9 @@ function makeRegister(overrides: Record<string, unknown> = {}) {
     assurancePaid: true,
     assuranceAmount: 50,
     assuranceDate: '2026-10-09',
+    assuranceMethod: 'Chèque',
+    assuranceChequeNumber: 'CHQ-77',
+    assuranceChequeDate: '2026-10-11',
     createdAt: '2026-10-09',
     payments: [
       {
@@ -278,6 +281,9 @@ describe('external students persistence', () => {
     expect(reg.assurancePaid).toBe(true);
     expect(reg.assuranceAmount).toBe(50);
     expect(reg.assuranceDate).toBe('2026-10-09');
+    expect(reg.assuranceMethod).toBe('Chèque');
+    expect(reg.assuranceChequeNumber).toBe('CHQ-77');
+    expect(reg.assuranceChequeDate).toBe('2026-10-11');
     expect(reg.payments).toHaveLength(1);
     expect(reg.payments[0]).toMatchObject({ courseId: COURSE_ID, amountPaid: 80, date: '2026-10-09', method: 'Espèces' });
     expect(reg.attendance).toHaveLength(1);

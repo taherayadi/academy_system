@@ -17,7 +17,8 @@ import {
   XSquare, 
   Printer,
   X,
-  ChevronDown
+  ChevronDown,
+  CreditCard
 } from 'lucide-react';
 import { Student, ExternalCourse, ExternalCourseSession, ExternalCourseStudent, CenterSettings, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, SeanceStudentStatus, ExternalStudentRegister, getAppSubjects, getCurrentAcademicYear } from '../types';
 import ConfirmDialog from './ConfirmDialog';
@@ -113,7 +114,11 @@ export default function ExternalCoursesModule({
   // Assurance payment modal: opened by clicking the unpaid « تأمين ✗ » badge
   const [assurancePayment, setAssurancePayment] = useState<{ course: ExternalCourse; student: ExternalCourseStudent } | null>(null);
   const [assurancePayAmount, setAssurancePayAmount] = useState(0);
-  const [assurancePayDate, setAssurancePayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [assurancePayRequired, setAssurancePayRequired] = useState(0);
+  const [assurancePayDiscount, setAssurancePayDiscount] = useState(0);
+  const [assurancePayMethod, setAssurancePayMethod] = useState<'Espèces' | 'Chèque'>('Espèces');
+  const [assurancePayChequeNumber, setAssurancePayChequeNumber] = useState('');
+  const [assurancePayChequeDate, setAssurancePayChequeDate] = useState(new Date().toISOString().split('T')[0]);
   // Month-payment receipt printed from the seance log (student who paid 'paie_mois' that day)
   const [printingMonthReceipt, setPrintingMonthReceipt] = useState<{ sess: ExternalCourseSession; studentId: string } | null>(null);
   const [extName, setExtName] = useState('');
@@ -317,9 +322,14 @@ export default function ExternalCoursesModule({
   };
 
   const openAssurancePayment = (course: ExternalCourse, st: ExternalCourseStudent) => {
+    const required = Math.max(0, course.assuranceAmount || st.assuranceAmount || 0);
     setAssurancePayment({ course, student: st });
-    setAssurancePayAmount(course.assuranceAmount || st.assuranceAmount || 50);
-    setAssurancePayDate(new Date().toISOString().split('T')[0]);
+    setAssurancePayRequired(required);
+    setAssurancePayDiscount(0);
+    setAssurancePayAmount(required);
+    setAssurancePayMethod('Espèces');
+    setAssurancePayChequeNumber('');
+    setAssurancePayChequeDate(new Date().toISOString().split('T')[0]);
   };
 
   const handlePayAssurance = (e: React.FormEvent) => {
@@ -330,26 +340,56 @@ export default function ExternalCoursesModule({
   const applyAssurancePayment = (thenPrint: boolean): void => {
     if (!assurancePayment) return;
     const { course, student } = assurancePayment;
-    const amount = Math.max(0, Number(assurancePayAmount) || 0);
-    const date = assurancePayDate || new Date().toISOString().split('T')[0];
+    const required = Math.max(0, Number(assurancePayRequired) || 0);
+    const disc = Math.max(0, Number(assurancePayDiscount) || 0);
+    const paid = Math.max(0, Number(assurancePayAmount) || 0);
+    const date = new Date().toISOString().split('T')[0];
+
+    if (required <= 0) {
+      toast.error('عذراً، يجب تحديد رسوم التأمين في الكورس أولاً قبل تسجيل أي دفعة!');
+      return;
+    }
+    if (assurancePayMethod === 'Chèque' && (!assurancePayChequeNumber.trim() || !assurancePayChequeDate)) {
+      toast.error('عذراً، يجب إدخال رقم الشيك وتاريخ الدفع عند الدفع بالشيك!');
+      return;
+    }
+    if (disc >= required) {
+      toast.error(`قيمة التخفيض (${disc} د.ت) يجب أن تكون أقل تماماً من قيمة التأمين (${required} د.ت)!`);
+      return;
+    }
+    const effectiveRequired = Math.max(0, required - disc);
+    if (paid <= 0) {
+      toast.error('عذراً، يجب إدخال مبلغ مدفوع أكبر من صفر!');
+      return;
+    }
+    if (paid > effectiveRequired) {
+      toast.error(`عذراً، المبلغ المدفوع (${paid} د.ت) أكبر من المبلغ المستوجب بعد التخفيض (${effectiveRequired} د.ت)!`);
+      return;
+    }
 
     // Identity lives in the shared register: mark the yearly assurance paid there.
     const existing = externalStudents.find(r => r.id === student.studentId);
-    const updatedReg: ExternalStudentRegister = existing
-      ? { ...existing, assurancePaid: true, assuranceAmount: amount, assuranceDate: date }
-      : {
-          id: student.studentId,
-          name: student.studentName,
-          parentPhone: student.parentPhone || '',
-          grade: course.gradeLevel,
-          schoolYear: course.schoolYear || getCurrentAcademicYear(),
-          assurancePaid: true,
-          assuranceAmount: amount,
-          assuranceDate: date,
-          payments: [],
-          attendance: [],
-          createdAt: date
-        };
+    const base: ExternalStudentRegister = existing || {
+      id: student.studentId,
+      name: student.studentName,
+      parentPhone: student.parentPhone || '',
+      grade: course.gradeLevel,
+      schoolYear: course.schoolYear || getCurrentAcademicYear(),
+      assurancePaid: false,
+      assuranceAmount: 0,
+      payments: [],
+      attendance: [],
+      createdAt: date
+    };
+    const updatedReg: ExternalStudentRegister = {
+      ...base,
+      assurancePaid: true,
+      assuranceAmount: paid,
+      assuranceDate: date,
+      assuranceMethod: assurancePayMethod,
+      assuranceChequeNumber: assurancePayMethod === 'Chèque' ? assurancePayChequeNumber : undefined,
+      assuranceChequeDate: assurancePayMethod === 'Chèque' ? assurancePayChequeDate : undefined
+    };
     onUpdateExternalStudents(existing
       ? externalStudents.map(r => r.id === student.studentId ? updatedReg : r)
       : [...externalStudents, updatedReg]);
@@ -359,7 +399,7 @@ export default function ExternalCoursesModule({
       ? {
           ...c,
           enrolledStudents: c.enrolledStudents.map(s => s.studentId === student.studentId
-            ? { ...s, assurancePaid: true, assuranceAmount: amount, assuranceDate: date }
+            ? { ...s, assurancePaid: true, assuranceAmount: paid, assuranceDate: date }
             : s)
         }
       : c);
@@ -369,7 +409,7 @@ export default function ExternalCoursesModule({
     }
 
     setAssurancePayment(null);
-    toast.success(`تم خلاص التأمين المدرسي (${amount} د.ت) لـ ${student.studentName}.`);
+    toast.success(`تم خلاص التأمين المدرسي (${paid} د.ت) لـ ${student.studentName}.`);
     if (thenPrint) setPrintingAssuranceReceipt(updatedReg);
   };
 
@@ -1063,9 +1103,17 @@ export default function ExternalCoursesModule({
                                 <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md text-[9px] font-black">خارجي</span>
                               )}
                               {st.assurancePaid ? (
-                                <span className="px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md text-[9px] font-black" title="التأمين المدرسي مدفوع">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const reg = externalStudents.find(r => r.id === st.studentId);
+                                    if (reg) setPrintingAssuranceReceipt(reg);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-brand-600/10 hover:bg-brand-600/20 text-brand-700 rounded-md text-[9px] font-black cursor-pointer"
+                                  title="التأمين المدرسي مدفوع — اضغط لطباعة الوصل"
+                                >
                                   تأمين ✓ ({st.assuranceAmount || 50} د.ت)
-                                </span>
+                                </button>
                               ) : st.isExternal ? (
                                 <button
                                   type="button"
@@ -1875,15 +1923,21 @@ export default function ExternalCoursesModule({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-5 bg-brand-600 text-white flex justify-between items-center">
-                <div>
-                  <h3 className="text-base font-black">خلاص التأمين المدرسي 🛡️</h3>
-                  <p className="text-[11px] text-slate-300">
-                    {assurancePayment.student.studentName} — {assurancePayment.course.subject} ({assurancePayment.course.gradeLevel})
-                  </p>
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-brand-600" />
+                  <div>
+                    <h3 className="text-lg font-black">
+                      تنزيل خلاص التأمين المدرسي{assurancePayment.course.schoolYear ? ` (${assurancePayment.course.schoolYear})` : ''}
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      التلميذ(ة): {assurancePayment.student.studentName}
+                    </p>
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setAssurancePayment(null)}
@@ -1895,29 +1949,110 @@ export default function ExternalCoursesModule({
 
               <form onSubmit={handlePayAssurance} className="p-6 space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">قيمة التأمين (د.ت) *</label>
-                  <input
-                    type="number" min="0" required
-                    value={assurancePayAmount}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setAssurancePayAmount(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-brand-600/30 rounded-xl text-sm font-black text-brand-700"
-                  />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setAssurancePayMethod('Espèces'); setAssurancePayChequeNumber(''); setAssurancePayChequeDate(new Date().toISOString().split('T')[0]); }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        assurancePayMethod === 'Espèces'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      نقداً (Espèces)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssurancePayMethod('Chèque')}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        assurancePayMethod === 'Chèque'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      شيك (Par Chèque)
+                    </button>
+                  </div>
                 </div>
+
+                {assurancePayMethod === 'Chèque' && (
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">رقم الشيك *</label>
+                      <input
+                        type="text" required
+                        value={assurancePayChequeNumber}
+                        onChange={(e) => setAssurancePayChequeNumber(e.target.value)}
+                        placeholder="رقم الشيك"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">تاريخ الدفع *</label>
+                      <DateField
+                        required
+                        value={assurancePayChequeDate}
+                        onChange={(e) => setAssurancePayChequeDate(e.target.value)}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">تاريخ الخلاص *</label>
-                  <DateField
-                    required value={assurancePayDate} onChange={(e) => setAssurancePayDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    التخفيض (د.ت) <span className="text-[10px] text-brand-700/80 font-semibold">(يجب أن يكون أقل من المبلغ)</span>
+                  </label>
+                  <input
+                    type="number" min="0" max={Math.max(0, assurancePayRequired - 1)}
+                    value={assurancePayDiscount}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const val = Math.max(0, Math.min(assurancePayRequired - 1, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0));
+                      setAssurancePayDiscount(val);
+                      setAssurancePayAmount(Math.max(0, assurancePayRequired - val));
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
                   />
+                  <p className="text-[10px] text-slate-400 font-bold mt-1">
+                    المستوجب بعد التخفيض: {Math.max(0, assurancePayRequired - (Number(assurancePayDiscount) || 0))} د.ت
+                    {Number(assurancePayDiscount) >= assurancePayRequired && assurancePayRequired > 0 && (
+                      <span className="text-red-500 font-black block mt-0.5">⚠️ التخفيض لا يمكن أن يساوي أو يتجاوز {assurancePayRequired} د.ت!</span>
+                    )}
+                  </p>
                 </div>
 
-                <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-xl text-[11px] text-brand-700 font-bold text-center">
-                  يُخلّص مرة واحدة في السنة لكل تلميذ خارجي.
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">المبلغ المدفوع (د.ت) *</label>
+                    <input
+                      type="number" required min="0"
+                      value={assurancePayAmount}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setAssurancePayAmount(Math.max(0, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0))}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">إجمالي التأمين (د.ت)</label>
+                    <input
+                      type="number" required value={assurancePayRequired} readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-not-allowed"
+                    />
+                  </div>
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
+                {/* Remaining calculation banner */}
+                <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs flex justify-between font-bold text-brand-700">
+                  <span>المبلغ المتبقي بعد هذه الدفعة:</span>
+                  <span className="font-mono text-sm font-black text-red-700">
+                    {Math.max(0, Math.max(0, assurancePayRequired - (Number(assurancePayDiscount) || 0)) - Number(assurancePayAmount || 0))} د.ت
+                  </span>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                   <button
                     type="button" onClick={() => setAssurancePayment(null)}
                     className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
@@ -1925,18 +2060,13 @@ export default function ExternalCoursesModule({
                     إلغاء
                   </button>
                   <button
-                    type="button" onClick={() => applyAssurancePayment(true)}
-                    className="px-4 py-2 bg-white border border-brand-600/40 text-brand-700 font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Printer className="h-3.5 w-3.5" />
-                    خلاص وطباعة الوصل
-                  </button>
-                  <button
                     type="submit"
-                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                    disabled={assurancePayRequired <= 0}
+                    title={assurancePayRequired <= 0 ? 'حدّد رسوم التأمين في الكورس أولاً' : undefined}
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    خلاص
+                    تأكيد الدفع وطباعة الوصل
                   </button>
                 </div>
               </form>

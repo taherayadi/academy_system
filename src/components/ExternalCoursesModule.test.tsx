@@ -69,7 +69,8 @@ describe('ExternalCoursesModule — assurance payment from the « تأمين ✗
     await act(async () => { await Promise.resolve(); });
     const badge = screen.getByRole('button', { name: 'تأمين ✗' });
     fireEvent.click(badge);
-    expect(screen.getByText('خلاص التأمين المدرسي 🛡️')).toBeTruthy();
+    expect(screen.getByText(/تنزيل خلاص التأمين المدرسي/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'تأكيد الدفع وطباعة الوصل' })).toBeTruthy();
   });
 
   it('paying marks the register + course roster assurance as paid with the course amount', async () => {
@@ -77,7 +78,7 @@ describe('ExternalCoursesModule — assurance payment from the « تأمين ✗
     await act(async () => { await Promise.resolve(); });
     fireEvent.click(screen.getByRole('button', { name: 'تأمين ✗' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'خلاص' }));
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الدفع وطباعة الوصل' }));
 
     expect(onUpdateExternalStudents).toHaveBeenCalledTimes(1);
     const updatedRegister = onUpdateExternalStudents.mock.calls[0][0] as ExternalStudentRegister[];

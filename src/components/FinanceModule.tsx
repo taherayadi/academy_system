@@ -314,7 +314,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         service: 'Assurance',
         month: 'Annuel',
         paymentType: 'full',
-        method: 'Espèces',
+        method: reg.assuranceMethod || 'Espèces',
         receiptNumber: `ASR-${reg.id.slice(-4)}`,
         notes: 'تأمين مدرسي (Assurance) - كراس خارجي',
         studentName: reg.name,
@@ -2046,7 +2046,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     name: reg.name,
                     courseName: 'تأمين مدرسي (Assurance) 🛡️',
                     amount: reg.assuranceAmount,
-                    method: 'Espèces',
+                    method: reg.assuranceMethod || 'Espèces',
                     isAssurance: true
                   });
                 }
