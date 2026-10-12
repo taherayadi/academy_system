@@ -110,6 +110,10 @@ export default function ExternalCoursesModule({
   // External (hors-liste) student enrollment modal state
   const [isExternalStudentModalOpen, setIsExternalStudentModalOpen] = useState(false);
   const [printingAssuranceReceipt, setPrintingAssuranceReceipt] = useState<ExternalStudentRegister | null>(null);
+  // Assurance payment modal: opened by clicking the unpaid « تأمين ✗ » badge
+  const [assurancePayment, setAssurancePayment] = useState<{ course: ExternalCourse; student: ExternalCourseStudent } | null>(null);
+  const [assurancePayAmount, setAssurancePayAmount] = useState(0);
+  const [assurancePayDate, setAssurancePayDate] = useState(new Date().toISOString().split('T')[0]);
   // Month-payment receipt printed from the seance log (student who paid 'paie_mois' that day)
   const [printingMonthReceipt, setPrintingMonthReceipt] = useState<{ sess: ExternalCourseSession; studentId: string } | null>(null);
   const [extName, setExtName] = useState('');
@@ -310,6 +314,63 @@ export default function ExternalCoursesModule({
     setExtGrade('Collège 7ème Année');
     setExtAssurance(false);
     toast.success(`تم تسجيل التلميذ الخارجي (${extName.trim()}) في الكورس${extAssurance ? ' مع خلاص التأمين المدرسي' : ''} بنجاح!`);
+  };
+
+  const openAssurancePayment = (course: ExternalCourse, st: ExternalCourseStudent) => {
+    setAssurancePayment({ course, student: st });
+    setAssurancePayAmount(course.assuranceAmount || st.assuranceAmount || 50);
+    setAssurancePayDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handlePayAssurance = (e: React.FormEvent) => {
+    e.preventDefault();
+    applyAssurancePayment(false);
+  };
+
+  const applyAssurancePayment = (thenPrint: boolean): void => {
+    if (!assurancePayment) return;
+    const { course, student } = assurancePayment;
+    const amount = Math.max(0, Number(assurancePayAmount) || 0);
+    const date = assurancePayDate || new Date().toISOString().split('T')[0];
+
+    // Identity lives in the shared register: mark the yearly assurance paid there.
+    const existing = externalStudents.find(r => r.id === student.studentId);
+    const updatedReg: ExternalStudentRegister = existing
+      ? { ...existing, assurancePaid: true, assuranceAmount: amount, assuranceDate: date }
+      : {
+          id: student.studentId,
+          name: student.studentName,
+          parentPhone: student.parentPhone || '',
+          grade: course.gradeLevel,
+          schoolYear: course.schoolYear || getCurrentAcademicYear(),
+          assurancePaid: true,
+          assuranceAmount: amount,
+          assuranceDate: date,
+          payments: [],
+          attendance: [],
+          createdAt: date
+        };
+    onUpdateExternalStudents(existing
+      ? externalStudents.map(r => r.id === student.studentId ? updatedReg : r)
+      : [...externalStudents, updatedReg]);
+
+    // Mirror onto the course roster so the badge flips immediately.
+    const updatedCourses = courses.map(c => c.id === course.id
+      ? {
+          ...c,
+          enrolledStudents: c.enrolledStudents.map(s => s.studentId === student.studentId
+            ? { ...s, assurancePaid: true, assuranceAmount: amount, assuranceDate: date }
+            : s)
+        }
+      : c);
+    onUpdateCourses(updatedCourses);
+    if (selectedCourse?.id === course.id) {
+      setSelectedCourse(updatedCourses.find(c => c.id === course.id) || selectedCourse);
+    }
+
+    setAssurancePayment(null);
+    toast.success(`تم خلاص التأمين المدرسي (${amount} د.ت) لـ ${student.studentName}.`);
+    if (thenPrint) setPrintingAssuranceReceipt(updatedReg);
   };
 
   const monthKey = (date: string) => date.slice(0, 7); // "YYYY-MM"
@@ -1006,9 +1067,14 @@ export default function ExternalCoursesModule({
                                   تأمين ✓ ({st.assuranceAmount || 50} د.ت)
                                 </span>
                               ) : st.isExternal ? (
-                                <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded-md text-[9px] font-black" title="التأمين المدرسي غير مدفوع">
+                                <button
+                                  type="button"
+                                  onClick={() => openAssurancePayment(selectedCourse, st)}
+                                  className="px-1.5 py-0.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-md text-[9px] font-black cursor-pointer border border-red-200"
+                                  title="التأمين المدرسي غير مدفوع — اضغط للخلاص"
+                                >
                                   تأمين ✗
-                                </span>
+                                </button>
                               ) : null}
                             </p>
                             <p className="text-[10px] text-slate-400 font-mono"><span dir="ltr">📞 هاتف الولي: {st.parentPhone || 'غير متوفر'}</span></p>
@@ -1796,6 +1862,84 @@ export default function ExternalCoursesModule({
                   إغلاق السجل
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ASSURANCE PAYMENT MODAL (opened from the unpaid « تأمين ✗ » badge) */}
+      <AnimatePresence>
+        {assurancePayment && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden my-8"
+            >
+              <div className="p-5 bg-brand-600 text-white flex justify-between items-center">
+                <div>
+                  <h3 className="text-base font-black">خلاص التأمين المدرسي 🛡️</h3>
+                  <p className="text-[11px] text-slate-300">
+                    {assurancePayment.student.studentName} — {assurancePayment.course.subject} ({assurancePayment.course.gradeLevel})
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssurancePayment(null)}
+                  className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handlePayAssurance} className="p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">قيمة التأمين (د.ت) *</label>
+                  <input
+                    type="number" min="0" required
+                    value={assurancePayAmount}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setAssurancePayAmount(Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-brand-600/30 rounded-xl text-sm font-black text-brand-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">تاريخ الخلاص *</label>
+                  <DateField
+                    required value={assurancePayDate} onChange={(e) => setAssurancePayDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"
+                  />
+                </div>
+
+                <div className="p-3 bg-brand-600/[0.06] border border-brand-600/20 rounded-xl text-[11px] text-brand-700 font-bold text-center">
+                  يُخلّص مرة واحدة في السنة لكل تلميذ خارجي.
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button" onClick={() => setAssurancePayment(null)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button" onClick={() => applyAssurancePayment(true)}
+                    className="px-4 py-2 bg-white border border-brand-600/40 text-brand-700 font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    خلاص وطباعة الوصل
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    خلاص
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
