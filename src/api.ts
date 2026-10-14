@@ -266,6 +266,18 @@ export async function saveCourses(courses: ExternalCourse[]): Promise<void> {
 }
 
 
+/** Removes ONE student from ONE external course without rewriting the domain. */
+export async function removeCourseStudentApi(courseId: string, studentId: string): Promise<void> {
+  return deleteDomain(`/courses?courseId=${encodeURIComponent(courseId)}&studentId=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ من الدرس.');
+}
+
+
+/** Deletes ONE external course (cascades its sessions/enrollments) without rewriting the domain. */
+export async function deleteCourseApi(courseId: string): Promise<void> {
+  return deleteDomain(`/courses?id=${encodeURIComponent(courseId)}`, 'تعذر حذف الدرس.');
+}
+
+
 export async function saveSessions(sessions: ExternalCourseSession[]): Promise<void> {
   return putDomain('/sessions', sessions, 'تعذر حفظ بيانات الجلسات.');
 }
@@ -315,9 +327,21 @@ export async function updateRevisionSeanceApi(seance: RevisionSeance): Promise<v
 }
 
 
+/** Deletes ONE revision seance (and its students/payments) without rewriting the domain. */
+export async function deleteRevisionSeanceApi(seanceId: string): Promise<void> {
+  return deleteDomain(`/revision-seances?id=${encodeURIComponent(seanceId)}`, 'تعذر حذف حصة المراجعة.');
+}
+
+
 /** Adds ONE student to an existing revision seance without rewriting the domain. */
 export async function addRevisionStudentApi(seanceId: string, student: RevisionSeanceStudent): Promise<void> {
   return postDomain('/revision-students', { seanceId, student }, 'تعذر إضافة التلميذ إلى حصة المراجعة.');
+}
+
+
+/** Removes ONE student from ONE revision seance without rewriting the domain. */
+export async function removeRevisionStudentApi(seanceId: string, studentId: string): Promise<void> {
+  return deleteDomain(`/revision-students?seanceId=${encodeURIComponent(seanceId)}&studentId=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ من حصة المراجعة.');
 }
 
 

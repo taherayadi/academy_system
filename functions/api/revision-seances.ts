@@ -1,4 +1,4 @@
-import { Env, json, readBody, readRevisionSeances, writeRevisionSeances, createRevisionSeance, getContextCenterId } from './_lib';
+import { Env, json, readBody, readRevisionSeances, writeRevisionSeances, createRevisionSeance, deleteRevisionSeance, getContextCenterId } from './_lib';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
@@ -43,5 +43,21 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   } catch (err) {
     console.error('Error:', err);
     return json({ error: 'تعذر حفظ بيانات جلسات المراجعة.' }, 500);
+  }
+};
+
+// DELETE : supprime UNE seule séance (id en query).
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  try {
+    const centerId = getContextCenterId(context);
+    const url = new URL(context.request.url);
+    const id = url.searchParams.get('id') || '';
+    await deleteRevisionSeance(context.env.DB, id, centerId);
+    return json({ ok: true });
+  } catch (err) {
+    console.error('Error:', err);
+    const message = err instanceof Error && err.message && !err.message.includes('Error:') ? err.message : 'تعذر حذف حصة المراجعة.';
+    const isBadRequest = err instanceof Error && (err.message.includes('غير موجود') || err.message.includes('مفقود'));
+    return json({ error: message }, isBadRequest ? 400 : 500);
   }
 };

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readCourses, readExternalStudents, readStudents, writeCourses, writeExternalStudents, writeStudents } from './_lib';
+import { readCourses, readExternalStudents, readStudents, removeCourseEnrollment, deleteCourse, writeCourses, writeExternalStudents, writeStudents } from './_lib';
 
 // Exécute le SQL réel (node:sqlite) avec PRAGMA foreign_keys = ON : les
 // régressions de FK (élève externe absent de `students`, effectifs effacés)
@@ -452,5 +452,42 @@ describe('course enrollments hydration', () => {
     await expect(
       writeCourses(db, [makeCourse({ enrolledStudents: [{ studentId: 'ghost' }] })], CENTER)
     ).rejects.toThrow();
+  });
+
+  it('removes ONE enrollment with a targeted delete', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await writeExternalStudents(db, [makeRegister()], CENTER);
+    await writeCourses(db, [makeCourse({ enrolledStudents: [{ studentId: REG_ID }] })], CENTER);
+
+    await removeCourseEnrollment(db, COURSE_ID, REG_ID, CENTER);
+
+    const courses = await readCourses(db, CENTER);
+    expect(courses).toHaveLength(1);
+    expect(courses[0].enrolledStudents).toHaveLength(0);
+  });
+
+  it('rejects removing an enrollment from a course of another center', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await writeExternalStudents(db, [makeRegister()], CENTER);
+    await writeCourses(db, [makeCourse({ enrolledStudents: [{ studentId: REG_ID }] })], CENTER);
+    await expect(removeCourseEnrollment(db, COURSE_ID, REG_ID, 'other_center')).rejects.toThrow('غير موجود');
+  });
+
+  it('deletes ONE course with a targeted delete (enrollments cascaded)', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await writeExternalStudents(db, [makeRegister()], CENTER);
+    await writeCourses(db, [makeCourse({ enrolledStudents: [{ studentId: REG_ID }] })], CENTER);
+
+    await deleteCourse(db, COURSE_ID, CENTER);
+
+    expect(await readCourses(db, CENTER)).toHaveLength(0);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM course_enrollments').get() as any).n).toBe(0);
+    // L'élève du registre externe n'est pas emporté par la suppression du cours.
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM students').get() as any).n).toBe(1);
+  });
+
+  it('rejects deleting a course of another center', async () => {
+    await writeCourses(db, [makeCourse()], CENTER);
+    await expect(deleteCourse(db, COURSE_ID, 'other_center')).rejects.toThrow('غير موجود');
   });
 });

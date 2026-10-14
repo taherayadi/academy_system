@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  addRevisionStudent, createRevisionSeance, readExternalStudents, readRevisionSeances, writeExternalStudents, writeRevisionSeances
+  addRevisionStudent, createRevisionSeance, deleteRevisionSeance, readExternalStudents, readRevisionSeances, removeRevisionStudent, writeExternalStudents, writeRevisionSeances
 } from './_lib';
 
 // Vérifie que la persistance des séances de révision est fidèle au schéma :
@@ -242,6 +242,50 @@ describe('revision seances persistence', () => {
     expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE service_key = 'revision'").get() as any).n).toBe(0);
     const read = await readRevisionSeances(db, CENTER);
     expect(read[0].students.find((s: any) => s.studentId === 'rev_st_a').paidSeance).toBe(false);
+  });
+
+  it('removes one student from a seance with a targeted delete', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await removeRevisionStudent(db, 'rev_1', 'rev_st_a', CENTER);
+
+    const links = sqlite.prepare('SELECT * FROM revision_seance_students').all() as any[];
+    expect(links.map((l: any) => l.student_id)).toEqual(['rev_st_b']);
+    const students = sqlite.prepare("SELECT id FROM students WHERE student_type = 'external'").all() as any[];
+    expect(students.map((s: any) => s.id)).toEqual(['rev_st_b']);
+    const payments = sqlite.prepare("SELECT * FROM payments WHERE service_key = 'revision'").all() as any[];
+    expect(payments.length).toBe(0);
+
+    const read = await readRevisionSeances(db, CENTER);
+    expect(read.length).toBe(1);
+    expect(read[0].students.map((s: any) => s.studentId)).toEqual(['rev_st_b']);
+  });
+
+  it('rejects removing a student from a seance of another center', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await expect(removeRevisionStudent(db, 'rev_1', 'rev_st_a', 'other_center')).rejects.toThrow('غير موجود');
+  });
+
+  it('deletes one seance with a targeted delete (payments + orphans cleaned)', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await createRevisionSeance(db, seance({ id: 'rev_2', students: [{ studentId: 'rev_st_b', studentName: 'Sami Trabelsi', parentPhone: '22222222', paidSeance: false, present: true }] }), CENTER);
+
+    await deleteRevisionSeance(db, 'rev_1', CENTER);
+
+    const seances = sqlite.prepare('SELECT id FROM revision_seances').all() as any[];
+    expect(seances.map((s: any) => s.id)).toEqual(['rev_2']);
+    // rev_st_a n'était que dans rev_1 → supprimé ; rev_st_b reste (rev_2).
+    const students = sqlite.prepare("SELECT id FROM students WHERE student_type = 'external'").all() as any[];
+    expect(students.map((s: any) => s.id)).toEqual(['rev_st_b']);
+    expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE service_key = 'revision'").get() as any).n).toBe(0);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM revision_seance_students').get() as any).n).toBe(1);
+
+    const read = await readRevisionSeances(db, CENTER);
+    expect(read.map((s: any) => s.id)).toEqual(['rev_2']);
+  });
+
+  it('rejects deleting a seance of another center', async () => {
+    await createRevisionSeance(db, seance(), CENTER);
+    await expect(deleteRevisionSeance(db, 'rev_1', 'other_center')).rejects.toThrow('غير موجود');
   });
 
   it('single-seance PUT (pointage) rewrites only that seance', async () => {

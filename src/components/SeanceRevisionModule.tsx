@@ -28,7 +28,9 @@ interface SeanceRevisionModuleProps {
   onUpdateRevisions: (list: RevisionSeance[]) => void;
   onCreateRevision?: (seance: RevisionSeance) => void;
   onUpdateRevision?: (seance: RevisionSeance) => void;
+  onDeleteRevision?: (seanceId: string) => void;
   onAddRevisionStudent?: (seanceId: string, student: RevisionSeanceStudent) => void;
+  onRemoveRevisionStudent?: (seanceId: string, studentId: string) => void;
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   sidebarCollapsed?: boolean;
@@ -41,7 +43,9 @@ export default function SeanceRevisionModule({
   onUpdateRevisions,
   onCreateRevision,
   onUpdateRevision,
+  onDeleteRevision,
   onAddRevisionStudent,
+  onRemoveRevisionStudent,
   settings,
   onUpdateSettings,
   sidebarCollapsed
@@ -963,7 +967,9 @@ export default function SeanceRevisionModule({
         confirmLabel="نعم، احذف الحصة"
         onConfirm={() => {
           if (deletion) {
-            onUpdateRevisions(revisions.filter(r => r.id !== deletion.id));
+            // Granulaire : DELETE ciblé par id, pas toute la liste.
+            if (onDeleteRevision) onDeleteRevision(deletion.id);
+            else onUpdateRevisions(revisions.filter(r => r.id !== deletion.id));
             if (selectedId === deletion.id) setSelectedId(null);
             toast.success('تم حذف حصة المراجعة نهائياً.');
             setDeletion(null);
@@ -987,8 +993,12 @@ export default function SeanceRevisionModule({
         confirmLabel="نعم، أزل التلميذ"
         onConfirm={() => {
           if (studentRemoval) {
-            const updated = revisions.map(r => r.id === studentRemoval.seance.id ? { ...r, students: r.students.filter(s => s.studentId !== studentRemoval.studentId) } : r);
-            onUpdateRevisions(updated);
+            // Granulaire : DELETE ciblé (séance + élève), pas toute la liste.
+            if (onRemoveRevisionStudent) onRemoveRevisionStudent(studentRemoval.seance.id, studentRemoval.studentId);
+            else {
+              const updated = revisions.map(r => r.id === studentRemoval.seance.id ? { ...r, students: r.students.filter(s => s.studentId !== studentRemoval.studentId) } : r);
+              onUpdateRevisions(updated);
+            }
             setStudentRemoval(null);
           }
         }}

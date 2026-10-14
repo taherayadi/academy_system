@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, removeCourseStudentApi, deleteCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -629,11 +629,23 @@ export default function App() {
     commitDomain(() => updateRevisionSeanceApi(seance));
   };
 
+  const handleDeleteRevisionSeance = (seanceId: string) => {
+    setRevisionSeances(prev => prev.filter(s => s.id !== seanceId));
+    commitDomain(() => deleteRevisionSeanceApi(seanceId));
+  };
+
   const handleAddRevisionStudent = (seanceId: string, student: RevisionSeanceStudent) => {
     setRevisionSeances(prev => prev.map(s => s.id === seanceId
       ? { ...s, students: [...s.students.filter(x => x.studentId !== student.studentId), student] }
       : s));
     commitDomain(() => addRevisionStudentApi(seanceId, student));
+  };
+
+  const handleRemoveRevisionStudent = (seanceId: string, studentId: string) => {
+    setRevisionSeances(prev => prev.map(s => s.id === seanceId
+      ? { ...s, students: s.students.filter(x => x.studentId !== studentId) }
+      : s));
+    commitDomain(() => removeRevisionStudentApi(seanceId, studentId));
   };
 
   const handleUpdateMealForfaitClosures = (updated: MealForfaitClosure[]) => {
@@ -680,6 +692,19 @@ export default function App() {
   const handleUpdateCourses = (updated: ExternalCourse[]) => {
     setCourses(updated);
     commitDomain(() => saveCourses(updated));
+  };
+
+  const handleRemoveCourseStudent = (courseId: string, studentId: string) => {
+    setCourses(prev => prev.map(c => c.id === courseId
+      ? { ...c, enrolledStudents: c.enrolledStudents.filter(s => s.studentId !== studentId) }
+      : c));
+    commitDomain(() => removeCourseStudentApi(courseId, studentId));
+  };
+
+  const handleDeleteCourse = (courseId: string) => {
+    setCourses(prev => prev.filter(c => c.id !== courseId));
+    setSessions(prev => prev.filter(s => s.courseId !== courseId));
+    commitDomain(() => deleteCourseApi(courseId));
   };
 
   const handleUpdateSessions = (updated: ExternalCourseSession[]) => {
@@ -1351,6 +1376,8 @@ export default function App() {
                   externalStudents={externalStudents}
                   onUpdateExternalStudents={handleUpdateExternalStudents}
                   onUpdateCourses={handleUpdateCourses}
+                  onRemoveCourseStudent={handleRemoveCourseStudent}
+                  onDeleteCourse={handleDeleteCourse}
                   onUpdateSessions={handleUpdateSessions}
                 />
               )}
@@ -1361,7 +1388,9 @@ export default function App() {
                   onUpdateRevisions={handleUpdateRevisionSeances}
                   onCreateRevision={handleCreateRevisionSeance}
                   onUpdateRevision={handleUpdateRevisionSeance}
+                  onDeleteRevision={handleDeleteRevisionSeance}
                   onAddRevisionStudent={handleAddRevisionStudent}
+                  onRemoveRevisionStudent={handleRemoveRevisionStudent}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
                   sidebarCollapsed={sidebarCollapsed}

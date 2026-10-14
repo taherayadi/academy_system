@@ -36,6 +36,8 @@ interface ExternalCoursesModuleProps {
   externalStudents: ExternalStudentRegister[];
   onUpdateExternalStudents: (list: ExternalStudentRegister[]) => void;
   onUpdateCourses: (courses: ExternalCourse[]) => void;
+  onRemoveCourseStudent?: (courseId: string, studentId: string) => void;
+  onDeleteCourse?: (courseId: string) => void;
   onUpdateSessions: (sessions: ExternalCourseSession[]) => void;
   sidebarCollapsed?: boolean;
 }
@@ -49,6 +51,8 @@ export default function ExternalCoursesModule({
   externalStudents,
   onUpdateExternalStudents,
   onUpdateCourses,
+  onRemoveCourseStudent,
+  onDeleteCourse,
   onUpdateSessions,
   sidebarCollapsed
 }: ExternalCoursesModuleProps) {
@@ -249,7 +253,9 @@ export default function ExternalCoursesModule({
   const handleRemoveStudent = (course: ExternalCourse, studentId: string) => {
     const updatedStudents = course.enrolledStudents.filter(s => s.studentId !== studentId);
     const updatedCourse = { ...course, enrolledStudents: updatedStudents };
-    onUpdateCourses(courses.map(c => c.id === course.id ? updatedCourse : c));
+    // Granulaire : DELETE ciblé (cours + élève), pas toute la liste.
+    if (onRemoveCourseStudent) onRemoveCourseStudent(course.id, studentId);
+    else onUpdateCourses(courses.map(c => c.id === course.id ? updatedCourse : c));
     setSelectedCourse(updatedCourse);
     toast.success('تم إزالة التلميذ من الكورس بنجاح!');
   };
@@ -2496,8 +2502,14 @@ export default function ExternalCoursesModule({
         onConfirm={() => {
           if (courseDeletion) {
             const deletedId = courseDeletion.id;
-            onUpdateCourses(courses.filter(c => c.id !== deletedId));
-            onUpdateSessions(sessions.filter(s => s.courseId !== deletedId));
+            // Granulaire : DELETE ciblé par id (séances en cascade côté serveur,
+            // l'état local est purgé par le handler parent), pas de PUT.
+            if (onDeleteCourse) {
+              onDeleteCourse(deletedId);
+            } else {
+              onUpdateCourses(courses.filter(c => c.id !== deletedId));
+              onUpdateSessions(sessions.filter(s => s.courseId !== deletedId));
+            }
             if (selectedCourse?.id === deletedId) setSelectedCourse(courses.find(c => c.id !== deletedId) || null);
             toast.success(`تم حذف الكورس (${courseDeletion.subject} — ${gradeLabelBilingual(courseDeletion.gradeLevel)}) نهائياً.`);
             setCourseDeletion(null);

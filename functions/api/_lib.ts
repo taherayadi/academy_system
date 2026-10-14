@@ -1284,6 +1284,29 @@ export async function writeCourses(db: D1Database, courses: any[], centerId: str
   for (let i = 0; i < insertStmts.length; i += 500) await db.batch(insertStmts.slice(i, i + 500));
 }
 
+// Retire UN seul élève (course_enrollments) d'un cours du centre, sans
+// réécrire la liste complète des cours.
+export async function removeCourseEnrollment(db: D1Database, courseId: string, studentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const cid = str(courseId);
+  const sid = str(studentId);
+  if (!cid) throw new Error('معرّف الدرس مفقود.');
+  if (!sid) throw new Error('معرّف التلميذ مفقود.');
+  const course = await db.prepare('SELECT id FROM external_courses WHERE id = ? AND center_id = ?').bind(cid, centerId).first<any>();
+  if (!course) throw new Error('الدرس غير موجود.');
+  await db.prepare('DELETE FROM course_enrollments WHERE course_id = ? AND student_id = ?').bind(cid, sid).run();
+}
+
+// Supprime UN SEUL cours du centre. Les FK CASCADE emportent les inscriptions
+// (course_enrollments), les séances (external_course_sessions) et leur pointage
+// (course_session_attendance) ; external_attendance.course_id passe à NULL.
+export async function deleteCourse(db: D1Database, courseId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const cid = str(courseId);
+  if (!cid) throw new Error('معرّف الدرس مفقود.');
+  const course = await db.prepare('SELECT id FROM external_courses WHERE id = ? AND center_id = ?').bind(cid, centerId).first<any>();
+  if (!course) throw new Error('الدرس غير موجود.');
+  await db.prepare('DELETE FROM external_courses WHERE id = ? AND center_id = ?').bind(cid, centerId).run();
+}
+
 // ===========================================================================
 // EXTERNAL COURSE SESSIONS
 // ===========================================================================
@@ -1871,6 +1894,45 @@ export async function addRevisionStudent(db: D1Database, seanceId: string, stude
     if (existing && existing.paid_payment_id) {
       stmts.push(db.prepare("DELETE FROM payments WHERE id = ? AND ref_type = 'revision_seance'").bind(str(existing.paid_payment_id)));
     }
+  }
+  await db.batch(stmts);
+}
+
+// Retire UN seul élève d'une séance du centre, ainsi que sa ligne `students`
+// (sinon l'externe orphelin réapparaîtrait dans le registre externe) et le
+// paiement de séance éventuel (FK payments.student_id = RESTRICT).
+export async function removeRevisionStudent(db: D1Database, seanceId: string, studentId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const seance = str(seanceId);
+  const sid = str(studentId);
+  if (!seance) throw new Error('معرّف حصة المراجعة مفقود.');
+  if (!sid) throw new Error('معرّف التلميذ مفقود.');
+  const found = await db.prepare('SELECT id FROM revision_seances WHERE id = ? AND center_id = ?').bind(seance, centerId).first<any>();
+  if (!found) throw new Error('حصة المراجعة غير موجودة.');
+  await db.batch([
+    db.prepare("DELETE FROM payments WHERE ref_type = 'revision_seance' AND ref_id = ? AND student_id = ?").bind(seance, sid),
+    db.prepare('DELETE FROM revision_seance_students WHERE seance_id = ? AND student_id = ?').bind(seance, sid),
+    db.prepare("DELETE FROM students WHERE id = ? AND center_id = ? AND student_type = 'external'").bind(sid, centerId)
+  ]);
+}
+
+// Supprime UNE seule séance du centre : paiements de séance, liens élèves, la
+// séance, puis les lignes `students` devenues orphelines (celles qui ne sont
+// plus référencées par aucune séance de révision).
+export async function deleteRevisionSeance(db: D1Database, seanceId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const sid = str(seanceId);
+  if (!sid) throw new Error('معرّف حصة المراجعة مفقود.');
+  const found = await db.prepare('SELECT id FROM revision_seances WHERE id = ? AND center_id = ?').bind(sid, centerId).first<any>();
+  if (!found) throw new Error('حصة المراجعة غير موجودة.');
+  const links = await db.prepare('SELECT student_id FROM revision_seance_students WHERE seance_id = ?').bind(sid).all<any>();
+  const studentIds = (links.results || []).map((r: any) => str(r.student_id)).filter(Boolean);
+  const stmts: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM payments WHERE ref_type = 'revision_seance' AND ref_id = ?").bind(sid),
+    db.prepare('DELETE FROM revision_seance_students WHERE seance_id = ?').bind(sid),
+    db.prepare('DELETE FROM revision_seances WHERE id = ? AND center_id = ?').bind(sid, centerId)
+  ];
+  if (studentIds.length) {
+    const ph = studentIds.map(() => '?').join(',');
+    stmts.push(db.prepare(`DELETE FROM students WHERE center_id = ? AND student_type = 'external' AND id IN (${ph}) AND id NOT IN (SELECT student_id FROM revision_seance_students)`).bind(centerId, ...studentIds));
   }
   await db.batch(stmts);
 }
