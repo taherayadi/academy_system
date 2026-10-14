@@ -36,6 +36,8 @@ interface ExternalCoursesModuleProps {
   externalStudents: ExternalStudentRegister[];
   onUpdateExternalStudents: (list: ExternalStudentRegister[]) => void;
   onUpdateCourses: (courses: ExternalCourse[]) => void;
+  /** Ajout ciblé d'UN cours : POST /api/courses — pas de PUT du domaine complet. */
+  onCreateCourse?: (course: ExternalCourse) => void;
   onRemoveCourseStudent?: (courseId: string, studentId: string) => void;
   onDeleteCourse?: (courseId: string) => void;
   onUpdateSessions: (sessions: ExternalCourseSession[]) => void;
@@ -51,6 +53,7 @@ export default function ExternalCoursesModule({
   externalStudents,
   onUpdateExternalStudents,
   onUpdateCourses,
+  onCreateCourse,
   onRemoveCourseStudent,
   onDeleteCourse,
   onUpdateSessions,
@@ -242,7 +245,9 @@ export default function ExternalCoursesModule({
       if (selectedCourse?.id === editingCourseId) setSelectedCourse(payload);
       toast.success(`تم تحديث الكورس (${payload.subject} — ${payload.teacherName}) بنجاح!`);
     } else {
-      onUpdateCourses([...courses, payload]);
+      // Granulaire : POST /api/courses (un seul cours), fallback legacy sinon.
+      if (onCreateCourse) onCreateCourse(payload);
+      else onUpdateCourses([...courses, payload]);
       setSelectedCourse(payload);
       toast.success(`تمت إضافة الكورس (${payload.subject} — ${payload.teacherName}) بنجاح!`);
     }

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readCourses, readExternalStudents, readStudents, removeCourseEnrollment, deleteCourse, writeCourses, writeExternalStudents, writeStudents } from './_lib';
+import { readCourses, readExternalStudents, readStudents, removeCourseEnrollment, deleteCourse, createCourse, writeCourses, writeExternalStudents, writeStudents } from './_lib';
 
 // Exécute le SQL réel (node:sqlite) avec PRAGMA foreign_keys = ON : les
 // régressions de FK (élève externe absent de `students`, effectifs effacés)
@@ -155,6 +155,13 @@ beforeEach(() => {
       present INTEGER NOT NULL DEFAULT 0 CHECK (present IN (0,1)),
       paid_payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
       PRIMARY KEY (seance_id, student_id)
+    ) STRICT;
+    CREATE TABLE formation_enrollments (
+      id           TEXT PRIMARY KEY,
+      center_id    TEXT NOT NULL,
+      formation_id TEXT NOT NULL,
+      student_id   TEXT NOT NULL,
+      UNIQUE (formation_id, student_id)
     ) STRICT;
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
@@ -489,5 +496,48 @@ describe('course enrollments hydration', () => {
   it('rejects deleting a course of another center', async () => {
     await writeCourses(db, [makeCourse()], CENTER);
     await expect(deleteCourse(db, COURSE_ID, 'other_center')).rejects.toThrow('غير موجود');
+  });
+});
+
+describe('create ONE course (targeted POST)', () => {
+  it('inserts one course with its enrollments leaving other courses intact', async () => {
+    await writeCourses(db, [makeCourse({ id: 'course_keep' })], CENTER);
+    // L'attendance du registre référence un cours existant (FK external_courses).
+    await writeExternalStudents(db, [makeRegister({
+      attendance: [{ id: 'att_1', studentId: REG_ID, courseId: 'course_keep', courseName: 'Mathématiques (Collège 7ème Année)', date: '2026-10-09', status: 'present' }]
+    })], CENTER);
+
+    await createCourse(db, makeCourse({ enrolledStudents: [{ studentId: REG_ID }] }), CENTER);
+
+    const courses = await readCourses(db, CENTER);
+    expect(courses.map(c => c.id).sort()).toEqual(['course_1', 'course_keep']);
+    const created = courses.find(c => c.id === COURSE_ID) as any;
+    expect(created.teacherName).toBe('Ali');
+    expect(created.subject).toBe('Mathématiques');
+    expect(created.enrolledStudents.map((s: any) => s.studentId)).toEqual([REG_ID]);
+    // L'autre cours n'a pas été touché.
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM external_courses WHERE id = ?').get('course_keep') as any).n).toBe(1);
+  });
+
+  it('is idempotent: re-posting the same id rewrites only that course', async () => {
+    await writeCourses(db, [makeCourse({ id: 'course_keep' })], CENTER);
+    await createCourse(db, makeCourse(), CENTER);
+    await createCourse(db, { ...makeCourse(), teacherName: 'Sami', enrolledStudents: [] }, CENTER);
+
+    const courses = await readCourses(db, CENTER);
+    expect(courses).toHaveLength(2);
+    expect(courses.find(c => c.id === COURSE_ID)?.teacherName).toBe('Sami');
+    expect(courses.find(c => c.id === COURSE_ID)?.enrolledStudents).toHaveLength(0);
+  });
+
+  it('rejects a missing id or subject', async () => {
+    await expect(createCourse(db, makeCourse({ id: '' }), CENTER)).rejects.toThrow('مفقود');
+    await expect(createCourse(db, makeCourse({ subject: '' }), CENTER)).rejects.toThrow('مطلوبة');
+  });
+
+  it('rejects hijacking a course id owned by another center', async () => {
+    sqlite.prepare(`INSERT INTO centers (id, name, slug, center_type, plan, status, created_at, updated_at) VALUES ('other_center', 'o', 'o', 'garderie', 'starter', 'trial', 1, 1)`).run();
+    await writeCourses(db, [makeCourse()], 'other_center');
+    await expect(createCourse(db, makeCourse(), CENTER)).rejects.toThrow('غير موجود');
   });
 });

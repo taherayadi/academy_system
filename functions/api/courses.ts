@@ -1,4 +1,4 @@
-import { Env, json, readBody, readCourses, writeCourses, removeCourseEnrollment, deleteCourse, getContextCenterId } from './_lib';
+import { Env, json, readBody, readCourses, writeCourses, createCourse, removeCourseEnrollment, deleteCourse, getContextCenterId } from './_lib';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
@@ -11,14 +11,35 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
+// POST : ajoute UN SEUL cours (l'objet envoyé), sans réécrire la liste.
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  try {
+    const centerId = getContextCenterId(context);
+    const course = await readBody(context.request);
+    if (!course || typeof course !== 'object' || Array.isArray(course)) {
+      return json({ error: 'بيانات الدرس غير صالحة.' }, 400);
+    }
+    await createCourse(context.env.DB, course, centerId);
+    return json({ ok: true });
+  } catch (err: any) {
+    console.error('Error:', err);
+    const bad = err?.message && /مفقود|مطلوب|غير موجود|غير صالحة/.test(err.message);
+    return json({ error: err?.message || 'تعذر حفظ الدرس.' }, bad ? 400 : 500);
+  }
+};
+
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const centerId = getContextCenterId(context);
     const courses = await readBody(context.request);
-    if (!Array.isArray(courses)) {
+    // Tableau = réécriture complète du domaine ; objet = upsert d'UN cours.
+    if (Array.isArray(courses)) {
+      await writeCourses(context.env.DB, courses, centerId);
+    } else if (courses && typeof courses === 'object') {
+      await createCourse(context.env.DB, courses, centerId);
+    } else {
       return json({ error: 'بيانات الدروس غير صالحة.' }, 400);
     }
-    await writeCourses(context.env.DB, courses, centerId);
     return json({ ok: true });
   } catch (err) {
     console.error('Error:', err);

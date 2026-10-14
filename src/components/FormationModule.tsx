@@ -46,6 +46,10 @@ import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
 interface FormationModuleProps {
   formations: Formation[];
   onUpdateFormations: (formations: Formation[]) => void;
+  onCreateFormation?: (formation: Formation) => void;
+  onDeleteFormation?: (formationId: string) => void;
+  onAddFormationStudent?: (formationId: string, student: FormationStudent) => void;
+  onRemoveFormationStudent?: (formationId: string, studentId: string) => void;
   settings?: CenterSettings | null;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   sidebarCollapsed?: boolean;
@@ -54,6 +58,10 @@ interface FormationModuleProps {
 export default function FormationModule({
   formations,
   onUpdateFormations,
+  onCreateFormation,
+  onDeleteFormation,
+  onAddFormationStudent,
+  onRemoveFormationStudent,
   settings,
   onUpdateSettings,
   sidebarCollapsed
@@ -333,7 +341,11 @@ export default function FormationModule({
         students: [],
         createdAt: now
       };
-      onUpdateFormations([newFormation, ...formations]);
+      if (onCreateFormation) {
+        onCreateFormation(newFormation);
+      } else {
+        onUpdateFormations([newFormation, ...formations]);
+      }
       setSelectedId(newFormation.id);
       toast.success('تم إنشاء التكوين بنجاح');
     }
@@ -343,7 +355,11 @@ export default function FormationModule({
 
   const handleDeleteFormation = (f: Formation) => {
     const updated = formations.filter(item => item.id !== f.id);
-    onUpdateFormations(updated);
+    if (onDeleteFormation) {
+      onDeleteFormation(f.id);
+    } else {
+      onUpdateFormations(updated);
+    }
     if (selectedId === f.id) {
       setSelectedId(updated[0]?.id || null);
     }
@@ -484,7 +500,13 @@ export default function FormationModule({
       return f;
     });
 
-    onUpdateFormations(updatedFormations);
+    // Nouvel élève : POST ciblé (une seule inscription) — jamais la liste complète.
+    // Édition d'un élève existant : PUT de la liste complète.
+    if (!editingStudentId) {
+      onAddFormationStudent?.(selectedFormation.id, studentRecord);
+    } else {
+      onUpdateFormations(updatedFormations);
+    }
     setIsStudentModalOpen(false);
     toast.success(editingStudentId ? 'تم تحديث بيانات التلميذ بنجاح' : 'تم تسجيل التلميذ في التكوين بنجاح');
   };
@@ -492,16 +514,8 @@ export default function FormationModule({
   const handleDeleteStudent = () => {
     if (!deleteStudentTarget) return;
     const { formation, student } = deleteStudentTarget;
-    const updatedFormations = formations.map(f => {
-      if (f.id === formation.id) {
-        return {
-          ...f,
-          students: (f.students || []).filter(s => s.id !== student.id)
-        };
-      }
-      return f;
-    });
-    onUpdateFormations(updatedFormations);
+    // Retrait ciblé : DELETE sur une seule inscription — jamais la liste complète.
+    onRemoveFormationStudent?.(formation.id, student.id);
     setDeleteStudentTarget(null);
     toast.success('تم حذف التلميذ من التكوين');
   };
@@ -818,13 +832,6 @@ export default function FormationModule({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-slate-700">جدول الحصص الأسبوعي:</span>
                     <button
-                      onClick={() => setIsScheduleModalOpen(true)}
-                      className="text-[11px] font-bold text-brand-600 hover:text-brand-700 cursor-pointer flex items-center gap-1"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {selectedFormation.schedule?.length ? 'تعديل بالذكاء الاصطناعي' : 'إنشاء / اقتراح بالذكاء الاصطناعي'}
-                    </button>
-                    <button
                       onClick={() => setPrintingSchedule(selectedFormation)}
                       disabled={!selectedFormation.schedule?.length}
                       className="text-[11px] font-bold text-brand-600 hover:text-brand-700 cursor-pointer flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -835,7 +842,7 @@ export default function FormationModule({
                   </div>
                   {(selectedFormation.schedule || []).length === 0 ? (
                     <p className="text-[11px] text-slate-400 font-bold">
-                      لا يوجد جدول بعد. اضغط "جدول الحصص" لتوليد اقتراح أسبوعي حسب المواد وعدد التلاميذ.
+                      لا يوجد جدول بعد. اضغط "جدول الحصص" لإضافة حصص الأسبوع.
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

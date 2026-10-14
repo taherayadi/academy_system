@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -675,6 +675,30 @@ export default function App() {
     commitDomain(() => saveFormations(updated));
   };
 
+  const handleCreateFormation = (formation: Formation) => {
+    setFormations(prev => [formation, ...prev]);
+    commitDomain(() => createFormationApi(formation));
+  };
+
+  const handleDeleteFormation = (formationId: string) => {
+    setFormations(prev => prev.filter(f => f.id !== formationId));
+    commitDomain(() => deleteFormationApi(formationId));
+  };
+
+  const handleAddFormationStudent = (formationId: string, student: FormationStudent) => {
+    setFormations(prev => prev.map(f => f.id === formationId
+      ? { ...f, students: [student, ...(f.students || [])] }
+      : f));
+    commitDomain(() => addFormationStudentApi(formationId, student));
+  };
+
+  const handleRemoveFormationStudent = (formationId: string, studentId: string) => {
+    setFormations(prev => prev.map(f => f.id === formationId
+      ? { ...f, students: (f.students || []).filter(s => s.id !== studentId) }
+      : f));
+    commitDomain(() => removeFormationStudentApi(formationId, studentId));
+  };
+
   const handleUpdateEvents = (updated: SchoolEvent[]) => {
     setEvents(updated);
     commitDomain(() => saveEventsApi(updated));
@@ -708,6 +732,11 @@ export default function App() {
   const handleUpdateCourses = (updated: ExternalCourse[]) => {
     setCourses(updated);
     commitDomain(() => saveCourses(updated));
+  };
+
+  const handleCreateCourse = (course: ExternalCourse) => {
+    setCourses(prev => [...prev, course]);
+    commitDomain(() => createCourseApi(course));
   };
 
   const handleRemoveCourseStudent = (courseId: string, studentId: string) => {
@@ -1395,6 +1424,7 @@ export default function App() {
                   externalStudents={externalStudents}
                   onUpdateExternalStudents={handleUpdateExternalStudents}
                   onUpdateCourses={handleUpdateCourses}
+                  onCreateCourse={handleCreateCourse}
                   onRemoveCourseStudent={handleRemoveCourseStudent}
                   onDeleteCourse={handleDeleteCourse}
                   onUpdateSessions={handleUpdateSessions}
@@ -1420,6 +1450,10 @@ export default function App() {
                 <FormationModule
                   formations={formations}
                   onUpdateFormations={handleUpdateFormations}
+                  onCreateFormation={handleCreateFormation}
+                  onDeleteFormation={handleDeleteFormation}
+                  onAddFormationStudent={handleAddFormationStudent}
+                  onRemoveFormationStudent={handleRemoveFormationStudent}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
                   sidebarCollapsed={sidebarCollapsed}

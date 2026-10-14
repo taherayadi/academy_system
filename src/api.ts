@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
 
 
 const API_BASE = '/api';
@@ -278,6 +278,12 @@ export async function saveCourses(courses: ExternalCourse[]): Promise<void> {
 }
 
 
+/** Adds ONE external course (POST /api/courses) without rewriting the whole courses domain. */
+export async function createCourseApi(course: ExternalCourse): Promise<void> {
+  return postDomain('/courses', course, 'تعذر حفظ الدرس.');
+}
+
+
 /** Removes ONE student from ONE external course without rewriting the domain. */
 export async function removeCourseStudentApi(courseId: string, studentId: string): Promise<void> {
   return deleteDomain(`/courses?courseId=${encodeURIComponent(courseId)}&studentId=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ من الدرس.');
@@ -382,6 +388,30 @@ export function fetchStudentAttendanceApi(): Promise<StudentAttendanceRecord[]> 
 
 export async function saveFormations(formations: Formation[]): Promise<void> {
   return putDomain('/formations', formations, 'تعذر حفظ بيانات التكوينات.');
+}
+
+
+/** Adds ONE تكوين (POST /api/formations) without rewriting the whole formations domain. */
+export async function createFormationApi(formation: Formation): Promise<void> {
+  return postDomain('/formations', formation, 'تعذر حفظ التكوين.');
+}
+
+
+/** Deletes ONE تكوين (DELETE /api/formations?id=) without rewriting the whole formations domain. */
+export async function deleteFormationApi(formationId: string): Promise<void> {
+  return deleteDomain(`/formations?id=${encodeURIComponent(formationId)}`, 'تعذر حذف التكوين.');
+}
+
+
+/** Adds ONE student to an existing formation (POST /api/formation-students). */
+export async function addFormationStudentApi(formationId: string, student: FormationStudent): Promise<void> {
+  return postDomain('/formation-students', { formationId, student }, 'تعذر تسجيل التلميذ في التكوين.');
+}
+
+
+/** Removes ONE student from ONE formation (DELETE /api/formation-students?...) without rewriting the domain. */
+export async function removeFormationStudentApi(formationId: string, studentId: string): Promise<void> {
+  return deleteDomain(`/formation-students?formationId=${encodeURIComponent(formationId)}&studentId=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ من التكوين.');
 }
 
 

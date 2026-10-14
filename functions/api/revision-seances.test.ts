@@ -110,6 +110,13 @@ beforeEach(() => {
       paid_payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
       PRIMARY KEY (seance_id, student_id)
     ) STRICT;
+    CREATE TABLE formation_enrollments (
+      id           TEXT PRIMARY KEY,
+      center_id    TEXT NOT NULL,
+      formation_id TEXT NOT NULL,
+      student_id   TEXT NOT NULL,
+      UNIQUE (formation_id, student_id)
+    ) STRICT;
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
       center_id TEXT NOT NULL REFERENCES centers(id) ON DELETE CASCADE,
