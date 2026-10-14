@@ -261,6 +261,18 @@ export async function saveSlots(slots: EtudeSlot[]): Promise<void> {
 }
 
 
+/** Adds ONE séance (POST /api/slots) without rewriting the whole slots domain. */
+export async function createSlotApi(slot: EtudeSlot): Promise<void> {
+  return postDomain('/slots', slot, 'تعذر حفظ الحصة.');
+}
+
+
+/** Deletes ONE séance (DELETE /api/slots?id=) without rewriting the whole slots domain. */
+export async function deleteSlotApi(slotId: string): Promise<void> {
+  return deleteDomain(`/slots?id=${encodeURIComponent(slotId)}`, 'تعذر حذف الحصة.');
+}
+
+
 export async function saveCourses(courses: ExternalCourse[]): Promise<void> {
   return putDomain('/courses', courses, 'تعذر حفظ بيانات الدروس الخصوصية.');
 }
@@ -347,6 +359,12 @@ export async function removeRevisionStudentApi(seanceId: string, studentId: stri
 
 export function saveStudentTimeSheets(sheets: StudentTimeSheet[]): Promise<void> {
   return putDomain('/student-timesheets', sheets, 'تعذر حفظ جداول التوقيت.');
+}
+
+
+/** Deletes ONE timetable (student_years.time_sheet_id → NULL cascades) without rewriting the domain. */
+export function deleteStudentTimeSheetApi(timeSheetId: string): Promise<void> {
+  return deleteDomain(`/student-timesheets?id=${encodeURIComponent(timeSheetId)}`, 'تعذر حذف جدول التوقيت.');
 }
 
 
@@ -490,6 +508,11 @@ export async function updateStudentYearApi(input: StudentYearRef): Promise<void>
 
 export async function deleteStudentYearApi(studentId: string, schoolYear: string): Promise<void> {
   return deleteDomain(`/student-years?studentId=${encodeURIComponent(studentId)}&schoolYear=${encodeURIComponent(schoolYear)}`, 'تعذر حذف سنة التلميذ.');
+}
+
+/** Retire l'élève de l'assignation d'un emploi du temps (grade/établissement préservés) sans réécrire le domaine. */
+export async function unassignStudentYearApi(studentId: string, schoolYear: string): Promise<void> {
+  return deleteDomain(`/student-years?studentId=${encodeURIComponent(studentId)}&schoolYear=${encodeURIComponent(schoolYear)}&timeSheetId=`, 'تعذر إلغاء إسناد جدول التوقيت.');
 }
 
 

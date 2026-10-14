@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, saveCourses, removeCourseStudentApi, deleteCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, updateStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -483,7 +483,7 @@ export default function App() {
         ops.push(upsertStudentYearApi({ studentId: id, schoolYear, grade, timeSheetId }));
       }
       for (const id of unassign) {
-        ops.push(updateStudentYearApi({ studentId: id, schoolYear, timeSheetId: null }));
+        ops.push(unassignStudentYearApi(id, schoolYear));
       }
       await Promise.all(ops);
     });
@@ -658,6 +658,12 @@ export default function App() {
     commitDomain(() => saveStudentTimeSheets(updated));
   };
 
+  const handleDeleteStudentTimeSheet = (timeSheetId: string) => {
+    setStudentTimeSheets(prev => prev.filter(ts => ts.id !== timeSheetId));
+    setStudents(prev => prev.map(s => s.timeSheetId === timeSheetId ? { ...s, timeSheetId: undefined } : s));
+    commitDomain(() => deleteStudentTimeSheetApi(timeSheetId));
+  };
+
   const handleUpdateStudentAttendance = (updated: StudentAttendanceRecord[]) => {
     setStudentAttendance(updated);
     stateRef.current.studentAttendance = updated;
@@ -687,6 +693,16 @@ export default function App() {
   const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
+  };
+
+  const handleCreateSlot = (slot: EtudeSlot) => {
+    setSlots(prev => [...prev, slot]);
+    commitDomain(() => createSlotApi(slot));
+  };
+
+  const handleDeleteSlot = (slotId: string) => {
+    setSlots(prev => prev.filter(s => s.id !== slotId));
+    commitDomain(() => deleteSlotApi(slotId));
   };
 
   const handleUpdateCourses = (updated: ExternalCourse[]) => {
@@ -1340,6 +1356,7 @@ export default function App() {
                   students={students}
                   studentTimeSheets={studentTimeSheets}
                   onUpdateStudentTimeSheets={handleUpdateStudentTimeSheets}
+                  onDeleteTimeSheet={handleDeleteStudentTimeSheet}
                   onUpdateStudent={handleUpdateSingleStudent}
                   onUpdateStudents={handleUpdateStudents}
                   onAssignStudents={handleAssignTimeSheet}
@@ -1358,6 +1375,8 @@ export default function App() {
                   settings={settings}
                   sidebarCollapsed={sidebarCollapsed}
                   onUpdateSlots={handleUpdateSlots}
+                  onCreateSlot={handleCreateSlot}
+                  onDeleteSlot={handleDeleteSlot}
                   onUpdateTimesheets={handleUpdateTimesheets}
                   onUpsertTimesheet={handleUpsertTimesheet}
                   onUpdateStudent={handleUpdateSingleStudent}

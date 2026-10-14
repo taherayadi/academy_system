@@ -58,6 +58,10 @@ interface EtudeModuleProps {
   slots: EtudeSlot[];
   timesheets: TimesheetEntry[];
   onUpdateSlots: (slots: EtudeSlot[]) => void;
+  /** Ajout ciblé d'UNE séance : POST /api/slots — pas de PUT du domaine complet. */
+  onCreateSlot?: (slot: EtudeSlot) => void;
+  /** Suppression ciblée d'UNE séance : DELETE /api/slots?id= — pas de PUT. */
+  onDeleteSlot?: (slotId: string) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
   /** Pointage d'un créneau : envoie SEULEMENT la ligne touchée (upsert serveur). */
   onUpsertTimesheet?: (entry: TimesheetEntry) => void;
@@ -103,6 +107,8 @@ export default function EtudeModule({
   slots,
   timesheets,
   onUpdateSlots,
+  onCreateSlot,
+  onDeleteSlot,
   onUpdateTimesheets,
   onUpsertTimesheet,
   onUpdateStudent,
@@ -661,7 +667,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
       onUpdateSlots(slots.map(s => s.id === editingSlotId ? payload : s));
       toast.success(`تم تحديث حصّة الدراسة (${gradeLevel} - ${timeLabel}) بنجاح!`);
     } else {
-      onUpdateSlots([...slots, payload]);
+      // Granulaire : POST /api/slots (une seule séance), fallback legacy sinon.
+      if (onCreateSlot) onCreateSlot(payload);
+      else onUpdateSlots([...slots, payload]);
       toast.success(`تمت إضافة حصّة (${gradeLevel} - ${timeLabel}) بنجاح!`);
     }
 
@@ -1971,7 +1979,9 @@ paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance
         confirmLabel="نعم، احذف الحصة"
         onConfirm={() => {
           if (slotToDelete) {
-            onUpdateSlots(slots.filter(s => s.id !== slotToDelete.id));
+            // Granulaire : DELETE /api/slots?id= (une seule séance), fallback legacy sinon.
+            if (onDeleteSlot) onDeleteSlot(slotToDelete.id);
+            else onUpdateSlots(slots.filter(s => s.id !== slotToDelete.id));
             setSlotToDelete(null);
           }
         }}

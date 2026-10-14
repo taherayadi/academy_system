@@ -1165,6 +1165,37 @@ export async function writeSlots(db: D1Database, slots: any[], centerId: string 
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
+/** Insère (ou met à jour) UNE seule séance (etude_slots + slot_enrollments) du centre. */
+export async function createSlot(db: D1Database, slot: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(slot?.id);
+  if (!id) throw new Error('معرّف الحصة مفقود.');
+  if (!str(slot?.day)) throw new Error('يوم الحصة مطلوب.');
+  if (!str(slot?.startTime) || !str(slot?.endTime)) throw new Error('توقيت الحصة مطلوب.');
+  if (!str(slot?.gradeLevel)) throw new Error('المستوى الدراسي مطلوب.');
+  // Un id déjà pris par un AUTRE centre ne doit pas être détourné.
+  const existing = await db.prepare('SELECT center_id FROM etude_slots WHERE id = ?').bind(id).first<any>();
+  if (existing && str(existing.center_id) !== centerId) throw new Error('الحصة غير موجودة في هذا المركز.');
+  const teacherId = slot?.teacherId ? str(slot.teacherId) : null;
+  if (teacherId) {
+    const owner = await db.prepare('SELECT 1 AS ok FROM staff WHERE id = ? AND center_id = ?').bind(teacherId, centerId).first<any>();
+    if (!owner) throw new Error('الأستاذ غير موجود في هذا المركز.');
+  }
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM slot_enrollments WHERE slot_id = ?').bind(id),
+    db.prepare('DELETE FROM etude_slots WHERE id = ? AND center_id = ?').bind(id, centerId),
+    ...buildSlotsStmts(db, [{ ...slot, id }], centerId)
+  ];
+  for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
+}
+
+/** Supprime UNE seule séance du centre (slot_enrollments CASCADE). */
+export async function deleteSlot(db: D1Database, slotId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(slotId);
+  if (!id) throw new Error('معرّف الحصة مفقود.');
+  const res = await db.prepare('DELETE FROM etude_slots WHERE id = ? AND center_id = ?').bind(id, centerId).run();
+  if (!res.meta.changes) throw new Error('الحصة غير موجودة في هذا المركز.');
+}
+
 // ===========================================================================
 // EXTERNAL COURSES
 // ===========================================================================
@@ -2989,4 +3020,27 @@ export async function deleteSingleStudentYear(db: D1Database, studentId: string,
     'DELETE FROM student_years WHERE student_id = ? AND school_year = ? AND student_id IN (SELECT id FROM students WHERE center_id = ?)'
   ).bind(str(studentId), str(schoolYear), centerId).run();
   if (!res.meta.changes) throw new Error('سنة التلميذ غير موجودة في هذا المركز.');
+}
+
+/**
+ * Retire l'élève de l'assignation d'un emploi du temps : remet time_sheet_id à
+ * NULL pour la ligne (student_id, school_year), SANS toucher grade ni
+ * établissement. Idempotent (une ligne déjà sans emploi du temps ne lève pas).
+ */
+export async function unassignStudentYearTimeSheet(db: D1Database, studentId: string, schoolYear: string, centerId: string): Promise<void> {
+  if (!str(studentId)) throw new Error('معرّف التلميذ مطلوب.');
+  if (!YEAR_GLOB.test(str(schoolYear))) throw new Error('السنة الدراسية غير صالحة (مثال: 2026/2027).');
+  const owner = await db.prepare('SELECT 1 AS ok FROM students WHERE id = ? AND center_id = ?').bind(str(studentId), centerId).first<any>();
+  if (!owner) throw new Error('التلميذ غير موجود في هذا المركز.');
+  await db.prepare(
+    'UPDATE student_years SET time_sheet_id = NULL WHERE student_id = ? AND school_year = ?'
+  ).bind(str(studentId), str(schoolYear)).run();
+}
+
+/** Supprime UN seul emploi du temps du centre (student_years.time_sheet_id → NULL via FK CASCADE). */
+export async function deleteStudentTimeSheet(db: D1Database, timeSheetId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(timeSheetId);
+  if (!id) throw new Error('معرّف جدول التوقيت مفقود.');
+  const res = await db.prepare('DELETE FROM student_time_sheets WHERE id = ? AND center_id = ?').bind(id, centerId).run();
+  if (!res.meta.changes) throw new Error('جدول التوقيت غير موجود في هذا المركز.');
 }

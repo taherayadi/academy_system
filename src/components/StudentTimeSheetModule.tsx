@@ -12,6 +12,8 @@ interface StudentTimeSheetModuleProps {
   students: Student[];
   studentTimeSheets: StudentTimeSheet[];
   onUpdateStudentTimeSheets: (sheets: StudentTimeSheet[]) => void;
+  /** Suppression ciblée d'UN emploi du temps via DELETE /api/student-timesheets. */
+  onDeleteTimeSheet?: (timeSheetId: string) => void;
   onUpdateStudent: (student: Student) => void;
   onUpdateStudents: (students: Student[]) => void;
   /**
@@ -28,6 +30,7 @@ export default function StudentTimeSheetModule({
   students,
   studentTimeSheets,
   onUpdateStudentTimeSheets,
+  onDeleteTimeSheet,
   onUpdateStudent,
   onUpdateStudents,
   onAssignStudents,
@@ -367,26 +370,32 @@ export default function StudentTimeSheetModule({
                 <button
                   onClick={() => {
                     const currentStudents = studentsRef.current;
-                    const remaining = studentTimeSheets.filter(t => t.id !== deleteTimeSheet.id);
-                    const unassignIds = currentStudents
-                      .filter(s => s.timeSheetId === deleteTimeSheet.id)
-                      .map(s => s.id);
-                    onUpdateStudentTimeSheets(remaining);
-                    if (onAssignStudents) {
-                      // Désassignation ciblée : /api/student-years (time_sheet_id → NULL).
-                      onAssignStudents(
-                        deleteTimeSheet.id,
-                        deleteTimeSheet.schoolYear,
-                        undefined,
-                        [],
-                        unassignIds
-                      );
+                    if (onDeleteTimeSheet) {
+                      // Suppression ciblée : DELETE /api/student-timesheets?id=
+                      // (les dé-assignations tombent en cascade via la FK), pas de PUT.
+                      onDeleteTimeSheet(deleteTimeSheet.id);
                     } else {
-                      // Fallback legacy : ancien PUT /students complet (tests).
-                      const updatedStudents = currentStudents.map(s =>
-                        s.timeSheetId === deleteTimeSheet.id ? { ...s, timeSheetId: undefined } : s
-                      );
-                      onUpdateStudents(updatedStudents);
+                      const remaining = studentTimeSheets.filter(t => t.id !== deleteTimeSheet.id);
+                      const unassignIds = currentStudents
+                        .filter(s => s.timeSheetId === deleteTimeSheet.id)
+                        .map(s => s.id);
+                      onUpdateStudentTimeSheets(remaining);
+                      if (onAssignStudents) {
+                        // Désassignation ciblée : /api/student-years (time_sheet_id → NULL).
+                        onAssignStudents(
+                          deleteTimeSheet.id,
+                          deleteTimeSheet.schoolYear,
+                          undefined,
+                          [],
+                          unassignIds
+                        );
+                      } else {
+                        // Fallback legacy : ancien PUT /students complet (tests).
+                        const updatedStudents = currentStudents.map(s =>
+                          s.timeSheetId === deleteTimeSheet.id ? { ...s, timeSheetId: undefined } : s
+                        );
+                        onUpdateStudents(updatedStudents);
+                      }
                     }
                     toast.success('تم حذف جدول التوقيت');
                     setDeleteTimeSheet(null);

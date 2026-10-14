@@ -1,4 +1,4 @@
-import { Env, json, readBody, readStudentYears, upsertSingleStudentYear, updateSingleStudentYear, deleteSingleStudentYear, getContextCenterId } from './_lib';
+import { Env, json, readBody, readStudentYears, upsertSingleStudentYear, updateSingleStudentYear, deleteSingleStudentYear, unassignStudentYearTimeSheet, getContextCenterId } from './_lib';
 
 /**
  * GET /api/student-years — toutes les lignes student_years du centre
@@ -50,7 +50,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 };
 
 /**
- * DELETE /api/student-years?studentId=…&schoolYear=… — supprime UNE ligne.
+ * DELETE /api/student-years?studentId=…&schoolYear=…[&timeSheetId=…]
+ * — `timeSheetId` présent → retire l'élève de l'assignation de l'emploi du temps
+ *   (time_sheet_id → NULL, grade/établissement préservés) ;
+ * — sinon → supprime UNE ligne student_year (désinscription pour l'année).
  */
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   try {
@@ -58,7 +61,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     const url = new URL(context.request.url);
     const studentId = url.searchParams.get('studentId') || '';
     const schoolYear = url.searchParams.get('schoolYear') || '';
-    await deleteSingleStudentYear(context.env.DB, studentId, schoolYear, centerId);
+    if (url.searchParams.has('timeSheetId')) {
+      await unassignStudentYearTimeSheet(context.env.DB, studentId, schoolYear, centerId);
+    } else {
+      await deleteSingleStudentYear(context.env.DB, studentId, schoolYear, centerId);
+    }
     return json({ ok: true });
   } catch (err: any) {
     console.error('Error:', err);

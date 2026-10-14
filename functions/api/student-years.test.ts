@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { onRequestGet, onRequestPost, onRequestPut, onRequestDelete } from './student-years';
 import { onRequestPut as onStudentTimeSheetsPut, onRequestGet as onStudentTimeSheetsGet } from './student-time-sheets';
+import { onRequestDelete as onStudentTimeSheetsDelete } from './student-timesheets';
 
 // Régression /api/student-years : assignation ciblée d'un emploi du temps
 // (table student_years) sans renvoyer l'élève entier — le schéma réel
@@ -61,7 +62,7 @@ beforeEach(() => {
       school_year TEXT NOT NULL CHECK (school_year GLOB '[0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9]'),
       grade TEXT NOT NULL,
       etablissement_id TEXT REFERENCES etablissements(id) ON DELETE SET NULL,
-      time_sheet_id TEXT,
+      time_sheet_id TEXT REFERENCES student_time_sheets(id) ON DELETE SET NULL,
       PRIMARY KEY (student_id, school_year),
       FOREIGN KEY (center_id, student_id) REFERENCES students(center_id, id) ON DELETE CASCADE
     ) STRICT;
@@ -202,6 +203,34 @@ describe('DELETE /api/student-years', () => {
 
   it('404s for a foreign-center student', async () => {
     const res = await onRequestDelete(ctx('DELETE', `${BASE}?studentId=stX&schoolYear=${YEAR}`));
+    expect(res.status).toBe(404);
+  });
+
+  it('unassigns the timesheet only (timeSheetId param) keeping grade and etablissement', async () => {
+    sqlite.prepare(`INSERT INTO student_years (student_id, center_id, school_year, grade, etablissement_id, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(ST1, CENTER, YEAR, 'Collège 7ème', 'et1', 'ts9');
+    const res = await onRequestDelete(ctx('DELETE', `${BASE}?studentId=${ST1}&schoolYear=${YEAR}&timeSheetId=`));
+    expect(res.status).toBe(200);
+    const row = sqlite.prepare('SELECT grade, etablissement_id, time_sheet_id FROM student_years WHERE student_id = ? AND school_year = ?').get(ST1, YEAR) as any;
+    expect(row).toEqual({ grade: 'Collège 7ème', etablissement_id: 'et1', time_sheet_id: null });
+  });
+});
+
+describe('DELETE /api/student-timesheets', () => {
+  const TS_BASE = 'https://app.example/api/student-timesheets';
+
+  it('deletes one timetable and NULLs the students assignment (FK SET NULL)', async () => {
+    sqlite.prepare(`INSERT INTO student_years (student_id, center_id, school_year, grade, time_sheet_id) VALUES (?, ?, ?, ?, ?)`)
+      .run(ST1, CENTER, YEAR, 'Collège 7ème', 'ts9');
+    const res = await onStudentTimeSheetsDelete(ctx('DELETE', `${TS_BASE}?id=ts9`));
+    expect(res.status).toBe(200);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM student_time_sheets WHERE id = ?').get('ts9') as any).n).toBe(0);
+    const row = sqlite.prepare('SELECT time_sheet_id FROM student_years WHERE student_id = ?').get(ST1) as any;
+    expect(row.time_sheet_id).toBeNull();
+  });
+
+  it('404s for a foreign/unknown timetable', async () => {
+    const res = await onStudentTimeSheetsDelete(ctx('DELETE', `${TS_BASE}?id=ts_unknown`));
     expect(res.status).toBe(404);
   });
 });
