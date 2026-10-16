@@ -27,6 +27,7 @@ import {
   Formation,
   FormationMatiere,
   FormationStudent,
+  FormationPayment,
   FormationSeance,
   CenterSettings,
   getAppSubjects,
@@ -42,7 +43,12 @@ import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
 import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
+import { instalmentsOf, hasUncashedCheque, collectedAmount } from '../utils/formationPayment';
 
+// A formation fee may be paid in several instalments with DIFFERENT methods
+// (40 cash now + 30 by cheque later). The shared helpers in
+// `utils/formationPayment` make the split explicit so an uncashed cheque never
+// swallows the cash that was already collected.
 interface FormationModuleProps {
   formations: Formation[];
   onUpdateFormations: (formations: Formation[]) => void;
@@ -217,19 +223,12 @@ export default function FormationModule({
     if (!selectedFormation) return { count: 0, totalPaid: 0, totalRemaining: 0, totalRequired: 0 };
     const students = selectedFormation.students || [];
     const count = students.length;
-    // Amount effectively collected per student:
-    //  - never count money still held in an uncashed cheque
-    //  - subtract any refund already given back
-    const totalPaid = students.reduce((sum, s) => {
-      if (s.paymentMethod === 'cheque' && s.chequePaid !== true) return sum;
-      return sum + Math.max(0, (s.amountPaid || 0) - (s.refundAmount || 0));
-    }, 0);
+    // Amount effectively collected per student: cash instalments + cashed
+    // cheques (an uncashed cheque is NOT collected yet), less any refund.
+    const totalPaid = students.reduce((sum, s) => sum + collectedAmount(s), 0);
     const totalRemaining = students.reduce((sum, s) => {
       const netRequired = Math.max(0, (s.totalRequired || 0) - (s.discount || 0));
-      if (s.paymentMethod === 'cheque' && s.chequePaid !== true) {
-        return sum + Math.max(0, netRequired - (s.refundAmount || 0));
-      }
-      return sum + Math.max(0, netRequired - (s.amountPaid || 0) + (s.refundAmount || 0));
+      return sum + Math.max(0, netRequired - collectedAmount(s));
     }, 0);
     const totalRequired = students.reduce((sum, s) => sum + (s.totalRequired || 0), 0);
     return { count, totalPaid, totalRemaining, totalRequired };
@@ -430,7 +429,9 @@ export default function FormationModule({
 
   const openPaymentModal = (student: FormationStudent) => {
     if (!selectedFormation) return;
-    if (student.paymentMethod === 'cheque' && student.chequePaid !== true) {
+    // Block only while a chèque versement is still pending — cash already
+    // collected does not stop the next payment.
+    if (hasUncashedCheque(student)) {
       toast.error('لا يمكن استكمال الدفع بشيك لم يتم تحصيله بعد.');
       return;
     }
@@ -471,14 +472,31 @@ export default function FormationModule({
     const newPaid = (student.amountPaid || 0) + paid;
     const remainingAfter = Math.max(0, netRequired - newPaid + (student.refundAmount || 0));
     const now = new Date().toISOString();
+    // Append a NEW versement instead of overwriting the previous one — paying a
+    // 30 د.ت remainder by cheque must record 30 cheque, not rewrite the 40 cash.
+    const payments: FormationPayment[] = [
+      ...instalmentsOf(student),
+      {
+        id: 'p_' + crypto.randomUUID(),
+        date: now,
+        amount: paid,
+        method: payMethod,
+        chequeNumber: payMethod === 'cheque' ? payChequeNumber.trim() : undefined,
+        chequeDate: payMethod === 'cheque' ? payChequeDate : undefined,
+        chequePaid: payMethod === 'cheque' ? false : undefined
+      }
+    ];
+    const cheques = payments.filter(p => p.method === 'cheque');
+    const lastCheque = cheques.length > 0 ? cheques[cheques.length - 1] : undefined;
     const updatedStudent: FormationStudent = {
       ...student,
       amountPaid: newPaid,
       remainingBalance: remainingAfter,
       paymentMethod: payMethod,
-      chequeNumber: payMethod === 'cheque' ? payChequeNumber.trim() : undefined,
-      chequeDate: payMethod === 'cheque' ? payChequeDate : undefined,
-      chequePaid: payMethod === 'cheque' ? false : student.chequePaid,
+      chequeNumber: lastCheque?.chequeNumber,
+      chequeDate: lastCheque?.chequeDate,
+      chequePaid: cheques.length > 0 ? cheques.every(c => c.chequePaid === true) : false,
+      payments,
       isAdvance: newPaid > 0 && remainingAfter > 0,
       paidAt: now
     };
@@ -533,6 +551,28 @@ export default function FormationModule({
     const isAdv = stAmountPaid > 0 && remaining > 0;
     const now = new Date().toISOString();
 
+    const previous = editingStudentId ? selectedFormation.students.find(s => s.id === editingStudentId) : undefined;
+    // Keep an existing split untouched when the edit does not restate the money
+    // (name/phone/matières/discount). A changed amount or method collapses it
+    // back to the single payment this form actually models.
+    const keepInstalments = !!previous
+      && !!previous.payments?.length
+      && stAmountPaid === (previous.amountPaid || 0)
+      && stPaymentMethod === previous.paymentMethod;
+    const payments: FormationPayment[] = keepInstalments
+      ? previous.payments!
+      : (stAmountPaid > 0
+          ? [{
+              id: 'p_' + crypto.randomUUID(),
+              date: now,
+              amount: stAmountPaid,
+              method: stPaymentMethod,
+              chequeNumber: stPaymentMethod === 'cheque' ? stChequeNumber.trim() : undefined,
+              chequeDate: stPaymentMethod === 'cheque' ? stChequeDate : undefined,
+              chequePaid: previous?.chequePaid ?? false
+            }]
+          : []);
+
     const studentRecord: FormationStudent = {
       id: editingStudentId || ('fst_' + crypto.randomUUID()),
       studentName: stName.trim(),
@@ -546,14 +586,15 @@ export default function FormationModule({
       chequeNumber: stPaymentMethod === 'cheque' ? stChequeNumber.trim() : undefined,
       chequeDate: stPaymentMethod === 'cheque' ? stChequeDate : undefined,
       // Preserve chequePaid status when editing (don't reset to false when editing payment info)
-      chequePaid: editingStudentId
-        ? (selectedFormation.students.find(s => s.id === editingStudentId)?.chequePaid ?? false)
-        : false,
+      chequePaid: keepInstalments
+        ? (previous?.chequePaid ?? false)
+        : (editingStudentId ? (previous?.chequePaid ?? false) : false),
+      payments,
       discount: stDiscount,
       isAdvance: isAdv || stIsAdvance,
-      paidAt: stAmountPaid > 0 ? (editingStudentId ? (selectedFormation.students.find(s => s.id === editingStudentId)?.paidAt || now) : now) : undefined,
+      paidAt: stAmountPaid > 0 ? (editingStudentId ? (previous?.paidAt || now) : now) : undefined,
       notes: stNotes.trim() || undefined,
-      enrolledAt: editingStudentId ? (selectedFormation.students.find(s => s.id === editingStudentId)?.enrolledAt || now) : now
+      enrolledAt: editingStudentId ? (previous?.enrolledAt || now) : now
     };
 
     const updatedFormations = formations.map(f => {
@@ -591,21 +632,22 @@ export default function FormationModule({
 
   const openRefundModal = (student: FormationStudent) => {
     if (!selectedFormation) return;
-    // A refund can only be given from a paid amount; a cheque that is not yet
-    // cashed/collected cannot be refunded.
-    if (student.paymentMethod === 'cheque' && student.chequePaid !== true) {
+    // A refund can only be given from money actually collected; a chèque that
+    // has not been cashed yet cannot be refunded.
+    if (hasUncashedCheque(student) && collectedAmount(student) <= 0) {
       toast.error('لا يمكن استرجاع مبلغ مدفوع بشيك لم يتم تحصيله بعد.');
       return;
     }
     setRefundTarget({ formation: selectedFormation, student });
-    setRefundAmount(student.refundAmount ?? student.amountPaid);
+    setRefundAmount(student.refundAmount ?? collectedAmount(student));
     setRefundReason(student.refundReason || '');
   };
 
   const handleConfirmRefund = () => {
     if (!refundTarget) return;
     const { formation, student } = refundTarget;
-    if (student.paymentMethod === 'cheque' && student.chequePaid !== true) {
+    const collected = collectedAmount(student);
+    if (hasUncashedCheque(student) && collected <= 0) {
       toast.error('لا يمكن استرجاع مبلغ مدفوع بشيك لم يتم تحصيله بعد.');
       return;
     }
@@ -614,7 +656,7 @@ export default function FormationModule({
       toast.error('يرجى إدخال مبلغ الاسترجاع');
       return;
     }
-    if (amt > student.amountPaid) {
+    if (amt > collected) {
       toast.error('لا يمكن استرجاع مبلغ أكبر من المبلغ المدفوع');
       return;
     }
@@ -1110,20 +1152,46 @@ export default function FormationModule({
                                 )}
                               </td>
 
-                              {/* Payment Method */}
+                              {/* Payment Method — a split payment (40 cash + 30
+                                  cheque) shows each versement with its own method. */}
                               <td className="p-3">
                                 <div className="text-[11px] font-bold">
-                                  {st.paymentMethod === 'espece' ? (
-                                    <span className="text-slate-600 flex items-center gap-1">
-                                      <Banknote className="h-3 w-3 text-brand-600" />
-                                      نقداً
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-800 flex items-center gap-1">
-                                      <CreditCard className="h-3 w-3 text-brand-600" />
-                                      شيك
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const inst = instalmentsOf(st);
+                                    if (inst.length > 1) {
+                                      return (
+                                        <div className="flex flex-col gap-0.5">
+                                          {inst.map(p => (
+                                            <span key={p.id} className="flex items-center gap-1 text-slate-700">
+                                              {p.method === 'cheque' ? (
+                                                <CreditCard className="h-3 w-3 text-brand-600 shrink-0" />
+                                              ) : (
+                                                <Banknote className="h-3 w-3 text-brand-600 shrink-0" />
+                                              )}
+                                              {p.method === 'cheque' ? 'شيك' : 'نقداً'} {p.amount} د.ت
+                                              {p.method === 'cheque' && p.chequePaid !== true && (
+                                                <span className="text-[9px] text-amber-600 font-black">(غير محصّل)</span>
+                                              )}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                    return st.paymentMethod === 'espece' ? (
+                                      <span className="text-slate-600 flex items-center gap-1">
+                                        <Banknote className="h-3 w-3 text-brand-600" />
+                                        نقداً
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-800 flex items-center gap-1">
+                                        <CreditCard className="h-3 w-3 text-brand-600" />
+                                        شيك
+                                        {st.chequePaid !== true && (
+                                          <span className="text-[9px] text-amber-600 font-black">(غير محصّل)</span>
+                                        )}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                               </td>
 
@@ -2096,15 +2164,39 @@ export default function FormationModule({
                     )}
                   </div>
 
-                  {/* Payment method */}
-                  <div className="py-3 border-b border-slate-200 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-500">طريقة الدفع</span>
-                    <span className="font-extrabold text-slate-900">
-                      {student.paymentMethod === 'espece'
-                        ? 'نقداً'
-                        : 'بشيك'}
-                    </span>
-                  </div>
+                  {/* Payment method — shows each versement when the fee was settled
+                      in several instalments with different methods. */}
+                  {(() => {
+                    const inst = instalmentsOf(student);
+                    if (inst.length > 1) {
+                      return (
+                        <div className="py-3 border-b border-slate-200">
+                          <p className="text-[11px] font-bold text-slate-500 mb-1.5">تفصيل الدفعات</p>
+                          <div className="space-y-1">
+                            {inst.map(p => (
+                              <div key={p.id} className="flex items-center justify-between">
+                                <span className="font-bold text-slate-700">
+                                  {p.method === 'cheque' ? 'شيك' : 'نقداً'}
+                                  {p.method === 'cheque' && p.chequePaid !== true && (
+                                    <span className="text-[9px] text-amber-600 font-black"> (غير محصّل)</span>
+                                  )}
+                                </span>
+                                <span className="font-mono font-black">{p.amount} د.ت</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="py-3 border-b border-slate-200 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500">طريقة الدفع</span>
+                        <span className="font-extrabold text-slate-900">
+                          {student.paymentMethod === 'espece' ? 'نقداً' : 'بشيك'}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Status */}
                   <div className="py-3 flex items-center justify-center">

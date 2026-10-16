@@ -1241,6 +1241,20 @@ export interface FormationMatiere {
 }
 
 
+// One formation payment instalment: a formation fee may be paid in several
+// parts with DIFFERENT methods (40 cash now, 30 by cheque later). Keeping one
+// cumulative `payments` row per enrolment would record the whole amount under
+// the method of the last instalment — so each instalment gets its own row.
+export interface FormationPayment {
+  id: string;
+  date: string; // ISO
+  amount: number;
+  method: 'espece' | 'cheque';
+  chequeNumber?: string;
+  chequeDate?: string;
+  chequePaid?: boolean;
+}
+
 export interface FormationStudent {
   id: string;
   studentName: string;
@@ -1254,6 +1268,9 @@ export interface FormationStudent {
   chequeNumber?: string;
   chequeDate?: string;
   chequePaid?: boolean;
+  // Instalments (sum = amountPaid). Absent for rows written before the split
+  // existed — readers fall back to the cumulative fields above.
+  payments?: FormationPayment[];
   discount: number;
   isAdvance: boolean;
   paidAt?: string;

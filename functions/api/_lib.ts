@@ -2162,6 +2162,23 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
     const totalRequired = pays.length > 0 ? Math.max(...pays.map((p: any) => num(p.total_required))) : 0;
     const discount = num(st.discount);
     const last = pays[pays.length - 1];
+    // Instalments: one `payments` row per versement (40 cash + 30 cheque ⇒ two
+    // rows). Rows written before the split existed still read fine — they just
+    // yield a single-element list.
+    const instalments = nonRefund.map((p: any) => ({
+      id: str(p.id),
+      date: str(p.date),
+      amount: num(p.amount),
+      method: str(p.method) === 'cheque' ? 'cheque' : 'espece',
+      chequeNumber: p.cheque_number == null ? undefined : str(p.cheque_number),
+      chequeDate: p.cheque_date == null ? undefined : str(p.cheque_date),
+      chequePaid: bool(p.cheque_paid)
+    }));
+    // An uncashed cheque exists only if SOME chèque versement is still pending —
+    // gating (refund / further payment) must not block a student whose cash
+    // versements are already collected.
+    const cheques = instalments.filter((p: any) => p.method === 'cheque');
+    const lastCheque = cheques.length > 0 ? cheques[cheques.length - 1] : undefined;
     (studentsByFormation[fid] = studentsByFormation[fid] || []).push({
       id: sid,
       studentName: `${str(st.first_name)} ${str(st.last_name)}`.trim(),
@@ -2172,9 +2189,10 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
       totalRequired,
       remainingBalance: Math.max(0, totalRequired - discount - amountPaid),
       paymentMethod: str(last?.method) === 'cheque' ? 'cheque' : 'espece',
-      chequeNumber: last?.cheque_number == null ? undefined : str(last.cheque_number),
-      chequeDate: last?.cheque_date == null ? undefined : str(last.cheque_date),
-      chequePaid: last ? bool(last.cheque_paid) : false,
+      chequeNumber: lastCheque?.chequeNumber ?? (last?.cheque_number == null ? undefined : str(last.cheque_number)),
+      chequeDate: lastCheque?.chequeDate ?? (last?.cheque_date == null ? undefined : str(last.cheque_date)),
+      chequePaid: cheques.length > 0 ? cheques.every((c: any) => c.chequePaid === true) : (last ? bool(last.cheque_paid) : false),
+      payments: instalments,
       discount,
       isAdvance: bool(st.is_advance),
       paidAt: last?.date == null ? undefined : str(last.date),
@@ -2218,8 +2236,12 @@ async function ensureFormationStudent(db: D1Database, centerId: string, name: un
 }
 
 // Inscription d'UN élève à UNE formation : la ligne `formation_enrollments`,
-// ses matières choisies et sa ligne canonique `payments`. `st.id` est
-// l'identifiant d'inscription ; `studentId` l'identité dans `students`.
+// ses matières choisies et ses lignes `payments`. `st.id` est l'identifiant
+// d'inscription ; `studentId` l'identité dans `students`.
+//
+// UN versement = UNE ligne `payments`. Un élève qui règle 40 en espèces puis 30
+// par chèque doit être enregistré 40 cash / 30 cheque — pas 70 cheque (l'ancien
+// modèle écrasait la ligne unique avec la méthode du dernier versement).
 function buildFormationStudentStmts(db: D1Database, formation: any, st: any, studentId: string, centerId: string): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   const formationId = str(formation.id);
@@ -2230,26 +2252,40 @@ function buildFormationStudentStmts(db: D1Database, formation: any, st: any, stu
   for (const mid of st.enrolledMatiereIds || []) {
     if (validMatIds.has(mid)) stmts.push(db.prepare('INSERT OR IGNORE INTO formation_enrollment_matieres (enrollment_id, matiere_id) VALUES (?, ?)').bind(enrollmentId, mid));
   }
-  // Paiement agrégé du client → une ligne canonique `payments`. Uniquement si
-  // un montant a réellement été encaissé : `payments.amount` est CHECK > 0 et
-  // `method`/`ref_type` sont contraints (cash/cheque/... et 'formation').
-  if (num(st.amountPaid) > 0) {
-    const method = paymentMethodKey(st.paymentMethod);
+  // Versements. `payments[]` (nouveau modèle) prime ; sinon on retombe sur les
+  // champs agrégés du client (ancien modèle) — rétrocompatible. Seuls les
+  // montants strictement positifs sont écrits (`payments.amount` CHECK > 0).
+  const today = new Date().toISOString().slice(0, 10);
+  const hasInstalments = Array.isArray(st.payments) && st.payments.some((p: any) => num(p?.amount) > 0);
+  const inst: any[] = hasInstalments
+    ? st.payments.filter((p: any) => num(p?.amount) > 0)
+    : (num(st.amountPaid) > 0 ? [{
+        date: st.paidAt, amount: num(st.amountPaid), method: st.paymentMethod,
+        chequeNumber: st.chequeNumber, chequeDate: st.chequeDate, chequePaid: st.chequePaid
+      }] : []);
+  const paidTotal = inst.reduce((sum: number, p: any) => sum + num(p.amount), 0);
+  const totalRequired = Math.max(num(st.totalRequired), paidTotal);
+  const createdAt = Date.now();
+  inst.forEach((p: any, i: number) => {
+    const method = paymentMethodKey(p.method);
+    const date = isoDay(p.date, isoDay(st.paidAt, today));
+    const isFirst = i === 0;
+    const isLast = i === inst.length - 1;
     stmts.push(db.prepare('INSERT OR REPLACE INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(
-        'fmt_' + enrollmentId, centerId, studentId,
-        isoDay(st.paidAt, new Date().toISOString().slice(0, 10)),
+        isFirst ? 'fmt_' + enrollmentId : `fmt_${enrollmentId}_${i + 1}`, centerId, studentId,
+        date,
         'formation', 'unit', null, formation.schoolYear,
-        st.isAdvance ? 'advance' : 'full',
+        inst.length === 1 ? (st.isAdvance ? 'advance' : 'full') : (isFirst ? 'advance' : (isLast ? 'balance' : 'partial')),
         method,
-        num(st.amountPaid), Math.max(num(st.totalRequired), num(st.amountPaid)), num(st.discount) || 0,
-        'FMT-' + enrollmentId, st.notes ?? null,
-        method === 'cheque' ? (st.chequeNumber ?? null) : null,
-        method === 'cheque' ? (st.chequeDate ?? null) : null,
-        method === 'cheque' && st.chequePaid ? 1 : 0, 0,
-        'formation', enrollmentId, Date.now()
+        num(p.amount), totalRequired, isFirst ? (num(st.discount) || 0) : 0,
+        isFirst ? 'FMT-' + enrollmentId : `FMT-${enrollmentId}-${i + 1}`, isFirst ? (st.notes ?? null) : null,
+        method === 'cheque' ? (p.chequeNumber ?? null) : null,
+        method === 'cheque' ? (p.chequeDate ?? null) : null,
+        method === 'cheque' && p.chequePaid ? 1 : 0, 0,
+        'formation', enrollmentId, createdAt + i
       ));
-  }
+  });
   return stmts;
 }
 

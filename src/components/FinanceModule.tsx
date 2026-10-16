@@ -32,6 +32,7 @@ import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
+import { instalmentsOf } from '../utils/formationPayment';
 
 interface FinanceModuleProps {
   students: Student[];
@@ -374,28 +375,35 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     }).flatMap(s => {
       const isAdvance = s.remainingBalance > 0 && s.amountPaid > 0;
       const paymentDate = (s.paidAt ? s.paidAt.split('T')[0] : '') || (form.startDate || new Date().toISOString().split('T')[0]);
-      const isCheque = s.paymentMethod === 'cheque';
-      const main: FormationPaymentRec = {
-        id: `form_${form.id}_${s.id}`,
-        date: paymentDate,
-        amountPaid: s.amountPaid,
-        totalRequired: s.totalRequired,
-        remainingBalance: s.remainingBalance,
-        service: 'Formation' as const,
-        month: `دورة: ${form.name} (${form.schoolYear || '2026/2027'})`,
-        paymentType: isAdvance ? ('advance' as const) : ('full' as const),
-        method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
-        receiptNumber: `FORM-${form.id.slice(-4)}-${s.id.slice(-4)}`,
-        notes: `تكوين: ${form.name}${s.isPack ? ' (باك كامل)' : ` (${s.enrolledMatiereIds?.length || 0} مواد)`}${s.notes ? ` - ${s.notes}` : ''}`,
-        discount: s.discount || undefined,
-        chequeNumber: s.chequeNumber,
-        chequeDate: s.chequeDate,
-        chequePaid: isCheque ? (s.chequePaid === true ? true : undefined) : undefined,
-        studentName: s.studentName,
-        studentGrade: 'تكوين',
-        studentYear: form.schoolYear || '2026/2027',
-        formationName: form.name
-      };
+      const studentNotes = `تكوين: ${form.name}${s.isPack ? ' (باك كامل)' : ` (${s.enrolledMatiereIds?.length || 0} مواد)`}${s.notes ? ` - ${s.notes}` : ''}`;
+      // ONE register line per versement : un élève qui règle 40 espèces puis 30
+      // chèque doit produire deux lignes (40 espèces + 30 chèque), pas une seule
+      // ligne de 70 chèque. Les anciens enregistrements (sans `payments[]`) sont
+      // synthétisés en un versement unique par `instalmentsOf`.
+      const records: FormationPaymentRec[] = instalmentsOf(s).map((p, i) => {
+        const isCheque = p.method === 'cheque';
+        return {
+          id: `form_${form.id}_${s.id}_i${i}`,
+          date: (p.date ? p.date.split('T')[0] : '') || paymentDate,
+          amountPaid: p.amount,
+          totalRequired: s.totalRequired,
+          remainingBalance: s.remainingBalance,
+          service: 'Formation' as const,
+          month: `دورة: ${form.name} (${form.schoolYear || '2026/2027'})`,
+          paymentType: isAdvance ? ('advance' as const) : ('full' as const),
+          method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
+          receiptNumber: `FORM-${form.id.slice(-4)}-${s.id.slice(-4)}${i > 0 ? `-${i + 1}` : ''}`,
+          notes: studentNotes,
+          discount: i === 0 ? (s.discount || undefined) : undefined,
+          chequeNumber: isCheque ? p.chequeNumber : undefined,
+          chequeDate: isCheque ? p.chequeDate : undefined,
+          chequePaid: isCheque ? (p.chequePaid === true ? true : undefined) : undefined,
+          studentName: s.studentName,
+          studentGrade: 'تكوين',
+          studentYear: form.schoolYear || '2026/2027',
+          formationName: form.name
+        };
+      });
       // If the student quit the formation and was refunded, emit a refund record
       const refundedAmount = s.refundAmount ?? 0;
       const refundRecords: FormationPaymentRec[] = refundedAmount > 0 ? [{
@@ -407,7 +415,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         service: 'Formation' as const,
         month: `دورة: ${form.name} (${form.schoolYear || '2026/2027'})`,
         paymentType: 'full' as const,
-        method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
+        method: s.paymentMethod === 'cheque' ? ('Chèque' as const) : ('Espèces' as const),
         receiptNumber: `FORM-${form.id.slice(-4)}-${s.id.slice(-4)}-R`,
         notes: `استرجاع: ${form.name}${s.refundReason ? ` - ${s.refundReason}` : ''}`,
         refund: true,
@@ -416,7 +424,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         studentYear: form.schoolYear || '2026/2027',
         formationName: form.name
       }] : [];
-      return [main, ...refundRecords];
+      return [...records, ...refundRecords];
     });
   });
 
@@ -3233,12 +3241,26 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             let formationChanged = false;
             const updatedFormations = formations.map(f => {
               const updatedStudents = (f.students || []).map(st => {
-                const formPayId = `form_${f.id}_${st.id}`;
-                if (paymentIds.has(formPayId) || (st.chequeNumber && st.chequeNumber === cheque.chequeNumber)) {
-                  formationChanged = true;
-                  return { ...st, chequePaid: true };
-                }
-                return st;
+                const inst = instalmentsOf(st);
+                let studentChanged = false;
+                const nextPayments = inst.map((p, i) => {
+                  const rowId = `form_${f.id}_${st.id}_i${i}`;
+                  const isThisCheque = p.method === 'cheque'
+                    && (paymentIds.has(rowId) || (cheque.chequeNumber && p.chequeNumber === cheque.chequeNumber));
+                  if (isThisCheque && p.chequePaid !== true) {
+                    studentChanged = true;
+                    return { ...p, chequePaid: true };
+                  }
+                  return p;
+                });
+                if (!studentChanged) return st;
+                formationChanged = true;
+                const cheques = nextPayments.filter(p => p.method === 'cheque');
+                return {
+                  ...st,
+                  payments: nextPayments,
+                  chequePaid: cheques.length > 0 ? cheques.every(c => c.chequePaid === true) : st.chequePaid
+                };
               });
               return { ...f, students: updatedStudents };
             });

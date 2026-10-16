@@ -300,6 +300,48 @@ describe('formation students (targeted POST / DELETE)', () => {
     expect(read.remainingBalance).toBe(30);
   });
 
+  it('records a split payment as ONE row per versement (40 cash + 30 cheque)', async () => {
+    seedFormationWithMatiere();
+    await addFormationStudent(db, 'form_1', {
+      ...STUDENT, amountPaid: 70, totalRequired: 100, discount: 30,
+      payments: [
+        { id: 'p1', date: '2026-10-14T08:00:00.000Z', amount: 40, method: 'espece' },
+        { id: 'p2', date: '2026-10-20T08:00:00.000Z', amount: 30, method: 'cheque', chequeNumber: 'CH-9', chequeDate: '2026-10-20', chequePaid: false }
+      ]
+    }, CENTER);
+
+    // Deux lignes `payments` (pas une ligne agrégée de 70 chèque).
+    const rows = sqlite.prepare("SELECT amount, method, receipt_number, cheque_number, cheque_paid FROM payments WHERE ref_type = 'formation' ORDER BY created_at").all() as any[];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ amount: 40, method: 'cash' });
+    expect(rows[1]).toMatchObject({ amount: 30, method: 'cheque', cheque_number: 'CH-9', cheque_paid: 0 });
+    // Receipt numbers restent uniques (contrainte UNIQUE(center_id, receipt_number)).
+    expect(new Set(rows.map((r: any) => r.receipt_number)).size).toBe(2);
+
+    const fs = await readFormations(db, CENTER);
+    const read = fs[0].students[0];
+    expect(read.amountPaid).toBe(70);
+    expect(read.remainingBalance).toBe(0);
+    expect(read.payments).toHaveLength(2);
+    expect(read.payments.map((p: any) => p.method)).toEqual(['espece', 'cheque']);
+    expect(read.chequeNumber).toBe('CH-9');
+    expect(read.chequePaid).toBe(false);
+  });
+
+  it('re-posting a split is idempotent (no stale instalment rows)', async () => {
+    seedFormationWithMatiere();
+    const split = {
+      ...STUDENT, amountPaid: 70, totalRequired: 100,
+      payments: [
+        { id: 'p1', date: '2026-10-14T08:00:00.000Z', amount: 40, method: 'espece' },
+        { id: 'p2', date: '2026-10-20T08:00:00.000Z', amount: 30, method: 'cheque', chequeNumber: 'CH-9', chequeDate: '2026-10-20', chequePaid: false }
+      ]
+    };
+    await addFormationStudent(db, 'form_1', split, CENTER);
+    await addFormationStudent(db, 'form_1', split, CENTER);
+    expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE ref_type = 'formation'").get() as any).n).toBe(2);
+  });
+
   it('persists formation students as external through the full PUT rewrite', async () => {
     const formation = {
       ...FORMATION,
