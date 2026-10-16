@@ -686,9 +686,17 @@ export default function App() {
   };
 
   const handleAddFormationStudent = (formationId: string, student: FormationStudent) => {
-    setFormations(prev => prev.map(f => f.id === formationId
-      ? { ...f, students: [student, ...(f.students || [])] }
-      : f));
+    setFormations(prev => prev.map(f => {
+      if (f.id !== formationId) return f;
+      const students = f.students || [];
+      const exists = students.some(s => s.id === student.id);
+      return {
+        ...f,
+        students: exists
+          ? students.map(s => s.id === student.id ? student : s)
+          : [student, ...students]
+      };
+    }));
     commitDomain(() => addFormationStudentApi(formationId, student));
   };
 
