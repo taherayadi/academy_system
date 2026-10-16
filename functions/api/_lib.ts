@@ -1498,6 +1498,7 @@ export async function readExternalStudents(db: D1Database, centerId: string = DE
       method: paymentMethodLabelKey(p.method),
       chequeNumber: p.cheque_number != null ? str(p.cheque_number) : undefined,
       chequeDate: p.cheque_date != null ? str(p.cheque_date) : undefined,
+      chequePaid: p.cheque_paid ? true : undefined,
       discount: num(p.discount) > 0 ? num(p.discount) : undefined
     }));
     const assurTotal = assurRows.reduce((sum, p) => sum + num(p.amount), 0);
@@ -1634,7 +1635,8 @@ function buildExternalStudentsStmts(db: D1Database, externalStudents: any[], cen
         // CHECK: un paiement non-chèque doit avoir cheque_number/date NULL.
         isCheque ? (str(ap.chequeNumber) || null) : null,
         isCheque ? isoDateOr(ap.chequeDate, apDate) : null,
-        0, 0, null,
+        // cheque_paid : encaissement du chèque (mis à jour via PUT /api/payments).
+        isCheque && ap.chequePaid ? 1 : 0, 0, null,
         // CHECK ((ref_type IS NULL) = (ref_id IS NULL)) : l'assurance n'est liée
         // à aucun cours → les deux restent NULL.
         null, null, Date.now()
@@ -2509,6 +2511,44 @@ export async function writeEvents(db: D1Database, events: any[], centerId: strin
   } catch (err) {
     console.error('writeEvents skipped (events table unavailable):', err);
   }
+}
+
+/**
+ * Encaissement d'un chèque pour UN participant d'UNE activité : ne réécrit que
+ * la ligne `events` ciblée (colonne JSON `participants`), jamais toute la liste
+ * des événements. Les participants d'activité ne sont pas des lignes `payments`
+ * (contrairement aux élèves/formations/assurance) : leur paiement vit dans le
+ * JSON de l'événement, donc le ciblage se fait par (eventId, participantId).
+ */
+export async function updateEventParticipantCheque(
+  db: D1Database,
+  eventId: string,
+  participantId: string,
+  cheque: { chequePaid?: boolean; chequeNumber?: string; chequeDate?: string },
+  centerId: string = DEFAULT_CENTER_ID
+): Promise<void> {
+  const evId = str(eventId);
+  const ptId = str(participantId);
+  if (!evId) throw new Error('معرّف الفعالية مفقود.');
+  if (!ptId) throw new Error('معرّف المشارك مفقود.');
+  const row = await db.prepare('SELECT participants FROM events WHERE id = ? AND center_id = ?').bind(evId, centerId).first<any>();
+  if (!row) throw new Error('الفعالية غير موجودة.');
+  const participants: any[] = parseJson<any[]>(row.participants, []);
+  const idx = participants.findIndex((p: any) => p && str(p.id) === ptId);
+  if (idx === -1) throw new Error('المشارك غير موجود.');
+  const p = participants[idx];
+  const paid = cheque.chequePaid === true;
+  const remaining = num(p.remainingBalance);
+  participants[idx] = {
+    ...p,
+    chequePaid: paid ? true : p.chequePaid,
+    chequeNumber: cheque.chequeNumber ?? p.chequeNumber,
+    chequeDate: cheque.chequeDate ?? p.chequeDate,
+    // Un chèque encaissé ne « libère » le participant que si rien ne reste dû.
+    paid: paid ? (remaining <= 0 ? true : !!p.paid) : p.paid,
+    paidAt: paid && remaining <= 0 ? (p.paidAt || new Date().toISOString()) : p.paidAt
+  };
+  await db.prepare('UPDATE events SET participants = ? WHERE id = ? AND center_id = ?').bind(JSON.stringify(participants), evId, centerId).run();
 }
 
 // ===========================================================================

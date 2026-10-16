@@ -43,7 +43,7 @@ import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
 import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
-import { instalmentsOf, hasUncashedCheque, collectedAmount } from '../utils/formationPayment';
+import { instalmentsOf, hasUncashedCheque, collectedAmount, formationPaymentRowId } from '../utils/formationPayment';
 
 // A formation fee may be paid in several instalments with DIFFERENT methods
 // (40 cash now + 30 by cheque later). The shared helpers in
@@ -472,12 +472,16 @@ export default function FormationModule({
     const newPaid = (student.amountPaid || 0) + paid;
     const remainingAfter = Math.max(0, netRequired - newPaid + (student.refundAmount || 0));
     const now = new Date().toISOString();
+    const previousInstalments = instalmentsOf(student);
     // Append a NEW versement instead of overwriting the previous one — paying a
     // 30 د.ت remainder by cheque must record 30 cheque, not rewrite the 40 cash.
+    // The row id follows the SERVER's scheme (`fmt_<enrol>` / `fmt_<enrol>_<n>`)
+    // so the Finance register, the cheque reconciliation and local state share
+    // the same payment id without waiting for a reload.
     const payments: FormationPayment[] = [
-      ...instalmentsOf(student),
+      ...previousInstalments,
       {
-        id: 'p_' + crypto.randomUUID(),
+        id: formationPaymentRowId(student.id, previousInstalments.length),
         date: now,
         amount: paid,
         method: payMethod,
@@ -552,6 +556,9 @@ export default function FormationModule({
     const now = new Date().toISOString();
 
     const previous = editingStudentId ? selectedFormation.students.find(s => s.id === editingStudentId) : undefined;
+    // One single id for the enrolment — the payment row id below is derived from
+    // it (server scheme), so it must be generated exactly ONCE for a new student.
+    const studentId = editingStudentId || ('fst_' + crypto.randomUUID());
     // Keep an existing split untouched when the edit does not restate the money
     // (name/phone/matières/discount). A changed amount or method collapses it
     // back to the single payment this form actually models.
@@ -563,7 +570,7 @@ export default function FormationModule({
       ? previous.payments!
       : (stAmountPaid > 0
           ? [{
-              id: 'p_' + crypto.randomUUID(),
+              id: formationPaymentRowId(studentId, 0),
               date: now,
               amount: stAmountPaid,
               method: stPaymentMethod,
@@ -574,7 +581,7 @@ export default function FormationModule({
           : []);
 
     const studentRecord: FormationStudent = {
-      id: editingStudentId || ('fst_' + crypto.randomUUID()),
+      id: studentId,
       studentName: stName.trim(),
       parentPhone: cleanPhone,
       isPack: stIsPack,

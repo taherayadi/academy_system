@@ -172,6 +172,16 @@ export async function updatePaymentApi(patch: { id: string; chequePaid?: boolean
 }
 
 /**
+ * Encaissement du chèque d'UN participant d'UNE activité — endpoint dédié
+ * /api/event-cheque. Les participants d'activité ne sont pas des lignes
+ * `payments` (leur paiement vit dans le JSON de l'événement) : on cible donc
+ * (eventId, participantId) au lieu d'envoyer toute la liste des événements.
+ */
+export async function updateEventChequeApi(patch: { eventId: string; participantId: string; chequePaid?: boolean; chequeNumber?: string; chequeDate?: string }): Promise<void> {
+  return putDomain('/event-cheque', patch, 'تعذر تحديث حالة الشيك.');
+}
+
+/**
  * Matières du centre : liste depuis /api/subjects (id UUID + nom), seedée
  * automatiquement au login si le centre n'en a aucune. Plus de liste codée
  * en dur.

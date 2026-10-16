@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, initialCenterSettings, normalizeSettings } from './types';
 
 import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
@@ -39,7 +39,7 @@ import { usePubNubSync } from './hooks/usePubNubSync';
 import brandIcon from './assets/icon.png';
 import { hasStudyModules } from './utils/centerType';
 import { useCatalog } from './utils/catalogStore';
-
+import { instalmentsOf } from './utils/formationPayment';
 
 // Map sidebar tabs to subscription modules enabled for the current center.
 // Exported for the 006 catalog-coherence cross-check (no phantom module keys).
@@ -434,22 +434,86 @@ export default function App() {
   }, []);
 
   /**
-   * Réconciliation locale : des paiements ont déjà été persistés via PUT /api/payments
-   * (encaissement de chèques). Aucun appel serveur — met uniquement à jour l'état
-   * affiché pour que تحصيل الشيكات et سجل المقبوضات se rafraîchissent immédiatement.
+   * Réconciliation locale APRÈS encaissement de chèques, tous services confondus.
+   * Les lignes `payments` (élèves / assurance externe / formations) ont déjà été
+   * persistées via PUT /api/payments et les participants d'activité via
+   * PUT /api/event-cheque : ici AUCUN appel serveur, on met seulement à jour
+   * l'état affiché (تحصيل الشيكات + سجل المقبوضات) sans réécrire tout un domaine.
    */
-  const handleMarkPaymentsPaid = useCallback((updates: { studentId: string; paymentIds: string[] }[]) => {
-    const paidByStudent = new Map<string, Set<string>>();
-    updates.forEach(u => {
-      const set = paidByStudent.get(u.studentId) ?? new Set<string>();
-      u.paymentIds.forEach(id => set.add(id));
-      paidByStudent.set(u.studentId, set);
-    });
-    setStudents(prev => prev.map(s => {
-      const paidIds = paidByStudent.get(s.id);
-      if (!paidIds || paidIds.size === 0) return s;
-      return { ...s, payments: (s.payments || []).map(p => paidIds.has(p.id) ? { ...p, chequePaid: true } : p) };
-    }));
+  const handleMarkChequesPaid = useCallback((updates: ChequeReconciliation[]) => {
+    if (!updates.length) return;
+    const studentIds = new Map<string, Set<string>>();
+    const externalIds = new Map<string, Set<string>>();
+    const formationUpdates: { formationId: string; studentId: string; paymentId: string; chequeNumber?: string }[] = [];
+    const eventIds = new Map<string, Set<string>>();
+    for (const u of updates) {
+      if (u.kind === 'student') {
+        const set = studentIds.get(u.studentId) ?? new Set<string>();
+        set.add(u.paymentId);
+        studentIds.set(u.studentId, set);
+      } else if (u.kind === 'external') {
+        const set = externalIds.get(u.externalStudentId) ?? new Set<string>();
+        set.add(u.paymentId);
+        externalIds.set(u.externalStudentId, set);
+      } else if (u.kind === 'formation') {
+        formationUpdates.push({ formationId: u.formationId, studentId: u.studentId, paymentId: u.paymentId, chequeNumber: u.chequeNumber });
+      } else if (u.kind === 'event') {
+        const set = eventIds.get(u.eventId) ?? new Set<string>();
+        set.add(u.participantId);
+        eventIds.set(u.eventId, set);
+      }
+    }
+    if (studentIds.size) {
+      setStudents(prev => prev.map(s => {
+        const ids = studentIds.get(s.id);
+        if (!ids || !ids.size) return s;
+        return { ...s, payments: (s.payments || []).map(p => ids.has(p.id) ? { ...p, chequePaid: true } : p) };
+      }));
+    }
+    if (externalIds.size) {
+      setExternalStudents(prev => prev.map(reg => {
+        const ids = externalIds.get(reg.id);
+        if (!ids || !ids.size) return reg;
+        return { ...reg, assurancePayments: (reg.assurancePayments || []).map(ap => ids.has(ap.id) ? { ...ap, chequePaid: true } : ap) };
+      }));
+    }
+    if (formationUpdates.length) {
+      setFormations(prev => prev.map(f => {
+        const ups = formationUpdates.filter(u => u.formationId === f.id);
+        if (!ups.length) return f;
+        let formationChanged = false;
+        const students = (f.students || []).map(st => {
+          const mine = ups.filter(u => u.studentId === st.id);
+          if (!mine.length) return st;
+          let studentChanged = false;
+          const next = instalmentsOf(st).map(p => {
+            const match = p.method === 'cheque' && p.chequePaid !== true && mine.some(u => u.paymentId === p.id || (u.chequeNumber && u.chequeNumber === p.chequeNumber));
+            if (!match) return p;
+            studentChanged = true;
+            return { ...p, chequePaid: true };
+          });
+          if (!studentChanged) return st;
+          formationChanged = true;
+          const cheques = next.filter(p => p.method === 'cheque');
+          return { ...st, payments: next, chequePaid: cheques.length > 0 ? cheques.every(c => c.chequePaid === true) : st.chequePaid };
+        });
+        return formationChanged ? { ...f, students } : f;
+      }));
+    }
+    if (eventIds.size) {
+      setEvents(prev => prev.map(ev => {
+        const ids = eventIds.get(ev.id);
+        if (!ids || !ids.size) return ev;
+        let changed = false;
+        const participants = (ev.participants || []).map(pt => {
+          if (!ids.has(pt.id) || pt.chequePaid === true) return pt;
+          changed = true;
+          const remaining = pt.remainingBalance || 0;
+          return { ...pt, chequePaid: true, paid: remaining <= 0 ? true : pt.paid, paidAt: remaining <= 0 ? (pt.paidAt || new Date().toISOString()) : pt.paidAt };
+        });
+        return changed ? { ...ev, participants } : ev;
+      }));
+    }
   }, []);
 
   const handleDeleteStudent = (id: string) => {
@@ -1554,14 +1618,12 @@ export default function App() {
                   expenses={expenses}
                   onUpdateExpenses={handleUpdateExpenses}
                   onUpdateStudent={handleUpdateSingleStudent}
-                  onMarkPaymentsPaid={handleMarkPaymentsPaid}
+                  onMarkChequesPaid={handleMarkChequesPaid}
                   externalStudents={externalStudents}
                   courses={courses}
                   revisions={revisionSeances}
                   formations={formations}
                   events={events}
-                  onUpdateFormations={handleUpdateFormations}
-                  onUpdateEvents={handleUpdateEvents}
                   slots={slots}
                   settings={settings}
                   enabledModules={currentCenter?.modules as string[] | undefined}

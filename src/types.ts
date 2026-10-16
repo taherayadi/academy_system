@@ -606,7 +606,33 @@ export interface PaymentRecord {
   // (inscription, événement, cours…)
   refType?: string;
   refId?: string;
+  // ── Métadonnées de ciblage (FinanceModule : encaissement de chèque) ──
+  // Le registre Finance fusionne des lignes de domaines différents (élèves,
+  // assurance externe, formations, activités). Chaque ligne porte ici le
+  // discriminant + coordonnées qui permettent de l'identifier côté serveur, de
+  // sorte que valider un chèque soit UN PUT ciblé (et non une réécriture de
+  // tout un domaine).
+  refKind?: 'student' | 'external' | 'formation' | 'event' | 'revision';
+  studentId?: string;          // refKind 'student'  → payments.student_id
+  externalStudentId?: string;  // refKind 'external' → external register id
+  formationId?: string;        // refKind 'formation' → formations.id
+  formationStudentId?: string; // refKind 'formation' → formation_enrollments.id
+  eventId?: string;            // refKind 'event'    → events.id
+  participantId?: string;      // refKind 'event'    → events.participants[].id
 }
+
+/**
+ * Réconciliation locale après encaissement d'un chèque : les lignes `payments`
+ * (élèves, assurance externe, formations) ont déjà été mises à jour côté serveur
+ * via PUT /api/payments ; les participants d'activité via PUT /api/event-cheque.
+ * Ce type ne transporte aucune requête — il sert uniquement à rafraîchir l'état
+ * affiché, sans réécrire tout un domaine.
+ */
+export type ChequeReconciliation =
+  | { kind: 'student'; studentId: string; paymentId: string }
+  | { kind: 'external'; externalStudentId: string; paymentId: string }
+  | { kind: 'formation'; formationId: string; studentId: string; paymentId: string; chequeNumber?: string }
+  | { kind: 'event'; eventId: string; participantId: string };
 
 /**
  * Libellé d'affichage « طريقة الخلاص » : clé brute (nouveau schéma DB :
@@ -1112,6 +1138,7 @@ export interface ExternalAssurancePayment {
   method: 'Espèces' | 'Chèque' | 'Virement';
   chequeNumber?: string;
   chequeDate?: string;
+  chequePaid?: boolean; // chèque encaissé (payments.cheque_paid) — mis à jour via PUT /api/payments
   discount?: number; // تخفيض appliqué (payments.discount) — porté par le 1er versement
 }
 

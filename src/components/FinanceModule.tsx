@@ -22,31 +22,35 @@ import {
   Eye,
   User,
   ChevronDown,
-  ChevronLeft
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { Student, CenterExpense, PaymentRecord, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, gradeLabelBilingual, Formation, MealServiceType, MealForfaitClosure, paymentMethodLabel } from '../types';
+import { Student, CenterExpense, PaymentRecord, ChequeReconciliation, SchoolEvent, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, ExpenseCategory, monthToArabic, ExternalStudentRegister, ExternalAssurancePayment, ExternalCourse, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, RevisionSeance, getCurrentAcademicYear, getCurrentAcademicIndex, EtudeSlot, gradeLabelBilingual, Formation, MealServiceType, MealForfaitClosure, paymentMethodLabel } from '../types';
 import { academicMonthPrefix, isLunchAttendance } from '../utils/mealLogic';
-import { updatePaymentApi } from '../api';
+import { updatePaymentApi, updateEventChequeApi } from '../api';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import GouterMonthlyTable from './GouterMonthlyTable';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
 import DateField from './DateField';
-import { instalmentsOf } from '../utils/formationPayment';
+import { instalmentsOf, formationPaymentRowId } from '../utils/formationPayment';
 
 interface FinanceModuleProps {
   students: Student[];
   expenses: CenterExpense[];
   onUpdateExpenses: (expenses: CenterExpense[]) => void;
   onUpdateStudent?: (student: Student) => void;
-  /** Réconciliation locale de paiements déjà persistés via /api/payments (sans réécriture élève). */
-  onMarkPaymentsPaid?: (updates: { studentId: string; paymentIds: string[] }[]) => void;
+  /**
+   * Réconciliation locale APRÈS encaissement de chèques, tous services confondus.
+   * Chaque ligne `payments` est mise à jour côté serveur par un PUT ciblé
+   * (/api/payments ou /api/event-cheque) — cette callback met seulement à jour
+   * l'état affiché (sans réécrire tout un domaine).
+   */
+  onMarkChequesPaid?: (updates: ChequeReconciliation[]) => void;
   externalStudents?: ExternalStudentRegister[];
   courses?: ExternalCourse[];
   revisions?: RevisionSeance[];
   formations?: Formation[];
-  onUpdateFormations?: (formations: Formation[]) => void;
-  onUpdateEvents?: (events: SchoolEvent[]) => void;
   events?: SchoolEvent[];
   slots?: EtudeSlot[];
   settings?: CenterSettings;
@@ -168,7 +172,7 @@ function expenseInSchoolYear(date: string, schoolYear: string): boolean {
   return false;
 }
 
-export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, onMarkPaymentsPaid, externalStudents = [], courses = [], revisions = [], formations = [], events = [], onUpdateFormations, onUpdateEvents, slots = [], settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
+export default function FinanceModule({ students, expenses, onUpdateExpenses, onUpdateStudent, onMarkChequesPaid, externalStudents = [], courses = [], revisions = [], formations = [], events = [], slots = [], settings, enabledModules, mealForfaitClosures = [], onUpdateMealForfaitClosures }: FinanceModuleProps) {
 
   const toast = useToast();
   const centerName = settings?.centerName || 'EduSphère';
@@ -264,6 +268,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   // Aggregate stats based on filters
   const allPayments = students.flatMap(s => (s.payments || []).map(p => ({ 
     ...p, 
+    refKind: 'student' as const,
+    studentId: s.id,
     studentName: `${s.firstName} ${s.lastName}`, 
     studentGrade: s.grade,
     studentYear: s.academicYear || getCurrentAcademicYear()
@@ -298,6 +304,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         method: pay.method || 'Espèces',
         receiptNumber: `EXT-${reg.id.slice(-4)}-${(pay.date || '').replace(/-/g, '')}`,
         notes: pay.courseName || 'كورسات خاصة',
+        refKind: 'external',
+        externalStudentId: reg.id,
         studentName: reg.name,
         studentGrade: reg.grade,
         studentYear: reg.schoolYear || '2026/2027',
@@ -306,10 +314,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       });
     });
     const assurRequired = reg.assuranceRequired || reg.assuranceAmount || 0;
-    const ledger = (reg.assurancePayments && reg.assurancePayments.length)
+    const ledger: ExternalAssurancePayment[] = (reg.assurancePayments && reg.assurancePayments.length)
       ? reg.assurancePayments
       : (reg.assurancePaid && reg.assuranceAmount > 0
-          ? [{ id: 'asr_' + reg.id, date: reg.assuranceDate || reg.createdAt || '', amount: reg.assuranceAmount, method: reg.assuranceMethod || 'Espèces' }]
+          ? [{
+              id: 'asr_' + reg.id,
+              date: reg.assuranceDate || reg.createdAt || '',
+              amount: reg.assuranceAmount,
+              method: reg.assuranceMethod || 'Espèces',
+              chequeNumber: reg.assuranceChequeNumber,
+              chequeDate: reg.assuranceChequeDate
+            }]
           : []);
     ledger.forEach((ap, i) => {
       if (!(ap.amount > 0)) return;
@@ -327,6 +342,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         receiptNumber: `ASR-${reg.id.slice(-4)}-${(ap.date || '').replace(/-/g, '')}${i ? '-' + i : ''}`,
         notes: 'تأمين مدرسي (Assurance) - كراس خارجي',
         discount: disc > 0 ? disc : undefined,
+        // Chèque : numéro + état d'encaissement (mis à jour via PUT /api/payments).
+        chequeNumber: ap.chequeNumber,
+        chequeDate: ap.chequeDate,
+        chequePaid: ap.chequePaid === true ? true : undefined,
+        refKind: 'external',
+        externalStudentId: reg.id,
         studentName: reg.name,
         studentGrade: reg.grade,
         studentYear: reg.schoolYear || '2026/2027',
@@ -353,6 +374,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       paymentType: 'full' as const,
       method: 'Espèces' as const,
       receiptNumber: `REV-${rev.id.slice(-4)}-${s.studentId.slice(-4)}`,
+      refKind: 'revision' as const,
       notes: `حصة مراجعة: ${rev.subject} (${rev.gradeLevel}) - أستاذ: ${rev.teacherName}`,
       studentName: s.studentName,
       studentGrade: rev.gradeLevel,
@@ -383,7 +405,11 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
       const records: FormationPaymentRec[] = instalmentsOf(s).map((p, i) => {
         const isCheque = p.method === 'cheque';
         return {
-          id: `form_${form.id}_${s.id}_i${i}`,
+          // id réel de la ligne `payments` — écrit par le serveur avec EXACTEMENT
+          // ce schéma (`buildFormationStudentStmts`), désormais partagé côté client
+          // via `formationPaymentRowId` pour que l'état local et le registre
+          // parlent du même identifiant même avant un rechargement.
+          id: formationPaymentRowId(s.id, i),
           date: (p.date ? p.date.split('T')[0] : '') || paymentDate,
           amountPaid: p.amount,
           totalRequired: s.totalRequired,
@@ -398,6 +424,9 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           chequeNumber: isCheque ? p.chequeNumber : undefined,
           chequeDate: isCheque ? p.chequeDate : undefined,
           chequePaid: isCheque ? (p.chequePaid === true ? true : undefined) : undefined,
+          refKind: 'formation' as const,
+          formationId: form.id,
+          formationStudentId: s.id,
           studentName: s.studentName,
           studentGrade: 'تكوين',
           studentYear: form.schoolYear || '2026/2027',
@@ -448,13 +477,16 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         paymentType: 'full' as const,
         // Un chèque événement reste « en attente » jusqu'à son encaissement
         // dans l'onglet تحصيل الشيكات : il n'entre dans le revenu qu'une fois
-        // marqué chequePaid côté participant (mis à jour via onUpdateEvents).
+        // marqué chequePaid côté participant (mis à jour via PUT /api/event-cheque).
         method: isCheque ? ('Chèque' as const) : ('Espèces' as const),
         chequePaid: isCheque ? (pt.chequePaid === true ? true : undefined) : undefined,
         receiptNumber: pt.receiptNumber || `EVT-${ev.id.slice(-4)}-${pt.id.slice(-4)}`,
         notes: `فعالية: ${ev.name} - ${pt.participantType === 'student' ? 'تلميذ' : pt.participantType === 'parent' ? 'ولي أمر' : pt.participantType === 'sibling' ? 'أخ/أخت' : 'خارجي'}${pt.attended === false && isPast ? ' — غائب' : ''}`,
         chequeNumber: pt.chequeNumber,
         chequeDate: pt.chequeDate,
+        refKind: 'event' as const,
+        eventId: ev.id,
+        participantId: pt.id,
         studentName: pt.participantName,
         studentGrade: 'فعالية',
         studentYear: ev.schoolYear || '2026/2027',
@@ -1788,6 +1820,41 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const formCurrentPage = Math.min(Math.max(1, historyPage), formTotalPages);
         const paginatedForm = formationRecords.slice((formCurrentPage - 1) * pageSize, formCurrentPage * pageSize);
 
+        // Group by formation (collapse per formation)
+        const groupKey = (p: FormationPaymentRec) => p.formationId || p.formationName || p.month || p.receiptNumber || p.id;
+        const grouped = paginatedForm.reduce((acc, p) => {
+          const key = groupKey(p);
+          if (!acc[key]) {
+            acc[key] = {
+              key,
+              formationId: p.formationId,
+              formationName: p.formationName || p.notes || monthToArabic(p.month),
+              studentYear: p.studentYear || (p.month?.match(/\((\d{4}\/\d{4})\)/)?.[1]) || '',
+              items: [] as FormationPaymentRec[],
+              subtotal: 0
+            };
+          }
+          acc[key].items.push(p);
+          acc[key].subtotal += (p.refund ? -Math.abs(p.amountPaid) : p.amountPaid);
+          return acc;
+        }, {} as Record<string, { key: string; formationId?: string; formationName: string; studentYear: string; items: FormationPaymentRec[]; subtotal: number }>);
+        const groupedList = Object.values(grouped).sort((a, b) => a.formationName.localeCompare(b.formationName));
+
+        const [expandedForms, setExpandedForms] = useState<Record<string, boolean>>({});
+        // Ensure at least first group expanded on change
+        React.useEffect(() => {
+          if (groupedList.length > 0) {
+            setExpandedForms(prev => {
+              const hasAny = Object.values(prev).some(Boolean);
+              if (hasAny) return prev;
+              return { [groupedList[0].key]: true };
+            });
+          } else {
+            setExpandedForms({});
+          }
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [paginatedForm.length]);
+
         return (
           <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -1820,54 +1887,79 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <td colSpan={7} className="p-8 text-center text-slate-400">لا توجد مدفوعات تكوينات موافقة للفترة المختارة.</td>
                     </tr>
                   ) : (
-                    paginatedForm.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
-                        <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
-                        <td className="p-4 font-black text-slate-900">{p.studentName}</td>
-                        <td className="p-4 font-bold text-brand-700">{p.formationName || p.notes || monthToArabic(p.month)}</td>
-                        <td className="p-4">
-                          {p.discount ? (
-                            <span className="text-brand-700 font-black font-mono">{fmt(p.discount)} د.ت</span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="p-4 font-mono font-black">
-                          {p.refund ? (
-                            <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
-                          ) : (
-                            <span className="text-brand-700">{fmt(p.amountPaid)} د.ت</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          {p.method === 'Chèque' ? (
-                            <div className="flex items-center gap-1">
-                              {p.chequePaid === true ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  شيك محصل
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
-                                  <AlertCircle className="h-3 w-3" />
-                                  شيك معلق
-                                </span>
-                              )}
-                              <button
-                                onClick={() => setChequeDetailModal({ chequeNumber: p.chequeNumber, chequeDate: p.chequeDate, payments: [{ ...p, studentName: p.studentName || '' }], totalAmount: p.amountPaid, paid: p.chequePaid === true })}
-                                className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 cursor-pointer"
-                                title="تفاصيل الشيك"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-slate-600 font-bold">{paymentMethodLabel(p.method)}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    groupedList.map((g) => {
+                      const isOpen = !!expandedForms[g.key];
+                      return (
+                        <React.Fragment key={g.key}>
+                          <tr
+                            className="bg-brand-600/5 hover:bg-brand-600/10 cursor-pointer"
+                            onClick={() => setExpandedForms(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
+                          >
+                            <td className="p-4 font-black text-brand-700 flex items-center gap-2" colSpan={2}>
+                              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              {g.formationName}
+                            </td>
+                            <td className="p-4 text-slate-600 font-bold" colSpan={2}>
+                              {g.studentYear ? `سنة ${g.studentYear}` : ''}
+                            </td>
+                            <td className="p-4 text-slate-600 font-bold">{g.items.length} وصل</td>
+                            <td className="p-4 font-mono font-black text-brand-700">{fmt(g.subtotal)} د.ت</td>
+                            <td className="p-4"></td>
+                          </tr>
+                          {isOpen && g.items.map((p) => (
+                            <tr key={p.id} className="hover:bg-slate-50/80 transition">
+                              <td className="p-4 font-mono font-bold text-slate-500">{p.receiptNumber}</td>
+                              <td className="p-4 font-mono text-slate-600">{p.date || '-'}</td>
+                              <td className="p-4 font-black text-slate-900">{p.studentName}</td>
+                              <td className="p-4 font-bold text-brand-700">{g.formationName}</td>
+                              <td className="p-4">
+                                {p.discount ? (
+                                  <span className="text-brand-700 font-black font-mono">{fmt(p.discount)} د.ت</span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                              <td className="p-4 font-mono font-black">
+                                {p.refund ? (
+                                  <span className="text-red-700">-{fmt(Math.abs(p.amountPaid))} د.ت <span className="text-[9px] font-normal">(استرجاع)</span></span>
+                                ) : (
+                                  <span className="text-brand-700">{fmt(p.amountPaid)} د.ت</span>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                {p.method === 'Chèque' ? (
+                                  <div className="flex items-center gap-1">
+                                    {p.chequePaid === true ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        شيك محصل
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-600/10 text-brand-700 rounded-lg font-bold text-[10px]">
+                                        <AlertCircle className="h-3 w-3" />
+                                        شيك معلق
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setChequeDetailModal({ chequeNumber: p.chequeNumber, chequeDate: p.chequeDate, payments: [{ ...p, studentName: p.studentName || '' }], totalAmount: p.amountPaid, paid: p.chequePaid === true });
+                                      }}
+                                      className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 cursor-pointer"
+                                      title="تفاصيل الشيك"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-600 font-bold">{paymentMethodLabel(p.method)}</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -3222,71 +3314,32 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalPendingCheques = pendingCheques.reduce((sum, p) => sum + p.amountPaid, 0);
 
         const handleValidateChequeGroup = (cheque: typeof groupedCheques[0]) => {
-          const paymentIds = new Set(cheque.payments.map(p => p.id));
-          // Encaissement atomique : UN PUT /api/payments PAR paiement du chèque —
-          // l'élève n'est plus réécrit en entier (l'ancien flux PUT /api/students
-          // renvoyait toutes les tables enfants et violait les CHECK stricts) ;
-          // l'état local est réconcilié via onMarkPaymentsPaid, sans requête élève.
-          const reconciliations: { studentId: string; paymentIds: string[] }[] = [];
+          // Encaissement ciblé : UN SEUL PUT PAR ligne de chèque, envoyé au bon
+          // endpoint — /api/payments pour toutes les lignes réelles de la table
+          // `payments` (élèves, assurance externe, formations) et /api/event-cheque
+          // pour les participants d'activité (paiement stocké en JSON : pas de
+          // ligne `payments`). Aucun domaine n'est réécrit en entier : l'état
+          // local est réconcilié via onMarkChequesPaid après l'envoi.
+          const reconciliations: ChequeReconciliation[] = [];
           cheque.payments.forEach(p => {
-            if (!p.studentId) return; // paiements synthétiques (formations/événements) : marquage local plus bas
-            reconciliations.push({ studentId: p.studentId, paymentIds: [p.id] });
-            updatePaymentApi({ id: p.id, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate })
-              .catch(() => toast.error(`تعذر تسجيل تحصيل الشيك ${cheque.chequeNumber || ''} على الخادم.`));
+            const kind = p.refKind ?? (p.studentId ? 'student' : undefined);
+            const failed = () => toast.error(`تعذر تسجيل تحصيل الشيك ${cheque.chequeNumber || ''} على الخادم.`);
+            if (kind === 'student' && p.studentId) {
+              updatePaymentApi({ id: p.id, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate }).catch(failed);
+              reconciliations.push({ kind: 'student', studentId: p.studentId, paymentId: p.id });
+            } else if (kind === 'external' && p.externalStudentId) {
+              updatePaymentApi({ id: p.id, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate }).catch(failed);
+              reconciliations.push({ kind: 'external', externalStudentId: p.externalStudentId, paymentId: p.id });
+            } else if (kind === 'formation' && p.formationId && p.formationStudentId) {
+              updatePaymentApi({ id: p.id, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate }).catch(failed);
+              reconciliations.push({ kind: 'formation', formationId: p.formationId, studentId: p.formationStudentId, paymentId: p.id, chequeNumber: p.chequeNumber ?? cheque.chequeNumber });
+            } else if (kind === 'event' && p.eventId && p.participantId) {
+              updateEventChequeApi({ eventId: p.eventId, participantId: p.participantId, chequePaid: true, chequeNumber: cheque.chequeNumber, chequeDate: cheque.chequeDate }).catch(failed);
+              reconciliations.push({ kind: 'event', eventId: p.eventId, participantId: p.participantId });
+            }
+            // 'revision' (et toute ligne sans cible connue) : jamais de chèque → rien à envoyer.
           });
-          if (onMarkPaymentsPaid && reconciliations.length > 0) onMarkPaymentsPaid(reconciliations);
-
-          // Also validate formation students if any payment is from Formation
-          if (formations && onUpdateFormations) {
-            let formationChanged = false;
-            const updatedFormations = formations.map(f => {
-              const updatedStudents = (f.students || []).map(st => {
-                const inst = instalmentsOf(st);
-                let studentChanged = false;
-                const nextPayments = inst.map((p, i) => {
-                  const rowId = `form_${f.id}_${st.id}_i${i}`;
-                  const isThisCheque = p.method === 'cheque'
-                    && (paymentIds.has(rowId) || (cheque.chequeNumber && p.chequeNumber === cheque.chequeNumber));
-                  if (isThisCheque && p.chequePaid !== true) {
-                    studentChanged = true;
-                    return { ...p, chequePaid: true };
-                  }
-                  return p;
-                });
-                if (!studentChanged) return st;
-                formationChanged = true;
-                const cheques = nextPayments.filter(p => p.method === 'cheque');
-                return {
-                  ...st,
-                  payments: nextPayments,
-                  chequePaid: cheques.length > 0 ? cheques.every(c => c.chequePaid === true) : st.chequePaid
-                };
-              });
-              return { ...f, students: updatedStudents };
-            });
-            if (formationChanged) {
-              onUpdateFormations(updatedFormations);
-            }
-          }
-
-          // Also validate event participants if any payment is from Événements
-          if (events && onUpdateEvents) {
-            let eventsChanged = false;
-            const updatedEvents = events.map(ev => {
-              const updatedParticipants = (ev.participants || []).map(pt => {
-                const eventPayId = `event_${ev.id}_${pt.id}`;
-                if (paymentIds.has(eventPayId) || (pt.chequeNumber && pt.chequeNumber === cheque.chequeNumber)) {
-                  eventsChanged = true;
-                  return { ...pt, chequePaid: true, paid: (pt.remainingBalance || 0) <= 0, paidAt: pt.paidAt || new Date().toISOString() };
-                }
-                return pt;
-              });
-              return { ...ev, participants: updatedParticipants };
-            });
-            if (eventsChanged) {
-              onUpdateEvents(updatedEvents);
-            }
-          }
+          if (onMarkChequesPaid) onMarkChequesPaid(reconciliations);
 
           toast.success(`تم تحصيل الشيك ${cheque.chequeNumber || ''} بنجاح - الإجمالي: ${fmt(cheque.totalAmount)} د.ت`);
         };
