@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -823,6 +823,16 @@ export default function App() {
     commitDomain(() => saveActivities(updated));
   };
 
+  const handleCreateActivity = (activity: Activity) => {
+    setActivities(prev => prev.some(a => a.id === activity.id) ? prev.map(a => a.id === activity.id ? activity : a) : [...prev, activity]);
+    commitDomain(() => createActivityApi(activity));
+  };
+
+  const handleDeleteActivity = (activityId: string) => {
+    setActivities(prev => prev.filter(a => a.id !== activityId));
+    commitDomain(() => deleteActivityApi(activityId));
+  };
+
   const handleUpdateSkills = (doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }) => {
     setSkillsDoc(doc);
     commitDomain(() => saveSkills(doc));
@@ -1591,6 +1601,8 @@ export default function App() {
                 <ActivitiesModule
                   activities={activities}
                   onUpdateActivities={handleUpdateActivities}
+                  onCreateActivity={handleCreateActivity}
+                  onDeleteActivity={handleDeleteActivity}
                   staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}
                 />
               )}

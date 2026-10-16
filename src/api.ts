@@ -485,6 +485,20 @@ export async function saveActivities(activities: Activity[]): Promise<void> {
   return putDomain('/activities', activities, 'تعذر حفظ بيانات الأنشطة.');
 }
 
+/**
+ * Crée / met à jour UNE SEULE activité (POST) — jamais la liste complète du
+ * planning. Idempotent : re-POST du même id réécrit cette activité et rien
+ * d'autre.
+ */
+export async function createActivityApi(activity: Activity): Promise<void> {
+  return postDomain('/activities', activity, 'تعذر حفظ النشاط.');
+}
+
+/** Supprime UNE activité ciblée — jamais la liste complète. */
+export async function deleteActivityApi(activityId: string): Promise<void> {
+  return deleteDomain(`/activities?id=${encodeURIComponent(activityId)}`, 'تعذر حذف النشاط.');
+}
+
 
 export async function fetchActivitiesApi(): Promise<Activity[]> {
   return getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.');

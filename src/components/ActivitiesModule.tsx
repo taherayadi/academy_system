@@ -7,6 +7,13 @@ import { TIME_BANDS, bandIndexFor, bandStartTime, CATEGORY_COLORS, validateActiv
 interface ActivitiesModuleProps {
   activities: Activity[];
   onUpdateActivities: (activities: Activity[]) => void;
+  /**
+   * Création / édition ciblée d'UNE activité (POST /api/activities) — jamais
+   * la liste complète du planning. Repli sur `onUpdateActivities` si absent.
+   */
+  onCreateActivity?: (activity: Activity) => void;
+  /** Suppression ciblée d'une activité (DELETE /api/activities?id=…). */
+  onDeleteActivity?: (activityId: string) => void;
   staff?: { id: string; firstName: string; lastName: string }[];
 }
 
@@ -48,7 +55,7 @@ const emptyForm = (): Omit<Activity, 'id' | 'createdAt'> => ({
 
 type ViewMode = 'week' | GroupByKey;
 
-export default function ActivitiesModule({ activities, onUpdateActivities, staff = [] }: ActivitiesModuleProps) {
+export default function ActivitiesModule({ activities, onUpdateActivities, onCreateActivity, onDeleteActivity, staff = [] }: ActivitiesModuleProps) {
   const { error, success } = useToast();
   const [view, setView] = useState<ViewMode>('week');
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,6 +95,19 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
     setModalOpen(true);
   };
 
+  /** Sauvegarde ciblée d'UNE activité : POST /api/activities (upsert d'une ligne). */
+  const saveActivityRecord = (record: Activity) => {
+    if (onCreateActivity) {
+      onCreateActivity(record);
+      return;
+    }
+    if (activities.some(a => a.id === record.id)) {
+      onUpdateActivities(activities.map(a => a.id === record.id ? record : a));
+    } else {
+      onUpdateActivities([...activities, record]);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setInlineError('');
@@ -110,17 +130,22 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
       createdAt: editingId ? undefined : new Date().toISOString()
     } as Activity;
     if (editingId) {
-      onUpdateActivities(activities.map(a => a.id === editingId ? { ...a, ...clean, id: a.id, createdAt: a.createdAt } : a));
+      const existing = activities.find(a => a.id === editingId);
+      if (existing) saveActivityRecord({ ...existing, ...clean, id: existing.id, createdAt: existing.createdAt });
       success('تم تحديث النشاط بنجاح');
     } else {
-      onUpdateActivities([...activities, clean]);
+      saveActivityRecord(clean);
       success('تمت إضافة النشاط بنجاح');
     }
     setModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
-    onUpdateActivities(activities.filter(a => a.id !== id));
+    if (onDeleteActivity) {
+      onDeleteActivity(id);
+    } else {
+      onUpdateActivities(activities.filter(a => a.id !== id));
+    }
     success('تم حذف النشاط');
   };
 
@@ -136,9 +161,9 @@ export default function ActivitiesModule({ activities, onUpdateActivities, staff
       const delta = (day - current + 7) % 7 || 7;
       d.setDate(d.getDate() + delta);
       const next = d.toISOString().slice(0, 10);
-      onUpdateActivities(activities.map(a => a.id === id ? { ...a, date: next } : a));
+      saveActivityRecord({ ...src, date: next });
     } else {
-      onUpdateActivities(activities.map(a => a.id === id ? { ...a, weekday: day } : a));
+      saveActivityRecord({ ...src, weekday: day });
     }
     success('تم نقل النشاط');
   };

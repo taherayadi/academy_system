@@ -2713,6 +2713,32 @@ export async function writeActivities(db: D1Database, activities: any[], centerI
   }
 }
 
+/**
+ * Crée / met à jour UNE SEULE activité (POST) — jamais la liste complète du
+ * planning. Idempotent : un re-POST du même id réécrit cette activité et rien
+ * d'autre (pas de DELETE NOT IN). Un id déjà détenu par un autre centre est
+ * rejeté.
+ */
+export async function createActivity(db: D1Database, activity: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const actId = str(activity?.id);
+  if (!actId || !isValidActivity(activity)) throw new Error('بيانات النشاط غير صالحة.');
+  const existing = await db.prepare('SELECT center_id FROM activities WHERE id = ?').bind(actId).first<any>();
+  if (existing && str(existing.center_id) !== str(centerId)) throw new Error('النشاط غير موجود.');
+  for (const stmt of buildActivitiesStmts(db, [activity], centerId)) await stmt.run();
+}
+
+/**
+ * Supprime UNE activité ciblée : DELETE /api/activities?id=… — jamais la liste
+ * complète. Vérifie le centre puis efface la ligne.
+ */
+export async function deleteActivity(db: D1Database, activityId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const actId = str(activityId);
+  if (!actId) throw new Error('معرّف النشاط مفقود.');
+  const row = await db.prepare('SELECT id FROM activities WHERE id = ? AND center_id = ?').bind(actId, centerId).first<any>();
+  if (!row) throw new Error('النشاط غير موجود.');
+  await db.prepare('DELETE FROM activities WHERE id = ? AND center_id = ?').bind(actId, centerId).run();
+}
+
 // ===========================================================================
 // SKILLS (Compétences & Skills)
 // ===========================================================================

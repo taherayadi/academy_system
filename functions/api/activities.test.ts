@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { onRequestGet, onRequestPut } from './activities';
+import { onRequestGet, onRequestPost, onRequestPut, onRequestDelete } from './activities';
 import { onRequest, ROUTES } from './_middleware';
 import { vi } from 'vitest';
 
@@ -25,6 +25,18 @@ function putRequest(body: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+}
+
+function postRequest(body: unknown) {
+  return new Request('https://app.example/api/activities', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+function deleteRequest(url: string) {
+  return new Request(url, { method: 'DELETE' });
 }
 
 beforeEach(() => {
@@ -180,14 +192,139 @@ describe('PUT /api/activities', () => {
   });
 });
 
+describe('POST /api/activities', () => {
+  it('creates ONE activity and leaves the rest of the domain intact', async () => {
+    // center A already has an activity (full-list PUT, legacy path)
+    let ctx: any = { env: { DB: db }, request: putRequest([{ ...validActivity, id: 'kept' }]), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    const created = { ...validActivity, id: 'act_new', title: 'dessin' };
+    ctx = { env: { DB: db }, request: postRequest(created), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(200);
+
+    const rows = sqlite.prepare('SELECT id FROM activities ORDER BY id').all() as any[];
+    expect(rows.map(r => r.id)).toEqual(['act_new', 'kept']);
+  });
+
+  it('is idempotent: re-posting the same activity rewrites only that row', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest({ ...validActivity, id: 'a1', title: 'v1' }), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPost(ctx);
+
+    ctx = { env: { DB: db }, request: putRequest([{ ...validActivity, id: 'a2', title: 'other' }]), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    ctx = { env: { DB: db }, request: postRequest({ ...validActivity, id: 'a1', title: 'v2' }), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(200);
+
+    const rows = sqlite.prepare('SELECT id, title FROM activities ORDER BY id').all() as any[];
+    expect(rows).toEqual([{ id: 'a1', title: 'v2' }, { id: 'a2', title: 'other' }]);
+  });
+
+  it('returns 400 for an invalid single activity', async () => {
+    const ctx: any = { env: { DB: db }, request: postRequest({ ...validActivity, id: 'bad', title: '   ' }), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(400);
+    const body: any = await res.json();
+    expect(body.error).toBe('بيانات النشاط غير صالحة.');
+    expect((sqlite.prepare('SELECT id FROM activities').all() as any[]).length).toBe(0);
+  });
+
+  it('returns 400 when the payload is an array (full-list PUT is not a POST)', async () => {
+    const ctx: any = { env: { DB: db }, request: postRequest([validActivity]), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(400);
+    expect((sqlite.prepare('SELECT id FROM activities').all() as any[]).length).toBe(0);
+  });
+
+  it('rejects an id already owned by another center', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest({ ...validActivity, id: 'shared' }), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPost(ctx);
+
+    ctx = { env: { DB: db }, request: postRequest({ ...validActivity, id: 'shared', title: 'hijack' }), data: {} };
+    applySession(ctx, CENTER_B);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(400);
+    const body: any = await res.json();
+    expect(body.error).toBe('النشاط غير موجود.');
+
+    const row = sqlite.prepare('SELECT center_id, title FROM activities WHERE id = ?').get('shared') as any;
+    expect(row.center_id).toBe(CENTER_A);
+    expect(row.title).toBe('Atelier peinture');
+  });
+
+  it('a single object sent via PUT takes the targeted path (parity with POST)', async () => {
+    const ctx: any = { env: { DB: db }, request: putRequest({ ...validActivity, id: 'single' }), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(200);
+    expect((sqlite.prepare('SELECT id FROM activities').all() as any[]).map(r => r.id)).toEqual(['single']);
+  });
+});
+
+describe('DELETE /api/activities', () => {
+  it('deletes ONE activity and leaves the others intact', async () => {
+    const ctx: any = { env: { DB: db }, request: putRequest([{ ...validActivity, id: 'a1' }, { ...validActivity, id: 'a2' }]), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    const del: any = { env: { DB: db }, request: deleteRequest('https://app.example/api/activities?id=a1'), data: {} };
+    applySession(del, CENTER_A);
+    const res = await onRequestDelete(del);
+    expect(res.status).toBe(200);
+
+    const rows = sqlite.prepare('SELECT id FROM activities').all() as any[];
+    expect(rows.map(r => r.id)).toEqual(['a2']);
+  });
+
+  it('returns 400 when the id is missing', async () => {
+    const ctx: any = { env: { DB: db }, request: deleteRequest('https://app.example/api/activities'), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestDelete(ctx);
+    expect(res.status).toBe(400);
+    const body: any = await res.json();
+    expect(body.error).toBe('معرّف النشاط مفقود.');
+  });
+
+  it('returns 400 for an unknown or foreign activity', async () => {
+    const ctx: any = { env: { DB: db }, request: deleteRequest('https://app.example/api/activities?id=nope'), data: {} };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestDelete(ctx);
+    expect(res.status).toBe(400);
+    const body: any = await res.json();
+    expect(body.error).toBe('النشاط غير موجود.');
+  });
+
+  it('cannot delete another center row', async () => {
+    let ctx: any = { env: { DB: db }, request: putRequest([{ ...validActivity, id: 'owned' }]), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    const del: any = { env: { DB: db }, request: deleteRequest('https://app.example/api/activities?id=owned'), data: {} };
+    applySession(del, CENTER_B);
+    const res = await onRequestDelete(del);
+    expect(res.status).toBe(400);
+    expect(sqlite.prepare('SELECT id FROM activities WHERE id = ?').get('owned')).toBeTruthy();
+  });
+});
+
 describe('middleware boundary', () => {
-  it('registers /api/activities with GET and PUT only', () => {
-    expect(ROUTES['/api/activities']).toEqual(['GET', 'PUT']);
+  it('registers /api/activities with GET, POST, PUT and DELETE', () => {
+    expect(ROUTES['/api/activities']).toEqual(['GET', 'POST', 'PUT', 'DELETE']);
   });
 
   it('returns 401 for unauthenticated access and 405 for wrong method', async () => {
     expect((await onRequest({ request: new Request('https://app.example/api/activities'), env: { DB: db }, data: {}, next: vi.fn() } as any)).status).toBe(401);
-    const del = await onRequest({ request: new Request('https://app.example/api/activities', { method: 'DELETE' }), env: { DB: db }, data: {}, next: vi.fn() } as any);
-    expect(del.status).toBe(405);
+    const patch = await onRequest({ request: new Request('https://app.example/api/activities', { method: 'PATCH' }), env: { DB: db }, data: {}, next: vi.fn() } as any);
+    expect(patch.status).toBe(405);
   });
 });
