@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Edit3, X, Printer, Users, LayoutGrid, List, HandMetal, MessageSquare, Footprints, Brain } from 'lucide-react';
 import { Skill, SkillEvaluation, SkillDomain, SkillLevel } from '../types';
 import { useToast } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 import {
   validateSkill,
   LEVEL_CHIP_CLASS,
@@ -14,6 +15,15 @@ interface CompetencesModuleProps {
   catalog: Skill[];
   evaluations: SkillEvaluation[];
   onUpdateDoc: (doc: { catalog: Skill[]; evaluations: SkillEvaluation[] }) => void;
+  /**
+   * Création / édition ciblée d'UNE compétence (POST /api/skills) — jamais le
+   * document complet. Repli sur `onUpdateDoc` si absent.
+   */
+  onCreateSkill?: (skill: Skill) => void;
+  /** Suppression ciblée d'une compétence (DELETE /api/skills?id=…) + cascade. */
+  onDeleteSkill?: (skillId: string) => void;
+  /** Ajout / mise à jour ciblée d'UNE évaluation (POST /api/skill-evaluations). */
+  onAddSkillEvaluation?: (evaluation: SkillEvaluation) => void;
   students: { id: string; firstName: string; lastName: string; grade?: string }[];
   currentUserRole?: string;
   /** Staff list sourcing the evaluator roster (same list as Étude). */
@@ -71,13 +81,15 @@ const emptySkillForm = (): Omit<Skill, 'id' | 'createdAt'> => ({
   label: ''
 });
 
-export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, students, staff = [], canUseRoster }: CompetencesModuleProps) {
+export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, onCreateSkill, onDeleteSkill, onAddSkillEvaluation, students, staff = [], canUseRoster }: CompetencesModuleProps) {
   const { error, success } = useToast();
   const [view, setView] = useState<'catalog' | 'evaluation' | 'heatmap'>('catalog');
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [skillForm, setSkillForm] = useState(emptySkillForm());
   const [skillError, setSkillError] = useState<string | null>(null);
+  /** Compétence en attente de confirmation de suppression. */
+  const [deleteTarget, setDeleteTarget] = useState<Skill | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [evalForm, setEvalForm] = useState<Record<string, { level: SkillLevel; evaluatorStaffId: string; evaluatorName: string; evaluatedAt: string }>>({});
   /** T018: print report is state-toggled, never always-mounted. */
@@ -104,6 +116,19 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
     setSkillModalOpen(true);
   };
 
+  /** Sauvegarde ciblée d'UNE compétence : POST /api/skills (upsert d'une ligne). */
+  const saveSkillRecord = (record: Skill) => {
+    if (onCreateSkill) {
+      onCreateSkill(record);
+      return;
+    }
+    if (catalog.some(s => s.id === record.id)) {
+      onUpdateDoc({ catalog: catalog.map(s => s.id === record.id ? record : s), evaluations });
+    } else {
+      onUpdateDoc({ catalog: [...catalog, record], evaluations });
+    }
+  };
+
   /** FR-002: validateSkill gates the save and surfaces an inline blocking message. */
   const handleSkillSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,28 +152,27 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
     }
     setSkillError(null);
     if (editingSkillId) {
-      onUpdateDoc({
-        catalog: catalog.map(s => s.id === editingSkillId ? { ...s, ...skillForm } : s),
-        evaluations
-      });
+      const existing = catalog.find(s => s.id === editingSkillId);
+      saveSkillRecord({ ...(existing as Skill), ...skillForm, id: editingSkillId });
       success('تم تحديث المهارة بنجاح');
     } else {
-      onUpdateDoc({
-        catalog: [...catalog, { ...skillForm, id: 'skl_' + crypto.randomUUID(), createdAt: new Date().toISOString() }],
-        evaluations
-      });
+      saveSkillRecord({ ...skillForm, id: 'skl_' + crypto.randomUUID(), createdAt: new Date().toISOString() });
       success('تمت إضافة المهارة بنجاح');
     }
     setSkillModalOpen(false);
   };
 
   /** FR-022 cascade: removing a skill removes only its evaluations. */
-  const handleSkillDelete = (id: string) => {
+  const performSkillDelete = (id: string) => {
     const removed = catalog.find(s => s.id === id);
-    onUpdateDoc({
-      catalog: catalog.filter(s => s.id !== id),
-      evaluations: evaluations.filter(ev => ev.skillId !== id)
-    });
+    if (onDeleteSkill) {
+      onDeleteSkill(id);
+    } else {
+      onUpdateDoc({
+        catalog: catalog.filter(s => s.id !== id),
+        evaluations: evaluations.filter(ev => ev.skillId !== id)
+      });
+    }
     success(removed ? `تم حذف المهارة "${removed.label}" وكل تقييماتها` : 'تم حذف المهارة');
   };
 
@@ -198,11 +222,11 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
       }
     }
     let next = [...evaluations];
+    const created: SkillEvaluation[] = [];
     for (const [skillId, v] of entries) {
       if (v.level === 'non_evalue') continue;
       // R3 latest-save-wins: replace any previous evaluation for this pair
-      next = next.filter(ev => !(ev.studentId === selectedStudentId && ev.skillId === skillId));
-      next.push({
+      const record: SkillEvaluation = {
         id: 'ev_' + crypto.randomUUID(),
         studentId: selectedStudentId,
         skillId,
@@ -211,9 +235,19 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
           ? { evaluatedByStaffId: v.evaluatorStaffId, evaluatedByName: undefined }
           : { evaluatedByName: v.evaluatorName.trim(), evaluatedByStaffId: undefined }),
         evaluatedAt: v.evaluatedAt || new Date().toISOString().slice(0, 10)
-      });
+      };
+      if (!onAddSkillEvaluation) {
+        next = next.filter(ev => !(ev.studentId === selectedStudentId && ev.skillId === skillId));
+        next.push(record);
+      }
+      created.push(record);
     }
-    onUpdateDoc({ catalog, evaluations: next });
+    if (onAddSkillEvaluation) {
+      // POST ciblé : une évaluation par couple (élève, compétence).
+      for (const record of created) onAddSkillEvaluation(record);
+    } else {
+      onUpdateDoc({ catalog, evaluations: next });
+    }
     success('تم حفظ التقييمات بنجاح');
     setEvalForm({});
   };
@@ -404,7 +438,7 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
                             <button onClick={() => openSkillEdit(s)} className="p-1.5 text-slate-400 hover:text-brand-600 rounded-lg hover:bg-brand-600/[0.06] cursor-pointer" title="تعديل">
                               <Edit3 className="h-3.5 w-3.5" />
                             </button>
-                            <button onClick={() => handleSkillDelete(s.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer" title="حذف">
+                            <button onClick={() => setDeleteTarget(s)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer" title="حذف">
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </span>
@@ -691,6 +725,17 @@ export default function CompetencesModule({ catalog, evaluations, onUpdateDoc, s
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="تأكيد حذف المهارة"
+        message={<>هل أنت متأكد من حذف المهارة <strong>{deleteTarget?.label}</strong> وكل تقييماتها ؟</>}
+        onConfirm={() => {
+          if (deleteTarget) performSkillDelete(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

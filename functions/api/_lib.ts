@@ -2759,6 +2759,19 @@ export async function deleteActivity(db: D1Database, activityId: string, centerI
 const SKILL_DOMAINS = new Set(['langage', 'motricite', 'social', 'autonomie']);
 const SKILL_LEVELS = new Set(['non_evalue', 'emergent', 'en_cours', 'acquis']);
 
+/**
+ * Normalise une date en epoch-ms : nombre tel quel, chaîne de chiffres → nombre,
+ * ISO → Date.parse, sinon fallback. `skills.created_at` / `skill_evaluations.
+ * evaluated_at` sont des colonnes INTEGER : le client envoie des ISO strings.
+ */
+function toEpochMs(v: any, fallback: number): number {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const t = str(v).trim();
+  if (/^\d+$/.test(t)) return Number(t);
+  const parsed = Date.parse(t);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 function isValidSkill(s: any): boolean {
   if (!s || typeof s !== 'object') return false;
   if (!str(s.label).trim()) return false;
@@ -2861,13 +2874,6 @@ export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evalua
     // sinon le batch est rejeté (SQLITE_CONSTRAINT_DATATYPE) et — comme le
     // try/catch l'avale — les données ne sont jamais persistées.
     const now = Date.now();
-    const toEpochMs = (v: any, fallback: number): number => {
-      if (typeof v === 'number' && Number.isFinite(v)) return v;
-      const t = str(v).trim();
-      if (/^\d+$/.test(t)) return Number(t);
-      const parsed = Date.parse(t);
-      return Number.isNaN(parsed) ? fallback : parsed;
-    };
     for (const s of skills) {
       stmts.push(db.prepare(
         'INSERT OR REPLACE INTO skills (id, center_id, domain, label, age_from, age_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -2917,6 +2923,75 @@ export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evalua
   } catch (err) {
     console.error('writeSkills skipped (skills tables unavailable):', err);
   }
+}
+
+/**
+ * Crée / met à jour UNE compétence ciblée (POST /api/skills) — jamais le
+ * document complet (catalogue + évaluations). Idempotent : un re-POST du même
+ * id réécrit cette ligne et rien d'autre. Un id déjà détenu par un autre centre
+ * est rejeté. On utilise UPDATE-puis-INSERT (jamais INSERT OR REPLACE) pour ne
+ * pas déclencher un ON DELETE CASCADE qui effacerait les évaluations liées.
+ */
+export async function createSkill(db: D1Database, skill: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const sklId = str(skill?.id);
+  if (!sklId || !isValidSkill(skill)) throw new Error('بيانات المهارة غير صالحة.');
+  const existing = await db.prepare('SELECT center_id FROM skills WHERE id = ?').bind(sklId).first<any>();
+  if (existing && str(existing.center_id) !== str(centerId)) throw new Error('المهارة غير موجودة.');
+  const ageFrom = skill.ageFrom != null && skill.ageFrom !== '' ? Number(skill.ageFrom) : null;
+  const ageTo = skill.ageTo != null && skill.ageTo !== '' ? Number(skill.ageTo) : null;
+  const createdAt = toEpochMs(skill.createdAt, Date.now());
+  if (existing) {
+    await db.prepare(
+      'UPDATE skills SET domain = ?, label = ?, age_from = ?, age_to = ?, created_at = ? WHERE id = ? AND center_id = ?'
+    ).bind(str(skill.domain), str(skill.label).trim(), ageFrom, ageTo, createdAt, sklId, centerId).run();
+  } else {
+    await db.prepare(
+      'INSERT INTO skills (id, center_id, domain, label, age_from, age_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(sklId, centerId, str(skill.domain), str(skill.label).trim(), ageFrom, ageTo, createdAt).run();
+  }
+}
+
+/**
+ * Supprime UNE compétence ciblée (DELETE /api/skills?id=…) — jamais le document
+ * complet. Vérifie le centre, efface la compétence et ses évaluations (cascade
+ * explicite : le DDL prod des skills n'a pas forcément de FK ON DELETE CASCADE).
+ */
+export async function deleteSkill(db: D1Database, skillId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const sklId = str(skillId);
+  if (!sklId) throw new Error('معرّف المهارة مفقود.');
+  const row = await db.prepare('SELECT id FROM skills WHERE id = ? AND center_id = ?').bind(sklId, centerId).first<any>();
+  if (!row) throw new Error('المهارة غير موجودة.');
+  await db.batch([
+    db.prepare('DELETE FROM skill_evaluations WHERE skill_id = ? AND center_id = ?').bind(sklId, centerId),
+    db.prepare('DELETE FROM skills WHERE id = ? AND center_id = ?').bind(sklId, centerId)
+  ]);
+}
+
+/**
+ * Ajoute / met à jour UNE évaluation ciblée (POST /api/skill-evaluations) —
+ * jamais le document complet. Vérifie que la compétence et l'élève appartiennent
+ * au centre, puis applique la règle « latest-save-wins » : une seule évaluation
+ * par couple (élève, compétence), la nouvelle remplace l'ancienne.
+ */
+export async function addSkillEvaluation(db: D1Database, evaluation: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const evId = str(evaluation?.id);
+  if (!evId || !isValidEvaluation(evaluation)) throw new Error('بيانات التقييم غير صالحة.');
+  const skillId = str(evaluation.skillId);
+  const studentId = str(evaluation.studentId);
+  const skill = await db.prepare('SELECT id FROM skills WHERE id = ? AND center_id = ?').bind(skillId, centerId).first<any>();
+  if (!skill) throw new Error('المهارة غير موجودة.');
+  const student = await db.prepare('SELECT id FROM students WHERE id = ? AND center_id = ?').bind(studentId, centerId).first<any>();
+  if (!student) throw new Error('التلميذ غير موجود.');
+  await db.batch([
+    db.prepare('DELETE FROM skill_evaluations WHERE center_id = ? AND student_id = ? AND skill_id = ?').bind(centerId, studentId, skillId),
+    db.prepare(
+      'INSERT INTO skill_evaluations (id, center_id, student_id, skill_id, level, evaluated_by_staff_id, evaluated_by_name, evaluated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      evId, centerId, studentId, skillId, str(evaluation.level),
+      str(evaluation.evaluatedByStaffId) || null, str(evaluation.evaluatedByName) || null,
+      toEpochMs(evaluation.evaluatedAt, Date.now())
+    )
+  ]);
 }
 
 // ===========================================================================

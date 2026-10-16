@@ -509,6 +509,27 @@ export async function saveSkills(doc: { catalog: Skill[]; evaluations: SkillEval
   return putDomain('/skills', doc, 'تعذر حفظ بيانات المهارات.');
 }
 
+/**
+ * Crée / met à jour UNE SEULE compétence (POST) — jamais le document complet.
+ * Idempotent : re-POST du même id réécrit cette compétence et rien d'autre.
+ */
+export async function createSkillApi(skill: Skill): Promise<void> {
+  return postDomain('/skills', skill, 'تعذر حفظ المهارة.');
+}
+
+/** Supprime UNE compétence ciblée (+ ses évaluations) — jamais le document complet. */
+export async function deleteSkillApi(skillId: string): Promise<void> {
+  return deleteDomain(`/skills?id=${encodeURIComponent(skillId)}`, 'تعذر حذف المهارة.');
+}
+
+/**
+ * Ajoute / met à jour UNE SEULE évaluation (POST) — jamais le document complet.
+ * Règle latest-save-wins côté serveur : une évaluation par couple (élève, compétence).
+ */
+export async function addSkillEvaluationApi(evaluation: SkillEvaluation): Promise<void> {
+  return postDomain('/skill-evaluations', evaluation, 'تعذر حفظ التقييم.');
+}
+
 
 export async function fetchSkillsApi(): Promise<{ catalog: Skill[]; evaluations: SkillEvaluation[] }> {
   return getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.');

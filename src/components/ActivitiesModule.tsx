@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Plus, Trash2, Edit3, X, Layers, MapPin, CalendarDays, Puzzle } from 'lucide-react';
 import { Activity, ActivityCategory } from '../types';
 import { useToast } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 import { TIME_BANDS, bandIndexFor, bandStartTime, CATEGORY_COLORS, validateActivity, groupActivities, GroupByKey } from '../utils/planner';
 
 interface ActivitiesModuleProps {
@@ -64,6 +65,8 @@ export default function ActivitiesModule({ activities, onUpdateActivities, onCre
   const [inlineError, setInlineError] = useState<string>('');
   /** Tap-select fallback state: id of the chip being moved (research R3). */
   const [moveSourceId, setMoveSourceId] = useState<string | null>(null);
+  /** Activité en attente de confirmation de suppression. */
+  const [deleteTarget, setDeleteTarget] = useState<Activity | null>(null);
 
   const staffName = (id?: string) => {
     if (!id) return undefined;
@@ -221,7 +224,7 @@ export default function ActivitiesModule({ activities, onUpdateActivities, onCre
           <Edit3 className="h-2.5 w-2.5" />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
+          onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); }}
           className="p-0.5 rounded hover:bg-white/70 cursor-pointer"
           title="حذف"
           aria-label={`حذف ${a.title}`}
@@ -538,6 +541,17 @@ export default function ActivitiesModule({ activities, onUpdateActivities, onCre
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="تأكيد حذف النشاط"
+        message={<>هل أنت متأكد من حذف النشاط <strong>{deleteTarget?.title}</strong> ؟</>}
+        onConfirm={() => {
+          if (deleteTarget) handleDelete(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

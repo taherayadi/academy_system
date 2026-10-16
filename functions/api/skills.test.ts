@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet, onRequestPut } from './skills';
+import { onRequestGet, onRequestPut, onRequestPost, onRequestDelete } from './skills';
+import { onRequestPost as onEvalPost } from './skill-evaluations';
 import { onRequest, ROUTES } from './_middleware';
 
 vi.mock('./_lib', async (importOriginal) => {
@@ -24,6 +25,18 @@ function putRequest(body: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+}
+
+function postRequest(body: unknown, path = '/api/skills') {
+  return new Request(`https://app.example${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+function deleteRequest(id: string, path = '/api/skills') {
+  return new Request(`https://app.example${path}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 beforeEach(() => {
@@ -228,14 +241,160 @@ describe('PUT /api/skills validation', () => {
   });
 });
 
+describe('POST /api/skills', () => {
+  it('creates ONE skill and leaves other skills intact', async () => {
+    let ctx: any = { env: { DB: db }, request: putRequest(docWith([validSkill], [])), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    ctx = { env: { DB: db }, request: postRequest({ ...validSkill, id: 'skl_2', label: 'Compter' }), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestPost(ctx)).status).toBe(200);
+
+    const rows = sqlite.prepare('SELECT id FROM skills ORDER BY id').all() as any[];
+    expect(rows.map(r => r.id)).toEqual(['skl_1', 'skl_2']);
+  });
+
+  it('is idempotent (re-POST of the same id rewrites only that row)', async () => {
+    const first: any = { env: { DB: db }, request: postRequest({ ...validSkill, id: 'skl_1', label: 'A' }), data: {} };
+    applySession(first, CENTER_A);
+    await onRequestPost(first);
+    const second: any = { env: { DB: db }, request: postRequest({ ...validSkill, id: 'skl_1', label: 'B' }), data: {} };
+    applySession(second, CENTER_A);
+    await onRequestPost(second);
+    const rows = sqlite.prepare('SELECT id, label FROM skills').all() as any[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].label).toBe('B');
+  });
+
+  it('rejects an invalid skill with 400 and an array body with 400', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest({ ...validSkill, domain: 'science' }), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestPost(ctx)).status).toBe(400);
+    ctx = { env: { DB: db }, request: postRequest([validSkill]), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestPost(ctx)).status).toBe(400);
+  });
+
+  it('rejects an id already owned by another center', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest(validSkill), data: {} };
+    applySession(ctx, CENTER_B);
+    await onRequestPost(ctx);
+    const hijack: any = { env: { DB: db }, request: postRequest({ ...validSkill, label: 'Hijacked' }), data: {} };
+    applySession(hijack, CENTER_A);
+    expect((await onRequestPost(hijack)).status).toBe(400);
+  });
+
+  it('a single skill object sent via PUT takes the targeted path (parity with POST)', async () => {
+    const ctx: any = { env: { DB: db }, request: putRequest({ ...validSkill, id: 'skl_put', label: 'x' }), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestPut(ctx)).status).toBe(200);
+    expect((sqlite.prepare('SELECT id FROM skills').all() as any[]).map(r => r.id)).toEqual(['skl_put']);
+  });
+
+  it('stores INTEGER created_at from an ISO string', async () => {
+    const ctx: any = { env: { DB: db }, request: postRequest({ ...validSkill, createdAt: '2026-10-02T09:00:00.000Z' }), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPost(ctx);
+    const row = sqlite.prepare('SELECT created_at FROM skills WHERE id = ?').get('skl_1') as any;
+    expect(row.created_at).toBe(Date.parse('2026-10-02T09:00:00.000Z'));
+  });
+});
+
+describe('DELETE /api/skills', () => {
+  it('deletes ONE skill and its evaluations, leaving others intact', async () => {
+    let ctx: any = { env: { DB: db }, request: putRequest(docWith([validSkill, { ...validSkill, id: 'skl_keep' }], [validEval])), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+
+    ctx = { env: { DB: db }, request: deleteRequest('skl_1'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestDelete(ctx)).status).toBe(200);
+
+    expect((sqlite.prepare('SELECT id FROM skills').all() as any[]).map(r => r.id)).toEqual(['skl_keep']);
+    expect((sqlite.prepare('SELECT COUNT(*) n FROM skill_evaluations').get() as any).n).toBe(0);
+  });
+
+  it('returns 400 on a missing id and 400 on an unknown id', async () => {
+    let ctx: any = { env: { DB: db }, request: new Request('https://app.example/api/skills', { method: 'DELETE' }), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestDelete(ctx)).status).toBe(400);
+    ctx = { env: { DB: db }, request: deleteRequest('skl_gone'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onRequestDelete(ctx)).status).toBe(400);
+  });
+
+  it('rejects a cross-center delete', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest(validSkill), data: {} };
+    applySession(ctx, CENTER_B);
+    await onRequestPost(ctx);
+    const foreign: any = { env: { DB: db }, request: deleteRequest('skl_1'), data: {} };
+    applySession(foreign, CENTER_A);
+    expect((await onRequestDelete(foreign)).status).toBe(400);
+  });
+});
+
+describe('POST /api/skill-evaluations', () => {
+  beforeEach(async () => {
+    const ctx: any = { env: { DB: db }, request: putRequest(docWith([validSkill], [])), data: {} };
+    applySession(ctx, CENTER_A);
+    await onRequestPut(ctx);
+  });
+
+  it('adds ONE evaluation', async () => {
+    const ctx: any = { env: { DB: db }, request: postRequest(validEval, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onEvalPost(ctx)).status).toBe(200);
+    const rows = sqlite.prepare('SELECT id, evaluated_at FROM skill_evaluations').all() as any[];
+    expect(rows.map(r => r.id)).toEqual(['evl_1']);
+    expect(rows[0].evaluated_at).toBe(Date.parse('2026-09-20'));
+  });
+
+  it('replaces the previous evaluation for the same (student, skill) pair', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest(validEval, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    await onEvalPost(ctx);
+    ctx = { env: { DB: db }, request: postRequest({ ...validEval, id: 'evl_2', level: 'acquis' }, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    await onEvalPost(ctx);
+    const rows = sqlite.prepare('SELECT id, level FROM skill_evaluations').all() as any[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].level).toBe('acquis');
+    expect(rows[0].id).toBe('evl_2');
+  });
+
+  it('stores the __me__ self sentinel in evaluated_by_staff_id', async () => {
+    const ctx: any = { env: { DB: db }, request: postRequest({ ...validEval, evaluatedByStaffId: '__me__' }, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    await onEvalPost(ctx);
+    const row = sqlite.prepare('SELECT evaluated_by_staff_id FROM skill_evaluations').get() as any;
+    expect(row.evaluated_by_staff_id).toBe('__me__');
+  });
+
+  it('rejects an invalid body / foreign skill / foreign student with 400', async () => {
+    let ctx: any = { env: { DB: db }, request: postRequest([validEval], '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onEvalPost(ctx)).status).toBe(400);
+
+    ctx = { env: { DB: db }, request: postRequest({ ...validEval, skillId: 'skl_gone' }, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onEvalPost(ctx)).status).toBe(400);
+
+    ctx = { env: { DB: db }, request: postRequest({ ...validEval, studentId: 'stu_b' }, '/api/skill-evaluations'), data: {} };
+    applySession(ctx, CENTER_A);
+    expect((await onEvalPost(ctx)).status).toBe(400);
+  });
+});
+
 describe('middleware boundary', () => {
-  it('registers /api/skills with GET and PUT only', () => {
-    expect(ROUTES['/api/skills']).toEqual(['GET', 'PUT']);
+  it('registers /api/skills with GET/POST/PUT/DELETE and /api/skill-evaluations with POST', () => {
+    expect(ROUTES['/api/skills']).toEqual(['GET', 'POST', 'PUT', 'DELETE']);
+    expect(ROUTES['/api/skill-evaluations']).toEqual(['POST']);
   });
 
   it('returns 401 for unauthenticated access and 405 for wrong method', async () => {
     expect((await onRequest({ request: new Request('https://app.example/api/skills'), env: { DB: db }, data: {}, next: vi.fn() } as any)).status).toBe(401);
-    const del = await onRequest({ request: new Request('https://app.example/api/skills', { method: 'POST' }), env: { DB: db }, data: {}, next: vi.fn() } as any);
-    expect(del.status).toBe(405);
+    const patch = await onRequest({ request: new Request('https://app.example/api/skills', { method: 'PATCH' }), env: { DB: db }, data: {}, next: vi.fn() } as any);
+    expect(patch.status).toBe(405);
   });
 });

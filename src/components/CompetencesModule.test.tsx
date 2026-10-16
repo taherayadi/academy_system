@@ -127,7 +127,7 @@ describe('CompetencesModule — US1 catalog', () => {
     expect(doc.catalog[0].label).toBe('Vocabulaire avancé');
   });
 
-  it('removing a skill cascades its evaluations only', () => {
+  it('asks for confirmation, then removing a skill cascades its evaluations only', () => {
     const onUpdateDoc = vi.fn();
     render(<CompetencesModule
       {...baseProps}
@@ -139,9 +139,59 @@ describe('CompetencesModule — US1 catalog', () => {
       ]}
     />);
     fireEvent.click(screen.getAllByTitle('حذف')[0]);
+    // nothing removed before confirmation
+    expect(onUpdateDoc).not.toHaveBeenCalled();
+    expect(screen.getByText('تأكيد حذف المهارة')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الحذف' }));
     const doc = onUpdateDoc.mock.calls[0][0];
     expect(doc.catalog.map((s: Skill) => s.id)).toEqual(['s2']);
     expect(doc.evaluations.map((e: SkillEvaluation) => e.id)).toEqual(['e2']);
+  });
+
+  it('cancel on the delete dialog keeps the skill (no save call)', () => {
+    const onUpdateDoc = vi.fn();
+    render(<CompetencesModule
+      {...baseProps}
+      onUpdateDoc={onUpdateDoc}
+      catalog={[skill('s1', 'langage', 'Vocabulaire')]}
+    />);
+    fireEvent.click(screen.getAllByTitle('حذف')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'إلغاء' }));
+    expect(onUpdateDoc).not.toHaveBeenCalled();
+    expect(screen.queryByText('تأكيد حذف المهارة')).toBeNull();
+  });
+
+  it('uses the targeted onCreateSkill / onDeleteSkill / onAddSkillEvaluation props when provided', () => {
+    const onCreateSkill = vi.fn();
+    const onDeleteSkill = vi.fn();
+    const onAddSkillEvaluation = vi.fn();
+    render(<CompetencesModule
+      {...baseProps}
+      onCreateSkill={onCreateSkill}
+      onDeleteSkill={onDeleteSkill}
+      onAddSkillEvaluation={onAddSkillEvaluation}
+      catalog={[skill('s1', 'langage', 'Vocabulaire')]}
+      students={[{ id: 'st1', firstName: 'Amine', lastName: 'Ben' } as any]}
+    />);
+    // add skill → POST callback
+    fireEvent.click(screen.getAllByRole('button', { name: /مهارة/ })[0]);
+    fireEvent.change(screen.getByLabelText(/اسم المهارة/), { target: { value: 'Trier' } });
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
+    expect(onCreateSkill).toHaveBeenCalledTimes(1);
+    expect(onCreateSkill.mock.calls[0][0]).toMatchObject({ label: 'Trier' });
+
+    // delete skill → confirm → DELETE callback
+    fireEvent.click(screen.getAllByTitle('حذف')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الحذف' }));
+    expect(onDeleteSkill).toHaveBeenCalledWith('s1');
+
+    // evaluation → POST callback
+    openEvaluation();
+    fireEvent.change(screen.getByLabelText('المستوى Vocabulaire'), { target: { value: 'acquis' } });
+    fireEvent.change(screen.getAllByLabelText('المقيّم')[0], { target: { value: 'Mme Salma' } });
+    fireEvent.click(screen.getByRole('button', { name: /حفظ التقييمات/ }));
+    expect(onAddSkillEvaluation).toHaveBeenCalledTimes(1);
+    expect(onAddSkillEvaluation.mock.calls[0][0]).toMatchObject({ studentId: 'st1', skillId: 's1', level: 'acquis' });
   });
 });
 

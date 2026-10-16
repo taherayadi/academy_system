@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -838,6 +838,36 @@ export default function App() {
     commitDomain(() => saveSkills(doc));
   };
 
+  const handleCreateSkill = (skill: Skill) => {
+    setSkillsDoc(prev => {
+      const exists = prev.catalog.some(s => s.id === skill.id);
+      return {
+        ...prev,
+        catalog: exists ? prev.catalog.map(s => s.id === skill.id ? skill : s) : [...prev.catalog, skill]
+      };
+    });
+    commitDomain(() => createSkillApi(skill));
+  };
+
+  const handleDeleteSkill = (skillId: string) => {
+    setSkillsDoc(prev => ({
+      catalog: prev.catalog.filter(s => s.id !== skillId),
+      evaluations: prev.evaluations.filter(ev => ev.skillId !== skillId)
+    }));
+    commitDomain(() => deleteSkillApi(skillId));
+  };
+
+  const handleAddSkillEvaluation = (evaluation: SkillEvaluation) => {
+    setSkillsDoc(prev => ({
+      ...prev,
+      evaluations: [
+        ...prev.evaluations.filter(ev => !(ev.studentId === evaluation.studentId && ev.skillId === evaluation.skillId)),
+        evaluation
+      ]
+    }));
+    commitDomain(() => addSkillEvaluationApi(evaluation));
+  };
+
   const handleUpdateSlots = (updated: EtudeSlot[]) => {
     setSlots(updated);
     commitDomain(() => saveSlots(updated));
@@ -1611,6 +1641,9 @@ export default function App() {
                   catalog={skillsDoc.catalog}
                   evaluations={skillsDoc.evaluations}
                   onUpdateDoc={handleUpdateSkills}
+                  onCreateSkill={handleCreateSkill}
+                  onDeleteSkill={handleDeleteSkill}
+                  onAddSkillEvaluation={handleAddSkillEvaluation}
                   students={students}
                   currentUserRole={currentUser?.role}
                   staff={staff.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName }))}

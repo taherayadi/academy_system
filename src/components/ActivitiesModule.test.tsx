@@ -170,6 +170,29 @@ describe('ActivitiesModule', () => {
     expect(screen.getAllByText('2026-10-15').length).toBeGreaterThan(0);
   });
 
+  // ── Delete confirmation dialog ──────────────────────────────────────
+
+  it('asks for confirmation before deleting an activity', () => {
+    const onDeleteActivity = vi.fn();
+    render(<ActivitiesModule activities={[activity]} onUpdateActivities={vi.fn()} onDeleteActivity={onDeleteActivity} />);
+    fireEvent.click(screen.getByRole('button', { name: 'حذف Atelier peinture' }));
+    // dialog shown, nothing deleted yet
+    expect(screen.getByText('تأكيد حذف النشاط')).toBeTruthy();
+    expect(screen.getByText(/هل أنت متأكد من حذف النشاط/)).toBeTruthy();
+    expect(onDeleteActivity).not.toHaveBeenCalled();
+
+    // cancel keeps the activity
+    fireEvent.click(screen.getByRole('button', { name: 'إلغاء' }));
+    expect(onDeleteActivity).not.toHaveBeenCalled();
+    expect(screen.queryByText('تأكيد حذف النشاط')).toBeNull();
+
+    // confirm performs the deletion
+    fireEvent.click(screen.getByRole('button', { name: 'حذف Atelier peinture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'تأكيد الحذف' }));
+    expect(onDeleteActivity).toHaveBeenCalledWith('act_1');
+    expect(screen.queryByText('تأكيد حذف النشاط')).toBeNull();
+  });
+
   // ── Revision C (remarks 3+4): day start at 08:00 + banner icon ──────
 
   it('renders the week grid starting at 08:00 with no 06:00–07:30 rows (remark 3)', () => {
