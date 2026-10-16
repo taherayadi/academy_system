@@ -41,13 +41,16 @@ function deleteRequest(url: string) {
 
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
+  // Fixture alignée sur la migration admin (STRICT) : created_at INTEGER et
+  // weekday CHECK 1–7 — c'est ce qui a causé le 500 en prod (ISO string +
+  // weekday 0–6 bandés tels quels). Voir migrations/0001_initial_schema.sql.
   sqlite.exec(`
     CREATE TABLE activities (
       id TEXT PRIMARY KEY, center_id TEXT NOT NULL, title TEXT NOT NULL,
-      category TEXT NOT NULL, weekday INTEGER, date TEXT,
+      category TEXT NOT NULL, weekday INTEGER CHECK (weekday IS NULL OR weekday BETWEEN 1 AND 7), date TEXT,
       time_start TEXT NOT NULL, time_end TEXT NOT NULL,
-      location TEXT, level_class TEXT, staff_id TEXT, created_at TEXT
-    );
+      location TEXT, level_class TEXT, staff_id TEXT, created_at INTEGER
+    ) STRICT;
     CREATE TABLE students (id TEXT PRIMARY KEY, center_id TEXT);
   `);
   db = {
@@ -268,6 +271,30 @@ describe('POST /api/activities', () => {
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(200);
     expect((sqlite.prepare('SELECT id FROM activities').all() as any[]).map(r => r.id)).toEqual(['single']);
+  });
+
+  it('stores STRICT INTEGER created_at and maps weekday 0–6 → 1–7 (prod schema regression)', async () => {
+    const createdAt = '2026-10-16T13:40:34.072Z';
+    const ctx: any = {
+      env: { DB: db },
+      request: postRequest({ ...validActivity, id: 'act_reg', weekday: 0, createdAt }),
+      data: {}
+    };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPost(ctx);
+    expect(res.status).toBe(200);
+
+    const row = sqlite.prepare('SELECT weekday, created_at FROM activities WHERE id = ?').get('act_reg') as any;
+    expect(row.weekday).toBe(1); // lundi stocké 1 (CHECK 1–7)
+    expect(typeof row.created_at).toBe('number');
+    expect(row.created_at).toBe(Date.parse(createdAt));
+
+    // GET exposes le domaine applicatif : weekday 0, createdAt ISO.
+    const getCtx: any = { env: { DB: db }, request: new Request('https://app.example/api/activities'), data: {} };
+    applySession(getCtx, CENTER_A);
+    const rows: any[] = await (await onRequestGet(getCtx)).json();
+    expect(rows[0].weekday).toBe(0);
+    expect(rows[0].createdAt).toBe(createdAt);
   });
 });
 

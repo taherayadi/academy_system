@@ -2649,14 +2649,15 @@ export async function readActivities(db: D1Database, centerId: string = DEFAULT_
       centerId: str(r.center_id),
       title: str(r.title),
       category: str(r.category),
-      weekday: r.weekday == null ? undefined : num(r.weekday),
+      // stocké 1–7 (CHECK D1) → exposé 0–6 (0 = lundi) comme côté client.
+      weekday: r.weekday == null ? undefined : num(r.weekday) - 1,
       date: r.date == null ? undefined : str(r.date),
       timeStart: str(r.time_start),
       timeEnd: str(r.time_end),
       location: r.location == null || str(r.location) === '' ? undefined : str(r.location),
       levelClass: r.level_class == null || str(r.level_class) === '' ? undefined : str(r.level_class),
       staffId: r.staff_id == null || str(r.staff_id) === '' ? undefined : str(r.staff_id),
-      createdAt: str(r.created_at)
+      createdAt: r.created_at == null || str(r.created_at) === '' ? undefined : new Date(num(r.created_at)).toISOString()
     }));
   } catch {
     return [];
@@ -2665,17 +2666,29 @@ export async function readActivities(db: D1Database, centerId: string = DEFAULT_
 
 function buildActivitiesStmts(db: D1Database, activities: any[], centerId: string = DEFAULT_CENTER_ID): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
+  // created_at est une colonne STRICT INTEGER (migration admin) : un bind
+  // texte (ISO) ferait échouer tout le batch. On normalise en epoch-ms —
+  // même motif que buildStudentTimeSheetsStmts.
+  const now = Date.now();
+  const toEpoch = (v: any, fallback: number): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const t = str(v).trim();
+    if (/^\d+$/.test(t)) return Number(t);
+    const parsed = Date.parse(t);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  };
   for (const a of activities || []) {
     if (!a || !a.id || !isValidActivity(a)) continue;
     stmts.push(db.prepare(
       'INSERT OR REPLACE INTO activities (id, center_id, title, category, weekday, date, time_start, time_end, location, level_class, staff_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       str(a.id), centerId, str(a.title).trim(), str(a.category),
-      a.date ? null : Number(a.weekday),
+      // CHECK D1 : weekday BETWEEN 1 AND 7 — le domaine applicatif est 0–6.
+      a.date ? null : Number(a.weekday) + 1,
       str(a.date) || null,
       str(a.timeStart), str(a.timeEnd),
       str(a.location) || null, str(a.levelClass) || null, str(a.staffId) || null,
-      str(a.createdAt) || new Date().toISOString()
+      toEpoch(a.createdAt, now)
     ));
   }
   return stmts;
@@ -2788,7 +2801,7 @@ export async function readSkills(db: D1Database, centerId: string = DEFAULT_CENT
         label: str(r.label),
         ageFrom: r.age_from == null ? undefined : num(r.age_from),
         ageTo: r.age_to == null ? undefined : num(r.age_to),
-        createdAt: str(r.created_at)
+        createdAt: r.created_at == null || str(r.created_at) === '' ? undefined : new Date(num(r.created_at)).toISOString()
       })),
       evaluations: (evalRows.results || []).map((r: any) => ({
         id: str(r.id),
@@ -2798,7 +2811,7 @@ export async function readSkills(db: D1Database, centerId: string = DEFAULT_CENT
         level: str(r.level),
         evaluatedByStaffId: r.evaluated_by_staff_id == null || str(r.evaluated_by_staff_id) === '' ? undefined : str(r.evaluated_by_staff_id),
         evaluatedByName: r.evaluated_by_name == null || str(r.evaluated_by_name) === '' ? undefined : str(r.evaluated_by_name),
-        evaluatedAt: str(r.evaluated_at)
+        evaluatedAt: r.evaluated_at == null || str(r.evaluated_at) === '' ? '' : new Date(num(r.evaluated_at)).toISOString().slice(0, 10)
       }))
     };
   } catch {
@@ -2843,6 +2856,18 @@ export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evalua
     }
 
     const stmts: D1PreparedStatement[] = [];
+    // created_at / evaluated_at sont des colonnes STRICT INTEGER (migration
+    // admin) : le client envoie des ISO strings — on normalise en epoch-ms,
+    // sinon le batch est rejeté (SQLITE_CONSTRAINT_DATATYPE) et — comme le
+    // try/catch l'avale — les données ne sont jamais persistées.
+    const now = Date.now();
+    const toEpochMs = (v: any, fallback: number): number => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      const t = str(v).trim();
+      if (/^\d+$/.test(t)) return Number(t);
+      const parsed = Date.parse(t);
+      return Number.isNaN(parsed) ? fallback : parsed;
+    };
     for (const s of skills) {
       stmts.push(db.prepare(
         'INSERT OR REPLACE INTO skills (id, center_id, domain, label, age_from, age_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -2850,7 +2875,7 @@ export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evalua
         str(s.id), centerId, str(s.domain), str(s.label).trim(),
         s.ageFrom != null && s.ageFrom !== '' ? Number(s.ageFrom) : null,
         s.ageTo != null && s.ageTo !== '' ? Number(s.ageTo) : null,
-        str(s.createdAt) || new Date().toISOString()
+        toEpochMs(s.createdAt, now)
       ));
     }
     for (const e of evals) {
@@ -2858,7 +2883,8 @@ export async function writeSkills(db: D1Database, doc: { catalog?: any[]; evalua
         'INSERT OR REPLACE INTO skill_evaluations (id, center_id, student_id, skill_id, level, evaluated_by_staff_id, evaluated_by_name, evaluated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
         str(e.id), centerId, str(e.studentId), str(e.skillId), str(e.level),
-        str(e.evaluatedByStaffId) || null, str(e.evaluatedByName) || null, str(e.evaluatedAt)
+        str(e.evaluatedByStaffId) || null, str(e.evaluatedByName) || null,
+        toEpochMs(e.evaluatedAt, now)
       ));
     }
 

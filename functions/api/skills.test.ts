@@ -28,16 +28,20 @@ function putRequest(body: unknown) {
 
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:');
+  // Fixture alignée sur la migration admin (STRICT) : created_at et
+  // evaluated_at INTEGER — le client envoie des ISO strings, le writer doit
+  // les normaliser en epoch-ms sinon le batch est rejeté en silence.
   sqlite.exec(`
     CREATE TABLE skills (
       id TEXT PRIMARY KEY, center_id TEXT NOT NULL, domain TEXT NOT NULL,
-      label TEXT NOT NULL, age_from INTEGER, age_to INTEGER, created_at TEXT
-    );
+      label TEXT NOT NULL, age_from INTEGER, age_to INTEGER, created_at INTEGER,
+      CHECK (age_from IS NULL OR age_to IS NULL OR age_to >= age_from)
+    ) STRICT;
     CREATE TABLE skill_evaluations (
       id TEXT PRIMARY KEY, center_id TEXT NOT NULL, student_id TEXT NOT NULL,
       skill_id TEXT NOT NULL, level TEXT NOT NULL,
-      evaluated_by_staff_id TEXT, evaluated_by_name TEXT, evaluated_at TEXT NOT NULL
-    );
+      evaluated_by_staff_id TEXT, evaluated_by_name TEXT, evaluated_at INTEGER NOT NULL
+    ) STRICT;
     CREATE TABLE students (id TEXT PRIMARY KEY, center_id TEXT);
     INSERT INTO students VALUES ('stu_1', 'c1'), ('stu_b', 'c2');
   `);
@@ -114,6 +118,35 @@ describe('PUT /api/skills validation', () => {
     await onRequestPut(ctx);
     const row = sqlite.prepare('SELECT center_id FROM skills WHERE id = ?').get('skl_1') as any;
     expect(row.center_id).toBe(CENTER_A);
+  });
+
+  it('stores STRICT INTEGER created_at/evaluated_at from ISO strings (prod schema regression)', async () => {
+    const ctx: any = {
+      env: { DB: db },
+      request: putRequest(docWith(
+        [{ ...validSkill, createdAt: '2026-10-01T08:00:00.000Z' }],
+        [{ ...validEval, evaluatedAt: '2026-09-20' }]
+      )),
+      data: {}
+    };
+    applySession(ctx, CENTER_A);
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(200);
+
+    const skillRow = sqlite.prepare('SELECT created_at FROM skills WHERE id = ?').get('skl_1') as any;
+    expect(typeof skillRow.created_at).toBe('number');
+    expect(skillRow.created_at).toBe(Date.parse('2026-10-01T08:00:00.000Z'));
+
+    const evalRow = sqlite.prepare('SELECT evaluated_at FROM skill_evaluations WHERE id = ?').get('evl_1') as any;
+    expect(typeof evalRow.evaluated_at).toBe('number');
+    expect(evalRow.evaluated_at).toBe(Date.parse('2026-09-20'));
+
+    // GET reconstruit les formats domaine : ISO date pour evaluatedAt.
+    const getCtx: any = { env: { DB: db }, request: new Request('https://app.example/api/skills'), data: {} };
+    applySession(getCtx, CENTER_A);
+    const doc: any = await (await onRequestGet(getCtx)).json();
+    expect(doc.evaluations[0].evaluatedAt).toBe('2026-09-20');
+    expect(doc.catalog[0].createdAt).toBe('2026-10-01T08:00:00.000Z');
   });
 
   it('drops evaluations whose skillId is absent from the same write (cascade)', async () => {
