@@ -35,6 +35,14 @@ interface StaffManagementModuleProps {
   timesheets: TimesheetEntry[];
   onUpdateStaff: (staff: StaffMember[]) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
+  /** Ciblé : créer UNE demande de congé (POST /api/staff-leave-requests). */
+  onCreateLeaveRequest?: (staffId: string, leaveRequest: LeaveRequest) => void;
+  /** Ciblé : approuver/refuser UNE demande de congé (PUT /api/staff-leave-requests). */
+  onUpdateLeaveStatus?: (staffId: string, requestId: string, status: 'approuve' | 'refuse') => void;
+  /** Ciblé : créer UNE demande d'avance (POST /api/staff-advances). */
+  onCreateAdvance?: (staffId: string, advance: StaffAdvance) => void;
+  /** Ciblé : approuver/refuser UNE demande d'avance (PUT /api/staff-advances). */
+  onUpdateAdvanceStatus?: (staffId: string, advanceId: string, status: StaffRequestStatus) => void;
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   expenses?: CenterExpense[];
@@ -120,6 +128,10 @@ export default function StaffManagementModule({
   timesheets,
   onUpdateStaff,
   onUpdateTimesheets,
+  onCreateLeaveRequest,
+  onUpdateLeaveStatus,
+  onCreateAdvance,
+  onUpdateAdvanceStatus,
   settings,
   onUpdateSettings,
   expenses = [],
@@ -506,22 +518,30 @@ export default function StaffManagementModule({
       leaveRequests: [...(selectedStaff.leaveRequests || []), newReq]
     };
 
-     onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+     if (onCreateLeaveRequest) {
+       onCreateLeaveRequest(selectedStaff.id, newReq);
+     } else {
+       onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+     }
      setIsLeaveModalOpen(false);
      toast.success('تمت إضافة طلب الإجازة/الرخصة بنجاح!');
    };
 
-   const handleUpdateLeaveStatus = (reqId: string, status: 'approuve' | 'refuse') => {
-     if (!selectedStaff) return;
+  const handleUpdateLeaveStatus = (reqId: string, status: 'approuve' | 'refuse') => {
+    if (!selectedStaff) return;
 
-     const req = (selectedStaff.leaveRequests || []).find(r => r.id === reqId);
-     const updatedRequests = (selectedStaff.leaveRequests || []).map(r => r.id === reqId ? { ...r, status } : r);
-     const updatedStaffMember: StaffMember = {
-       ...selectedStaff,
-       leaveRequests: updatedRequests
-     };
+    const req = (selectedStaff.leaveRequests || []).find(r => r.id === reqId);
 
-     onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+    if (onUpdateLeaveStatus) {
+      onUpdateLeaveStatus(selectedStaff.id, reqId, status);
+    } else {
+      const updatedRequests = (selectedStaff.leaveRequests || []).map(r => r.id === reqId ? { ...r, status } : r);
+      const updatedStaffMember: StaffMember = {
+        ...selectedStaff,
+        leaveRequests: updatedRequests
+      };
+      onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+    }
 
      // When a leave is approved, mark each day of the leave as conge (🏖) in the pointage
      if (status === 'approuve' && req) {
@@ -577,7 +597,11 @@ export default function StaffManagementModule({
       ...selectedStaff,
       advances: [...(selectedStaff.advances || []), newAdv]
     };
-    onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+    if (onCreateAdvance) {
+      onCreateAdvance(selectedStaff.id, newAdv);
+    } else {
+      onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));
+    }
     setIsAdvanceModalOpen(false);
     setAdvanceAmount(0);
     setAdvanceReason('');
@@ -586,6 +610,10 @@ export default function StaffManagementModule({
 
   const handleUpdateAdvanceStatus = (advId: string, status: StaffRequestStatus) => {
     if (!selectedStaff) return;
+    if (onUpdateAdvanceStatus) {
+      onUpdateAdvanceStatus(selectedStaff.id, advId, status);
+      return;
+    }
     const updatedAdvances = (selectedStaff.advances || []).map(a => a.id === advId ? { ...a, status } : a);
     const updatedStaffMember: StaffMember = { ...selectedStaff, advances: updatedAdvances };
     onUpdateStaff(staff.map(s => s.id === selectedStaff.id ? updatedStaffMember : s));

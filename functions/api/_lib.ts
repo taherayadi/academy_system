@@ -1099,6 +1099,71 @@ export async function deleteSingleStaff(db: D1Database, staffId: string, centerI
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
 }
 
+// ===========================================================================
+// STAFF LEAVE REQUESTS / ADVANCES (granular POST create / PUT status)
+// ===========================================================================
+// Les demandes de congé et d'avance vivaient en JSON imbriqué dans l'objet
+// `staff` : chaque création figeait un PUT /api/staff qui réécrivait tout
+// l'agent. Ces helpers ciblent UNE ligne (staff_leave_requests / staff_advances)
+// et vérifient que l'agent appartient bien au centre appelant.
+
+const STAFF_REQUEST_STATUSES = new Set(['en_attente', 'approuve', 'refuse']);
+
+async function assertStaffInCenter(db: D1Database, staffId: string, centerId: string): Promise<void> {
+  const id = str(staffId);
+  if (!id) throw new Error('معرّف عضو الإطار مفقود.');
+  const row = await db.prepare('SELECT id FROM staff WHERE id = ? AND center_id = ?').bind(id, centerId).first<any>();
+  if (!row) throw new Error('عضو الإطار غير موجود.');
+}
+
+/** Crée UNE demande de congé (POST /api/staff-leave-requests). Idempotent. */
+export async function createStaffLeaveRequest(db: D1Database, staffId: string, leaveRequest: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await assertStaffInCenter(db, staffId, centerId);
+  const lr = leaveRequest;
+  if (!lr || typeof lr !== 'object' || Array.isArray(lr)) throw new Error('بيانات طلب الإجازة غير صالحة.');
+  if (!str(lr.id) || !str(lr.startDate) || !str(lr.endDate) || !str(lr.type)) throw new Error('بيانات طلب الإجازة غير صالحة.');
+  if (str(lr.endDate) < str(lr.startDate)) throw new Error('بيانات طلب الإجازة غير صالحة.');
+  const status = str(lr.status) || 'en_attente';
+  if (!STAFF_REQUEST_STATUSES.has(status)) throw new Error('حالة الطلب غير صالحة.');
+  await db.prepare('INSERT OR REPLACE INTO staff_leave_requests (id, staff_id, start_date, end_date, reason, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(str(lr.id), str(staffId), str(lr.startDate), str(lr.endDate), str(lr.reason), str(lr.type), status).run();
+}
+
+/** Met à jour le statut d'UNE demande de congé (PUT /api/staff-leave-requests). */
+export async function updateStaffLeaveRequestStatus(db: D1Database, staffId: string, requestId: string, status: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await assertStaffInCenter(db, staffId, centerId);
+  const rid = str(requestId);
+  if (!rid) throw new Error('معرّف طلب الإجازة مفقود.');
+  if (!STAFF_REQUEST_STATUSES.has(str(status))) throw new Error('حالة الطلب غير صالحة.');
+  const row = await db.prepare('SELECT id FROM staff_leave_requests WHERE id = ? AND staff_id = ?').bind(rid, str(staffId)).first<any>();
+  if (!row) throw new Error('طلب الإجازة غير موجود.');
+  await db.prepare('UPDATE staff_leave_requests SET status = ? WHERE id = ? AND staff_id = ?').bind(str(status), rid, str(staffId)).run();
+}
+
+/** Crée UNE demande d'avance (POST /api/staff-advances). Idempotent. */
+export async function createStaffAdvance(db: D1Database, staffId: string, advance: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await assertStaffInCenter(db, staffId, centerId);
+  const adv = advance;
+  if (!adv || typeof adv !== 'object' || Array.isArray(adv)) throw new Error('بيانات طلب السلفة غير صالحة.');
+  const amount = num(adv.amount);
+  if (!str(adv.id) || !str(adv.date) || amount <= 0) throw new Error('بيانات طلب السلفة غير صالحة.');
+  const status = str(adv.status) || 'en_attente';
+  if (!STAFF_REQUEST_STATUSES.has(status)) throw new Error('حالة الطلب غير صالحة.');
+  await db.prepare('INSERT OR REPLACE INTO staff_advances (id, center_id, staff_id, amount, date, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(str(adv.id), centerId, str(staffId), amount, str(adv.date), str(adv.reason), status).run();
+}
+
+/** Met à jour le statut d'UNE demande d'avance (PUT /api/staff-advances). */
+export async function updateStaffAdvanceStatus(db: D1Database, staffId: string, advanceId: string, status: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await assertStaffInCenter(db, staffId, centerId);
+  const aid = str(advanceId);
+  if (!aid) throw new Error('معرّف طلب السلفة مفقود.');
+  if (!STAFF_REQUEST_STATUSES.has(str(status))) throw new Error('حالة الطلب غير صالحة.');
+  const row = await db.prepare('SELECT id FROM staff_advances WHERE id = ? AND staff_id = ?').bind(aid, str(staffId)).first<any>();
+  if (!row) throw new Error('طلب السلفة غير موجود.');
+  await db.prepare('UPDATE staff_advances SET status = ? WHERE id = ? AND staff_id = ?').bind(str(status), aid, str(staffId)).run();
+}
+
 
 // ===========================================================================
 // TIMESHEETS

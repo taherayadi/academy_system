@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -603,6 +603,26 @@ export default function App() {
   const handleDeleteStaff = (id: string) => {
     setStaff(prev => prev.filter(s => s.id !== id));
     commitDomain(() => deleteStaffApi(id));
+  };
+
+  const handleCreateStaffLeaveRequest = (staffId: string, leaveRequest: LeaveRequest) => {
+    setStaff(prev => prev.map(s => s.id === staffId ? { ...s, leaveRequests: [...(s.leaveRequests || []), leaveRequest] } : s));
+    commitDomain(() => createStaffLeaveRequestApi(staffId, leaveRequest));
+  };
+
+  const handleUpdateStaffLeaveStatus = (staffId: string, requestId: string, status: 'approuve' | 'refuse') => {
+    setStaff(prev => prev.map(s => s.id === staffId ? { ...s, leaveRequests: (s.leaveRequests || []).map(r => r.id === requestId ? { ...r, status } : r) } : s));
+    commitDomain(() => updateStaffLeaveRequestStatusApi(staffId, requestId, status));
+  };
+
+  const handleCreateStaffAdvance = (staffId: string, advance: StaffAdvance) => {
+    setStaff(prev => prev.map(s => s.id === staffId ? { ...s, advances: [...(s.advances || []), advance] } : s));
+    commitDomain(() => createStaffAdvanceApi(staffId, advance));
+  };
+
+  const handleUpdateStaffAdvanceStatus = (staffId: string, advanceId: string, status: StaffRequestStatus) => {
+    setStaff(prev => prev.map(s => s.id === staffId ? { ...s, advances: (s.advances || []).map(a => a.id === advanceId ? { ...a, status } : a) } : s));
+    commitDomain(() => updateStaffAdvanceStatusApi(staffId, advanceId, status));
   };
 
   const handleUpdateStaff = (updated: StaffMember[]) => {
@@ -1714,6 +1734,10 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStaff={handleUpdateStaff}
                   onUpdateTimesheets={handleUpdateTimesheets}
+                  onCreateLeaveRequest={handleCreateStaffLeaveRequest}
+                  onUpdateLeaveStatus={handleUpdateStaffLeaveStatus}
+                  onCreateAdvance={handleCreateStaffAdvance}
+                  onUpdateAdvanceStatus={handleUpdateStaffAdvanceStatus}
                   staffLite={staffLite}
                   onGoToRenewal={() => setActiveTab('renewal')}
                 />

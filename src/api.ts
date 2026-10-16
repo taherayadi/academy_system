@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus } from './types';
 
 
 const API_BASE = '/api';
@@ -241,6 +241,26 @@ export async function updateStaffApi(staff: StaffMember): Promise<void> {
 
 export async function deleteStaffApi(staffId: string): Promise<void> {
   return deleteDomain(`/staff?id=${encodeURIComponent(staffId)}`, 'تعذر حذف عضو الإطار.');
+}
+
+
+export async function createStaffLeaveRequestApi(staffId: string, leaveRequest: LeaveRequest): Promise<void> {
+  return postDomain('/staff-leave-requests', { staffId, leaveRequest }, 'تعذر حفظ طلب الإجازة.');
+}
+
+
+export async function updateStaffLeaveRequestStatusApi(staffId: string, requestId: string, status: StaffRequestStatus): Promise<void> {
+  return putDomain('/staff-leave-requests', { staffId, requestId, status }, 'تعذر تحديث طلب الإجازة.');
+}
+
+
+export async function createStaffAdvanceApi(staffId: string, advance: StaffAdvance): Promise<void> {
+  return postDomain('/staff-advances', { staffId, advance }, 'تعذر حفظ طلب السلفة.');
+}
+
+
+export async function updateStaffAdvanceStatusApi(staffId: string, advanceId: string, status: StaffRequestStatus): Promise<void> {
+  return putDomain('/staff-advances', { staffId, advanceId, status }, 'تعذر تحديث طلب السلفة.');
 }
 
 
