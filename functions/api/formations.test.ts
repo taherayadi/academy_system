@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { onRequestPost, onRequestDelete, onRequestPut, onRequestGet } from './formations';
 import { onRequestPut as onSchedulePut, onRequestPost as onSchedulePost } from './formation-schedule';
-import { addFormationStudent, removeFormationStudent } from './_lib';
+import { addFormationStudent, removeFormationStudent, readFormations } from './_lib';
 
 // Régression /api/formations : ajout ciblé d'UNE formation (POST) et suppression
 // ciblée (DELETE ?id=) — plus de réécriture complète du domaine via PUT.
@@ -286,6 +286,18 @@ describe('formation students (targeted POST / DELETE)', () => {
     // Le même « amir » (dédupliqué par nom) reste inscrit en form_2.
     expect((sqlite.prepare("SELECT COUNT(*) AS n FROM students WHERE student_type = 'external'").get() as any).n).toBe(1);
     expect((sqlite.prepare('SELECT COUNT(*) AS n FROM formation_enrollments').get() as any).n).toBe(1);
+  });
+
+  it('applies the discount when reading the remaining balance', async () => {
+    seedFormationWithMatiere();
+    await addFormationStudent(db, 'form_1', { ...STUDENT, amountPaid: 50, totalRequired: 100, discount: 20 }, CENTER);
+
+    const fs = await readFormations(db, CENTER);
+    const read = fs[0].students[0];
+    expect(read.totalRequired).toBe(100);
+    expect(read.discount).toBe(20);
+    expect(read.amountPaid).toBe(50);
+    expect(read.remainingBalance).toBe(30);
   });
 
   it('persists formation students as external through the full PUT rewrite', async () => {

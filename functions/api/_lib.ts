@@ -2160,6 +2160,7 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
     const nonRefund = pays.filter((p: any) => !bool(p.is_refund));
     const amountPaid = nonRefund.reduce((sum: number, p: any) => sum + num(p.amount), 0);
     const totalRequired = pays.length > 0 ? Math.max(...pays.map((p: any) => num(p.total_required))) : 0;
+    const discount = num(st.discount);
     const last = pays[pays.length - 1];
     (studentsByFormation[fid] = studentsByFormation[fid] || []).push({
       id: sid,
@@ -2169,12 +2170,12 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
       enrolledMatiereIds: matieresByEnrollment[sid] || [],
       amountPaid,
       totalRequired,
-      remainingBalance: Math.max(0, totalRequired - amountPaid),
+      remainingBalance: Math.max(0, totalRequired - discount - amountPaid),
       paymentMethod: str(last?.method) === 'cheque' ? 'cheque' : 'espece',
       chequeNumber: last?.cheque_number == null ? undefined : str(last.cheque_number),
       chequeDate: last?.cheque_date == null ? undefined : str(last.cheque_date),
       chequePaid: last ? bool(last.cheque_paid) : false,
-      discount: num(st.discount),
+      discount,
       isAdvance: bool(st.is_advance),
       paidAt: last?.date == null ? undefined : str(last.date),
       notes: st.notes == null ? undefined : str(st.notes),
