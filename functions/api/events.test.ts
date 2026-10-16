@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { onRequestGet, onRequestPut } from './events';
+import { onRequestGet, onRequestPost, onRequestPut, onRequestDelete } from './events';
 import { Env } from './_lib';
 
 // Mock _lib helpers
@@ -10,11 +10,13 @@ vi.mock('./_lib', async () => {
     getContextCenterId: vi.fn(),
     readEvents: vi.fn(),
     writeEvents: vi.fn(),
+    createEvent: vi.fn(),
+    deleteEvent: vi.fn(),
     readBody: vi.fn(),
   };
 });
 
-import { getContextCenterId, readEvents, writeEvents, readBody } from './_lib';
+import { getContextCenterId, readEvents, writeEvents, createEvent, deleteEvent, readBody } from './_lib';
 
 describe('Events API', () => {
   const mockEnv: Env = {
@@ -93,7 +95,7 @@ describe('Events API', () => {
       expect(writeEvents).toHaveBeenCalledWith(mockEnv.DB, mockEvents, centerId);
     });
 
-    it('returns 400 if payload is not an array', async () => {
+    it('returns 400 if a single-object payload is invalid', async () => {
       const putContext = {
         ...mockContext,
         request: new Request('https://example.com/api/events', {
@@ -104,11 +106,14 @@ describe('Events API', () => {
 
       (getContextCenterId as any).mockReturnValue('center_123');
       (readBody as any).mockResolvedValue({ not: 'an array' });
+      (createEvent as any).mockRejectedValue(new Error('بيانات الفعالية غير صالحة.'));
 
       const response = await onRequestPut(putContext);
       expect(response.status).toBe(400);
       const data = await response.json() as { error?: string };
-      expect(data.error).toBe('بيانات الفعاليات غير صالحة.');
+      expect(data.error).toBe('بيانات الفعالية غير صالحة.');
+      expect(createEvent).toHaveBeenCalledWith(mockEnv.DB, { not: 'an array' }, 'center_123');
+      expect(writeEvents).not.toHaveBeenCalled();
     });
 
     it('returns 500 on unexpected error', async () => {
@@ -128,6 +133,139 @@ describe('Events API', () => {
       expect(response.status).toBe(500);
       const data = await response.json() as { error?: string };
       expect(data.error).toBe('تعذر حفظ بيانات الفعاليات.');
+    });
+
+    it('routes a single object to the targeted createEvent (parity with POST)', async () => {
+      const single = { id: 'evt_9', name: 'Trip' };
+      const putContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events', {
+          method: 'PUT',
+          body: JSON.stringify(single),
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (readBody as any).mockResolvedValue(single);
+      (createEvent as any).mockResolvedValue(undefined);
+
+      const response = await onRequestPut(putContext);
+      expect(response.status).toBe(200);
+      expect(createEvent).toHaveBeenCalledWith(mockEnv.DB, single, 'center_123');
+      expect(writeEvents).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onRequestPost', () => {
+    it('creates ONE event via the targeted helper (never the full list)', async () => {
+      const single = { id: 'evt_9', name: 'Trip' };
+      const postContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events', {
+          method: 'POST',
+          body: JSON.stringify(single),
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (readBody as any).mockResolvedValue(single);
+      (createEvent as any).mockResolvedValue(undefined);
+
+      const response = await onRequestPost(postContext);
+      expect(response.status).toBe(200);
+      expect(createEvent).toHaveBeenCalledWith(mockEnv.DB, single, 'center_123');
+      expect(writeEvents).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 if the payload is an array', async () => {
+      const postContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events', {
+          method: 'POST',
+          body: JSON.stringify([]),
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (readBody as any).mockResolvedValue([]);
+
+      const response = await onRequestPost(postContext);
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error?: string };
+      expect(data.error).toBe('بيانات الفعالية غير صالحة.');
+      expect(createEvent).not.toHaveBeenCalled();
+    });
+
+    it('maps a foreign-center rejection to 400', async () => {
+      const postContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events', {
+          method: 'POST',
+          body: JSON.stringify({ id: 'evt_other', name: 'Trip' }),
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (readBody as any).mockResolvedValue({ id: 'evt_other', name: 'Trip' });
+      (createEvent as any).mockRejectedValue(new Error('الفعالية غير موجودة.'));
+
+      const response = await onRequestPost(postContext);
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error?: string };
+      expect(data.error).toBe('الفعالية غير موجودة.');
+    });
+  });
+
+  describe('onRequestDelete', () => {
+    it('deletes ONE event by id via the targeted helper', async () => {
+      const deleteContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events?id=evt_1', {
+          method: 'DELETE',
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (deleteEvent as any).mockResolvedValue(undefined);
+
+      const response = await onRequestDelete(deleteContext);
+      expect(response.status).toBe(200);
+      expect(deleteEvent).toHaveBeenCalledWith(mockEnv.DB, 'evt_1', 'center_123');
+      expect(writeEvents).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when the id is missing', async () => {
+      const deleteContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events', {
+          method: 'DELETE',
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+
+      const response = await onRequestDelete(deleteContext);
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error?: string };
+      expect(data.error).toBe('معرّف الفعالية مفقود.');
+      expect(deleteEvent).not.toHaveBeenCalled();
+    });
+
+    it('maps a foreign/unknown event to 400', async () => {
+      const deleteContext = {
+        ...mockContext,
+        request: new Request('https://example.com/api/events?id=evt_foreign', {
+          method: 'DELETE',
+        }),
+      };
+
+      (getContextCenterId as any).mockReturnValue('center_123');
+      (deleteEvent as any).mockRejectedValue(new Error('الفعالية غير موجودة.'));
+
+      const response = await onRequestDelete(deleteContext);
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error?: string };
+      expect(data.error).toBe('الفعالية غير موجودة.');
     });
   });
 });

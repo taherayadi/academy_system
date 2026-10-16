@@ -37,6 +37,17 @@ import { useToast } from './Toast';
 interface EventsModuleProps {
   events: SchoolEvent[];
   onUpdateEvents: (events: SchoolEvent[]) => void;
+  /**
+   * Création / édition ciblée d'UNE activité (POST /api/events) — jamais la
+   * liste complète. Repli sur `onUpdateEvents` si le prop n'est pas fourni.
+   */
+  onCreateEvent?: (event: SchoolEvent) => void;
+  /** Suppression ciblée d'une activité (DELETE /api/events?id=…). */
+  onDeleteEvent?: (eventId: string) => void;
+  /** Ajout / mise à jour ciblée d'UN participant (POST /api/event-participants). */
+  onAddEventParticipant?: (eventId: string, participant: EventParticipant) => void;
+  /** Suppression ciblée d'un participant (DELETE /api/event-participants?…). */
+  onDeleteEventParticipant?: (eventId: string, participantId: string) => void;
   students?: Student[];
   settings?: CenterSettings | null;
   sidebarCollapsed?: boolean;
@@ -73,6 +84,10 @@ const isChequePending = (p: EventParticipant) => p.paymentMethod === 'Chèque' &
 export default function EventsModule({
   events,
   onUpdateEvents,
+  onCreateEvent,
+  onDeleteEvent,
+  onAddEventParticipant,
+  onDeleteEventParticipant,
   students = [],
   settings
 }: EventsModuleProps) {
@@ -165,13 +180,43 @@ export default function EventsModule({
     onUpdateEvents(newEvents);
   };
 
+  /** Sauvegarde ciblée d'UNE activité : POST /api/events (upsert d'une ligne). */
+  const saveEventRecord = (record: SchoolEvent) => {
+    if (onCreateEvent) {
+      onCreateEvent(record);
+    } else {
+      onUpdateEvents([...events.filter(e => e.id !== record.id), record]);
+    }
+  };
+
+  /** Sauvegarde ciblée d'UN participant : POST /api/event-participants (upsert). */
+  const saveParticipant = (eventId: string, partId: string, updater: (p: EventParticipant) => EventParticipant) => {
+    const existing = events.find(e => e.id === eventId)?.participants.find(p => p.id === partId);
+    if (!existing) return;
+    if (onAddEventParticipant) {
+      onAddEventParticipant(eventId, updater(existing));
+    } else {
+      patchParticipant(eventId, partId, updater);
+    }
+  };
+
+  /** Ajout ciblé d'UN participant — jamais la liste complète des événements. */
+  const appendParticipant = (eventId: string, part: EventParticipant) => {
+    if (onAddEventParticipant) {
+      onAddEventParticipant(eventId, part);
+    } else {
+      patchEvent(eventId, e => ({ ...e, participants: [...e.participants, part] }));
+    }
+  };
+
   const handleSubmitEvent = async () => {
     if (!eventForm.name || !eventForm.date || !eventForm.location) {
       error('يرجى ملء الحقول المطلوبة');
       return;
     }
     if (eventModal.id) {
-      patchEvent(eventModal.id, e => ({ ...e, ...eventForm }));
+      const existing = events.find(e => e.id === eventModal.id);
+      if (existing) saveEventRecord({ ...existing, ...eventForm });
     } else {
       const newEvent: SchoolEvent = {
         id: 'evt_' + crypto.randomUUID(),
@@ -192,7 +237,7 @@ export default function EventsModule({
         participants: [],
         createdAt: new Date().toISOString(),
       };
-      onUpdateEvents([...events, newEvent]);
+      saveEventRecord(newEvent);
       setSelectedId(newEvent.id);
     }
     setEventModal({ open: false, id: null });
@@ -200,7 +245,11 @@ export default function EventsModule({
   };
 
   const handleDeleteEvent = (id: string) => {
-    onUpdateEvents(events.filter(e => e.id !== id));
+    if (onDeleteEvent) {
+      onDeleteEvent(id);
+    } else {
+      onUpdateEvents(events.filter(e => e.id !== id));
+    }
     setSelectedId(null);
     success('تم حذف الفعالية');
   };
@@ -245,7 +294,7 @@ export default function EventsModule({
     const remaining = round2(Math.max(0, effectiveRequired - amountPaid));
 
     if (participantModal.id) {
-      patchParticipant(selectedEvent.id, participantModal.id, p => ({
+      saveParticipant(selectedEvent.id, participantModal.id, p => ({
         ...p,
         participantName: participantForm.participantName ?? p.participantName,
         participantType: type,
@@ -284,17 +333,21 @@ export default function EventsModule({
         notes: participantForm.notes,
         receiptNumber: amountPaid > 0 ? generateEventReceiptNumber(events) : undefined,
       };
-      patchEvent(selectedEvent.id, e => ({ ...e, participants: [...e.participants, newPart] }));
+      appendParticipant(selectedEvent.id, newPart);
     }
     setParticipantModal({ open: false, id: null });
     success('تم حفظ المشارك بنجاح');
   };
 
   const handleDeleteParticipant = (eventId: string, partId: string) => {
-    patchEvent(eventId, e => ({
-      ...e,
-      participants: e.participants.filter(p => p.id !== partId)
-    }));
+    if (onDeleteEventParticipant) {
+      onDeleteEventParticipant(eventId, partId);
+    } else {
+      patchEvent(eventId, e => ({
+        ...e,
+        participants: e.participants.filter(p => p.id !== partId)
+      }));
+    }
     success('تم حذف المشارك');
   };
 
@@ -326,7 +379,7 @@ export default function EventsModule({
     const remaining = round2(Math.max(0, total - newPaidAmount));
     const receiptNumber = part.receiptNumber || generateEventReceiptNumber(events);
 
-    patchParticipant(selectedEvent.id, part.id, p => ({
+    saveParticipant(selectedEvent.id, part.id, p => ({
       ...p,
       amountPaid: newPaidAmount,
       remainingBalance: remaining,
@@ -344,7 +397,7 @@ export default function EventsModule({
   };
 
   const toggleAttendance = (eventId: string, partId: string) => {
-    patchParticipant(eventId, partId, p => ({ ...p, attended: !p.attended }));
+    saveParticipant(eventId, partId, p => ({ ...p, attended: !p.attended }));
   };
 
   // --- Renderers ---

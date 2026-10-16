@@ -2551,6 +2551,69 @@ export async function updateEventParticipantCheque(
   await db.prepare('UPDATE events SET participants = ? WHERE id = ? AND center_id = ?').bind(JSON.stringify(participants), evId, centerId).run();
 }
 
+/**
+ * Crée / met à jour UNE SEULE activité (POST) — jamais la liste complète des
+ * événements. Idempotent : un re-POST du même id réécrit cette activité et
+ * rien d'autre (pas de DELETE NOT IN). Un id déjà détenu par un autre centre
+ * est rejeté.
+ */
+export async function createEvent(db: D1Database, event: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const evId = str(event?.id);
+  const name = str(event?.name);
+  if (!evId || !name) throw new Error('بيانات الفعالية غير صالحة.');
+  const existing = await db.prepare('SELECT center_id FROM events WHERE id = ?').bind(evId).first<any>();
+  if (existing && str(existing.center_id) !== str(centerId)) throw new Error('الفعالية غير موجودة.');
+  for (const stmt of buildEventsStmts(db, [event], centerId)) await stmt.run();
+}
+
+/**
+ * Supprime UNE activité ciblée : DELETE /api/events?id=… — jamais la liste
+ * complète. Vérifie le centre puis efface la ligne.
+ */
+export async function deleteEvent(db: D1Database, eventId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const evId = str(eventId);
+  if (!evId) throw new Error('معرّف الفعالية مفقود.');
+  const row = await db.prepare('SELECT id FROM events WHERE id = ? AND center_id = ?').bind(evId, centerId).first<any>();
+  if (!row) throw new Error('الفعالية غير موجودة.');
+  await db.prepare('DELETE FROM events WHERE id = ? AND center_id = ?').bind(evId, centerId).run();
+}
+
+/**
+ * Ajoute / met à jour UN participant dans UNE activité (POST) : seule la
+ * colonne JSON `participants` de cette activité est réécrite, jamais la liste
+ * des événements. Idempotent : un participant existant (même id) est remplacé.
+ */
+export async function addEventParticipant(db: D1Database, eventId: string, participant: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const evId = str(eventId);
+  const ptId = str(participant?.id);
+  if (!evId) throw new Error('معرّف الفعالية مفقود.');
+  if (!ptId || !str(participant?.participantName)) throw new Error('بيانات المشارك غير صالحة.');
+  const row = await db.prepare('SELECT participants FROM events WHERE id = ? AND center_id = ?').bind(evId, centerId).first<any>();
+  if (!row) throw new Error('الفعالية غير موجودة.');
+  const participants: any[] = parseJson<any[]>(row.participants, []);
+  const idx = participants.findIndex((p: any) => p && str(p.id) === ptId);
+  if (idx === -1) participants.push(participant);
+  else participants[idx] = { ...participants[idx], ...participant, id: ptId };
+  await db.prepare('UPDATE events SET participants = ? WHERE id = ? AND center_id = ?').bind(JSON.stringify(participants), evId, centerId).run();
+}
+
+/**
+ * Supprime UN participant d'UNE activité (DELETE /api/event-participants) :
+ * seule la colonne JSON `participants` est réécrite. Idempotent (pas d'erreur
+ * si le participant a déjà disparu).
+ */
+export async function removeEventParticipant(db: D1Database, eventId: string, participantId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const evId = str(eventId);
+  const ptId = str(participantId);
+  if (!evId) throw new Error('معرّف الفعالية مفقود.');
+  if (!ptId) throw new Error('معرّف المشارك مفقود.');
+  const row = await db.prepare('SELECT participants FROM events WHERE id = ? AND center_id = ?').bind(evId, centerId).first<any>();
+  if (!row) throw new Error('الفعالية غير موجودة.');
+  const participants: any[] = parseJson<any[]>(row.participants, []);
+  const next = participants.filter((p: any) => !p || str(p.id) !== ptId);
+  await db.prepare('UPDATE events SET participants = ? WHERE id = ? AND center_id = ?').bind(JSON.stringify(next), evId, centerId).run();
+}
+
 // ===========================================================================
 // ACTIVITIES (Activités & Planning)
 // ===========================================================================

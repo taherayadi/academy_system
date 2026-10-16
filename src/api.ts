@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
 
 
 const API_BASE = '/api';
@@ -435,6 +435,32 @@ export async function saveFormationScheduleApi(formationId: string, schedule: Fo
 
 export async function saveEventsApi(events: SchoolEvent[]): Promise<void> {
   return putDomain('/events', events, 'تعذر حفظ بيانات الفعاليات.');
+}
+
+/**
+ * Crée / met à jour UNE SEULE activité (POST) — jamais la liste complète.
+ * Idempotent : re-POST du même id réécrit cette activité et rien d'autre.
+ */
+export async function createEventApi(event: SchoolEvent): Promise<void> {
+  return postDomain('/events', event, 'تعذر حفظ الفعالية.');
+}
+
+/** Supprime UNE activité ciblée — jamais la liste complète. */
+export async function deleteEventApi(eventId: string): Promise<void> {
+  return deleteDomain(`/events?id=${encodeURIComponent(eventId)}`, 'تعذر حذف الفعالية.');
+}
+
+/**
+ * Ajoute / met à jour UN participant d'UNE activité : ne réécrit que la ligne
+ * `events` ciblée, jamais toute la liste des événements.
+ */
+export async function addEventParticipantApi(eventId: string, participant: EventParticipant): Promise<void> {
+  return postDomain('/event-participants', { eventId, participant }, 'تعذر حفظ بيانات المشارك.');
+}
+
+/** Supprime UN participant d'UNE activité — jamais la liste complète. */
+export async function deleteEventParticipantApi(eventId: string, participantId: string): Promise<void> {
+  return deleteDomain(`/event-participants?eventId=${encodeURIComponent(eventId)}&participantId=${encodeURIComponent(participantId)}`, 'تعذر حذف المشارك.');
 }
 
 
