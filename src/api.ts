@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, Activity, SkillEvaluation, Skill, PaymentRecord } from './types';
 
 
 const API_BASE = '/api';
@@ -412,6 +412,12 @@ export async function addFormationStudentApi(formationId: string, student: Forma
 /** Removes ONE student from ONE formation (DELETE /api/formation-students?...) without rewriting the domain. */
 export async function removeFormationStudentApi(formationId: string, studentId: string): Promise<void> {
   return deleteDomain(`/formation-students?formationId=${encodeURIComponent(formationId)}&studentId=${encodeURIComponent(studentId)}`, 'تعذر حذف التلميذ من التكوين.');
+}
+
+
+/** Replaces ONLY the weekly schedule of ONE formation (PUT /api/formation-schedule). */
+export async function saveFormationScheduleApi(formationId: string, schedule: FormationSeance[]): Promise<void> {
+  return putDomain('/formation-schedule', { formationId, schedule }, 'تعذر حفظ جدول الحصص.');
 }
 
 

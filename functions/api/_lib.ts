@@ -1446,6 +1446,16 @@ function isoDateOr(value: unknown, fallback: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : fallback;
 }
 
+// Accepts either a `YYYY-MM-DD` day or a full ISO timestamp and returns the
+// day part (`YYYY-MM-DD`); otherwise the fallback. Guards the strict
+// `payments.date` GLOB CHECK against ISO datetimes like `...T09:16:55.242Z`.
+function isoDay(value: unknown, fallback: string): string {
+  const s = str(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : fallback;
+}
+
 export async function readExternalStudents(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
   const [studentRows, yearRows, paymentRows, attendanceRows] = await Promise.all([
     db.prepare("SELECT * FROM students WHERE center_id = ? AND student_type = 'external' AND id NOT IN (SELECT student_id FROM revision_seance_students) AND id NOT IN (SELECT student_id FROM formation_enrollments)").bind(centerId).all(),
@@ -2102,10 +2112,10 @@ export async function writeStudentAttendance(db: D1Database, records: any[], cen
 // FORMATIONS — nouveau schéma : formation_enrollments (FK students.id) +
 // formation_enrollment_matieres. L'ancien bloc dénormalisé formation_students
 // (nom + téléphone + paiements inline) n'existe plus :
-//  - l'élève est résolu (ou créé) dans `students` (student_type='formation') ;
+//  - l'élève est résolu (ou créé) dans `students` (student_type='external') ;
 //  - le nom/téléphone vivent dans students.first_name/last_name/contact_phone ;
 //  - le paiement est une ligne de `payments` (service_key='formation',
-//    ref_type='formation_enrollment', ref_id=enrollment.id).
+//    ref_type='formation', ref_id=enrollment.id).
 // ===========================================================================
 
 export async function readFormations(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
@@ -2116,7 +2126,7 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
                 JOIN formations f ON fe.formation_id = f.id
                 LEFT JOIN students s ON s.id = fe.student_id
                 WHERE f.center_id = ?`).bind(centerId).all(),
-    db.prepare(`SELECT p.* FROM payments p JOIN formations f ON p.ref_type = 'formation_enrollment' AND p.ref_id IN
+    db.prepare(`SELECT p.* FROM payments p JOIN formations f ON p.ref_type = 'formation' AND p.ref_id IN
                 (SELECT fe.id FROM formation_enrollments fe JOIN formations f2 ON fe.formation_id = f2.id WHERE f2.center_id = ?)
                 `).bind(centerId).all()
   ]);
@@ -2160,7 +2170,7 @@ export async function readFormations(db: D1Database, centerId: string = DEFAULT_
       amountPaid,
       totalRequired,
       remainingBalance: Math.max(0, totalRequired - amountPaid),
-      paymentMethod: str(last?.method) === 'Chèque' ? 'cheque' : 'espece',
+      paymentMethod: str(last?.method) === 'cheque' ? 'cheque' : 'espece',
       chequeNumber: last?.cheque_number == null ? undefined : str(last.cheque_number),
       chequeDate: last?.cheque_date == null ? undefined : str(last.cheque_date),
       chequePaid: last ? bool(last.cheque_paid) : false,
@@ -2219,20 +2229,25 @@ function buildFormationStudentStmts(db: D1Database, formation: any, st: any, stu
   for (const mid of st.enrolledMatiereIds || []) {
     if (validMatIds.has(mid)) stmts.push(db.prepare('INSERT OR IGNORE INTO formation_enrollment_matieres (enrollment_id, matiere_id) VALUES (?, ?)').bind(enrollmentId, mid));
   }
-  // Paiement agrégé du client → une ligne canonique `payments`.
-  if (num(st.amountPaid) > 0 || num(st.totalRequired) > 0) {
-    stmts.push(db.prepare('INSERT OR REPLACE INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+  // Paiement agrégé du client → une ligne canonique `payments`. Uniquement si
+  // un montant a réellement été encaissé : `payments.amount` est CHECK > 0 et
+  // `method`/`ref_type` sont contraints (cash/cheque/... et 'formation').
+  if (num(st.amountPaid) > 0) {
+    const method = paymentMethodKey(st.paymentMethod);
+    stmts.push(db.prepare('INSERT OR REPLACE INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month, school_year, payment_type, method, amount, total_required, discount, receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(
         'fmt_' + enrollmentId, centerId, studentId,
-        st.paidAt || new Date().toISOString().slice(0, 10),
+        isoDay(st.paidAt, new Date().toISOString().slice(0, 10)),
         'formation', 'unit', null, formation.schoolYear,
         st.isAdvance ? 'advance' : 'full',
-        str(st.paymentMethod) === 'cheque' ? 'Chèque' : 'Espèces',
-        num(st.amountPaid), num(st.totalRequired), num(st.discount) || 0,
-        '', st.notes ?? null,
-        st.chequeNumber ?? null, st.chequeDate ?? null, st.chequePaid ? 1 : 0, 0, Date.now()
+        method,
+        num(st.amountPaid), Math.max(num(st.totalRequired), num(st.amountPaid)), num(st.discount) || 0,
+        'FMT-' + enrollmentId, st.notes ?? null,
+        method === 'cheque' ? (st.chequeNumber ?? null) : null,
+        method === 'cheque' ? (st.chequeDate ?? null) : null,
+        method === 'cheque' && st.chequePaid ? 1 : 0, 0,
+        'formation', enrollmentId, Date.now()
       ));
-    stmts.push(db.prepare("UPDATE payments SET ref_type = 'formation_enrollment', ref_id = ? WHERE id = ?").bind(enrollmentId, 'fmt_' + enrollmentId));
   }
   return stmts;
 }
@@ -2253,10 +2268,21 @@ async function buildFormationsStmts(db: D1Database, formations: any[], centerId:
   return stmts;
 }
 
+// Remplace UNIQUEMENT le جدول الحصص (schedule JSON) d'un تكوين du centre, sans
+// réécrire la formation, ses matières, ses élèves ni ses paiements.
+export async function updateFormationSchedule(db: D1Database, formationId: string, schedule: unknown, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const fid = str(formationId);
+  if (!fid) throw new Error('معرّف التكوين مفقود.');
+  const formation = await db.prepare('SELECT id FROM formations WHERE id = ? AND center_id = ?').bind(fid, centerId).first<any>();
+  if (!formation) throw new Error('التكوين غير موجود.');
+  const rows = Array.isArray(schedule) ? schedule : [];
+  await db.prepare('UPDATE formations SET schedule = ? WHERE id = ? AND center_id = ?').bind(JSON.stringify(rows), fid, centerId).run();
+}
+
 export async function writeFormations(db: D1Database, formations: any[], centerId: string = DEFAULT_CENTER_ID): Promise<void> {
   const subjectIds = await resolveSubjectIds(db, centerId, (formations || []).flatMap((f: any) => (f.matieres || []).map((m: any) => m.subject)));
   const deleteStmts: D1PreparedStatement[] = [
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))").bind(centerId),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))").bind(centerId),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
     db.prepare('DELETE FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
@@ -2279,7 +2305,7 @@ export async function createFormation(db: D1Database, formation: any, centerId: 
   if (existing && str(existing.center_id) !== centerId) throw new Error('التكوين غير موجود.');
   const subjectIds = await resolveSubjectIds(db, centerId, (formation.matieres || []).map((m: any) => m.subject));
   const stmts: D1PreparedStatement[] = [
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)").bind(id),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)").bind(id),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)').bind(id),
     db.prepare('DELETE FROM formation_enrollments WHERE formation_id = ?').bind(id),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id = ?').bind(id),
@@ -2296,7 +2322,7 @@ export async function deleteFormation(db: D1Database, formationId: string, cente
   const formation = await db.prepare('SELECT id FROM formations WHERE id = ? AND center_id = ?').bind(fid, centerId).first<any>();
   if (!formation) throw new Error('التكوين غير موجود.');
   const stmts: D1PreparedStatement[] = [
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)").bind(fid),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)").bind(fid),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id IN (SELECT id FROM formation_enrollments WHERE formation_id = ?)').bind(fid),
     db.prepare('DELETE FROM formation_enrollments WHERE formation_id = ?').bind(fid),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id = ?').bind(fid),
@@ -2320,7 +2346,7 @@ export async function addFormationStudent(db: D1Database, formationId: string, s
   const studentId = await ensureFormationStudent(db, centerId, student.studentName, student.parentPhone);
   if (!studentId) throw new Error('بيانات التلميذ غير صالحة.');
   const stmts: D1PreparedStatement[] = [
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id = ?").bind(enrollmentId),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id = ?").bind(enrollmentId),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id = ?').bind(enrollmentId),
     db.prepare('DELETE FROM formation_enrollments WHERE id = ? AND formation_id = ?').bind(enrollmentId, fid),
     ...buildFormationStudentStmts(db, { id: fid, schoolYear: str(formation.school_year), matieres: matieres.map((m: any) => ({ id: str(m.id) })) }, student, studentId, centerId)
@@ -2341,7 +2367,7 @@ export async function removeFormationStudent(db: D1Database, formationId: string
   const enrollment = await db.prepare('SELECT student_id FROM formation_enrollments WHERE id = ? AND formation_id = ?').bind(enrollmentId, fid).first<any>();
   const backingStudentId = enrollment ? str(enrollment.student_id) : '';
   const stmts: D1PreparedStatement[] = [
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id = ?").bind(enrollmentId),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id = ?").bind(enrollmentId),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id = ?').bind(enrollmentId),
     db.prepare('DELETE FROM formation_enrollments WHERE id = ? AND formation_id = ?').bind(enrollmentId, fid)
   ];
@@ -2767,7 +2793,7 @@ export async function writeState(db: D1Database, state: AppState, centerId: stri
 
     db.prepare('DELETE FROM student_time_sheets WHERE center_id = ?').bind(centerId),
 
-    db.prepare("DELETE FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))").bind(centerId),
+    db.prepare("DELETE FROM payments WHERE ref_type = 'formation' AND ref_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))").bind(centerId),
     db.prepare('DELETE FROM formation_enrollment_matieres WHERE enrollment_id IN (SELECT id FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?))').bind(centerId),
     db.prepare('DELETE FROM formation_enrollments WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),
     db.prepare('DELETE FROM formation_matieres WHERE formation_id IN (SELECT id FROM formations WHERE center_id = ?)').bind(centerId),

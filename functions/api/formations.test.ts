@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { onRequestPost, onRequestDelete, onRequestPut, onRequestGet } from './formations';
+import { onRequestPut as onSchedulePut, onRequestPost as onSchedulePost } from './formation-schedule';
 import { addFormationStudent, removeFormationStudent } from './_lib';
 
 // Régression /api/formations : ajout ciblé d'UNE formation (POST) et suppression
@@ -75,13 +76,13 @@ beforeEach(() => {
       id             TEXT PRIMARY KEY,
       center_id      TEXT NOT NULL REFERENCES centers(id) ON DELETE CASCADE,
       student_id     TEXT NOT NULL,
-      date           TEXT,
+      date           TEXT CHECK (date IS NULL OR date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
       service_key    TEXT,
       billing_period TEXT,
       period_month   TEXT,
       school_year    TEXT,
       payment_type   TEXT,
-      method         TEXT,
+      method         TEXT CHECK (method IS NULL OR method IN ('cash','cheque','transfer','card')),
       amount         REAL NOT NULL DEFAULT 0,
       total_required REAL NOT NULL DEFAULT 0,
       discount       REAL NOT NULL DEFAULT 0,
@@ -91,7 +92,7 @@ beforeEach(() => {
       cheque_date    TEXT,
       cheque_paid    INTEGER NOT NULL DEFAULT 0,
       is_refund      INTEGER NOT NULL DEFAULT 0,
-      ref_type       TEXT,
+      ref_type       TEXT CHECK (ref_type IS NULL OR ref_type IN ('external_course','revision_seance','formation','event')),
       ref_id         TEXT,
       created_at     INTEGER NOT NULL
     ) STRICT;
@@ -202,7 +203,7 @@ describe('DELETE /api/formations (one formation)', () => {
     sqlite.prepare("INSERT INTO formation_matieres (id, formation_id, subject_id) VALUES ('mat_1', 'form_1', 'sub_1')").run();
     sqlite.prepare(`INSERT INTO formation_enrollments (id, center_id, formation_id, student_id, enrolled_at) VALUES ('en_1', ?, 'form_1', 'st1', 1)`).run(CENTER);
     sqlite.prepare("INSERT INTO formation_enrollment_matieres (enrollment_id, matiere_id) VALUES ('en_1', 'mat_1')").run();
-    sqlite.prepare(`INSERT INTO payments (id, center_id, student_id, ref_type, ref_id, amount, total_required, created_at) VALUES ('p1', ?, 'st1', 'formation_enrollment', 'en_1', 100, 100, 1)`).run(CENTER);
+    sqlite.prepare(`INSERT INTO payments (id, center_id, student_id, ref_type, ref_id, amount, total_required, created_at) VALUES ('p1', ?, 'st1', 'formation', 'en_1', 100, 100, 1)`).run(CENTER);
 
     const res = await onRequestDelete(ctx('DELETE', `${BASE}?id=form_1`));
     expect(res.status).toBe(200);
@@ -246,7 +247,7 @@ describe('formation students (targeted POST / DELETE)', () => {
     expect(s.contact_phone).toBe('55555555');
     // L'inscription porte bien l'id client (fst_1) comme identifiant d'inscription.
     expect((sqlite.prepare('SELECT COUNT(*) AS n FROM formation_enrollments WHERE id = ?').get('fst_1') as any).n).toBe(1);
-    expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE ref_type = 'formation_enrollment' AND ref_id = ?").get('fst_1') as any).n).toBe(1);
+    expect((sqlite.prepare("SELECT COUNT(*) AS n FROM payments WHERE ref_type = 'formation' AND ref_id = ?").get('fst_1') as any).n).toBe(1);
   });
 
   it('is idempotent: re-adding the same student rewrites only that enrollment/payment', async () => {
@@ -297,6 +298,51 @@ describe('formation students (targeted POST / DELETE)', () => {
     const s = sqlite.prepare("SELECT student_type FROM students WHERE first_name = 'amir'").get() as any;
     expect(s?.student_type).toBe('external');
     expect((sqlite.prepare('SELECT COUNT(*) AS n FROM formation_enrollments').get() as any).n).toBe(1);
+  });
+});
+
+describe('formation schedule (targeted PUT / POST)', () => {
+  const SCHEDULE = [{ id: 'se_1', day: 'الأثنين', startTime: '09:00', endTime: '10:30', matiere: 'الرياضيات', students: ['fst_1'] }];
+
+  it('updates ONLY the schedule column, leaving matieres/students/other rows intact', async () => {
+    seedFormation('form_1', CENTER);
+    seedFormation('form_keep', CENTER);
+    sqlite.prepare("INSERT INTO subjects (id, center_id, name) VALUES ('sub_1', ?, 'علوم')").run(CENTER);
+    sqlite.prepare("INSERT INTO formation_matieres (id, formation_id, subject_id) VALUES ('mat_1', 'form_1', 'sub_1')").run();
+    await addFormationStudent(db, 'form_1', {
+      id: 'fst_1', studentName: 'amir', parentPhone: '55555555', isPack: true,
+      enrolledMatiereIds: ['mat_1'], amountPaid: 100, totalRequired: 100,
+      paymentMethod: 'espece', isAdvance: false, enrolledAt: '2026-10-14T08:55:12.590Z'
+    }, CENTER);
+
+    const res = await onSchedulePut(ctx('PUT', 'https://app.example/api/formation-schedule', { formationId: 'form_1', schedule: SCHEDULE }));
+    expect(res.status).toBe(200);
+
+    const stored = JSON.parse((sqlite.prepare('SELECT schedule FROM formations WHERE id = ?').get('form_1') as any).schedule);
+    expect(stored).toEqual(SCHEDULE);
+    // Le reste de la formation est intact.
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM formation_matieres WHERE formation_id = ?').get('form_1') as any).n).toBe(1);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM formation_enrollments').get() as any).n).toBe(1);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM payments').get() as any).n).toBe(1);
+    // L'autre formation n'a pas été touchée.
+    expect(JSON.parse((sqlite.prepare('SELECT schedule FROM formations WHERE id = ?').get('form_keep') as any).schedule)).toEqual([]);
+  });
+
+  it('accepts POST as well', async () => {
+    seedFormation('form_1', CENTER);
+    const res = await onSchedulePost(ctx('POST', 'https://app.example/api/formation-schedule', { formationId: 'form_1', schedule: SCHEDULE }));
+    expect(res.status).toBe(200);
+    expect(JSON.parse((sqlite.prepare('SELECT schedule FROM formations WHERE id = ?').get('form_1') as any).schedule)).toEqual(SCHEDULE);
+  });
+
+  it('rejects (400) an unknown/foreign formation', async () => {
+    const res = await onSchedulePut(ctx('PUT', 'https://app.example/api/formation-schedule', { formationId: 'form_x', schedule: [] }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects (400) a missing formationId or a non-object body', async () => {
+    expect((await onSchedulePut(ctx('PUT', 'https://app.example/api/formation-schedule', { schedule: [] }))).status).toBe(400);
+    expect((await onSchedulePut(ctx('PUT', 'https://app.example/api/formation-schedule', [1, 2]))).status).toBe(400);
   });
 });
 

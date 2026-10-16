@@ -50,6 +50,7 @@ interface FormationModuleProps {
   onDeleteFormation?: (formationId: string) => void;
   onAddFormationStudent?: (formationId: string, student: FormationStudent) => void;
   onRemoveFormationStudent?: (formationId: string, studentId: string) => void;
+  onUpdateFormationSchedule?: (formationId: string, schedule: FormationSeance[]) => void;
   settings?: CenterSettings | null;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   sidebarCollapsed?: boolean;
@@ -62,6 +63,7 @@ export default function FormationModule({
   onDeleteFormation,
   onAddFormationStudent,
   onRemoveFormationStudent,
+  onUpdateFormationSchedule,
   settings,
   onUpdateSettings,
   sidebarCollapsed
@@ -369,10 +371,15 @@ export default function FormationModule({
 
   const handleSaveFormationSchedule = (schedule: FormationSeance[]) => {
     if (!selectedFormation) return;
-    const updated = formations.map(f =>
-      f.id === selectedFormation.id ? { ...f, schedule } : f
-    );
-    onUpdateFormations(updated);
+    // Enregistrement ciblé : seuls le formationId + le schedule sont envoyés.
+    if (onUpdateFormationSchedule) {
+      onUpdateFormationSchedule(selectedFormation.id, schedule);
+    } else {
+      const updated = formations.map(f =>
+        f.id === selectedFormation.id ? { ...f, schedule } : f
+      );
+      onUpdateFormations(updated);
+    }
   };
 
   // ------------------- Student Modal Handlers -------------------

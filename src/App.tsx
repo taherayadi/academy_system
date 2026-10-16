@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, fetchActivitiesApi, saveSkills, fetchSkillsApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -697,6 +697,11 @@ export default function App() {
       ? { ...f, students: (f.students || []).filter(s => s.id !== studentId) }
       : f));
     commitDomain(() => removeFormationStudentApi(formationId, studentId));
+  };
+
+  const handleUpdateFormationSchedule = (formationId: string, schedule: Formation['schedule']) => {
+    setFormations(prev => prev.map(f => f.id === formationId ? { ...f, schedule } : f));
+    commitDomain(() => saveFormationScheduleApi(formationId, schedule || []));
   };
 
   const handleUpdateEvents = (updated: SchoolEvent[]) => {
@@ -1454,6 +1459,7 @@ export default function App() {
                   onDeleteFormation={handleDeleteFormation}
                   onAddFormationStudent={handleAddFormationStudent}
                   onRemoveFormationStudent={handleRemoveFormationStudent}
+                  onUpdateFormationSchedule={handleUpdateFormationSchedule}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
                   sidebarCollapsed={sidebarCollapsed}
