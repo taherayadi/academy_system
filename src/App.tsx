@@ -66,6 +66,21 @@ export const TAB_MODULE: Record<string, string> = {
 // (Remettre à true pour réactiver le module.)
 const LIBRARY_ENABLED = false;
 
+// Guard against duplicate formation students: the same enrolment id must never
+// appear twice (e.g. a stale optimistic state that prepended an existing id),
+// otherwise the students table and the finance register show two lines.
+function normalizeFormations(list: Formation[] | undefined | null): Formation[] {
+  return (list || []).map(f => {
+    const seen = new Set<string>();
+    const students = (f.students || []).filter(s => {
+      if (!s || !s.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+    return students.length === (f.students || []).length ? f : { ...f, students };
+  });
+}
+
 export default function App() {
   // Catalogue DB (modules + types de centre + compatibilité) chargé via
   // GET /api/catalog : une seule souscription ici re-rend tout l'arbre quand
@@ -326,7 +341,7 @@ export default function App() {
         setExternalStudents(db.externalStudents || []);
         setRevisionSeances(db.revisionSeances || []);
         setStudentTimeSheets(db.studentTimeSheets || []);
-        setFormations(db.formations || []);
+        setFormations(normalizeFormations(db.formations));
         setEvents(db.events || []);
         setActivities(db.activities || []);
         setSkillsDoc({ catalog: db.skills || [], evaluations: db.skillEvaluations || [] });
@@ -671,7 +686,7 @@ export default function App() {
   };
 
   const handleUpdateFormations = (updated: Formation[]) => {
-    setFormations(updated);
+    setFormations(normalizeFormations(updated));
     commitDomain(() => saveFormations(updated));
   };
 
@@ -969,7 +984,7 @@ export default function App() {
     }
     if (next.formations !== undefined) {
       if (!validateArray(next.formations as unknown[], ['id', 'name'], 'التكوينات')) return;
-      setFormations(next.formations as Formation[]);
+      setFormations(normalizeFormations(next.formations as Formation[]));
     }
     if (next.events !== undefined) {
       if (!validateArray(next.events as unknown[], ['id', 'name'], 'الفعاليات')) return;
@@ -1038,7 +1053,7 @@ export default function App() {
       setRevisionSeances(freshDb.revisionSeances || []);
       setStudentTimeSheets(freshDb.studentTimeSheets || []);
       setStudentAttendance(freshAttendance);
-      setFormations(freshDb.formations || []);
+      setFormations(normalizeFormations(freshDb.formations));
       setEvents(freshDb.events || []);
       stateRef.current = { ...freshDb, studentAttendance: freshAttendance };
     });

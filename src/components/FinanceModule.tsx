@@ -363,8 +363,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
   // Formation revenue: each student who paid for a formation
   type FormationPaymentRec = PaymentRecord & { studentName: string; studentGrade: string; studentYear: string; formationName: string };
-  const formationPayments: FormationPaymentRec[] = formations.flatMap(form =>
-    (form.students || []).filter(s => s.amountPaid > 0).flatMap(s => {
+  const formationPayments: FormationPaymentRec[] = formations.flatMap(form => {
+    // Never emit two lines for the same enrolment (guards against stale
+    // duplicate student state) — the register must update in place.
+    const seen = new Set<string>();
+    return (form.students || []).filter(s => {
+      if (!s || !s.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return s.amountPaid > 0;
+    }).flatMap(s => {
       const isAdvance = s.remainingBalance > 0 && s.amountPaid > 0;
       const paymentDate = (s.paidAt ? s.paidAt.split('T')[0] : '') || (form.startDate || new Date().toISOString().split('T')[0]);
       const isCheque = s.paymentMethod === 'cheque';
@@ -410,8 +417,8 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         formationName: form.name
       }] : [];
       return [main, ...refundRecords];
-    })
-  );
+    });
+  });
 
   // Event/outing revenue: each participant who paid is reflected here as a
   // PaymentRecord with service 'Événements'. This mirrors the Formation pattern:
