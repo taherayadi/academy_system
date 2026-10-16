@@ -129,6 +129,14 @@ export default function FormationModule({
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [refundReason, setRefundReason] = useState<string>('');
 
+  // Payment-only modal (opened by the $ quick action): record an instalment
+  // for an already-enrolled student without opening the edit form.
+  const [paymentTarget, setPaymentTarget] = useState<{ formation: Formation; student: FormationStudent } | null>(null);
+  const [payAmountNow, setPayAmountNow] = useState<number>(0);
+  const [payMethod, setPayMethod] = useState<'espece' | 'cheque'>('espece');
+  const [payChequeNumber, setPayChequeNumber] = useState<string>('');
+  const [payChequeDate, setPayChequeDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
   // Matières : liste depuis /api/subjects (table subjects, id UUID).
   const [apiSubjects, setApiSubjects] = useState<string[]>([]);
   useEffect(() => {
@@ -420,20 +428,74 @@ export default function FormationModule({
     setIsStudentModalOpen(true);
   };
 
-  const handleAddRestPayment = (student: FormationStudent) => {
+  const openPaymentModal = (student: FormationStudent) => {
     if (!selectedFormation) return;
     if (student.paymentMethod === 'cheque' && student.chequePaid !== true) {
       toast.error('لا يمكن استكمال الدفع بشيك لم يتم تحصيله بعد.');
       return;
     }
     const netRequired = Math.max(0, (student.totalRequired || 0) - (student.discount || 0));
-    const rest = Math.max(0, netRequired - (student.amountPaid || 0));
-    if (rest <= 0) {
+    const remaining = Math.max(0, netRequired - (student.amountPaid || 0) - (student.refundAmount || 0));
+    if (remaining <= 0) {
       toast.error('لا يوجد مبلغ متبقٍ لاستكماله');
       return;
     }
-    openEditStudentModal({ ...student, amountPaid: netRequired });
-    toast.success(`المبلغ المتبقي: ${rest} د.ت — أكّد لاستكمال الدفع`);
+    setPaymentTarget({ formation: selectedFormation, student });
+    setPayAmountNow(remaining);
+    setPayMethod(student.paymentMethod === 'cheque' ? 'cheque' : 'espece');
+    setPayChequeNumber(student.chequeNumber || '');
+    setPayChequeDate(student.chequeDate || new Date().toISOString().split('T')[0]);
+  };
+
+  const handleConfirmPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentTarget) return;
+    const { formation, student } = paymentTarget;
+    if (payMethod === 'cheque' && (!payChequeNumber.trim() || !payChequeDate)) {
+      toast.error('يرجى إدخال رقم الشيك وتاريخه');
+      return;
+    }
+    const netRequired = Math.max(0, (student.totalRequired || 0) - (student.discount || 0));
+    const already = Math.max(0, (student.amountPaid || 0) - (student.refundAmount || 0));
+    const remainingBefore = Math.max(0, netRequired - already);
+    const paid = Math.max(0, Number(payAmountNow) || 0);
+    if (paid <= 0) {
+      toast.error('يرجى إدخال المبلغ المدفوع');
+      return;
+    }
+    if (paid > remainingBefore) {
+      toast.error(`المبلغ المدفوع (${paid} د.ت) أكبر من المتبقي (${remainingBefore} د.ت)!`);
+      return;
+    }
+
+    const newPaid = (student.amountPaid || 0) + paid;
+    const remainingAfter = Math.max(0, netRequired - newPaid + (student.refundAmount || 0));
+    const now = new Date().toISOString();
+    const updatedStudent: FormationStudent = {
+      ...student,
+      amountPaid: newPaid,
+      remainingBalance: remainingAfter,
+      paymentMethod: payMethod,
+      chequeNumber: payMethod === 'cheque' ? payChequeNumber.trim() : undefined,
+      chequeDate: payMethod === 'cheque' ? payChequeDate : undefined,
+      chequePaid: payMethod === 'cheque' ? false : student.chequePaid,
+      isAdvance: newPaid > 0 && remainingAfter > 0,
+      paidAt: now
+    };
+
+    // Upsert ciblé d'une seule inscription (POST idempotent) ; repli sur la
+    // liste complète si le prop ciblé n'est pas fourni.
+    if (onAddFormationStudent) {
+      onAddFormationStudent(formation.id, updatedStudent);
+    } else {
+      onUpdateFormations(formations.map(f => f.id === formation.id
+        ? { ...f, students: (f.students || []).map(s => s.id === student.id ? updatedStudent : s) }
+        : f));
+    }
+    setPaymentTarget(null);
+    toast.success(remainingAfter <= 0
+      ? `تم خلاص كامل المبلغ لـ ${student.studentName}.`
+      : `تم تسجيل دفعة (${paid} د.ت) لـ ${student.studentName} — المتبقي ${remainingAfter} د.ت.`);
   };
 
   const handleToggleMatiereSelection = (matiereId: string) => {
@@ -1107,7 +1169,7 @@ export default function FormationModule({
                                   </button>
                                   {isAdvance && !hasRefund && (
                                     <button
-                                      onClick={() => handleAddRestPayment(st)}
+                                      onClick={() => openPaymentModal(st)}
                                       title="استكمال الدفع (يدفع المبلغ المتبقي)"
                                       className="p-1 text-brand-600 hover:text-brand-700 hover:bg-brand-600/[0.06] rounded-lg transition cursor-pointer"
                                     >
@@ -1777,6 +1839,156 @@ export default function FormationModule({
           </motion.div>
         </div>
       )}
+
+      {/* Payment modal (quick $ action → record an instalment, not the edit form) */}
+      {paymentTarget && (() => {
+        const stu = paymentTarget.student;
+        const netRequired = Math.max(0, (stu.totalRequired || 0) - (stu.discount || 0));
+        const already = Math.max(0, (stu.amountPaid || 0) - (stu.refundAmount || 0));
+        const remainingBefore = Math.max(0, netRequired - already);
+        const remainingAfter = Math.max(0, remainingBefore - (Number(payAmountNow) || 0));
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
+            >
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  <div>
+                    <h3 className="text-lg font-black">تنزيل دفعة</h3>
+                    <p className="text-xs text-slate-300">
+                      التلميذ(ة): {stu.studentName} — {paymentTarget.formation.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentTarget(null)}
+                  className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmPayment} className="p-6 space-y-4">
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-300 text-xs space-y-1">
+                  <div className="flex justify-between font-bold text-amber-800">
+                    <span>الصافي المستحق:</span>
+                    <span className="font-mono font-black">{netRequired} د.ت</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-amber-800">
+                    <span>المدفوع سابقاً:</span>
+                    <span className="font-mono font-black">{already} د.ت</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-amber-800">
+                    <span>المتبقي قبل هذه الدفعة:</span>
+                    <span className="font-mono font-black">{remainingBefore} د.ت</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setPayMethod('espece'); setPayChequeNumber(''); setPayChequeDate(new Date().toISOString().split('T')[0]); }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        payMethod === 'espece'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      نقداً (Espèces)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPayMethod('cheque')}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        payMethod === 'cheque'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      شيك (Par Chèque)
+                    </button>
+                  </div>
+                </div>
+
+                {payMethod === 'cheque' && (
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">رقم الشيك *</label>
+                      <input
+                        type="text" required
+                        value={payChequeNumber}
+                        onChange={(e) => setPayChequeNumber(e.target.value)}
+                        placeholder="رقم الشيك"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">تاريخ الدفع *</label>
+                      <DateField
+                        required
+                        value={payChequeDate}
+                        onChange={(e) => setPayChequeDate(e.target.value)}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">المبلغ المدفوع الآن (د.ت) *</label>
+                    <input
+                      type="number" required min="0"
+                      value={payAmountNow}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setPayAmountNow(Math.max(0, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0))}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">المبلغ المتبقي (د.ت)</label>
+                    <input
+                      type="number" value={remainingBefore} readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs flex justify-between font-bold text-brand-700">
+                  <span>المبلغ المتبقي بعد هذه الدفعة:</span>
+                  <span className={`font-mono text-sm font-black ${remainingAfter > 0 ? 'text-red-700' : 'text-brand-700'}`}>
+                    {remainingAfter} د.ت
+                  </span>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    type="button" onClick={() => setPaymentTarget(null)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    تأكيد الدفع
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        );
+      })()}
 
       {/* Receipt print overlay */}
       {printingStudent && (() => {
