@@ -242,6 +242,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   };
   const isStudentGroupExpanded = (groupKey: string) => expandedStudents[groupKey] !== false;
 
+  // Groupes pliables par formation (سجل الخلاص للتكوينات والدورات) — ouverts par
+  // défaut (clé absente = ouvert), mémorisé entre les rendus. Déclaré AU NIVEAU du
+  // composant : un useState placé dans un onglet conditionnel rompt les règles
+  // des hooks (erreur React #310).
+  const [expandedForms, setExpandedForms] = useState<Record<string, boolean>>({});
+  // Sans choix explicite, seule la première formation du groupe est dépliée.
+  const isFormGroupExpanded = (groupKey: string, isFirst: boolean) => expandedForms[groupKey] ?? isFirst;
+  const toggleFormGroup = (groupKey: string, isFirst: boolean) => {
+    setExpandedForms(prev => ({ ...prev, [groupKey]: !isFormGroupExpanded(groupKey, isFirst) }));
+  };
+
   // Expense modal state
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expCategory, setExpCategory] = useState<ExpenseCategory>('Électricité (STEG)');
@@ -1840,21 +1851,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         }, {} as Record<string, { key: string; formationId?: string; formationName: string; studentYear: string; items: FormationPaymentRec[]; subtotal: number }>);
         const groupedList = Object.values(grouped).sort((a, b) => a.formationName.localeCompare(b.formationName));
 
-        const [expandedForms, setExpandedForms] = useState<Record<string, boolean>>({});
-        // Ensure at least first group expanded on change
-        React.useEffect(() => {
-          if (groupedList.length > 0) {
-            setExpandedForms(prev => {
-              const hasAny = Object.values(prev).some(Boolean);
-              if (hasAny) return prev;
-              return { [groupedList[0].key]: true };
-            });
-          } else {
-            setExpandedForms({});
-          }
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [paginatedForm.length]);
-
         return (
           <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -1887,13 +1883,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <td colSpan={7} className="p-8 text-center text-slate-400">لا توجد مدفوعات تكوينات موافقة للفترة المختارة.</td>
                     </tr>
                   ) : (
-                    groupedList.map((g) => {
-                      const isOpen = !!expandedForms[g.key];
+                    groupedList.map((g, gi) => {
+                      const isOpen = isFormGroupExpanded(g.key, gi === 0);
                       return (
                         <React.Fragment key={g.key}>
                           <tr
                             className="bg-brand-600/5 hover:bg-brand-600/10 cursor-pointer"
-                            onClick={() => setExpandedForms(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
+                            onClick={() => toggleFormGroup(g.key, gi === 0)}
                           >
                             <td className="p-4 font-black text-brand-700 flex items-center gap-2" colSpan={2}>
                               {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
