@@ -1838,17 +1838,14 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           if (!acc[key]) {
             acc[key] = {
               key,
-              formationId: p.formationId,
               formationName: p.formationName || p.notes || monthToArabic(p.month),
               studentYear: p.studentYear || (p.month?.match(/\((\d{4}\/\d{4})\)/)?.[1]) || '',
-              items: [] as FormationPaymentRec[],
-              subtotal: 0
+              items: [] as FormationPaymentRec[]
             };
           }
           acc[key].items.push(p);
-          acc[key].subtotal += (p.refund ? -Math.abs(p.amountPaid) : p.amountPaid);
           return acc;
-        }, {} as Record<string, { key: string; formationId?: string; formationName: string; studentYear: string; items: FormationPaymentRec[]; subtotal: number }>);
+        }, {} as Record<string, { key: string; formationName: string; studentYear: string; items: FormationPaymentRec[] }>);
         const groupedList = Object.values(grouped).sort((a, b) => a.formationName.localeCompare(b.formationName));
 
         return (
@@ -1891,16 +1888,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             className="bg-brand-600/5 hover:bg-brand-600/10 cursor-pointer"
                             onClick={() => toggleFormGroup(g.key, gi === 0)}
                           >
-                            <td className="p-4 font-black text-brand-700 flex items-center gap-2" colSpan={2}>
-                              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              {g.formationName}
+                            <td className="p-4 font-black text-brand-700" colSpan={7}>
+                              <span className="inline-flex items-center gap-2">
+                                {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                                {g.formationName}
+                                {g.studentYear ? <span className="font-mono font-bold text-slate-500">({g.studentYear})</span> : null}
+                              </span>
                             </td>
-                            <td className="p-4 text-slate-600 font-bold" colSpan={2}>
-                              {g.studentYear ? `سنة ${g.studentYear}` : ''}
-                            </td>
-                            <td className="p-4 text-slate-600 font-bold">{g.items.length} وصل</td>
-                            <td className="p-4 font-mono font-black text-brand-700">{fmt(g.subtotal)} د.ت</td>
-                            <td className="p-4"></td>
                           </tr>
                           {isOpen && g.items.map((p) => (
                             <tr key={p.id} className="hover:bg-slate-50/80 transition">
