@@ -219,6 +219,40 @@ describe('MealsModule — revision D remarks', () => {
     expect(updated.mealAttendances!.filter(a => a.date === (updated.mealAttendances![0].date)).length).toBe(2);
   });
 
+  it('remark M3: in-house unit lunch sends the billed unit price, not the traiteur share', async () => {
+    const unitStudent = student({ id: 'st_unit_price', firstName: 'Unit', lastName: 'Price' });
+    const onCreate = vi.fn();
+    const pricedSettings = {
+      centerName: 'Test Center',
+      mealOperatingMode: 'in_house_kitchen',
+      servicePrices: { DEFAULT: { 'lunch:unit': 8, 'gouter_matin:unit': 2, 'gouter_apres_midi:unit': 3 } }
+    } as unknown as CenterSettings;
+    render(
+      <MealsModule
+        students={[unitStudent]}
+        mealPlans={[]}
+        onUpdateStudents={vi.fn()}
+        onUpdateMealPlans={vi.fn()}
+        settings={pricedSettings}
+        onCreateMealAttendance={onCreate}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /إضافة تلميذ بالوحدة/ }));
+    fireEvent.click(screen.getByText('Unit Price'));
+    fireEvent.click(screen.getByTestId('unit-service-toggle-lunch'));
+    fireEvent.click(screen.getByRole('button', { name: 'إضافة الخدمات المحددة' }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
+    // Bug historique : en cuisine interne, traiteurPrice=0 écrasait unit_price et
+    // le repas était enregistré à 0 alors que l'élève paie 8.
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+      studentId: 'st_unit_price',
+      service: 'lunch',
+      type: 'unit',
+      unitPrice: 8,
+      traiteurPrice: 0
+    }));
+  });
+
   it('remark M3: the confirm button stays disabled until at least one service is ticked', () => {
     const unitStudent = student({ id: 'st_unit3', firstName: 'Unit', lastName: 'Three' });
     render(

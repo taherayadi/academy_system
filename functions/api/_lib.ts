@@ -697,7 +697,13 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
       type: str(r.billing_mode) === 'unit' ? 'unit' : 'subscription',
       paid: status === 'paid' || status === 'covered_by_subscription',
       paidAt: r.created_at == null ? undefined : new Date(num(r.created_at)).toISOString().slice(0, 10),
-      traiteurPrice: r.unit_price == null ? undefined : num(r.unit_price)
+      // Coût traiteur = traiteur_share. Les lignes legacy (créées avant la
+      // séparation unit_price / traiteur_share) n'ont que unit_price : on le
+      // réutilise pour ne pas modifier les coûts historiques.
+      traiteurPrice: r.traiteur_share != null
+        ? num(r.traiteur_share)
+        : (r.unit_price == null ? undefined : num(r.unit_price)),
+      unitPrice: r.unit_price == null ? undefined : num(r.unit_price)
     });
   });
 
@@ -930,9 +936,19 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
       ));
     }
     for (const m of s.mealAttendances || []) {
-      stmts.push(db.prepare('INSERT OR IGNORE INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(
+      // `unitPrice` = prix facturé, `traiteurPrice` = part traiteur. Les
+      // anciens payloads ne portent que traiteurPrice : il sert alors de prix
+      // unitaire (comportement historique) tout en alimentant traiteur_share.
+      const traiteurShare = m.traiteurPrice != null ? num(m.traiteurPrice) : null;
+      const unitPrice = m.unitPrice != null
+        ? num(m.unitPrice)
+        : traiteurShare;
+      const centerShare = unitPrice != null && traiteurShare != null
+        ? Math.max(0, unitPrice - traiteurShare)
+        : null;
+      stmts.push(db.prepare('INSERT OR IGNORE INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, unit_price, traiteur_share, center_share, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
         centerId, s.id, m.date, str(m.service) || 'lunch', m.type === 'unit' ? 'unit' : 'subscription',
-        m.paid ? 'paid' : 'unpaid', m.traiteurPrice != null ? num(m.traiteurPrice) : null, Date.now()
+        m.paid ? 'paid' : 'unpaid', unitPrice, traiteurShare, centerShare, Date.now()
       ));
     }
     // Notes : PK = UUID serveur + référence subject_id (migration 0002). Le
@@ -1894,11 +1910,21 @@ export async function createSingleMealAttendance(db: D1Database, payload: any, c
   const paid = payload?.paid === true;
   const paymentId = payload?.paymentId ? str(payload.paymentId) : null;
   if (paymentId) await assertMealPayment(db, paymentId, centerId);
+  // `unit_price` = prix facturé (fraisParRepas) ; `traiteur_share` = coût
+  // traiteur (0 en cuisine interne). Les anciens clients qui n'envoyaient que
+  // `traiteurPrice` restent compatibles : il sert alors de prix unitaire.
+  const traiteurShare = mealAttendancePrice(payload?.traiteurPrice);
+  const unitPrice = payload?.unitPrice === undefined
+    ? traiteurShare
+    : mealAttendancePrice(payload.unitPrice);
+  const centerShare = unitPrice != null && traiteurShare != null
+    ? Math.max(0, unitPrice - traiteurShare)
+    : null;
   await db.prepare(
-    'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, unit_price, traiteur_share, center_share, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     centerId, studentId, date, service, type, mealAttendanceStatus(type, paid), paymentId,
-    mealAttendancePrice(payload?.traiteurPrice), Date.now()
+    unitPrice, traiteurShare, centerShare, Date.now()
   ).run();
 }
 
@@ -1921,13 +1947,26 @@ export async function updateSingleMealAttendance(db: D1Database, payload: any, c
     ? (existing.paid_payment_id == null ? null : str(existing.paid_payment_id))
     : (payload.paymentId ? str(payload.paymentId) : null);
   if (paymentId) await assertMealPayment(db, paymentId, centerId);
-  const unitPrice = payload?.traiteurPrice === undefined
-    ? (existing.unit_price == null ? null : num(existing.unit_price))
-    : mealAttendancePrice(payload.traiteurPrice);
+  // Mise à jour partielle : un champ absent conserve la valeur existante.
+  // `unit_price` = prix facturé ; `traiteur_share` = coût traiteur.
+  const currentUnit = existing.unit_price == null ? null : num(existing.unit_price);
+  const currentTraiteur = existing.traiteur_share == null ? currentUnit : num(existing.traiteur_share);
+  const unitPrice = payload?.unitPrice !== undefined
+    ? mealAttendancePrice(payload.unitPrice)
+    : payload?.traiteurPrice !== undefined
+      ? mealAttendancePrice(payload.traiteurPrice)
+      : currentUnit;
+  const traiteurShare = payload?.traiteurPrice !== undefined
+    ? mealAttendancePrice(payload.traiteurPrice)
+    : currentTraiteur;
+  const centerShare = unitPrice != null && traiteurShare != null
+    ? Math.max(0, unitPrice - traiteurShare)
+    : null;
   await db.prepare(
-    'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, unit_price = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
+    'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, unit_price = ?, traiteur_share = ?, center_share = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
   ).bind(
-    type, mealAttendanceStatus(type, paid), paymentId, unitPrice, centerId, studentId, date, service
+    type, mealAttendanceStatus(type, paid), paymentId, unitPrice, traiteurShare, centerShare,
+    centerId, studentId, date, service
   ).run();
 }
 

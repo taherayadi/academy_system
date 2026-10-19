@@ -669,6 +669,13 @@ export interface MealAttendance {
   type: 'subscription' | 'unit';
   paid: boolean;
   paidAt?: string;
+  /**
+   * Prix unitaire facturé pour CE repas (fraisParRepas / prix unitaire goûter).
+   * C'est la valeur métier de `meal_attendances.unit_price` ; elle n'est PAS
+   * le coût traiteur (voir `traiteurPrice`).
+   */
+  unitPrice?: number;
+  /** Part traiteur par assiette (0 en cuisine interne). */
   traiteurPrice?: number;
 }
 
@@ -690,6 +697,9 @@ export interface MealAttendanceKey {
 export interface MealAttendanceInput extends MealAttendanceKey {
   type: 'subscription' | 'unit';
   paid?: boolean;
+  /** Prix unitaire facturé → `unit_price`. */
+  unitPrice?: number;
+  /** Part traiteur par assiette → `traiteur_share` (0 en cuisine interne). */
   traiteurPrice?: number;
   paymentId?: string;
 }

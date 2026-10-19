@@ -88,6 +88,7 @@ const base = {
   service: 'lunch',
   type: 'unit',
   paid: false,
+  unitPrice: 8,
   traiteurPrice: 6
 };
 
@@ -99,9 +100,29 @@ describe('/api/meal-attendances — POST crée UNE ligne', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       center_id: CENTER, student_id: STUDENT, date: '2026-10-19',
-      service_key: 'lunch', billing_mode: 'unit', status: 'unpaid'
+      service_key: 'lunch', billing_mode: 'unit', status: 'unpaid',
+      unit_price: 8, traiteur_share: 6, center_share: 2
     });
-    expect(rows[0].unit_price).toBe(6);
+  });
+
+  it('en cuisine interne : unit_price = prix facturé, traiteur_share = 0', async () => {
+    const res = await onRequestPost(ctx('POST', { ...base, traiteurPrice: 0 }));
+    expect(res.status).toBe(200);
+    const row = sqlite.prepare('SELECT unit_price, traiteur_share, center_share FROM meal_attendances').get() as any;
+    // Bug historique : la cuisine interne écrivait 0 dans unit_price alors que
+    // l'élève paie bien le prix unitaire configuré.
+    expect(row.unit_price).toBe(8);
+    expect(row.traiteur_share).toBe(0);
+    expect(row.center_share).toBe(8);
+  });
+
+  it('reste compatible avec un ancien client qui n’envoie que traiteurPrice', async () => {
+    const { unitPrice: _omit, ...legacy } = base;
+    const res = await onRequestPost(ctx('POST', legacy));
+    expect(res.status).toBe(200);
+    const row = sqlite.prepare('SELECT unit_price, traiteur_share FROM meal_attendances').get() as any;
+    expect(row.unit_price).toBe(6);
+    expect(row.traiteur_share).toBe(6);
   });
 
   it('refuse un doublon (409) au lieu d’écraser silencieusement', async () => {
@@ -140,6 +161,9 @@ describe('/api/meal-attendances — PUT met à jour SANS supprimer', () => {
     expect(rows[0].status).toBe('paid');
     expect(rows[0].paid_payment_id).toBe('pay_1');
     expect(rows[0].billing_mode).toBe('unit');
+    // Marquer payé ne doit jamais remettre le prix à 0.
+    expect(rows[0].unit_price).toBe(8);
+    expect(rows[0].traiteur_share).toBe(6);
   });
 
   it('conserve le paiement existant quand le champ paymentId est absent', async () => {

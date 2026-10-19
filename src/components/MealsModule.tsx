@@ -108,6 +108,7 @@ export default function MealsModule({
       service: row.service,
       type: row.type,
       paid: row.paid === true,
+      ...(row.unitPrice !== undefined ? { unitPrice: row.unitPrice } : {}),
       ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
     };
     const updated: Student = { ...st, mealAttendances: [...(st.mealAttendances || []), localRow] };
@@ -130,6 +131,7 @@ export default function MealsModule({
           ...(row.paid !== undefined
             ? { paid: row.paid, ...(row.paid ? { paidAt: new Date().toISOString() } : {}) }
             : {}),
+          ...(row.unitPrice !== undefined ? { unitPrice: row.unitPrice } : {}),
           ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
         };
       })
@@ -175,6 +177,30 @@ export default function MealsModule({
       notes: `استرجاع ثمن ${serviceLabel} - ${selectedDate}`,
       refund: true
     };
+  };
+
+  /**
+   * Prix unitaire facturé pour UN service (ce que l'élève paie) — stocké dans
+   * `meal_attendances.unit_price`. Ne pas confondre avec la part traiteur.
+   */
+  const mealUnitPriceFor = (service: MealServiceType): number | undefined => {
+    if (!settings) return undefined;
+    const fees = getFeesForYear(settings, schoolYear);
+    if (service === 'lunch') return fees.fraisParRepas;
+    if (service === 'gouter_matin') return fees.fraisGouterMatinUnitaire;
+    return fees.fraisGouterSoirUnitaire;
+  };
+
+  /**
+   * Part traiteur par assiette — stockée dans `meal_attendances.traiteur_share`.
+   * Toujours 0 en cuisine interne (aucun traiteur) et pour les goûters.
+   */
+  const mealTraiteurShareFor = (service: MealServiceType): number | undefined => {
+    if (!settings) return undefined;
+    if (service !== 'lunch') return 0;
+    return (settings.mealOperatingMode || 'external_traiteur') === 'in_house_kitchen'
+      ? 0
+      : getFeesForYear(settings, schoolYear).prixPlatTraiteur;
   };
   const centerName = settings?.centerName || 'EduSphère';
   const toast = useToast();
@@ -372,18 +398,16 @@ export default function MealsModule({
     const mealType: 'subscription' | 'unit' = isSubscribedForService ? 'subscription' : 'unit';
     const hasPaid = service === 'lunch' ? hasPaidLunch : hasPaidGouter;
 
-    // Option C: snapshot current traiteur price on lunch attendance so past records
-    // are never retroactively changed when settings.prixPlatTraiteur changes later.
-    const snapshotTraiteurPrice = (service === 'lunch' && settings)
-      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
-      : undefined;
-
+    // Snapshot du prix facturé et de la part traiteur : les coûts passés ne
+    // changent jamais quand les tarifs sont modifiés plus tard. En cuisine
+    // interne, la part traiteur est 0 mais le prix unitaire reste facturé.
     addMealAttendance(st, {
       date: selectedDate,
       service,
       type: mealType,
       paid: mealType === 'subscription' ? hasPaid : false,
-      ...(snapshotTraiteurPrice != null ? { traiteurPrice: snapshotTraiteurPrice } : {})
+      unitPrice: mealUnitPriceFor(service),
+      traiteurPrice: mealTraiteurShareFor(service)
     });
     toast.success(`تم تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
   };
@@ -473,9 +497,8 @@ export default function MealsModule({
   // creating it when absent, appending to an existing line otherwise.
   const handleMarkGouterToday = (st: Student, services: MealServiceType[]) => {
     if (!services.length) return;
-    const traiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
-      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
-      : 0;
+    // Les goûters n'ont pas de part traiteur dans le modèle financier.
+    const traiteurPrice = 0;
     // Reverse lookup (date → academic month) is the one direction the shared
     // prefix map does not cover; keep it local.
     const mNum: Record<AcademicMonth, number> = { 'Septembre': 9, 'Octobre': 10, 'Novembre': 11, 'Décembre': 12, 'Janvier': 1, 'Février': 2, 'Mars': 3, 'Avril': 4, 'Mai': 5 };
@@ -495,13 +518,15 @@ export default function MealsModule({
         a.date === selectedDate && !before.some(b => b.date === a.date && (b.service || 'lunch') === (a.service || 'lunch'))
       );
       for (const row of added) {
+        const service = row.service || 'lunch';
         onCreateMealAttendance({
           studentId: st.id,
           date: row.date,
-          service: row.service || 'lunch',
+          service,
           type: row.type,
           paid: row.paid,
-          ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
+          unitPrice: mealUnitPriceFor(service),
+          traiteurPrice: row.traiteurPrice ?? 0
         });
       }
     } else {
@@ -569,9 +594,8 @@ export default function MealsModule({
 
     const mealType = (!isSubscribedSys || hasRefund) ? 'unit' : 'subscription';
 
-    const snapshotTraiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
-      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
-      : 0;
+    const unitPrice = mealUnitPriceFor('lunch');
+    const traiteurShare = mealTraiteurShareFor('lunch');
 
     if (onCreateMealAttendance) {
       // POST /api/meal-attendances — une seule ligne, pas de PUT élève.
@@ -580,7 +604,8 @@ export default function MealsModule({
         service: 'lunch',
         type: mealType,
         paid: mealType === 'unit' ? false : hasPaid,
-        traiteurPrice: snapshotTraiteurPrice
+        unitPrice,
+        traiteurPrice: traiteurShare
       });
     } else {
       // Fallback legacy (tests) : l'ancien PUT élève garde le compteur d'abonnement.
@@ -594,7 +619,7 @@ export default function MealsModule({
           : undefined,
         mealAttendances: [
           ...(st.mealAttendances || []),
-          { date: selectedDate, service: 'lunch', type: mealType, paid: mealType === 'unit' ? false : hasPaid, traiteurPrice: snapshotTraiteurPrice }
+          { date: selectedDate, service: 'lunch', type: mealType, paid: mealType === 'unit' ? false : hasPaid, unitPrice, traiteurPrice: traiteurShare }
         ]
       };
       onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
@@ -613,18 +638,16 @@ export default function MealsModule({
       return;
     }
 
-    const snapshotTraiteurPrice = ((settings?.mealOperatingMode || 'external_traiteur') === 'external_traiteur' && settings)
-      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
-      : 0;
-
     if (onCreateMealAttendance) {
-      // Une requête POST /api/meal-attendances par service coché.
+      // Une requête POST /api/meal-attendances par service coché. On enregistre
+      // le prix facturé (fraisParRepas) ET la part traiteur (0 en cuisine interne).
       services.forEach(service => addMealAttendance(stObj, {
         date: selectedDate,
         service,
         type: 'unit',
         paid: false,
-        traiteurPrice: snapshotTraiteurPrice
+        unitPrice: mealUnitPriceFor(service),
+        traiteurPrice: mealTraiteurShareFor(service)
       }));
     } else {
       // Fallback legacy (tests).
@@ -632,7 +655,14 @@ export default function MealsModule({
         ...stObj,
         mealAttendances: [
           ...(stObj.mealAttendances || []),
-          ...services.map(service => ({ date: selectedDate, service, type: 'unit' as const, paid: false, traiteurPrice: snapshotTraiteurPrice }))
+          ...services.map(service => ({
+            date: selectedDate,
+            service,
+            type: 'unit' as const,
+            paid: false,
+            unitPrice: mealUnitPriceFor(service),
+            traiteurPrice: mealTraiteurShareFor(service)
+          }))
         ]
       };
       onUpdateStudents(students.map(s => s.id === stObj.id ? updatedStudent : s));

@@ -468,6 +468,7 @@ export default function App() {
           service: attendance.service,
           type: attendance.type,
           paid: attendance.paid === true,
+          ...(attendance.unitPrice != null ? { unitPrice: attendance.unitPrice } : {}),
           ...(attendance.traiteurPrice != null ? { traiteurPrice: attendance.traiteurPrice } : {}),
           ...(attendance.paid ? { paidAt: new Date().toISOString() } : {})
         }]
@@ -498,6 +499,7 @@ export default function App() {
             ...(attendance.paid !== undefined
               ? { paid: attendance.paid, ...(attendance.paid ? { paidAt: new Date().toISOString() } : {}) }
               : {}),
+            ...(attendance.unitPrice !== undefined ? { unitPrice: attendance.unitPrice } : {}),
             ...(attendance.traiteurPrice !== undefined ? { traiteurPrice: attendance.traiteurPrice } : {})
           };
         })
