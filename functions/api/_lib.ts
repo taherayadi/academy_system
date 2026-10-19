@@ -1829,6 +1829,198 @@ export async function writeMealPlans(db: D1Database, mealPlans: any[], centerId:
 }
 
 // ===========================================================================
+// MEAL ATTENDANCES — écritures granulaires (POST create / PUT update / DELETE)
+// ---------------------------------------------------------------------------
+// Un pointage = UNE ligne de `meal_attendances` (PK élève + date + service).
+// L'ancien flux passait par PUT /api/students : suppression puis réinsertion de
+// TOUTES les tables enfants de l'élève (paiements, parents, inscriptions…) pour
+// un simple pointage. Ces helpers ne touchent qu'une ligne et ne renvoient PAS
+// l'élève :
+//   POST   /api/meal-attendances       → création
+//   PUT    /api/meal-attendances       → mise à jour (status + paid_payment_id,
+//                                         sans jamais supprimer la ligne)
+//   DELETE /api/meal-attendances?...    → suppression (annulation explicite)
+// ===========================================================================
+
+const MEAL_SERVICE_KEYS = new Set(['lunch', 'gouter_matin', 'gouter_apres_midi']);
+
+async function assertMealStudent(db: D1Database, studentId: string, centerId: string): Promise<void> {
+  const owner = await db.prepare("SELECT 1 AS ok FROM students WHERE id = ? AND center_id = ? AND student_type <> 'external'").bind(studentId, centerId).first<any>();
+  if (!owner) throw new Error('Élève introuvable dans ce centre.');
+}
+
+async function assertMealPayment(db: D1Database, paymentId: string, centerId: string): Promise<void> {
+  const pay = await db.prepare('SELECT 1 AS ok FROM payments WHERE id = ? AND center_id = ?').bind(paymentId, centerId).first<any>();
+  if (!pay) throw new Error('Paiement introuvable dans ce centre.');
+}
+
+/** Status DB : 'covered_by_subscription' pour un abonnement, 'paid' pour une unité. */
+function mealAttendanceStatus(type: string, paid: boolean): 'unpaid' | 'paid' | 'covered_by_subscription' {
+  if (!paid) return 'unpaid';
+  return type === 'subscription' ? 'covered_by_subscription' : 'paid';
+}
+
+function mealAttendanceType(value: unknown, fallback: 'subscription' | 'unit'): 'subscription' | 'unit' {
+  return value === 'unit' ? 'unit' : value === 'subscription' ? 'subscription' : fallback;
+}
+
+function mealAttendanceKey(payload: any): { studentId: string; date: string; service: string } {
+  const studentId = str(payload?.studentId);
+  const date = str(payload?.date);
+  const service = str(payload?.service) || 'lunch';
+  if (!studentId) throw new Error('studentId requis.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date invalide (YYYY-MM-DD).');
+  if (!MEAL_SERVICE_KEYS.has(service)) throw new Error('Service invalide.');
+  return { studentId, date, service };
+}
+
+function mealAttendancePrice(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = num(value);
+  if (!Number.isFinite(n) || n < 0) throw new Error('Prix invalide.');
+  return n;
+}
+
+export async function createSingleMealAttendance(db: D1Database, payload: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const { studentId, date, service } = mealAttendanceKey(payload);
+  if (payload?.type !== undefined && payload.type !== 'unit' && payload.type !== 'subscription') {
+    throw new Error('Type de pointage invalide.');
+  }
+  await assertMealStudent(db, studentId, centerId);
+  const exists = await db.prepare('SELECT 1 AS ok FROM meal_attendances WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?')
+    .bind(centerId, studentId, date, service).first<any>();
+  if (exists) throw new Error('Pointage déjà existant.');
+  const type = mealAttendanceType(payload?.type, 'unit');
+  const paid = payload?.paid === true;
+  const paymentId = payload?.paymentId ? str(payload.paymentId) : null;
+  if (paymentId) await assertMealPayment(db, paymentId, centerId);
+  await db.prepare(
+    'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    centerId, studentId, date, service, type, mealAttendanceStatus(type, paid), paymentId,
+    mealAttendancePrice(payload?.traiteurPrice), Date.now()
+  ).run();
+}
+
+export async function updateSingleMealAttendance(db: D1Database, payload: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const { studentId, date, service } = mealAttendanceKey(payload);
+  if (payload?.type !== undefined && payload.type !== 'unit' && payload.type !== 'subscription') {
+    throw new Error('Type de pointage invalide.');
+  }
+  await assertMealStudent(db, studentId, centerId);
+  const existing = await db.prepare('SELECT * FROM meal_attendances WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?')
+    .bind(centerId, studentId, date, service).first<any>();
+  if (!existing) throw new Error('Pointage introuvable.');
+  const currentType: 'subscription' | 'unit' = str(existing.billing_mode) === 'unit' ? 'unit' : 'subscription';
+  const type = mealAttendanceType(payload?.type, currentType);
+  const currentPaid = str(existing.status) === 'paid' || str(existing.status) === 'covered_by_subscription';
+  const paid = payload?.paid === true ? true : payload?.paid === false ? false : currentPaid;
+  // paid_payment_id est conservé si le champ est absent : marquer payé ne
+  // supprime jamais la ligne, on met juste à jour status + paid_payment_id.
+  const paymentId = payload?.paymentId === undefined
+    ? (existing.paid_payment_id == null ? null : str(existing.paid_payment_id))
+    : (payload.paymentId ? str(payload.paymentId) : null);
+  if (paymentId) await assertMealPayment(db, paymentId, centerId);
+  const unitPrice = payload?.traiteurPrice === undefined
+    ? (existing.unit_price == null ? null : num(existing.unit_price))
+    : mealAttendancePrice(payload.traiteurPrice);
+  await db.prepare(
+    'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, unit_price = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
+  ).bind(
+    type, mealAttendanceStatus(type, paid), paymentId, unitPrice, centerId, studentId, date, service
+  ).run();
+}
+
+export async function deleteSingleMealAttendance(db: D1Database, payload: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const { studentId, date, service } = mealAttendanceKey(payload);
+  await assertMealStudent(db, studentId, centerId);
+  const res = await db.prepare('DELETE FROM meal_attendances WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?')
+    .bind(centerId, studentId, date, service).run();
+  if (!res.meta.changes) throw new Error('Pointage introuvable.');
+}
+
+// ===========================================================================
+// MEAL ENROLLMENTS — inscription/désinscription repas & goûter sans PUT élève
+// ---------------------------------------------------------------------------
+// `enrolledServices.meals` et `mealSubscription.active` sont DÉRIVÉS à la
+// lecture de la présence d'une ligne `student_service_enrollments`
+// (service_key 'lunch'). Ces helpers n'écrivent QUE ces lignes d'inscription.
+//   PUT /api/meal-enrollments  (objet ou tableau)
+// ===========================================================================
+
+export interface MealEnrollmentUpdate {
+  studentId: string;
+  schoolYear?: string;
+  lunch?: { active: boolean; mode?: 'subscription' | 'unit'; monthlyPrice?: number; annualPrice?: number; unitPrice?: number };
+  gouterMatin?: boolean;
+  gouterSoir?: boolean;
+}
+
+async function applyMealEnrollment(db: D1Database, entry: MealEnrollmentUpdate, centerId: string): Promise<void> {
+  const studentId = str(entry?.studentId);
+  if (!studentId) throw new Error('studentId requis.');
+  await assertMealStudent(db, studentId, centerId);
+  const schoolYearRaw = str(entry?.schoolYear);
+  const schoolYear = /^\d{4}\/\d{4}$/.test(schoolYearRaw) ? schoolYearRaw : currentAcademicYear();
+  const validFrom = schoolYearStart(schoolYear);
+  const stmts: D1PreparedStatement[] = [];
+
+  const setEnrollment = (
+    serviceKey: string,
+    active: boolean,
+    billingMode: 'subscription' | 'unit' = 'subscription',
+    prices: { monthly?: number; annual?: number; unit?: number } = {}
+  ) => {
+    if (!active) {
+      stmts.push(db.prepare('DELETE FROM student_service_enrollments WHERE center_id = ? AND student_id = ? AND service_key = ? AND school_year = ?')
+        .bind(centerId, studentId, serviceKey, schoolYear));
+      return;
+    }
+    stmts.push(db.prepare(
+      'INSERT INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+      'ON CONFLICT(student_id, service_key, school_year, valid_from) DO UPDATE SET billing_mode = excluded.billing_mode, monthly_price = excluded.monthly_price, annual_price = excluded.annual_price, unit_price = excluded.unit_price'
+    ).bind(
+      crypto.randomUUID(), centerId, studentId, serviceKey, schoolYear, billingMode,
+      prices.monthly == null ? null : num(prices.monthly),
+      prices.annual == null ? null : num(prices.annual),
+      prices.unit == null ? null : num(prices.unit),
+      validFrom
+    ));
+  };
+
+  if (entry?.lunch && typeof entry.lunch === 'object') {
+    const lunch = entry.lunch;
+    setEnrollment('lunch', lunch.active === true, lunch.mode === 'unit' ? 'unit' : 'subscription', {
+      monthly: lunch.monthlyPrice, annual: lunch.annualPrice, unit: lunch.unitPrice
+    });
+  }
+  if (entry?.gouterMatin !== undefined) setEnrollment('gouter_matin', entry.gouterMatin === true);
+  if (entry?.gouterSoir !== undefined) setEnrollment('gouter_apres_midi', entry.gouterSoir === true);
+
+  if (stmts.length) await db.batch(stmts);
+}
+
+export async function writeMealEnrollments(db: D1Database, payload: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const entries = Array.isArray(payload) ? payload : [payload];
+  if (!entries.length) throw new Error('Aucune inscription fournie.');
+  for (const entry of entries) await applyMealEnrollment(db, entry, centerId);
+}
+
+/**
+ * Réinitialisation « مسح كل بيانات المطعم » : vide les pointages, les
+ * inscriptions lunch et les paiements Repas du centre — sans réécrire les
+ * élèves un par un (l'ancien flux envoyait PUT /api/students pour toute la
+ * liste). Les Goûters restent intacts, comme dans l'ancien comportement.
+ */
+export async function resetMealData(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM meal_attendances WHERE center_id = ?').bind(centerId),
+    db.prepare("DELETE FROM payments WHERE center_id = ? AND service_key = 'lunch'").bind(centerId),
+    db.prepare("DELETE FROM student_service_enrollments WHERE center_id = ? AND service_key = 'lunch'").bind(centerId)
+  ]);
+}
+
+// ===========================================================================
 // EXPENSES
 // ===========================================================================
 

@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate } from './types';
 
 
 const API_BASE = '/api';
@@ -338,6 +338,37 @@ export async function saveSessions(sessions: ExternalCourseSession[]): Promise<v
 
 export async function saveMealPlans(mealPlans: MealPlanDay[]): Promise<void> {
   return putDomain('/meals', mealPlans, 'تعذر حفظ بيانات الوجبات.');
+}
+
+
+/**
+ * Pointage repas granulaire — POST crée UNE ligne, PUT la met à jour
+ * (status + paid_payment_id, sans suppression), DELETE l'annule.
+ * Plus de PUT /api/students pour un simple pointage.
+ */
+export async function createMealAttendanceApi(attendance: MealAttendanceInput): Promise<void> {
+  return postDomain('/meal-attendances', attendance, 'تعذر تسجيل الوجبة.');
+}
+
+export async function updateMealAttendanceApi(attendance: MealAttendanceInput): Promise<void> {
+  return putDomain('/meal-attendances', attendance, 'تعذر تحديث تسجيل الوجبة.');
+}
+
+export async function deleteMealAttendanceApi(key: MealAttendanceKey): Promise<void> {
+  const params = new URLSearchParams({ studentId: key.studentId, date: key.date, service: key.service });
+  return deleteDomain(`/meal-attendances?${params.toString()}`, 'تعذر إلغاء تسجيل الوجبة.');
+}
+
+
+/** Inscription/désinscription repas & goûter — sans PUT élève. */
+export async function updateMealEnrollmentApi(update: MealEnrollmentUpdate | MealEnrollmentUpdate[]): Promise<void> {
+  return putDomain('/meal-enrollments', update, 'تعذر حفظ inscription المطعم.');
+}
+
+
+/** « مسح كل بيانات المطعم » en une seule opération serveur. */
+export async function resetMealDataApi(): Promise<void> {
+  return postDomain('/meal-reset', {}, 'تعذر مسح بيانات المطعم.');
 }
 
 

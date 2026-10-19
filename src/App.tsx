@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
 
-import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, updateTimesheetApi, deleteTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, updateTimesheetApi, deleteTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, deletePaymentApi, createMealAttendanceApi, updateMealAttendanceApi, deleteMealAttendanceApi, updateMealEnrollmentApi, resetMealDataApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -431,6 +431,155 @@ export default function App() {
       ? { ...s, payments: [...(s.payments || []), payment] }
       : s));
     commitDomain(() => createPaymentApi({ ...payment, studentId }));
+  }, []);
+
+  /** Suppression d'UNE ligne de paiement (réinscription « fresh start »). */
+  const handleDeletePayment = useCallback((paymentId: string) => {
+    setStudents(prev => prev.map(s => ({ ...s, payments: (s.payments || []).filter(p => p.id !== paymentId) })));
+    commitDomain(() => deletePaymentApi(paymentId));
+  }, []);
+
+  /**
+   * Pointage repas granulaire : POST crée la ligne, PUT met à jour
+   * status + paid_payment_id (jamais de suppression), DELETE annule.
+   * Aucun PUT /api/students pour un simple pointage.
+   */
+  const handleCreateMealAttendance = useCallback((attendance: MealAttendanceInput) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id !== attendance.studentId) return s;
+      const others = (s.mealAttendances || []).filter(
+        a => !(a.date === attendance.date && (a.service || 'lunch') === attendance.service)
+      );
+      // `consumedMealsCount` serveur = nb de lignes lunch en abonnement :
+      // on répercute le même calcul localement pour ne pas attendre un reload.
+      const previous = (s.mealAttendances || []).find(
+        a => a.date === attendance.date && (a.service || 'lunch') === attendance.service
+      );
+      const wasSubLunch = (previous?.service || 'lunch') === 'lunch' && previous?.type === 'subscription';
+      const isSubLunch = attendance.service === 'lunch' && attendance.type === 'subscription';
+      const delta = (isSubLunch ? 1 : 0) - (wasSubLunch ? 1 : 0);
+      return {
+        ...s,
+        mealSubscription: delta && s.mealSubscription
+          ? { ...s.mealSubscription, consumedMealsCount: Math.max(0, (s.mealSubscription.consumedMealsCount || 0) + delta) }
+          : s.mealSubscription,
+        mealAttendances: [...others, {
+          date: attendance.date,
+          service: attendance.service,
+          type: attendance.type,
+          paid: attendance.paid === true,
+          ...(attendance.traiteurPrice != null ? { traiteurPrice: attendance.traiteurPrice } : {}),
+          ...(attendance.paid ? { paidAt: new Date().toISOString() } : {})
+        }]
+      };
+    }));
+    commitDomain(() => createMealAttendanceApi(attendance));
+  }, []);
+
+  const handleUpdateMealAttendance = useCallback((attendance: MealAttendanceInput) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id !== attendance.studentId) return s;
+      const previous = (s.mealAttendances || []).find(
+        a => a.date === attendance.date && (a.service || 'lunch') === attendance.service
+      );
+      const wasSubLunch = previous ? (previous.service || 'lunch') === 'lunch' && previous.type === 'subscription' : false;
+      const isSubLunch = attendance.service === 'lunch' && attendance.type === 'subscription';
+      const delta = previous ? (isSubLunch ? 1 : 0) - (wasSubLunch ? 1 : 0) : 0;
+      return {
+        ...s,
+        mealSubscription: delta && s.mealSubscription
+          ? { ...s.mealSubscription, consumedMealsCount: Math.max(0, (s.mealSubscription.consumedMealsCount || 0) + delta) }
+          : s.mealSubscription,
+        mealAttendances: (s.mealAttendances || []).map(a => {
+          if (!(a.date === attendance.date && (a.service || 'lunch') === attendance.service)) return a;
+          return {
+            ...a,
+            type: attendance.type,
+            ...(attendance.paid !== undefined
+              ? { paid: attendance.paid, ...(attendance.paid ? { paidAt: new Date().toISOString() } : {}) }
+              : {}),
+            ...(attendance.traiteurPrice !== undefined ? { traiteurPrice: attendance.traiteurPrice } : {})
+          };
+        })
+      };
+    }));
+    commitDomain(() => updateMealAttendanceApi(attendance));
+  }, []);
+
+  const handleDeleteMealAttendance = useCallback((key: MealAttendanceKey) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id !== key.studentId) return s;
+      const removed = (s.mealAttendances || []).find(
+        a => a.date === key.date && (a.service || 'lunch') === key.service
+      );
+      const removedSubLunch = (removed?.service || 'lunch') === 'lunch' && removed?.type === 'subscription';
+      return {
+        ...s,
+        mealSubscription: removedSubLunch && s.mealSubscription
+          ? { ...s.mealSubscription, consumedMealsCount: Math.max(0, (s.mealSubscription.consumedMealsCount || 0) - 1) }
+          : s.mealSubscription,
+        mealAttendances: (s.mealAttendances || []).filter(
+          a => !(a.date === key.date && (a.service || 'lunch') === key.service)
+        )
+      };
+    }));
+    commitDomain(() => deleteMealAttendanceApi(key));
+  }, []);
+
+  /** Inscription/désinscription repas & goûter — sans réécrire l'élève. */
+  const handleUpdateMealEnrollment = useCallback((update: MealEnrollmentUpdate | MealEnrollmentUpdate[]) => {
+    const entries = Array.isArray(update) ? update : [update];
+    setStudents(prev => prev.map(s => {
+      const entry = entries.find(e => e.studentId === s.id);
+      if (!entry) return s;
+      let next = s;
+      if (entry.lunch) {
+        const monthlyPrice = entry.lunch.monthlyPrice ?? next.mealSubscription?.monthlyPrice ?? 0;
+        const unitPrice = entry.lunch.unitPrice ?? next.mealSubscription?.unitPrice ?? 0;
+        next = {
+          ...next,
+          enrolledServices: next.enrolledServices
+            ? { ...next.enrolledServices, meals: entry.lunch.active }
+            : next.enrolledServices,
+          mealSubscription: entry.lunch.active
+            ? {
+                mode: entry.lunch.mode ?? next.mealSubscription?.mode ?? 'subscription',
+                monthlyPrice,
+                unitPrice,
+                prepaidMeals: next.mealSubscription?.prepaidMeals ?? (unitPrice > 0 ? Math.floor(monthlyPrice / unitPrice) : 0),
+                consumedMealsCount: next.mealSubscription?.consumedMealsCount ?? 0,
+                active: true
+              }
+            : next.mealSubscription
+              ? { ...next.mealSubscription, active: false }
+              : undefined
+        };
+      }
+      if (entry.gouterMatin !== undefined || entry.gouterSoir !== undefined) {
+        const gouterMatin = entry.gouterMatin ?? next.enrolledServices?.gouterMatin ?? false;
+        const gouterSoir = entry.gouterSoir ?? next.enrolledServices?.gouterSoir ?? false;
+        next = {
+          ...next,
+          enrolledServices: next.enrolledServices
+            ? { ...next.enrolledServices, gouterMatin, gouterSoir, gouterBoth: gouterMatin && gouterSoir }
+            : next.enrolledServices
+        };
+      }
+      return next;
+    }));
+    commitDomain(() => updateMealEnrollmentApi(update));
+  }, []);
+
+  /** « مسح كل بيانات المطعم » — une seule opération serveur, sans PUT élève. */
+  const handleResetMealData = useCallback(() => {
+    setStudents(prev => prev.map(st => ({
+      ...st,
+      enrolledServices: st.enrolledServices ? { ...st.enrolledServices, meals: false } : st.enrolledServices,
+      mealSubscription: { mode: 'unit', monthlyPrice: 0, unitPrice: 0, prepaidMeals: 0, consumedMealsCount: 0, active: false },
+      mealAttendances: [],
+      payments: (st.payments || []).filter(p => p.service !== 'Repas')
+    })));
+    commitDomain(() => resetMealDataApi());
   }, []);
 
   /**
@@ -1722,6 +1871,13 @@ export default function App() {
                   settings={settings}
                   onUpdateStudents={handleUpdateStudents}
                   onUpdateStudent={handleUpdateSingleStudent}
+                  onRecordPayment={handleRecordPayment}
+                  onDeletePayment={handleDeletePayment}
+                  onCreateMealAttendance={handleCreateMealAttendance}
+                  onUpdateMealAttendance={handleUpdateMealAttendance}
+                  onDeleteMealAttendance={handleDeleteMealAttendance}
+                  onUpdateMealEnrollment={handleUpdateMealEnrollment}
+                  onResetMealData={handleResetMealData}
                   onUpdateMealPlans={handleUpdateMealPlans}
                 />
               )}

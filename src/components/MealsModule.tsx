@@ -24,7 +24,7 @@ import {
   Coffee,
   Cookie
 } from 'lucide-react';
-import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType, paymentMethodLabel, gradeLabelBilingual } from '../types';
+import { Student, MealPlanDay, CenterSettings, ACADEMIC_MONTHS, ARABIC_ACADEMIC_MONTHS, AcademicMonth, getFeesForYear, PaymentRecord, getCurrentAcademicIndex, monthToArabic, DEFAULT_ACADEMIC_YEARS, generateReceiptNumber, getCurrentAcademicYear, MealServiceType, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, paymentMethodLabel, gradeLabelBilingual } from '../types';
 import { WEEKDAYS, DAY_BY_INDEX, ARABIC_WEEKDAYS, getGouterStatusFor, eligibleServicesForStudent, ensureGouterAttendanceForDate, academicMonthPrefix } from '../utils/mealLogic';
 import GouterConsumptionTable from './GouterConsumptionTable';
 import ConfirmDialog from './ConfirmDialog';
@@ -35,10 +35,22 @@ interface MealsModuleProps {
   students: Student[];
   mealPlans: MealPlanDay[];
   onUpdateStudents: (students: Student[]) => void;
-  /** Mise à jour d'un seul élève (pointages repas, compteurs) — PUT granulaire. */
+  /** Mise à jour d'un seul élève (fallback legacy — les pointages ont leur API). */
   onUpdateStudent?: (student: Student) => void;
   /** Paiement seul via POST /api/payments — PAS de réécriture de l'élève. */
   onRecordPayment?: (studentId: string, payment: PaymentRecord) => void;
+  /** DELETE /api/payments — suppression d'UNE ligne (réinscription). */
+  onDeletePayment?: (paymentId: string) => void;
+  /** POST /api/meal-attendances — crée UN pointage. */
+  onCreateMealAttendance?: (attendance: MealAttendanceInput) => void;
+  /** PUT /api/meal-attendances — met à jour status / paid_payment_id (jamais de DELETE). */
+  onUpdateMealAttendance?: (attendance: MealAttendanceInput) => void;
+  /** DELETE /api/meal-attendances — annule UN pointage. */
+  onDeleteMealAttendance?: (key: MealAttendanceKey) => void;
+  /** PUT /api/meal-enrollments — inscription/désinscription sans PUT élève. */
+  onUpdateMealEnrollment?: (update: MealEnrollmentUpdate | MealEnrollmentUpdate[]) => void;
+  /** POST /api/meal-reset — « مسح كل بيانات المطعم ». */
+  onResetMealData?: () => void;
   onUpdateMealPlans: (plans: MealPlanDay[]) => void;
   settings?: CenterSettings;
 }
@@ -49,14 +61,19 @@ export default function MealsModule({
   onUpdateStudents,
   onUpdateStudent,
   onRecordPayment,
+  onDeletePayment,
+  onCreateMealAttendance,
+  onUpdateMealAttendance,
+  onDeleteMealAttendance,
+  onUpdateMealEnrollment,
+  onResetMealData,
   onUpdateMealPlans,
   settings
 }: MealsModuleProps) {
   /**
-   * ÉCrit les paiements via le endpoint dédié quand il est câblé, en réutilisant
-   * onUpdateStudents pour le reste (pointages, compteurs d'abonnement).
-   * Fallback : l'ancienne réécriture complète si le parent n'expose pas le
-   * callback (rendus de tests sans props granulaires).
+   * Écrit chaque paiement via POST /api/payments quand le parent expose le
+   * callback. Fallback : l'ancienne réécriture complète (rendus de tests sans
+   * props granulaires). Les pointages ont leur propre API ci-dessous.
    */
   const recordPayment = (studentId: string, payment: PaymentRecord) => {
     if (onRecordPayment) {
@@ -69,13 +86,95 @@ export default function MealsModule({
   };
 
   /**
-   * Persist a whole-student change (attendance rows, consumed counters,
-   * enrolledServices). The granular single-student PUT rewrites child tables
-   * from the payload, so current payments are always included as-is.
+   * Fallback legacy UNIQUEMENT (tests/renders sans endpoints granulaires).
+   * L'application réelle écrit les pointages via /api/meal-attendances, les
+   * paiements via /api/payments et les inscriptions via /api/meal-enrollments.
    */
   const patchStudent = (updated: Student) => {
     if (onUpdateStudent) onUpdateStudent(updated);
     else onUpdateStudents(students.map(s => s.id === updated.id ? updated : s));
+  };
+
+  // ── Pointages repas : API dédiée (POST / PUT / DELETE) ────────────────────
+  // Aucun PUT /api/students : on n'envoie que la ligne touchée. Les fallbacks
+  // (rendus de tests sans endpoints granulaires) conservent l'ancien comportement.
+  const addMealAttendance = (st: Student, row: Omit<MealAttendanceInput, 'studentId'>) => {
+    if (onCreateMealAttendance) {
+      onCreateMealAttendance({ studentId: st.id, ...row });
+      return;
+    }
+    const localRow = {
+      date: row.date,
+      service: row.service,
+      type: row.type,
+      paid: row.paid === true,
+      ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
+    };
+    const updated: Student = { ...st, mealAttendances: [...(st.mealAttendances || []), localRow] };
+    if (onUpdateStudent) onUpdateStudent(updated);
+    else onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+  };
+
+  const updateMealAttendance = (st: Student, row: MealAttendanceInput) => {
+    if (onUpdateMealAttendance) {
+      onUpdateMealAttendance(row);
+      return;
+    }
+    const updated: Student = {
+      ...st,
+      mealAttendances: (st.mealAttendances || []).map(a => {
+        if (!(a.date === row.date && (a.service || 'lunch') === row.service)) return a;
+        return {
+          ...a,
+          type: row.type,
+          ...(row.paid !== undefined
+            ? { paid: row.paid, ...(row.paid ? { paidAt: new Date().toISOString() } : {}) }
+            : {}),
+          ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
+        };
+      })
+    };
+    if (onUpdateStudent) onUpdateStudent(updated);
+    else onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+  };
+
+  const removeMealAttendance = (st: Student, date: string, service: MealServiceType) => {
+    if (onDeleteMealAttendance) {
+      onDeleteMealAttendance({ studentId: st.id, date, service });
+      return;
+    }
+    const updated: Student = {
+      ...st,
+      mealAttendances: (st.mealAttendances || []).filter(
+        a => !(a.date === date && (a.service || 'lunch') === service)
+      )
+    };
+    if (onUpdateStudent) onUpdateStudent(updated);
+    else onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+  };
+
+  const buildMealUnitRefund = (st: Student, service: MealServiceType, serviceLabel: string): PaymentRecord | null => {
+    const fees = settings ? getFeesForYear(settings, schoolYear) : null;
+    const refundedAmount = service === 'lunch'
+      ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 0))
+      : service === 'gouter_matin'
+        ? (fees?.fraisGouterMatinUnitaire ?? 0)
+        : (fees?.fraisGouterSoirUnitaire ?? 0);
+    if (refundedAmount <= 0) return null;
+    return {
+      id: `ref_meal_unit_${crypto.randomUUID()}`,
+      date: new Date().toISOString().split('T')[0],
+      amountPaid: -refundedAmount,
+      totalRequired: refundedAmount,
+      remainingBalance: 0,
+      service: service === 'lunch' ? 'Repas' : 'Goûter',
+      month: `${serviceLabel} unitaire (${selectedDate})`,
+      paymentType: 'balance',
+      method: 'Espèces',
+      receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
+      notes: `استرجاع ثمن ${serviceLabel} - ${selectedDate}`,
+      refund: true
+    };
   };
   const centerName = settings?.centerName || 'EduSphère';
   const toast = useToast();
@@ -219,92 +318,74 @@ export default function MealsModule({
   const handleToggleMealService = (st: Student, service: MealServiceType) => {
     const existing = getServiceAttendance(st, service);
     const serviceLabel = service === 'lunch' ? 'الغداء' : service === 'gouter_matin' ? 'لمجة الصباح' : 'لمجة المساء';
+
     if (existing) {
-      const newAttendances = (st.mealAttendances || []).filter(
-        a => !(a.date === selectedDate && (a.service || 'lunch') === service)
-      );
-      let updatedStudent: Student = {
-        ...st,
-        mealAttendances: newAttendances,
-        mealSubscription: (service === 'lunch' && existing.type === 'subscription' && st.mealSubscription)
-          ? {
-              ...st.mealSubscription,
-              consumedMealsCount: Math.max(0, (st.mealSubscription.consumedMealsCount || 0) - 1)
-            }
-          : st.mealSubscription
-      };
-      if (existing.type === 'unit' && existing.paid) {
-        const fees = settings ? getFeesForYear(settings, schoolYear) : null;
-        const refundedAmount = service === 'lunch'
-          ? (fees?.fraisParRepas ?? (st.mealSubscription?.unitPrice || 0))
-          : service === 'gouter_matin'
-            ? (fees?.fraisGouterMatinUnitaire ?? 0)
-            : (fees?.fraisGouterSoirUnitaire ?? 0);
-        if (refundedAmount > 0) {
-          // Remboursement + retrait du pointage : UN PUT élève cohérent.
-          updatedStudent = {
-            ...updatedStudent,
-            payments: [...(st.payments || []), {
-              id: `ref_meal_unit_${crypto.randomUUID()}`,
-              date: new Date().toISOString().split('T')[0],
-              amountPaid: -refundedAmount,
-              totalRequired: refundedAmount,
-              remainingBalance: 0,
-              service: service === 'lunch' ? 'Repas' : 'Goûter',
-              month: `${serviceLabel} unitaire (${selectedDate})`,
-              paymentType: 'balance',
-              method: 'Espèces',
-              receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
-              notes: `استرجاع ثمن ${serviceLabel} - ${selectedDate}`,
-              refund: true
-            }]
-          };
+      if (onDeleteMealAttendance) {
+        // Annulation : le remboursement éventuel passe par POST /api/payments,
+        // puis DELETE /api/meal-attendances supprime UNIQUEMENT la ligne du jour.
+        if (existing.type === 'unit' && existing.paid) {
+          const refund = buildMealUnitRefund(st, service, serviceLabel);
+          if (refund) recordPayment(st.id, refund);
         }
+        removeMealAttendance(st, selectedDate, service);
+      } else {
+        // Fallback legacy (tests) : un seul PUT élève cohérent.
+        const newAttendances = (st.mealAttendances || []).filter(
+          a => !(a.date === selectedDate && (a.service || 'lunch') === service)
+        );
+        let updatedStudent: Student = {
+          ...st,
+          mealAttendances: newAttendances,
+          mealSubscription: (service === 'lunch' && existing.type === 'subscription' && st.mealSubscription)
+            ? {
+                ...st.mealSubscription,
+                consumedMealsCount: Math.max(0, (st.mealSubscription.consumedMealsCount || 0) - 1)
+              }
+            : st.mealSubscription
+        };
+        if (existing.type === 'unit' && existing.paid) {
+          const refund = buildMealUnitRefund(st, service, serviceLabel);
+          if (refund) updatedStudent = { ...updatedStudent, payments: [...(st.payments || []), refund] };
+        }
+        patchStudent(updatedStudent);
       }
-      patchStudent(updatedStudent);
       toast.info(`تم إلغاء تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
-    } else {
-      const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
-      const monthMap: Record<number, AcademicMonth> = {
-        8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
-        0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
-      };
-      const academicMonth = monthMap[dateMonth];
-      const hasPaidLunch = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
-      const hasRefund = academicMonth ? hasUncoveredRefund(st, academicMonth) : false;
-      const isSubscribedSys = st.mealSubscription?.active === true;
-      const isLunchSubscribed = service === 'lunch' && isSubscribedSys && !hasRefund;
-
-      const isGouterMatinSubscribed = service === 'gouter_matin' && (st.enrolledServices?.gouterMatin === true || st.enrolledServices?.gouterBoth === true);
-      const isGouterSoirSubscribed = service === 'gouter_apres_midi' && (st.enrolledServices?.gouterSoir === true || st.enrolledServices?.gouterBoth === true);
-      const isSubscribedForService = service === 'lunch' ? isLunchSubscribed : (isGouterMatinSubscribed || isGouterSoirSubscribed);
-
-      const hasPaidGouter = academicMonth ? getGouterStatus(st, academicMonth).status !== 'unpaid' : false;
-      const mealType: 'subscription' | 'unit' = isSubscribedForService ? 'subscription' : 'unit';
-      const hasPaid = service === 'lunch' ? hasPaidLunch : hasPaidGouter;
-
-      // Option C: snapshot current traiteur price on lunch attendance so past records
-      // are never retroactively changed when settings.prixPlatTraiteur changes later.
-      const snapshotTraiteurPrice = (service === 'lunch' && settings)
-        ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
-        : undefined;
-
-      const updatedStudent: Student = {
-        ...st,
-        mealSubscription: (service === 'lunch' && isLunchSubscribed && st.mealSubscription)
-          ? {
-              ...st.mealSubscription,
-              consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + 1
-            }
-          : st.mealSubscription,
-        mealAttendances: [
-          ...(st.mealAttendances || []),
-          { date: selectedDate, service, type: mealType, paid: mealType === 'subscription' ? hasPaid : false, ...(snapshotTraiteurPrice != null ? { traiteurPrice: snapshotTraiteurPrice } : {}) }
-        ]
-      };
-      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
-      toast.success(`تم تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
+      return;
     }
+
+    const dateMonth = new Date(`${selectedDate}T12:00:00`).getMonth();
+    const monthMap: Record<number, AcademicMonth> = {
+      8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre',
+      0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai'
+    };
+    const academicMonth = monthMap[dateMonth];
+    const hasPaidLunch = academicMonth ? getMealStatus(st, academicMonth).status !== 'unpaid' : false;
+    const hasRefund = academicMonth ? hasUncoveredRefund(st, academicMonth) : false;
+    const isSubscribedSys = st.mealSubscription?.active === true;
+    const isLunchSubscribed = service === 'lunch' && isSubscribedSys && !hasRefund;
+
+    const isGouterMatinSubscribed = service === 'gouter_matin' && (st.enrolledServices?.gouterMatin === true || st.enrolledServices?.gouterBoth === true);
+    const isGouterSoirSubscribed = service === 'gouter_apres_midi' && (st.enrolledServices?.gouterSoir === true || st.enrolledServices?.gouterBoth === true);
+    const isSubscribedForService = service === 'lunch' ? isLunchSubscribed : (isGouterMatinSubscribed || isGouterSoirSubscribed);
+
+    const hasPaidGouter = academicMonth ? getGouterStatus(st, academicMonth).status !== 'unpaid' : false;
+    const mealType: 'subscription' | 'unit' = isSubscribedForService ? 'subscription' : 'unit';
+    const hasPaid = service === 'lunch' ? hasPaidLunch : hasPaidGouter;
+
+    // Option C: snapshot current traiteur price on lunch attendance so past records
+    // are never retroactively changed when settings.prixPlatTraiteur changes later.
+    const snapshotTraiteurPrice = (service === 'lunch' && settings)
+      ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
+      : undefined;
+
+    addMealAttendance(st, {
+      date: selectedDate,
+      service,
+      type: mealType,
+      paid: mealType === 'subscription' ? hasPaid : false,
+      ...(snapshotTraiteurPrice != null ? { traiteurPrice: snapshotTraiteurPrice } : {})
+    });
+    toast.success(`تم تسجيل ${serviceLabel} للتلميذ (${st.firstName} ${st.lastName}).`);
   };
 
 
@@ -335,19 +416,31 @@ export default function MealsModule({
       receiptNumber: generateReceiptNumber(students, service === 'lunch' ? 'REC-REP-' : 'REC-GOUT-'),
       notes: `${serviceLabel}: ${service === 'lunch' ? activePlan.dishName : 'استهلاك بالوحدة'}`
     };
-    const updatedStudent: Student = {
-      ...st,
-      mealAttendances: (st.mealAttendances || []).map(a =>
-        (a.date === selectedDate && (a.service || 'lunch') === service)
-          ? { ...a, paid: true, paidAt: new Date().toISOString() }
-          : a
-      ),
-      payments: [...(st.payments || []), payment]
-    };
-    // Pointage payé + paiement : le PUT élève rewrite les tables enfants, donc on
-    // lui passe la liste incluant le nouveau paiement ; le endpoint dédié n'est
-    // PAS appelé pour ce flux (pointage et paiement envoient le même état).
-    patchStudent(updatedStudent);
+    if (onUpdateMealAttendance) {
+      // Paiement → POST /api/payments. Pointage → PUT /api/meal-attendances
+      // (status='paid' + paid_payment_id) : AUCUNE suppression de la ligne.
+      recordPayment(st.id, payment);
+      updateMealAttendance(st, {
+        studentId: st.id,
+        date: selectedDate,
+        service,
+        type: 'unit',
+        paid: true,
+        paymentId: payment.id
+      });
+    } else {
+      // Fallback legacy (tests) : un seul PUT élève cohérent.
+      const updatedStudent: Student = {
+        ...st,
+        mealAttendances: (st.mealAttendances || []).map(a =>
+          (a.date === selectedDate && (a.service || 'lunch') === service)
+            ? { ...a, paid: true, paidAt: new Date().toISOString() }
+            : a
+        ),
+        payments: [...(st.payments || []), payment]
+      };
+      patchStudent(updatedStudent);
+    }
     toast.success(`تم تسجيل خلاص ${serviceLabel} (${unitPrice} د.ت).`);
   };
 
@@ -395,7 +488,25 @@ export default function MealsModule({
       traiteurPrice
     });
     if (updated === st) return; // every service already marked for this date
-    onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+    if (onCreateMealAttendance) {
+      // POST /api/meal-attendances pour chaque service nouvellement pointé.
+      const before = st.mealAttendances || [];
+      const added = (updated.mealAttendances || []).filter(a =>
+        a.date === selectedDate && !before.some(b => b.date === a.date && (b.service || 'lunch') === (a.service || 'lunch'))
+      );
+      for (const row of added) {
+        onCreateMealAttendance({
+          studentId: st.id,
+          date: row.date,
+          service: row.service || 'lunch',
+          type: row.type,
+          paid: row.paid,
+          ...(row.traiteurPrice !== undefined ? { traiteurPrice: row.traiteurPrice } : {})
+        });
+      }
+    } else {
+      onUpdateStudents(students.map(s => s.id === st.id ? updated : s));
+    }
     toast.success('تم تسجيل اللمجة في نقطة اليوم.');
   };
 
@@ -462,21 +573,32 @@ export default function MealsModule({
       ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
       : 0;
 
-    const updatedStudent: Student = {
-      ...st,
-      mealSubscription: st.mealSubscription
-        ? {
-            ...st.mealSubscription,
-            consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + (mealType === 'subscription' ? 1 : 0)
-          }
-        : undefined,
-      mealAttendances: [
-        ...(st.mealAttendances || []),
-        { date: selectedDate, service: 'lunch', type: mealType, paid: mealType === 'unit' ? false : hasPaid, traiteurPrice: snapshotTraiteurPrice }
-      ]
-    };
-
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    if (onCreateMealAttendance) {
+      // POST /api/meal-attendances — une seule ligne, pas de PUT élève.
+      addMealAttendance(st, {
+        date: selectedDate,
+        service: 'lunch',
+        type: mealType,
+        paid: mealType === 'unit' ? false : hasPaid,
+        traiteurPrice: snapshotTraiteurPrice
+      });
+    } else {
+      // Fallback legacy (tests) : l'ancien PUT élève garde le compteur d'abonnement.
+      const updatedStudent: Student = {
+        ...st,
+        mealSubscription: st.mealSubscription
+          ? {
+              ...st.mealSubscription,
+              consumedMealsCount: (st.mealSubscription.consumedMealsCount || 0) + (mealType === 'subscription' ? 1 : 0)
+            }
+          : undefined,
+        mealAttendances: [
+          ...(st.mealAttendances || []),
+          { date: selectedDate, service: 'lunch', type: mealType, paid: mealType === 'unit' ? false : hasPaid, traiteurPrice: snapshotTraiteurPrice }
+        ]
+      };
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    }
     if (hasRefund) {
       toast.info(`تم تسجيل وجبة كوجبة منفردة (مسترجع شهر ${academicMonth}) — يُدفع عند الاستلام.`);
     }
@@ -495,14 +617,26 @@ export default function MealsModule({
       ? (getFeesForYear(settings, schoolYear).prixPlatTraiteur ?? 6)
       : 0;
 
-    const updatedStudent: Student = {
-      ...stObj,
-      mealAttendances: [
-        ...(stObj.mealAttendances || []),
-        ...services.map(service => ({ date: selectedDate, service, type: 'unit' as const, paid: false, traiteurPrice: snapshotTraiteurPrice }))
-      ]
-    };
-    onUpdateStudents(students.map(s => s.id === stObj.id ? updatedStudent : s));
+    if (onCreateMealAttendance) {
+      // Une requête POST /api/meal-attendances par service coché.
+      services.forEach(service => addMealAttendance(stObj, {
+        date: selectedDate,
+        service,
+        type: 'unit',
+        paid: false,
+        traiteurPrice: snapshotTraiteurPrice
+      }));
+    } else {
+      // Fallback legacy (tests).
+      const updatedStudent: Student = {
+        ...stObj,
+        mealAttendances: [
+          ...(stObj.mealAttendances || []),
+          ...services.map(service => ({ date: selectedDate, service, type: 'unit' as const, paid: false, traiteurPrice: snapshotTraiteurPrice }))
+        ]
+      };
+      onUpdateStudents(students.map(s => s.id === stObj.id ? updatedStudent : s));
+    }
     setIsAddUnitMealModalOpen(false);
     setUnitMealSelectedId(null);
     setUnitMealTicked({});
@@ -531,13 +665,27 @@ export default function MealsModule({
       receiptNumber: generateReceiptNumber(students, 'REC-REP-'),
       notes: `وجبة اليوم: ${activePlan.dishName}`
     };
-    const updatedStudent: Student = {
-      ...st,
-      mealAttendances: (st.mealAttendances || []).map(a => a.date === selectedDate ? { ...a, paid: true, paidAt: new Date().toISOString() } : a),
-      payments: [...(st.payments || []), payment]
-    };
-    // Pointage payé + paiement dans le PUT élève (voir handlePayUnitService).
-    patchStudent(updatedStudent);
+    if (onUpdateMealAttendance) {
+      // Paiement → POST /api/payments ; pointage → PUT /api/meal-attendances
+      // (status='paid' + paid_payment_id), SANS supprimer la ligne.
+      recordPayment(st.id, payment);
+      updateMealAttendance(st, {
+        studentId: st.id,
+        date: selectedDate,
+        service: attendance.service || 'lunch',
+        type: 'unit',
+        paid: true,
+        paymentId: payment.id
+      });
+    } else {
+      // Fallback legacy (tests).
+      const updatedStudent: Student = {
+        ...st,
+        mealAttendances: (st.mealAttendances || []).map(a => a.date === selectedDate ? { ...a, paid: true, paidAt: new Date().toISOString() } : a),
+        payments: [...(st.payments || []), payment]
+      };
+      patchStudent(updatedStudent);
+    }
     toast.success(`تم تسجيل دفع وجبة اليوم (${unitPrice} د.ت).`);
   };
 
@@ -545,45 +693,55 @@ export default function MealsModule({
   const handleRemoveAttendance = (st: Student) => {
     const attendance = getAttendance(st);
     if (!attendance) return;
+    const todays = (st.mealAttendances || []).filter(a => a.date === selectedDate);
 
-    const newAttendances = (st.mealAttendances || []).filter(a => a.date !== selectedDate);
+    if (onDeleteMealAttendance) {
+      if (attendance.type === 'unit' && attendance.paid) {
+        const service = attendance.service || 'lunch';
+        const serviceLabel = service === 'gouter_matin' ? 'لمجة الصباح' : service === 'gouter_apres_midi' ? 'لمجة المساء' : 'الغداء';
+        const refund = buildMealUnitRefund(st, service, serviceLabel);
+        if (refund) recordPayment(st.id, refund);
+      }
+      // DELETE /api/meal-attendances pour chaque service de la journée.
+      for (const row of todays) removeMealAttendance(st, row.date, row.service || 'lunch');
+    } else {
+      // Fallback legacy (tests) : un seul PUT élève.
+      const newAttendances = (st.mealAttendances || []).filter(a => a.date !== selectedDate);
+      let updatedStudent: Student = { ...st, mealAttendances: newAttendances };
 
-    let updatedStudent: Student = { ...st, mealAttendances: newAttendances };
+      if (attendance.type === 'unit' && attendance.paid) {
+        const refundedAmount = settings
+          ? getFeesForYear(settings, schoolYear).fraisParRepas
+          : (st.mealSubscription?.unitPrice || 0);
+        if (refundedAmount > 0) updatedStudent = {
+          ...updatedStudent,
+          payments: [...(st.payments || []), {
+            id: `ref_meal_unit_${crypto.randomUUID()}`,
+            date: new Date().toISOString().split('T')[0],
+            amountPaid: -refundedAmount,
+            totalRequired: refundedAmount,
+            remainingBalance: 0,
+            service: 'Repas',
+            month: `Repas unitaire (${selectedDate})`,
+            paymentType: 'balance',
+            method: 'Espèces',
+            receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
+            notes: `استرجاع ثمن وجبة ${activePlan.dishName} - ${selectedDate}`,
+            refund: true
+          }]
+        };
+      } else if (attendance.type === 'subscription' && st.mealSubscription) {
+        updatedStudent = {
+          ...updatedStudent,
+          mealSubscription: {
+            ...st.mealSubscription,
+            consumedMealsCount: Math.max(0, (st.mealSubscription.consumedMealsCount || 0) - 1)
+          }
+        };
+      }
 
-    if (attendance.type === 'unit' && attendance.paid) {
-      const refundedAmount = settings
-        ? getFeesForYear(settings, schoolYear).fraisParRepas
-        : (st.mealSubscription?.unitPrice || 0);
-      // Remboursement = ligne de paiement seule, intégrée au même PUT élève.
-      // (refundedAmount 0 → pas de ligne de remboursement : éviter un montant 0)
-      if (refundedAmount > 0) updatedStudent = {
-        ...updatedStudent,
-        payments: [...(st.payments || []), {
-          id: `ref_meal_unit_${crypto.randomUUID()}`,
-          date: new Date().toISOString().split('T')[0],
-          amountPaid: -refundedAmount,
-          totalRequired: refundedAmount,
-          remainingBalance: 0,
-          service: 'Repas',
-          month: `Repas unitaire (${selectedDate})`,
-          paymentType: 'balance',
-          method: 'Espèces',
-          receiptNumber: generateReceiptNumber(students, 'REM-REP-'),
-          notes: `استرجاع ثمن وجبة ${activePlan.dishName} - ${selectedDate}`,
-          refund: true
-        }]
-      };
-    } else if (attendance.type === 'subscription' && st.mealSubscription) {
-      updatedStudent = {
-        ...updatedStudent,
-        mealSubscription: {
-          ...st.mealSubscription,
-          consumedMealsCount: Math.max(0, (st.mealSubscription.consumedMealsCount || 0) - 1)
-        }
-      };
+      patchStudent(updatedStudent);
     }
-
-    patchStudent(updatedStudent);
     setRemoveAttendanceStudent(null);
     toast.success(attendance.type === 'unit' && attendance.paid
       ? 'تم إزالة التلميذ واسترجاع ثمن الوجبة المنفردة.'
@@ -658,32 +816,43 @@ export default function MealsModule({
   };
 
   const handleEnrollStudentInGouter = (st: Student, type: 'matin' | 'soir' | 'both') => {
-    const updatedStudent: Student = {
-      ...st,
-      enrolledServices: {
-        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
-        gouterMatin: type === 'matin' || type === 'both',
-        gouterSoir: type === 'soir' || type === 'both',
-        gouterBoth: type === 'both'
-      }
-    };
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    const gouterMatin = type === 'matin' || type === 'both';
+    const gouterSoir = type === 'soir' || type === 'both';
+    if (onUpdateMealEnrollment) {
+      // PUT /api/meal-enrollments — pas de PUT élève.
+      onUpdateMealEnrollment({ studentId: st.id, schoolYear, gouterMatin, gouterSoir });
+    } else {
+      const updatedStudent: Student = {
+        ...st,
+        enrolledServices: {
+          ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
+          gouterMatin,
+          gouterSoir,
+          gouterBoth: gouterMatin && gouterSoir
+        }
+      };
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    }
     setIsEnrollGouterModalOpen(false);
     const typeLabel = type === 'both' ? 'اللمجتان معاً (صباح ومساء)' : type === 'matin' ? 'لمجة الصباح' : 'لمجة المساء';
     toast.success(`تم إلحاق التلميذ (${st.firstName} ${st.lastName}) بخدمة اللمجة: ${typeLabel}.`);
   };
 
   const handleUnenrollGouter = (st: Student) => {
-    const updatedStudent: Student = {
-      ...st,
-      enrolledServices: {
-        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
-        gouterMatin: false,
-        gouterSoir: false,
-        gouterBoth: false
-      }
-    };
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    if (onUpdateMealEnrollment) {
+      onUpdateMealEnrollment({ studentId: st.id, schoolYear, gouterMatin: false, gouterSoir: false });
+    } else {
+      const updatedStudent: Student = {
+        ...st,
+        enrolledServices: {
+          ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
+          gouterMatin: false,
+          gouterSoir: false,
+          gouterBoth: false
+        }
+      };
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    }
     toast.info(`تم إلغاء اشتراك اللمجة للتلميذ (${st.firstName} ${st.lastName}).`);
   };
 
@@ -697,44 +866,64 @@ export default function MealsModule({
     const clearedPayments = (st.payments || []).filter(
       p => !(p.service === 'Repas' && !p.month.includes('Repas unitaire'))
     );
-    const updatedStudent: Student = {
-      ...st,
-      enrolledServices: {
-        ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
-        meals: true
-      },
-      mealSubscription: {
-        mode: 'subscription' as const,
-        active: true,
-        monthlyPrice,
-        unitPrice,
-        prepaidMeals: Math.floor(monthlyPrice / unitPrice) || 18,
-        consumedMealsCount: 0
-      },
-      payments: clearedPayments
-    };
-    onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    if (onUpdateMealEnrollment) {
+      // Effacement « fresh start » : chaque ancienne ligne Repas est supprimée
+      // par DELETE /api/payments (une requête par ligne), puis l'inscription
+      // est réécrite via PUT /api/meal-enrollments. Aucun PUT élève.
+      const removed = (st.payments || []).filter(
+        p => p.service === 'Repas' && !p.month.includes('Repas unitaire')
+      );
+      if (onDeletePayment) removed.forEach(p => onDeletePayment(p.id));
+      onUpdateMealEnrollment({
+        studentId: st.id,
+        schoolYear,
+        lunch: { active: true, mode: 'subscription', monthlyPrice, unitPrice }
+      });
+    } else {
+      const updatedStudent: Student = {
+        ...st,
+        enrolledServices: {
+          ...(st.enrolledServices || { etude: true, suivi: true, library: false, meals: false }),
+          meals: true
+        },
+        mealSubscription: {
+          mode: 'subscription' as const,
+          active: true,
+          monthlyPrice,
+          unitPrice,
+          prepaidMeals: Math.floor(monthlyPrice / unitPrice) || 18,
+          consumedMealsCount: 0
+        },
+        payments: clearedPayments
+      };
+      onUpdateStudents(students.map(s => s.id === st.id ? updatedStudent : s));
+    }
     setIsEnrollModalOpen(false);
     toast.success(`تم إلحاق التلميذ (${st.firstName} ${st.lastName}) بالمطعم — يبدأ كمنخرط جديد بدون أي رصيد سابق.`);
   };
 
   // Remove all students from Repas: clear payments, subscriptions and attendances
   const handleClearMealsData = () => {
-    const updated = students.map(st => ({
-      ...st,
-      enrolledServices: { ...st.enrolledServices, meals: false },
-      mealSubscription: {
-        mode: 'unit' as const,
-        monthlyPrice: 0,
-        unitPrice: 0,
-        prepaidMeals: 0,
-        consumedMealsCount: 0,
-        active: false
-      },
-      mealAttendances: [],
-      payments: (st.payments || []).filter(p => p.service !== 'Repas')
-    }));
-    onUpdateStudents(updated);
+    if (onResetMealData) {
+      // POST /api/meal-reset — une opération serveur, aucun PUT élève.
+      onResetMealData();
+    } else {
+      const updated = students.map(st => ({
+        ...st,
+        enrolledServices: { ...st.enrolledServices, meals: false },
+        mealSubscription: {
+          mode: 'unit' as const,
+          monthlyPrice: 0,
+          unitPrice: 0,
+          prepaidMeals: 0,
+          consumedMealsCount: 0,
+          active: false
+        },
+        mealAttendances: [],
+        payments: (st.payments || []).filter(p => p.service !== 'Repas')
+      }));
+      onUpdateStudents(updated);
+    }
     setClearMealsConfirm(false);
     toast.success('تم مسح كل بيانات المطعم السابقة من جميع التلاميذ.');
   };
@@ -857,28 +1046,47 @@ export default function MealsModule({
         : `خلاص اشتراك ${isGouter ? 'اللمجة' : 'المطعم'} لشهر ${paymentMonth} (${schoolYear})`),
       discount: numDiscount > 0 ? numDiscount : undefined
     };
-    // Mise à jour des métadonnées du service (meals flag / abonnement actif) et
-    // du paiement dans UN SEUL PUT élève — le endpoint dédié n'est pas doublé ici
-    // car le PUT granulaire réécrit les paiements depuis le payload complet.
-    const updatedStudent: Student = isGouter ? {
-      ...selectedStudentForPayment,
-      payments: [...(selectedStudentForPayment.payments || []), newPayment]
-    } : {
-      ...selectedStudentForPayment,
-      enrolledServices: {
-        suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true,
-        etude: selectedStudentForPayment.enrolledServices?.etude ?? true,
-        library: selectedStudentForPayment.enrolledServices?.library ?? false,
-        meals: true
-      },
-      mealSubscription: selectedStudentForPayment.mealSubscription
-        ? { ...selectedStudentForPayment.mealSubscription, mode: 'subscription' as const, active: true }
-        : selectedStudentForPayment.mealSubscription,
-      payments: [...(selectedStudentForPayment.payments || []), newPayment]
-    };
-    patchStudent(updatedStudent);
-    setSelectedStudentForPayment(null);
-    setPrintingReceipt({ student: updatedStudent, payment: newPayment });
+    if (onRecordPayment) {
+      // Paiement → POST /api/payments uniquement (aucun PUT élève). L'élève est
+      // déjà inscrit au service dans la grille de paiement ; on ne réécrit donc
+      // pas ses métadonnées d'inscription.
+      recordPayment(selectedStudentForPayment.id, newPayment);
+      const receiptStudent: Student = {
+        ...selectedStudentForPayment,
+        payments: [...(selectedStudentForPayment.payments || []), newPayment],
+        ...(isGouter ? {} : {
+          enrolledServices: selectedStudentForPayment.enrolledServices
+            ? { ...selectedStudentForPayment.enrolledServices, meals: true }
+            : selectedStudentForPayment.enrolledServices,
+          mealSubscription: selectedStudentForPayment.mealSubscription
+            ? { ...selectedStudentForPayment.mealSubscription, mode: 'subscription' as const, active: true }
+            : selectedStudentForPayment.mealSubscription
+        })
+      };
+      setSelectedStudentForPayment(null);
+      setPrintingReceipt({ student: receiptStudent, payment: newPayment });
+    } else {
+      // Fallback legacy (tests) : un seul PUT élève.
+      const updatedStudent: Student = isGouter ? {
+        ...selectedStudentForPayment,
+        payments: [...(selectedStudentForPayment.payments || []), newPayment]
+      } : {
+        ...selectedStudentForPayment,
+        enrolledServices: {
+          suivi: selectedStudentForPayment.enrolledServices?.suivi ?? true,
+          etude: selectedStudentForPayment.enrolledServices?.etude ?? true,
+          library: selectedStudentForPayment.enrolledServices?.library ?? false,
+          meals: true
+        },
+        mealSubscription: selectedStudentForPayment.mealSubscription
+          ? { ...selectedStudentForPayment.mealSubscription, mode: 'subscription' as const, active: true }
+          : selectedStudentForPayment.mealSubscription,
+        payments: [...(selectedStudentForPayment.payments || []), newPayment]
+      };
+      patchStudent(updatedStudent);
+      setSelectedStudentForPayment(null);
+      setPrintingReceipt({ student: updatedStudent, payment: newPayment });
+    }
     toast.success(isGouter
       ? `تم تسجيل خلاص اشتراك اللمجة (${paid} د.ت) بنجاح.`
       : wasRefunded
@@ -1012,27 +1220,42 @@ export default function MealsModule({
     // Shut down service if the current/actual month was refunded OR if the student has no more paid months
     const shutsDownService = isCurrentMonthRefunded || !hasRemainingPaidMonth;
 
-    const updatedStudent: Student = {
-      ...refundingStudent,
-      enrolledServices: shutsDownService && refundingStudent.enrolledServices
-        ? { ...refundingStudent.enrolledServices, meals: false }
-        : refundingStudent.enrolledServices,
-      mealSubscription: refundingStudent.mealSubscription
-        ? { ...refundingStudent.mealSubscription, active: !shutsDownService }
-        : refundingStudent.mealSubscription,
-      payments: [...(refundingStudent.payments || []), ...refundRecords]
-    };
-
-    // Remboursements + arrêt/relance du service = UN PUT élève cohérent.
-    patchStudent(updatedStudent);
+    if (onRecordPayment && onUpdateMealEnrollment) {
+      // Remboursements → POST /api/payments (une ligne par mois), puis
+      // arrêt/relance du service → PUT /api/meal-enrollments. Aucun PUT élève.
+      refundRecords.forEach(r => recordPayment(refundingStudent.id, r));
+      onUpdateMealEnrollment({
+        studentId: refundingStudent.id,
+        schoolYear,
+        lunch: {
+          active: !shutsDownService,
+          mode: refundingStudent.mealSubscription?.mode ?? 'subscription',
+          monthlyPrice: refundingStudent.mealSubscription?.monthlyPrice,
+          unitPrice: refundingStudent.mealSubscription?.unitPrice
+        }
+      });
+    } else {
+      // Fallback legacy (tests) : un seul PUT élève cohérent.
+      const updatedStudent: Student = {
+        ...refundingStudent,
+        enrolledServices: shutsDownService && refundingStudent.enrolledServices
+          ? { ...refundingStudent.enrolledServices, meals: false }
+          : refundingStudent.enrolledServices,
+        mealSubscription: refundingStudent.mealSubscription
+          ? { ...refundingStudent.mealSubscription, active: !shutsDownService }
+          : refundingStudent.mealSubscription,
+        payments: [...(refundingStudent.payments || []), ...refundRecords]
+      };
+      patchStudent(updatedStudent);
+    }
     setIsRefundModalOpen(false);
     setRefundingStudent(null);
     setRefundAmounts({});
     toast.success(refundRecords.length > 0
       ? shutsDownService
-        ? `تم استرجاع ${totalRefund} د.ت (سُجّل في الميزانية)! أُنهيت خدمة المطعم للتلميذ(ة) ${updatedStudent.firstName} ${updatedStudent.lastName} — يمكنه أخذ وجبات منفردة حتى يعيد الخلاص.`
+        ? `تم استرجاع ${totalRefund} د.ت (سُجّل في الميزانية)! أُنهيت خدمة المطعم للتلميذ(ة) ${refundingStudent.firstName} ${refundingStudent.lastName} — يمكنه أخذ وجبات منفردة حتى يعيد الخلاص.`
         : `تم استرجاع ${totalRefund} د.ت مقابل ${refundRecords.length} شهر (سُجّل في الميزانية)! تبقى خدمة المطعم نشطة.`
-      : `لا توجد أشهر قابلة للاسترجاع للتلميذ(ة) ${updatedStudent.firstName} ${updatedStudent.lastName}.`);
+      : `لا توجد أشهر قابلة للاسترجاع للتلميذ(ة) ${refundingStudent.firstName} ${refundingStudent.lastName}.`);
   };
 
   return (

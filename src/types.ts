@@ -673,6 +673,44 @@ export interface MealAttendance {
 }
 
 
+/** Clé d'UN pointage repas (PK serveur : élève + date + service). */
+export interface MealAttendanceKey {
+  studentId: string;
+  date: string;
+  service: MealServiceType;
+}
+
+
+/**
+ * Payload d'écriture d'UN pointage repas.
+ * POST /api/meal-attendances = création — PUT = mise à jour.
+ * `paymentId` relie le pointage au paiement (paid_payment_id) ; il ne
+ * supprime jamais la ligne.
+ */
+export interface MealAttendanceInput extends MealAttendanceKey {
+  type: 'subscription' | 'unit';
+  paid?: boolean;
+  traiteurPrice?: number;
+  paymentId?: string;
+}
+
+
+/** Inscription/désinscription repas & goûter sans réécrire l'élève complet. */
+export interface MealEnrollmentUpdate {
+  studentId: string;
+  schoolYear?: string;
+  lunch?: {
+    active: boolean;
+    mode?: 'subscription' | 'unit';
+    monthlyPrice?: number;
+    annualPrice?: number;
+    unitPrice?: number;
+  };
+  gouterMatin?: boolean;
+  gouterSoir?: boolean;
+}
+
+
 export interface StudentRegistration {
   date: string;
   location: string;
