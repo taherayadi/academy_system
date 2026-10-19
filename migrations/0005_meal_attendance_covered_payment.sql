@@ -58,15 +58,51 @@ SET covered_by_payment_id = (
 WHERE status = 'covered_by_subscription'
   AND covered_by_payment_id IS NULL;
 
--- 4) Sans paiement identifiable, conserver l'information « payé » mais
---    passer en 'paid' pour satisfaire la contrainte.
+-- 4) Sans paiement identifiable, on ne peut conserver ni « couvert » ni
+--    « payé » (les deux contraintes exigent un payment_id). On repasse en
+--    'unpaid' : le client affichera le pointage comme non payé.
 UPDATE meal_attendances
-SET status = 'paid'
+SET status = 'unpaid'
 WHERE status = 'covered_by_subscription'
   AND covered_by_payment_id IS NULL;
 
--- 5) Reconstruction de la table avec la contrainte (aucune autre table ne
---    référence meal_attendances, donc le remplacement est sûr).
+-- 4bis) Même règle pour les anciens pointages unitaires marqués 'paid'
+--      sans paid_payment_id. On tente d'abord de retrouver le paiement
+--      unitaire du même jour (period_month NULL).
+UPDATE meal_attendances
+SET paid_payment_id = (
+  SELECT p.id
+  FROM payments p
+  WHERE p.center_id = meal_attendances.center_id
+    AND p.student_id = meal_attendances.student_id
+    AND p.date = meal_attendances.date
+    AND p.period_month IS NULL
+    AND p.billing_period = 'unit'
+    AND p.is_refund = 0
+    AND p.amount > 0
+    AND (
+      (meal_attendances.service_key = 'lunch' AND p.service_key = 'lunch')
+      OR (
+        meal_attendances.service_key IN ('gouter_matin', 'gouter_apres_midi')
+        AND p.service_key IN ('gouter_matin', 'gouter_apres_midi', 'gouter_both')
+      )
+    )
+  ORDER BY p.created_at DESC
+  LIMIT 1
+)
+WHERE status = 'paid'
+  AND paid_payment_id IS NULL;
+
+UPDATE meal_attendances
+SET status = 'unpaid'
+WHERE status = 'paid'
+  AND paid_payment_id IS NULL;
+
+-- 5) Le pointage est exposé par la vue v_meal_center_income. SQLite refuse
+--    le RENAME tant que cette vue pointe vers l'ancienne table : on la
+--    recrée après la reconstruction (même définition que la production).
+DROP VIEW IF EXISTS v_meal_center_income;
+
 CREATE TABLE meal_attendances_new (
   center_id             TEXT NOT NULL,
   student_id            TEXT NOT NULL,
@@ -82,6 +118,7 @@ CREATE TABLE meal_attendances_new (
   center_share          REAL CHECK (center_share IS NULL OR center_share >= 0),
   created_at            INTEGER NOT NULL,
   PRIMARY KEY (student_id, date, service_key),
+  CHECK (status <> 'paid' OR paid_payment_id IS NOT NULL),
   CHECK (status <> 'covered_by_subscription' OR covered_by_payment_id IS NOT NULL),
   FOREIGN KEY (center_id, student_id) REFERENCES students(center_id, id) ON DELETE CASCADE,
   FOREIGN KEY (center_id, paid_payment_id) REFERENCES payments(center_id, id) ON DELETE RESTRICT,
@@ -101,3 +138,22 @@ FROM meal_attendances;
 
 DROP TABLE meal_attendances;
 ALTER TABLE meal_attendances_new RENAME TO meal_attendances;
+
+-- 6) Recréer les index de production perdus avec l'ancienne table.
+CREATE INDEX IF NOT EXISTS idx_meal_att_center_date
+  ON meal_attendances(center_id, date, service_key);
+
+CREATE INDEX IF NOT EXISTS idx_meal_att_status
+  ON meal_attendances(center_id, status)
+  WHERE status = 'unpaid';
+
+-- 7) Recréer la vue qui agrège les revenus cantine par mois/service/mode.
+CREATE VIEW v_meal_center_income AS
+SELECT center_id, substr(date, 1, 7) AS month, service_key, mode_snapshot,
+       COUNT(*)                  AS meals,
+       SUM(unit_price)           AS gross,
+       SUM(traiteur_share)       AS traiteur,
+       SUM(center_share)         AS center
+FROM meal_attendances
+WHERE status IN ('paid','covered_by_subscription')
+GROUP BY center_id, substr(date, 1, 7), service_key, mode_snapshot;

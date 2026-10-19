@@ -1926,15 +1926,41 @@ async function findCoveringMealPaymentId(
   return row ? str(row.id) : null;
 }
 
+/**
+ * Retrouve le paiement unitaire du même jour pour un pointage unitaire.
+ * Utile aux anciens clients qui envoient paid=true sans paymentId : la
+ * contrainte DB exige paid_payment_id non NULL pour le statut 'paid'.
+ */
+async function findUnitMealPaymentId(
+  db: D1Database, centerId: string, studentId: string, service: string, date: string
+): Promise<string | null> {
+  const serviceKeys = MEAL_PAYMENT_SERVICE_KEYS[service] || [service];
+  const placeholders = serviceKeys.map(() => '?').join(', ');
+  const row = await db.prepare(
+    `SELECT id FROM payments
+      WHERE center_id = ? AND student_id = ?
+        AND service_key IN (${placeholders})
+        AND date = ? AND period_month IS NULL AND billing_period = 'unit'
+        AND is_refund = 0 AND amount > 0
+      ORDER BY created_at DESC
+      LIMIT 1`
+  ).bind(centerId, studentId, ...serviceKeys, date).first<any>();
+  return row ? str(row.id) : null;
+}
+
 /** Status DB : 'covered_by_subscription' pour un abonnement, 'paid' pour une unité. */
 function mealAttendanceStatus(
-  type: string, paid: boolean, coveredByPaymentId: string | null = null
+  type: string,
+  paid: boolean,
+  coveredByPaymentId: string | null = null,
+  paidPaymentId: string | null = null
 ): 'unpaid' | 'paid' | 'covered_by_subscription' {
   if (!paid) return 'unpaid';
-  // Sans paiement d'abonnement identifiable, on reste sur 'paid' : la
-  // contrainte DB interdit 'covered_by_subscription' avec un id NULL.
+  // Les deux contraintes DB exigent un payment_id pour 'paid' et
+  // 'covered_by_subscription'. Sans paiement identifiable, on reste 'unpaid'.
   if (type === 'subscription' && coveredByPaymentId) return 'covered_by_subscription';
-  return 'paid';
+  if (type === 'unit' && paidPaymentId) return 'paid';
+  return 'unpaid';
 }
 
 function mealAttendanceType(value: unknown, fallback: 'subscription' | 'unit'): 'subscription' | 'unit' {
@@ -1976,7 +2002,10 @@ export async function createSingleMealAttendance(db: D1Database, payload: any, c
   const coveredPaymentId = paid && type === 'subscription'
     ? (paymentId || await findCoveringMealPaymentId(db, centerId, studentId, service, date))
     : null;
-  const paidPaymentId = type === 'unit' ? paymentId : null;
+  let paidPaymentId = type === 'unit' ? paymentId : null;
+  if (paid && type === 'unit' && !paidPaymentId) {
+    paidPaymentId = await findUnitMealPaymentId(db, centerId, studentId, service, date);
+  }
   // `unit_price` = prix facturé (fraisParRepas) ; `traiteur_share` = coût
   // traiteur (0 en cuisine interne). Les anciens clients qui n'envoyaient que
   // `traiteurPrice` restent compatibles : il sert alors de prix unitaire.
@@ -1991,7 +2020,7 @@ export async function createSingleMealAttendance(db: D1Database, payload: any, c
     'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, covered_by_payment_id, unit_price, traiteur_share, center_share, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     centerId, studentId, date, service, type,
-    mealAttendanceStatus(type, paid, coveredPaymentId), paidPaymentId, coveredPaymentId,
+    mealAttendanceStatus(type, paid, coveredPaymentId, paidPaymentId), paidPaymentId, coveredPaymentId,
     unitPrice, traiteurShare, centerShare, Date.now()
   ).run();
 }
@@ -2024,7 +2053,10 @@ export async function updateSingleMealAttendance(db: D1Database, payload: any, c
             || await findCoveringMealPaymentId(db, centerId, studentId, service, date))
         : null)
     : null;
-  const paidPaymentId = type === 'unit' ? paymentId : null;
+  let paidPaymentId = type === 'unit' ? paymentId : null;
+  if (paid && type === 'unit' && !paidPaymentId) {
+    paidPaymentId = await findUnitMealPaymentId(db, centerId, studentId, service, date);
+  }
   // Mise à jour partielle : un champ absent conserve la valeur existante.
   // `unit_price` = prix facturé ; `traiteur_share` = coût traiteur.
   const currentUnit = existing.unit_price == null ? null : num(existing.unit_price);
@@ -2043,7 +2075,7 @@ export async function updateSingleMealAttendance(db: D1Database, payload: any, c
   await db.prepare(
     'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, covered_by_payment_id = ?, unit_price = ?, traiteur_share = ?, center_share = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
   ).bind(
-    type, mealAttendanceStatus(type, paid, coveredPaymentId), paidPaymentId, coveredPaymentId,
+    type, mealAttendanceStatus(type, paid, coveredPaymentId, paidPaymentId), paidPaymentId, coveredPaymentId,
     unitPrice, traiteurShare, centerShare,
     centerId, studentId, date, service
   ).run();

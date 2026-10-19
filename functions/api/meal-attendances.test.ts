@@ -29,6 +29,7 @@ beforeEach(() => {
       student_id TEXT NOT NULL,
       date TEXT,
       service_key TEXT,
+      billing_period TEXT NOT NULL DEFAULT 'unit',
       period_month TEXT,
       amount REAL NOT NULL DEFAULT 0,
       is_refund INTEGER NOT NULL DEFAULT 0,
@@ -50,6 +51,7 @@ beforeEach(() => {
       center_share REAL,
       created_at INTEGER NOT NULL,
       PRIMARY KEY (student_id, date, service_key),
+      CHECK (status <> 'paid' OR paid_payment_id IS NOT NULL),
       CHECK (status <> 'covered_by_subscription' OR covered_by_payment_id IS NOT NULL),
       FOREIGN KEY (center_id, student_id) REFERENCES students(center_id, id) ON DELETE CASCADE,
       FOREIGN KEY (center_id, paid_payment_id) REFERENCES payments(center_id, id) ON DELETE RESTRICT
@@ -157,12 +159,27 @@ describe('/api/meal-attendances — POST crée UNE ligne', () => {
     expect(row.covered_by_payment_id).toBe('pay_sub');
   });
 
-  it('retombe sur paid si aucun paiement d’abonnement n’est identifiable', async () => {
+  it('reste unpaid si aucun paiement d’abonnement n’est identifiable', async () => {
     const res = await onRequestPost(ctx('POST', { ...base, type: 'subscription', paid: true }));
     expect(res.status).toBe(200);
-    const row = sqlite.prepare('SELECT status, covered_by_payment_id FROM meal_attendances').get() as any;
-    expect(row.status).toBe('paid');
+    const row = sqlite.prepare('SELECT status, covered_by_payment_id, paid_payment_id FROM meal_attendances').get() as any;
+    // Les deux contraintes DB exigent un payment_id : sans paiement, on ne
+    // peut ni écrire 'covered_by_subscription' ni 'paid'.
+    expect(row.status).toBe('unpaid');
     expect(row.covered_by_payment_id).toBeNull();
+    expect(row.paid_payment_id).toBeNull();
+  });
+
+  it('retrouve le paiement unitaire du jour si paymentId est absent', async () => {
+    sqlite.prepare(`
+      INSERT INTO payments (id, center_id, student_id, date, service_key, period_month, amount, is_refund, created_at)
+      VALUES ('pay_unit', ?, ?, '2026-10-19', 'lunch', NULL, 8, 0, 1)
+    `).run(CENTER, STUDENT);
+    const res = await onRequestPost(ctx('POST', { ...base, paid: true }));
+    expect(res.status).toBe(200);
+    const row = sqlite.prepare('SELECT status, paid_payment_id FROM meal_attendances').get() as any;
+    expect(row.status).toBe('paid');
+    expect(row.paid_payment_id).toBe('pay_unit');
   });
 });
 
