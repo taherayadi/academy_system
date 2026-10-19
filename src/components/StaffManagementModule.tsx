@@ -1820,7 +1820,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
                         )}
                         <div className="px-3 py-2.5 bg-brand-600 text-white flex justify-between text-sm font-black">
                           <span>الصافي الواجب دفعه:</span>
-                          <span className="font-mono text-brand-600">{netPrev.toFixed(2)} د.ت</span>
+                          <span className="font-mono text-white">{netPrev.toFixed(2)} د.ت</span>
                         </div>
                       </div>
                       {alreadyValidated && (
@@ -1946,7 +1946,7 @@ const base = generatingPayslipStaff.baseSalary || 850;
 
                     <div className="p-3 bg-brand-600 text-white flex justify-between text-sm font-black">
                       <span>الصافي الواجب دفعه:</span>
-                      <span className="font-mono text-brand-600">{printedPayslip.netSalary.toFixed(2)} د.ت</span>
+                      <span className="font-mono text-white">{printedPayslip.netSalary.toFixed(2)} د.ت</span>
                     </div>
                   </div>
                 </div>
