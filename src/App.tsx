@@ -4,7 +4,7 @@ import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, 
 
 import { Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, updateTimesheetApi, deleteTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -705,18 +705,42 @@ export default function App() {
     commitDomain(() => saveTimesheets(updated));
   };
 
+  // Fusion locale d'UN pointage par (staff + date + créneau) : rendu immédiat,
+  // dédoublonnage côté client (id existant conservé). Le serveur ne reçoit que
+  // la ligne touchée (POST création / PUT mise à jour).
+  const mergeTimesheet = useCallback((entry: TimesheetEntry) => {
+    const key = (t: TimesheetEntry) => `${t.staffId}|${t.date}|${t.slotTime ?? ''}`;
+    setTimesheets(prev => {
+      const existing = prev.find(t => key(t) === key(entry));
+      return existing ? prev.map(t => (t.id === existing.id ? { ...entry, id: existing.id } : t)) : [...prev, entry];
+    });
+  }, []);
+
   // Upsert d'UN pointage (marquage Étude) : le module n'envoie que la ligne
   // touchée — App fusionne localement (dédoublonnage par staff+date+créneau)
   // et POSTe uniquement ce record au serveur.
   const handleUpsertTimesheet = useCallback((entry: TimesheetEntry) => {
-    const key = (t: TimesheetEntry) => `${t.staffId}|${t.date}|${t.slotTime ?? ''}`;
-    const existing = timesheets.find(t => key(t) === key(entry));
-    const next = existing
-      ? timesheets.map(t => (t.id === existing.id ? { ...entry, id: existing.id } : t))
-      : [...timesheets, entry];
-    setTimesheets(next);
+    mergeTimesheet(entry);
     commitDomain(() => upsertTimesheetApi(entry));
-  }, [timesheets]);
+  }, [mergeTimesheet]);
+
+  // Création d'UN pointage — POST /api/timesheets.
+  const handleCreateTimesheet = useCallback((entry: TimesheetEntry) => {
+    mergeTimesheet(entry);
+    commitDomain(() => upsertTimesheetApi(entry));
+  }, [mergeTimesheet]);
+
+  // Mise à jour d'UN pointage existant — PUT /api/timesheets.
+  const handleUpdateTimesheet = useCallback((entry: TimesheetEntry) => {
+    mergeTimesheet(entry);
+    commitDomain(() => updateTimesheetApi(entry));
+  }, [mergeTimesheet]);
+
+  // Suppression d'UN pointage — DELETE /api/timesheets.
+  const handleDeleteTimesheet = useCallback((entry: TimesheetEntry) => {
+    setTimesheets(prev => prev.filter(t => t.id !== entry.id));
+    commitDomain(() => deleteTimesheetApi({ id: entry.id }));
+  }, []);
 
   const handleUpdateExternalStudents = (updated: ExternalStudentRegister[]) => {
     setExternalStudents(updated);
@@ -1744,6 +1768,9 @@ export default function App() {
                   onUpdateSettings={handleUpdateSettings}
                   onUpdateStaff={handleUpdateStaff}
                   onUpdateTimesheets={handleUpdateTimesheets}
+                  onCreateTimesheet={handleCreateTimesheet}
+                  onUpdateTimesheet={handleUpdateTimesheet}
+                  onDeleteTimesheet={handleDeleteTimesheet}
                   onCreateLeaveRequest={handleCreateStaffLeaveRequest}
                   onUpdateLeaveStatus={handleUpdateStaffLeaveStatus}
                   onCreateAdvance={handleCreateStaffAdvance}

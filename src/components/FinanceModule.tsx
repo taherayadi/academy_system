@@ -2092,7 +2092,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                       <th className="p-4">المستوى</th>
                       <th className="p-4">السنة الدراسية</th>
                       <th className="p-4">هاتف الولي</th>
-                      <th className="p-4">التأمين المدرسي</th>
+                      <th className="p-4 text-center">التأمين المدرسي</th>
                       <th className="p-4">مداخيل الكورسات</th>
                       <th className="p-4">المجموع</th>
                       <th className="p-4">الكورسات المسجل فيها</th>
@@ -2119,7 +2119,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                             <td className="p-4 text-slate-600 font-bold">{reg.grade}</td>
                             <td className="p-4 font-mono text-slate-500">{reg.schoolYear || '—'}</td>
                             <td className="p-4 font-mono text-slate-500" dir="ltr">{reg.parentPhone || '—'}</td>
-                            <td className="p-4">
+                            <td className="p-4 text-center">
                               {reg.assurancePaid ? (
                                 <div className="flex flex-col items-center text-center gap-0.5 bg-brand-600/10 text-brand-700 rounded-lg px-2 py-1 font-black text-[11px] w-fit mx-auto">
                                   <span>✓ مدفوع — {fmt(reg.assuranceAmount)} د.ت</span>
@@ -2133,7 +2133,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                                   <span className="text-[9px] font-bold text-amber-700">المتبقي {fmt(Math.max(0, (reg.assuranceRequired || 0) - reg.assuranceAmount))} د.ت</span>
                                 </div>
                               ) : (
-                                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-lg font-black text-[11px]">
+                                <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 rounded-lg font-black text-[11px]">
                                   ✗ غير مدفوع
                                 </span>
                               )}
@@ -2167,7 +2167,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                     <tfoot className="bg-slate-50 border-t border-slate-200">
                       <tr>
                         <td colSpan={4} className="p-4 font-black text-slate-700 text-xs">الإجماليات</td>
-                        <td className="p-4 font-mono font-black text-brand-700 text-xs">{fmt(totalAssurance)} د.ت</td>
+                        <td className="p-4 font-mono font-black text-brand-700 text-xs text-center">{fmt(totalAssurance)} د.ت</td>
                         <td className="p-4 font-mono font-black text-brand-700 text-xs">{fmt(totalCoursePayments)} د.ت</td>
                         <td className="p-4 font-mono font-black text-slate-900 text-xs">{fmt(totalExtRevenue)} د.ت</td>
                         <td className="p-4"></td>

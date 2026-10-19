@@ -3501,6 +3501,57 @@ export async function upsertSingleTimesheet(db: D1Database, t: any, centerId: st
 }
 
 /**
+ * Met à jour UN pointage existant (PUT /api/timesheets, corps = objet).
+ * La ligne est identifiée par (staff_id, date, slot_time) — slot_time NULL/absent
+ * = journée entière. La ligne DOIT exister (sinon 400) : la création passe par
+ * POST. Même contrôle de tenancy que l'upsert.
+ */
+export async function updateSingleTimesheet(db: D1Database, t: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const staffId = str(t.staffId);
+  const date = str(t.date);
+  if (!staffId || !date) {
+    throw new Error('سجل الحضور يجب أن يحتوي على الأستاذ والتاريخ.');
+  }
+  if (t.status !== 'present' && t.status !== 'retard' && t.status !== 'absent' && t.status !== 'conge') {
+    throw new Error('حالة الحضور غير صالحة.');
+  }
+  const owner = await db.prepare('SELECT id FROM staff WHERE id = ? AND center_id = ?').bind(staffId, centerId).first();
+  if (!owner) {
+    throw new Error('الأستاذ غير موجود في هذا المركز.');
+  }
+  const slotTime = t.slotTime == null || t.slotTime === '' ? null : str(t.slotTime);
+  const existing = await db.prepare('SELECT id FROM timesheets WHERE center_id = ? AND staff_id = ? AND date = ? AND (slot_time = ? OR (slot_time IS NULL AND ? IS NULL))')
+    .bind(centerId, staffId, date, slotTime, slotTime).first();
+  if (!existing) {
+    throw new Error('سجل الحضور غير موجود.');
+  }
+  await db.prepare('UPDATE timesheets SET status = ?, leave_reason = ?, leave_status = ?, notes = ?, hours_worked = ?, extra_hours = ? WHERE center_id = ? AND staff_id = ? AND date = ? AND (slot_time = ? OR (slot_time IS NULL AND ? IS NULL))')
+    .bind(str(t.status), t.leaveReason == null ? null : str(t.leaveReason), t.leaveStatus == null ? null : str(t.leaveStatus), t.notes == null ? null : str(t.notes), t.hoursWorked == null ? null : num(t.hoursWorked), t.extraHours == null ? null : num(t.extraHours), centerId, staffId, date, slotTime, slotTime)
+    .run();
+}
+
+/**
+ * Supprime UN pointage (DELETE /api/timesheets). Cible par `id`, ou par
+ * (staff_id, date, slot_time) quand l'id n'est pas fourni. Tenancy garantie par
+ * le filtre center_id.
+ */
+export async function deleteSingleTimesheet(db: D1Database, t: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(t?.id);
+  if (id) {
+    await db.prepare('DELETE FROM timesheets WHERE id = ? AND center_id = ?').bind(id, centerId).run();
+    return;
+  }
+  const staffId = str(t?.staffId);
+  const date = str(t?.date);
+  if (!staffId || !date) {
+    throw new Error('سجل الحضور يجب أن يحتوي على الأستاذ والتاريخ.');
+  }
+  const slotTime = t?.slotTime == null || t.slotTime === '' ? null : str(t.slotTime);
+  await db.prepare('DELETE FROM timesheets WHERE center_id = ? AND staff_id = ? AND date = ? AND (slot_time = ? OR (slot_time IS NULL AND ? IS NULL))')
+    .bind(centerId, staffId, date, slotTime, slotTime).run();
+}
+
+/**
  * Mise à jour partielle d'une ligne student_year existante. Sémantique tri-état :
  * champ ABSENT de l'objet → inchangé ; champ PRÉSENT → réécrit tel quel
  * (null/'' = effacer, sauf grade NOT NULL où '' est ignoré). COALESCE ne peut

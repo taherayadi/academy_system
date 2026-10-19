@@ -357,6 +357,16 @@ export async function upsertTimesheetApi(entry: TimesheetEntry): Promise<void> {
   return postDomain('/timesheets', entry, 'تعذر حفظ سجل الحضور.');
 }
 
+/** Met à jour UN pointage existant (PUT /api/timesheets, corps = objet). */
+export async function updateTimesheetApi(entry: TimesheetEntry): Promise<void> {
+  return putDomain('/timesheets', entry, 'تعذر تحديث سجل الحضور.');
+}
+
+/** Supprime UN pointage (DELETE /api/timesheets) par id. */
+export async function deleteTimesheetApi(entry: Pick<TimesheetEntry, 'id'>): Promise<void> {
+  return deleteDomain(`/timesheets?id=${encodeURIComponent(entry.id)}`, 'تعذر حذف سجل الحضور.');
+}
+
 
 export async function saveExternalStudents(externalStudents: ExternalStudentRegister[]): Promise<void> {
   return putDomain('/external-students', externalStudents, 'تعذر حفظ بيانات التلاميذ الخارجيين.');

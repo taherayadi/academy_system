@@ -35,6 +35,12 @@ interface StaffManagementModuleProps {
   timesheets: TimesheetEntry[];
   onUpdateStaff: (staff: StaffMember[]) => void;
   onUpdateTimesheets: (ts: TimesheetEntry[]) => void;
+  /** Ciblé : créer UN pointage (POST /api/timesheets). */
+  onCreateTimesheet?: (entry: TimesheetEntry) => void;
+  /** Ciblé : mettre à jour UN pointage existant (PUT /api/timesheets). */
+  onUpdateTimesheet?: (entry: TimesheetEntry) => void;
+  /** Ciblé : supprimer UN pointage (DELETE /api/timesheets). */
+  onDeleteTimesheet?: (entry: TimesheetEntry) => void;
   /** Ciblé : créer UNE demande de congé (POST /api/staff-leave-requests). */
   onCreateLeaveRequest?: (staffId: string, leaveRequest: LeaveRequest) => void;
   /** Ciblé : approuver/refuser UNE demande de congé (PUT /api/staff-leave-requests). */
@@ -130,6 +136,9 @@ export default function StaffManagementModule({
   timesheets,
   onUpdateStaff,
   onUpdateTimesheets,
+  onCreateTimesheet,
+  onUpdateTimesheet,
+  onDeleteTimesheet,
   onCreateLeaveRequest,
   onUpdateLeaveStatus,
   onCreateAdvance,
@@ -455,6 +464,31 @@ export default function StaffManagementModule({
        .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
    };
 
+  // Persiste un ensemble désiré de pointages pour un périmètre donné en
+  // n'envoyant que les différences : créations (POST), mises à jour (PUT),
+  // suppressions (DELETE). Repli (tests / legacy) : remplacement du domaine.
+  const persistTimesheetDiff = (
+    scopeExisting: TimesheetEntry[],
+    desired: TimesheetEntry[],
+    fullList: TimesheetEntry[]
+  ) => {
+    const keyOf = (t: TimesheetEntry) => `${t.staffId}|${t.date}|${t.slotTime ?? ''}`;
+    if (onCreateTimesheet && onUpdateTimesheet && onDeleteTimesheet) {
+      const existingByKey = new Map(scopeExisting.map(t => [keyOf(t), t]));
+      const desiredKeys = new Set(desired.map(keyOf));
+      for (const d of desired) {
+        const cur = existingByKey.get(keyOf(d));
+        if (cur) onUpdateTimesheet({ ...d, id: cur.id });
+        else onCreateTimesheet(d);
+      }
+      for (const t of scopeExisting) {
+        if (!desiredKeys.has(keyOf(t))) onDeleteTimesheet(t);
+      }
+      return;
+    }
+    onUpdateTimesheets(fullList);
+  };
+
   const handleSaveDailyPointage = () => {
     if (pointageDate > todayStr) {
       toast.error('عذراً، لا يمكن تسجيل الحضور لتاريخ مستقبلي!');
@@ -496,9 +530,12 @@ export default function StaffManagementModule({
       }
     });
 
-    // Merge into existing timesheets
+    // Périmètre touché : tous les pointages de ce jour. On n'envoie que les
+    // différences (POST création / PUT mise à jour / DELETE suppression) au lieu
+    // de réécrire tout le domaine des pointages.
     const otherEntries = timesheets.filter(t => t.date !== pointageDate);
-    onUpdateTimesheets([...otherEntries, ...newEntries]);
+    const scopeExisting = timesheets.filter(t => t.date === pointageDate);
+    persistTimesheetDiff(scopeExisting, newEntries, [...otherEntries, ...newEntries]);
     toast.success(`تم حفظ سجل الحضور ليوم ${pointageDate} بنجاح!`);
   };
 
@@ -557,7 +594,7 @@ export default function StaffManagementModule({
          const dateStr = toLocalDateStr(d);
          const existing = timesheets.find(t => t.staffId === selectedStaff.id && t.date === dateStr);
          congeEntries.push({
-           id: existing ? existing.id : `ts_${selectedStaff.id}_${dateStr}_conge`,
+           id: `ts_${selectedStaff.id}_${dateStr}_conge`,
            staffId: selectedStaff.id,
            date: dateStr,
            status: 'conge',
@@ -568,8 +605,10 @@ export default function StaffManagementModule({
            extraHours: existing?.extraHours || 0
          });
        }
-       const otherEntries = timesheets.filter(t => !(t.staffId === selectedStaff.id && congeEntries.some(ce => ce.date === t.date)));
-       onUpdateTimesheets([...otherEntries, ...congeEntries]);
+       const leaveDates = new Set(congeEntries.map(ce => ce.date));
+       const scopeExisting = timesheets.filter(t => t.staffId === selectedStaff.id && leaveDates.has(t.date));
+       const otherEntries = timesheets.filter(t => !(t.staffId === selectedStaff.id && leaveDates.has(t.date)));
+       persistTimesheetDiff(scopeExisting, congeEntries, [...otherEntries, ...congeEntries]);
        toast.success(`تمت الموافقة على الإجازة وسُجلت في الحضور لأيام ${req.startDate} → ${req.endDate} 🏖`);
      }
     };

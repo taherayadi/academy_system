@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { onRequestGet, onRequestPut, onRequestPost } from './timesheets';
+import { onRequestGet, onRequestPut, onRequestPost, onRequestDelete } from './timesheets';
 
 // Régression : les pointages doublons (staff + date + créneau) ne devono
 // jamais créer plusieurs lignes. writeTimesheets déduplique côté serveur,
@@ -143,5 +143,54 @@ describe('/api/timesheets — upsert par (staff, date, créneau)', () => {
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBe(1);
     expect(body[0]).toMatchObject({ staffId: 't1', date: '2026-10-09', slotTime: '16:00 - 18:00', status: 'present' });
+  });
+
+  it('PUT (objet) met à jour UN pointage existant, sans toucher aux autres', async () => {
+    sqlite.exec("INSERT INTO staff (id, center_id) VALUES ('t1', '" + CENTER + "');");
+    await onRequestPut(ctx('PUT', [
+      { id: 'e1', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'retard' },
+      { id: 'e2', staffId: 't1', date: '2026-10-10', slotTime: '08:00 - 10:00', status: 'present' },
+    ]));
+    const res = await onRequestPut(ctx('PUT', { id: 'e1', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'present', notes: 'ok' }));
+    expect(res.status).toBe(200);
+    const rows = sqlite.prepare('SELECT * FROM timesheets ORDER BY id').all() as any[];
+    expect(rows.length).toBe(2);
+    const e1 = rows.find(r => r.id === 'e1');
+    expect(e1.status).toBe('present');
+    expect(e1.notes).toBe('ok');
+    expect(rows.find(r => r.id === 'e2').status).toBe('present');
+  });
+
+  it('PUT (objet) refuse un pointage inexistant (créer via POST) avec 400', async () => {
+    sqlite.exec("INSERT INTO staff (id, center_id) VALUES ('t1', '" + CENTER + "');");
+    const res = await onRequestPut(ctx('PUT', { staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'present' }));
+    expect(res.status).toBe(400);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM timesheets').get() as any).n).toBe(0);
+  });
+
+  it('PUT (objet) refuse un staff d\'un autre centre (tenancy)', async () => {
+    sqlite.exec("INSERT INTO staff (id, center_id) VALUES ('theirs', 'c2');");
+    sqlite.exec("INSERT INTO timesheets VALUES ('z', '" + CENTER + "', 'theirs', '2026-10-09', '08:00 - 10:00', 'present', NULL, NULL, NULL, NULL, NULL);");
+    const res = await onRequestPut(ctx('PUT', { staffId: 'theirs', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'absent' }));
+    expect(res.status).toBe(400);
+    expect((sqlite.prepare("SELECT status FROM timesheets WHERE id='z'").get() as any).status).toBe('present');
+  });
+
+  it('DELETE supprime UN pointage par id', async () => {
+    await onRequestPut(ctx('PUT', [
+      { id: 'd1', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'present' },
+      { id: 'd2', staffId: 't2', date: '2026-10-09', status: 'present' },
+    ]));
+    const res = await onRequestDelete(ctx('DELETE', { id: 'd1' }));
+    expect(res.status).toBe(200);
+    const rows = sqlite.prepare('SELECT id FROM timesheets').all() as any[];
+    expect(rows.map(r => r.id)).toEqual(['d2']);
+  });
+
+  it('DELETE cible par (staff, date, créneau) quand aucun id n\'est fourni', async () => {
+    await onRequestPut(ctx('PUT', [{ id: 'k1', staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00', status: 'present' }]));
+    const res = await onRequestDelete(ctx('DELETE', { staffId: 't1', date: '2026-10-09', slotTime: '08:00 - 10:00' }));
+    expect(res.status).toBe(200);
+    expect((sqlite.prepare('SELECT COUNT(*) AS n FROM timesheets').get() as any).n).toBe(0);
   });
 });
