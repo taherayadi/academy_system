@@ -1884,10 +1884,46 @@ async function assertMealPayment(db: D1Database, paymentId: string, centerId: st
   if (!pay) throw new Error('Paiement introuvable dans ce centre.');
 }
 
+// Clés de paiement correspondant à un service de pointage. Un paiement Goûter
+// est historiquement stocké sous 'gouter_matin' même pour le soir.
+const MEAL_PAYMENT_SERVICE_KEYS: Record<string, string[]> = {
+  lunch: ['lunch'],
+  gouter_matin: ['gouter_matin', 'gouter_apres_midi', 'gouter_both'],
+  gouter_apres_midi: ['gouter_matin', 'gouter_apres_midi', 'gouter_both']
+};
+
+/**
+ * Retrouve le paiement d'abonnement qui couvre le mois du pointage.
+ * La contrainte DB exige covered_by_payment_id non NULL pour le statut
+ * 'covered_by_subscription' ; on lie donc le paiement mensuel réel.
+ */
+async function findCoveringMealPaymentId(
+  db: D1Database, centerId: string, studentId: string, service: string, date: string
+): Promise<string | null> {
+  const monthKey = str(date).slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return null;
+  const serviceKeys = MEAL_PAYMENT_SERVICE_KEYS[service] || [service];
+  const placeholders = serviceKeys.map(() => '?').join(', ');
+  const row = await db.prepare(
+    `SELECT id FROM payments
+      WHERE center_id = ? AND student_id = ?
+        AND service_key IN (${placeholders})
+        AND period_month = ? AND is_refund = 0 AND amount > 0
+      ORDER BY date DESC, created_at DESC
+      LIMIT 1`
+  ).bind(centerId, studentId, ...serviceKeys, monthKey).first<any>();
+  return row ? str(row.id) : null;
+}
+
 /** Status DB : 'covered_by_subscription' pour un abonnement, 'paid' pour une unité. */
-function mealAttendanceStatus(type: string, paid: boolean): 'unpaid' | 'paid' | 'covered_by_subscription' {
+function mealAttendanceStatus(
+  type: string, paid: boolean, coveredByPaymentId: string | null = null
+): 'unpaid' | 'paid' | 'covered_by_subscription' {
   if (!paid) return 'unpaid';
-  return type === 'subscription' ? 'covered_by_subscription' : 'paid';
+  // Sans paiement d'abonnement identifiable, on reste sur 'paid' : la
+  // contrainte DB interdit 'covered_by_subscription' avec un id NULL.
+  if (type === 'subscription' && coveredByPaymentId) return 'covered_by_subscription';
+  return 'paid';
 }
 
 function mealAttendanceType(value: unknown, fallback: 'subscription' | 'unit'): 'subscription' | 'unit' {
@@ -1924,6 +1960,12 @@ export async function createSingleMealAttendance(db: D1Database, payload: any, c
   const paid = payload?.paid === true;
   const paymentId = payload?.paymentId ? str(payload.paymentId) : null;
   if (paymentId) await assertMealPayment(db, paymentId, centerId);
+  // Un pointage d'abonnement payé est couvert par le paiement mensuel. On le
+  // lie explicitement (covered_by_payment_id) pour satisfaire la contrainte DB.
+  const coveredPaymentId = paid && type === 'subscription'
+    ? (paymentId || await findCoveringMealPaymentId(db, centerId, studentId, service, date))
+    : null;
+  const paidPaymentId = type === 'unit' ? paymentId : null;
   // `unit_price` = prix facturé (fraisParRepas) ; `traiteur_share` = coût
   // traiteur (0 en cuisine interne). Les anciens clients qui n'envoyaient que
   // `traiteurPrice` restent compatibles : il sert alors de prix unitaire.
@@ -1935,9 +1977,10 @@ export async function createSingleMealAttendance(db: D1Database, payload: any, c
     ? Math.max(0, unitPrice - traiteurShare)
     : null;
   await db.prepare(
-    'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, unit_price, traiteur_share, center_share, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, paid_payment_id, covered_by_payment_id, unit_price, traiteur_share, center_share, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
-    centerId, studentId, date, service, type, mealAttendanceStatus(type, paid), paymentId,
+    centerId, studentId, date, service, type,
+    mealAttendanceStatus(type, paid, coveredPaymentId), paidPaymentId, coveredPaymentId,
     unitPrice, traiteurShare, centerShare, Date.now()
   ).run();
 }
@@ -1961,6 +2004,16 @@ export async function updateSingleMealAttendance(db: D1Database, payload: any, c
     ? (existing.paid_payment_id == null ? null : str(existing.paid_payment_id))
     : (payload.paymentId ? str(payload.paymentId) : null);
   if (paymentId) await assertMealPayment(db, paymentId, centerId);
+  // Abonnement : le statut couvert exige un covered_by_payment_id non NULL.
+  // On réutilise le lien existant, sinon on retrouve le paiement mensuel.
+  const existingCovered = existing.covered_by_payment_id == null ? null : str(existing.covered_by_payment_id);
+  const coveredPaymentId = type === 'subscription'
+    ? (paid
+        ? ((payload?.paymentId !== undefined ? paymentId : existingCovered)
+            || await findCoveringMealPaymentId(db, centerId, studentId, service, date))
+        : null)
+    : null;
+  const paidPaymentId = type === 'unit' ? paymentId : null;
   // Mise à jour partielle : un champ absent conserve la valeur existante.
   // `unit_price` = prix facturé ; `traiteur_share` = coût traiteur.
   const currentUnit = existing.unit_price == null ? null : num(existing.unit_price);
@@ -1977,9 +2030,10 @@ export async function updateSingleMealAttendance(db: D1Database, payload: any, c
     ? Math.max(0, unitPrice - traiteurShare)
     : null;
   await db.prepare(
-    'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, unit_price = ?, traiteur_share = ?, center_share = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
+    'UPDATE meal_attendances SET billing_mode = ?, status = ?, paid_payment_id = ?, covered_by_payment_id = ?, unit_price = ?, traiteur_share = ?, center_share = ? WHERE center_id = ? AND student_id = ? AND date = ? AND service_key = ?'
   ).bind(
-    type, mealAttendanceStatus(type, paid), paymentId, unitPrice, traiteurShare, centerShare,
+    type, mealAttendanceStatus(type, paid, coveredPaymentId), paidPaymentId, coveredPaymentId,
+    unitPrice, traiteurShare, centerShare,
     centerId, studentId, date, service
   ).run();
 }
