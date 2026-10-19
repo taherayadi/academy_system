@@ -423,6 +423,32 @@ describe('external students persistence', () => {
     expect((sqlite.prepare('SELECT COUNT(*) AS n FROM students WHERE id = ?').get(REG_ID) as any).n).toBe(1);
     expect((sqlite.prepare('SELECT COUNT(*) AS n FROM payments WHERE student_id = ?').get(REG_ID) as any).n).toBe(2);
   });
+
+  it('reconstruit le libellé des paiements unitaires repas à la lecture', async () => {
+    sqlite.exec(`
+      INSERT INTO services (key, category, label_fr, label_ar, module_key)
+      VALUES ('lunch', 'meal', 'Repas', 'غداء', 'cantine')
+    `);
+    await writeStudents(db, [makeRegularStudent()], CENTER);
+    sqlite.prepare(`
+      INSERT INTO payments (
+        id, center_id, student_id, date, service_key, billing_period, period_month,
+        school_year, payment_type, method, amount, total_required, discount,
+        receipt_number, notes, cheque_number, cheque_date, cheque_paid, is_refund,
+        refund_of, ref_type, ref_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'pay_unit_lunch', CENTER, 'st_1', '2026-10-19', 'lunch', 'unit', null,
+      YEAR, 'full', 'cash', 8, 8, 0, 'REC-REP-1', null, null, null, 0, 0,
+      null, null, null, 1
+    );
+
+    const students = await readStudents(db, CENTER);
+    const payment = students[0].payments.find((p: any) => p.id === 'pay_unit_lunch');
+    // Sans cette reconstruction, month='' après reload et Finance ne peut plus
+    // rattacher le paiement unitaire au mois ni le distinguer d'un abonnement.
+    expect(payment.month).toBe('Repas unitaire (2026-10-19)');
+  });
 });
 
 describe('course enrollments hydration', () => {

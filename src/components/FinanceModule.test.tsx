@@ -472,3 +472,66 @@ describe('FinanceModule — Goûter status cross-surface agreement (feature 008)
     expect(within(table).getByText('مسدد')).toBeTruthy();
   });
 });
+
+describe('FinanceModule — paiements unitaires repas / goûter', () => {
+  const setMonth = (value: string) => {
+    fireEvent.change(screen.getByLabelText('الشهر:'), { target: { value } });
+  };
+
+  it('affiche le montant payé d’un repas unitaire même sans libellé de mois', () => {
+    const unitLunch = student({
+      id: 'st_fin_unit_lunch',
+      firstName: 'UnitLunch',
+      lastName: 'Paid',
+      academicYear: getCurrentAcademicYear(),
+      enrolledServices: { ...baseServices, meals: true },
+      mealAttendances: [{ date: '2026-10-19', type: 'unit', paid: true, service: 'lunch' }],
+      payments: [{
+        id: 'p_fin_unit_lunch', date: '2026-10-19', service: 'Repas',
+        month: '', amountPaid: 8, totalRequired: 8
+      }]
+    });
+
+    renderFinance('in_house_kitchen', [unitLunch]);
+    setMonth('Octobre');
+
+    const detailCard = screen.getByText(/تفاصيل استهلاك التلاميذ \(/).closest('div.bg-white') as HTMLElement;
+    const row = within(detailCard).getByText('UnitLunch Paid').closest('tr') as HTMLElement;
+    expect(within(row).getByText('8.000 د.ت')).toBeTruthy();
+
+    // Les repas unitaires ne doivent pas gonfler la carte des abonnements.
+    expect(screen.getByText('إجمالي الاشتراكات').parentElement?.textContent).toContain('0.000');
+    expect(screen.getByText('مدفوعات الوجبات المنفردة').parentElement?.textContent).toContain('8.000');
+  });
+
+  it('sépare les abonnements Goûter des paiements unitaires', () => {
+    const unitGouter = student({
+      id: 'st_fin_unit_gouter',
+      firstName: 'UnitGouter',
+      lastName: 'Paid',
+      academicYear: getCurrentAcademicYear(),
+      enrolledServices: { ...baseServices, gouterSoir: true },
+      mealAttendances: [
+        { date: '2026-10-01', type: 'unit', paid: true, service: 'gouter_apres_midi' },
+        { date: '2026-10-02', type: 'unit', paid: true, service: 'gouter_apres_midi' }
+      ],
+      payments: [
+        {
+          id: 'p_fin_gouter_1', date: '2026-10-01', service: 'Goûter',
+          month: 'لمجة المساء unitaire (2026-10-01)', amountPaid: 3, totalRequired: 3
+        },
+        {
+          id: 'p_fin_gouter_2', date: '2026-10-02', service: 'Goûter',
+          month: '', amountPaid: 3, totalRequired: 3
+        }
+      ]
+    });
+
+    renderFinance('in_house_kitchen', [unitGouter]);
+    setMonth('Octobre');
+    fireEvent.click(screen.getByTestId('service-tab-gouter'));
+
+    expect(screen.getByText('إجمالي الاشتراكات').parentElement?.textContent).toContain('0.000');
+    expect(screen.getByText('مدفوعات اللمجات المنفردة').parentElement?.textContent).toContain('6.000');
+  });
+});

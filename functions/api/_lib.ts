@@ -534,6 +534,16 @@ const SERVICE_KEY_LABELS: Record<string, string> = {
   event: 'Événements'
 };
 
+// Les paiements unitaires repas/goûter n'ont pas de period_month (pas de mois
+// d'abonnement). On reconstruit leur libellé à la lecture depuis la date, sinon
+// le client reçoit month='' et ne peut plus distinguer un paiement unitaire
+// d'un abonnement (montants payés à 0, filtres mensuels, etc.).
+const UNIT_MEAL_PAYMENT_LABELS: Record<string, string> = {
+  lunch: 'Repas',
+  gouter_matin: 'لمجة الصباح',
+  gouter_apres_midi: 'لمجة المساء'
+};
+
 function paymentServiceLabel(serviceKey: string, billingPeriod: string): string {
   const base = SERVICE_KEY_LABELS[str(serviceKey)] || str(serviceKey) || 'Autres';
   if (billingPeriod === 'year') {
@@ -651,7 +661,9 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
   const paymentsByStudent: Record<string, any[]> = {};
   paymentRows.results.forEach((r: any) => {
     const key = str(r.student_id);
+    const serviceKey = str(r.service_key);
     const billingPeriod = str(r.billing_period);
+    const unitMealLabel = UNIT_MEAL_PAYMENT_LABELS[serviceKey];
     const amount = num(r.amount);
     const totalRequired = num(r.total_required);
     const discount = r.discount == null ? 0 : num(r.discount);
@@ -663,14 +675,16 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
       id: str(r.id), date: str(r.date),
       amountPaid: displayAmount, totalRequired,
       remainingBalance: Math.max(0, totalRequired - Math.abs(amount)),
-      service: paymentServiceLabel(r.service_key, billingPeriod),
-      serviceKey: str(r.service_key), billingPeriod,
+      service: paymentServiceLabel(serviceKey, billingPeriod),
+      serviceKey, billingPeriod,
       schoolYear: r.school_year == null ? undefined : str(r.school_year),
       // period_month ('YYYY-MM') → libellé d'affichage ; même format que le client
       // ('Septembre (2026/2027)') pour que getStudentMonthStatus() (égalité sur
       // p.month) et les filtres par année retrouvent les paiements après reload.
       month: r.period_month == null
-        ? (billingPeriod === 'year' ? `Annuel (${str(r.school_year)})` : '')
+        ? (billingPeriod === 'year'
+            ? `Annuel (${str(r.school_year)})`
+            : (unitMealLabel ? `${unitMealLabel} unitaire (${str(r.date)})` : ''))
         : (monthLabelFromKey(str(r.period_month))
             ? `${monthLabelFromKey(str(r.period_month))} (${str(r.school_year)})`
             : str(r.period_month)),

@@ -569,8 +569,17 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   //    those unit payments are excluded and the margin replaces them. An in-house
   //    kitchen has no traiteur — every payment counts as-is and no margin applies.
   const isExternalTraiteur = settings?.mealOperatingMode === 'external_traiteur';
-  const isUnitRepasPayment = (p: { service: string; month: string }) =>
-    p.service === 'Repas' && String(p.month || '').includes('unitaire');
+  // Distingue un paiement à l'unité (une journée) d'un abonnement mensuel.
+  // Les abonnements portent toujours un libellé de mois (« Octobre (2026/2027) »).
+  // Les paiements unitaires n'ont pas de period_month : à la lecture leur
+  // libellé peut être vide (anciennes données) ou finir par « unitaire (...)".
+  const isUnitMealPayment = (p: { service: string; month?: string }) => {
+    if (p.service !== 'Repas' && p.service !== 'Goûter') return false;
+    const month = String(p.month || '').trim();
+    return month === '' || month.toLowerCase().includes('unitaire');
+  };
+  const isUnitRepasPayment = (p: { service: string; month?: string }) =>
+    p.service === 'Repas' && isUnitMealPayment(p);
 
   const repasUnitMarginAllTime = (() => {
     if (!settings || !isExternalTraiteur) return 0;
@@ -2661,17 +2670,23 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           const unitMeals = lunchAttendances.filter(a => a.type === 'unit');
           const subPayments = (s.payments || []).filter(p => {
             if (p.service !== 'Repas') return false;
-            if (schoolYearFilter !== 'all' && !p.month.includes(schoolYearFilter) && s.academicYear !== schoolYearFilter) return false;
+            const studentYear = s.academicYear || getCurrentAcademicYear();
+            if (schoolYearFilter !== 'all'
+                && !String(p.month || '').includes(schoolYearFilter)
+                && studentYear !== schoolYearFilter) return false;
             if (monthFilter === 'all') return true;
-            if (p.month.includes(monthFilter)) return true;
-            if (datePrefix && p.month.startsWith(`Repas unitaire (${datePrefix}`)) return true;
+            // Le pointage/paiement unitaire peut avoir perdu son libellé de mois
+            // après reload : la date du paiement reste la source fiable.
+            if (p.date && monthFromDate(p.date) === monthFilter) return true;
+            if (String(p.month || '').includes(monthFilter)) return true;
+            if (datePrefix && String(p.month || '').toLowerCase().startsWith(`repas unitaire (${datePrefix}`)) return true;
             return false;
           });
           const grossPaid = subPayments.filter(p => !p.refund).reduce((sum, p) => sum + p.amountPaid, 0);
           const totalRefunded = Math.abs(subPayments.filter(p => p.refund).reduce((sum, p) => sum + p.amountPaid, 0));
           const totalMeals = subscriptionMeals.length + unitMeals.length;
           const isEnrolled = s.mealSubscription?.active === true || s.enrolledServices?.meals === true;
-          const monthlySubPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
+          const monthlySubPayments = subPayments.filter(p => !isUnitMealPayment(p));
           const latestMonthlyPayment = monthlySubPayments.length > 0
             ? monthlySubPayments[monthlySubPayments.length - 1]
             : null;
@@ -2704,7 +2719,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           const unpaidMeals = lunchAttendances.length - paidMeals;
           const unpaidSubscriptionMeals = subscriptionMeals.filter(a => !a.paid).length;
           const unpaidUnitMeals = unitMeals.filter(a => !a.paid).length;
-          const subForfaitPayments = subPayments.filter(p => !p.month.includes('Repas unitaire'));
+          const subForfaitPayments = subPayments.filter(p => !isUnitMealPayment(p));
           const subGrossPaid = subForfaitPayments.filter(p => !p.refund).reduce((sum, p) => sum + p.amountPaid, 0);
           const subRefunded = Math.abs(subForfaitPayments.filter(p => p.refund).reduce((sum, p) => sum + p.amountPaid, 0));
           const forfaitEstimate = Math.max(0, (subGrossPaid - subRefunded) - subscriptionMeals.length * f.fraisParRepas);
@@ -2738,8 +2753,22 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           };
         }).filter(s => s.totalMeals > 0 || s.grossPaid > 0);
 
-        const totalSubscriptions = restoStudents.reduce((sum, s) => sum + s.grossPaid, 0);
-        const totalRefundedAll = restoStudents.reduce((sum, s) => sum + s.totalRefunded, 0);
+        // Cartes Repas : les abonnements et les repas à l'unité sont deux
+        // revenus différents. On ne mélange plus les paiements unitaires dans
+        // « إجمالي الاشتراكات » (ils ont leur propre carte).
+        const repasPaymentsFiltered = filteredPayments.filter(p => p.service === 'Repas');
+        const totalSubscriptions = repasPaymentsFiltered
+          .filter(p => !isUnitMealPayment(p) && !p.refund)
+          .reduce((sum, p) => sum + p.amountPaid, 0);
+        const totalUnitPaid = repasPaymentsFiltered
+          .filter(p => isUnitMealPayment(p) && !p.refund)
+          .reduce((sum, p) => sum + p.amountPaid, 0);
+        const totalSubRefunded = Math.abs(repasPaymentsFiltered
+          .filter(p => !isUnitMealPayment(p) && p.refund)
+          .reduce((sum, p) => sum + p.amountPaid, 0));
+        const totalUnitRefunded = Math.abs(repasPaymentsFiltered
+          .filter(p => isUnitMealPayment(p) && p.refund)
+          .reduce((sum, p) => sum + p.amountPaid, 0));
         const totalPlatesConsumed = restoStudents.reduce((sum, s) => sum + s.totalMeals, 0);
         const totalSubMeals = restoStudents.reduce((sum, s) => sum + s.subscriptionMeals, 0);
         const totalUnitMeals = restoStudents.reduce((sum, s) => sum + s.unitMeals, 0);
@@ -2753,7 +2782,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         const totalGouterConsumed = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
           (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
         ).length, 0);
-        const totalGouterSubscriptions = filteredPayments.filter(p => p.service === 'Goûter').reduce((sum, p) => sum + p.amountPaid, 0);
+        const gouterPaymentsFiltered = filteredPayments.filter(p => p.service === 'Goûter');
+        const totalGouterSubscriptions = gouterPaymentsFiltered
+          .filter(p => !isUnitMealPayment(p))
+          .reduce((sum, p) => sum + p.amountPaid, 0);
+        const totalGouterUnitPaid = gouterPaymentsFiltered
+          .filter(p => isUnitMealPayment(p))
+          .reduce((sum, p) => sum + p.amountPaid, 0);
         const totalGouterUnpaid = filteredStudents.reduce((sum, s) => sum + (s.mealAttendances || []).filter(a =>
           (a.service === 'gouter_matin' || a.service === 'gouter_apres_midi') && !a.paid && (!gouterCardPrefix || a.date.startsWith(gouterCardPrefix))
         ).length, 0);
@@ -2805,10 +2840,15 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             </div>
 
             {financeServiceTab === 'gouter' && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
                 <div className="font-mono text-lg font-black text-brand-800">{fmt(totalGouterSubscriptions)} د.ت</div>
+              </div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">مدفوعات اللمجات المنفردة</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(totalGouterUnitPaid)} د.ت</div>
+                <div className="text-[9px] text-brand-600 mt-1">المحسوبة بالوحدة</div>
               </div>
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الوجبات المستهلكة</div>
@@ -2827,13 +2867,20 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
             {/* Summary Cards (Repas panel) */}
             {financeServiceTab === 'repas' && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الاشتراكات</div>
                 <div className="font-mono text-lg font-black text-brand-800">{fmt(totalSubscriptions)} د.ت</div>
-                {totalRefundedAll > 0 && (
-                  <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalRefundedAll)} د.ت</div>
+                {totalSubRefunded > 0 && (
+                  <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalSubRefunded)} د.ت</div>
                 )}
+              </div>
+              <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
+                <div className="text-[10px] font-bold text-brand-700 mb-1">مدفوعات الوجبات المنفردة</div>
+                <div className="font-mono text-lg font-black text-brand-800">{fmt(totalUnitPaid)} د.ت</div>
+                {totalUnitRefunded > 0
+                  ? <div className="text-[9px] text-red-600 mt-1 font-bold">استرجاع: -{fmt(totalUnitRefunded)} د.ت</div>
+                  : <div className="text-[9px] text-brand-600 mt-1">{totalUnitMeals} وجبة منفردة</div>}
               </div>
               <div className="p-5 bg-brand-600/[0.06]/50 rounded-2xl border border-brand-600/20 text-center">
                 <div className="text-[10px] font-bold text-brand-700 mb-1">إجمالي الوجبات المستهلكة</div>
