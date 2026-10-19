@@ -816,7 +816,6 @@ CREATE TABLE "meal_attendances" (
   center_share      REAL CHECK (center_share IS NULL OR center_share >= 0),
   created_at            INTEGER NOT NULL,
   PRIMARY KEY (student_id, date, service_key),
-  CHECK (status <> 'covered_by_subscription' OR covered_by_payment_id IS NOT NULL),
   FOREIGN KEY (center_id, student_id)         REFERENCES students(center_id, id) ON DELETE CASCADE,
   FOREIGN KEY (center_id, paid_payment_id)    REFERENCES payments(center_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (center_id, covered_by_payment_id) REFERENCES payments(center_id, id) ON DELETE RESTRICT

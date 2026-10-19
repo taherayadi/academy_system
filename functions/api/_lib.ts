@@ -612,6 +612,17 @@ function paymentServiceKey(serviceLabel: unknown, month: unknown): { serviceKey:
   const mapped = SERVICE_LABEL_KEYS[label] || { serviceKey: 'autre', period: 'unit' };
   // Anciens paiements « Bibliothèque » sur un mois « Annuel … » → inscription.
   if (isAnnual && mapped.serviceKey === 'bibliotheque' && label === 'Bibliothèque') return SERVICE_LABEL_KEYS['Inscription Bibliothèque'];
+  // Repas / Goûter : le libellé du service ne suffit pas. Un abonnement
+  // mensuel utilise « Octobre (2026/2027) », un paiement unitaire utilise
+  // « Repas unitaire (2026-10-19) ». C'est donc le libellé du mois qui
+  // détermine billing_period ('month' vs 'unit').
+  if (mapped.serviceKey === 'lunch' || mapped.serviceKey.startsWith('gouter_')) {
+    if (isAnnual) return { serviceKey: mapped.serviceKey, period: 'year' };
+    return {
+      serviceKey: mapped.serviceKey,
+      period: periodMonthFrom(month) ? 'month' : 'unit'
+    };
+  }
   return mapped;
 }
 
@@ -2215,7 +2226,17 @@ function monthKeyFromLabel(label: unknown): string {
   let idx = frLabels.findIndex(l => l.toLowerCase() === first.toLowerCase());
   if (idx === -1) idx = arLabels.indexOf(first);
   if (idx === -1) return '';
-  // Année explicite dans le libellé (« septembre 2026 ») prioritaire ; sinon
+  // Année scolaire complète (« Janvier (2026/2027) ») : sept-déc → année de
+  // début, jan-août → année de fin. Sans cela, Janvier 2027 serait stocké
+  // '2026-01' et ne pourrait plus couvrir un pointage de janvier 2027.
+  const academicMatch = /\b(\d{4})\s*\/\s*(\d{4})\b/.exec(raw);
+  if (academicMatch) {
+    const startYear = Number(academicMatch[1]);
+    const endYear = Number(academicMatch[2]);
+    const year = idx >= 8 ? startYear : endYear;
+    return `${year}-${String(idx + 1).padStart(2, '0')}`;
+  }
+  // Année explicite simple (« septembre 2026 ») prioritaire ; sinon
   // heuristique année scolaire (sept-déc = année courante, jan-mai = année+1).
   const yearMatch = /\b(\d{4})\b/.exec(raw);
   const now = new Date();
