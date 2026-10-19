@@ -1017,7 +1017,7 @@ export async function readStaff(db: D1Database, centerId: string = DEFAULT_CENTE
   const paymentsByStaff: Record<string, any[]> = {};
   paymentRows.results.forEach((r: any) => { (paymentsByStaff[str(r.staff_id)] = paymentsByStaff[str(r.staff_id)] || []).push({ id: str(r.id), month: str(r.month), amountPaid: num(r.amount_paid), bonus: r.bonus == null ? undefined : num(r.bonus), deduction: r.deduction == null ? undefined : num(r.deduction), netSalary: num(r.net_salary), date: str(r.date), receiptNumber: str(r.receipt_number), notes: r.notes == null ? undefined : str(r.notes) }); });
   const payslipsByStaff: Record<string, any[]> = {};
-  payslipRows.results.forEach((r: any) => { (payslipsByStaff[str(r.staff_id)] = payslipsByStaff[str(r.staff_id)] || []).push({ id: str(r.id), staffId: str(r.staff_id), month: str(r.month), baseSalary: num(r.base_salary), bonus: num(r.bonus), bonusReason: r.bonus_reason == null ? undefined : str(r.bonus_reason), cnssDeduction: num(r.cnss_deduction), absenceDeductions: num(r.absence_deductions), advanceDeducted: num(r.advance_deducted), netSalary: num(r.net_salary), issueDate: str(r.issue_date), daysPresent: r.days_present == null ? undefined : num(r.days_present), daysAbsent: r.days_absent == null ? undefined : num(r.days_absent), daysRetard: r.days_retard == null ? undefined : num(r.days_retard), extraHours: r.extra_hours == null ? undefined : num(r.extra_hours), extraHourRate: r.extra_hour_rate == null ? undefined : num(r.extra_hour_rate), extraHoursAmount: r.extra_hours_amount == null ? undefined : num(r.extra_hours_amount) }); });
+  payslipRows.results.forEach((r: any) => { (payslipsByStaff[str(r.staff_id)] = payslipsByStaff[str(r.staff_id)] || []).push({ id: str(r.id), staffId: str(r.staff_id), month: arabicMonthLabelFromKey(str(r.month)) || str(r.month), baseSalary: num(r.base_salary), bonus: num(r.bonus), bonusReason: r.bonus_reason == null ? undefined : str(r.bonus_reason), cnssDeduction: num(r.cnss_deduction), absenceDeductions: num(r.absence_deductions), advanceDeducted: num(r.advance_deducted), netSalary: num(r.net_salary), issueDate: str(r.issue_date), daysPresent: r.days_present == null ? undefined : num(r.days_present), daysAbsent: r.days_absent == null ? undefined : num(r.days_absent), daysRetard: r.days_retard == null ? undefined : num(r.days_retard), extraHours: r.extra_hours == null ? undefined : num(r.extra_hours), extraHourRate: r.extra_hour_rate == null ? undefined : num(r.extra_hour_rate), extraHoursAmount: r.extra_hours_amount == null ? undefined : num(r.extra_hours_amount) }); });
   const leaveByStaff: Record<string, any[]> = {};
   leaveRows.results.forEach((r: any) => { (leaveByStaff[str(r.staff_id)] = leaveByStaff[str(r.staff_id)] || []).push({ id: str(r.id), staffId: str(r.staff_id), startDate: str(r.start_date), endDate: str(r.end_date), reason: str(r.reason), type: str(r.type), status: str(r.status) }); });
   const advanceByStaff: Record<string, any[]> = {};
@@ -1162,6 +1162,36 @@ export async function updateStaffAdvanceStatus(db: D1Database, staffId: string, 
   const row = await db.prepare('SELECT id FROM staff_advances WHERE id = ? AND staff_id = ?').bind(aid, str(staffId)).first<any>();
   if (!row) throw new Error('طلب السلفة غير موجود.');
   await db.prepare('UPDATE staff_advances SET status = ? WHERE id = ? AND staff_id = ?').bind(str(status), aid, str(staffId)).run();
+}
+
+// ===========================================================================
+// STAFF PAYSLIPS (granular POST create)
+// ===========================================================================
+// Une fiche de paie (بطاقة أجر) vivait en JSON imbriqué dans l'objet `staff` :
+// chaque génération figeait un PUT /api/staff qui réécrivait tout l'agent.
+// `createStaffPayslip` cible UNE ligne `staff_payslips`.
+
+/**
+ * Crée (ou remet à jour) UNE fiche de paie (POST /api/staff-payslips).
+ * `month` est un libellé arabe ('سبتمبر 2026') → normalisé en 'YYYY-MM' (GLOB en base).
+ * UPDATE-then-INSERT : jamais `INSERT OR REPLACE`, pour ne pas casser une
+ * éventuelle référence `staff_payments.payslip_id` (ON DELETE SET NULL).
+ */
+export async function createStaffPayslip(db: D1Database, staffId: string, payslip: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  await assertStaffInCenter(db, staffId, centerId);
+  const pl = payslip;
+  if (!pl || typeof pl !== 'object' || Array.isArray(pl)) throw new Error('بيانات بطاقة الأجر غير صالحة.');
+  if (!str(pl.id) || !str(pl.month) || !str(pl.issueDate)) throw new Error('بيانات بطاقة الأجر غير صالحة.');
+  const existing = await db.prepare('SELECT id FROM staff_payslips WHERE id = ? AND center_id = ?').bind(str(pl.id), centerId).first<any>();
+  if (existing) {
+    await db.prepare('UPDATE staff_payslips SET month = ?, base_salary = ?, bonus = ?, bonus_reason = ?, cnss_deduction = ?, absence_deductions = ?, advance_deducted = ?, net_salary = ?, issue_date = ?, days_present = ?, days_absent = ?, days_retard = ?, extra_hours = ?, extra_hour_rate = ?, extra_hours_amount = ? WHERE id = ? AND center_id = ?')
+      .bind(staffMonthKey(pl.month), num(pl.baseSalary), num(pl.bonus), pl.bonusReason ?? null, num(pl.cnssDeduction), num(pl.absenceDeductions), num(pl.advanceDeducted), num(pl.netSalary), str(pl.issueDate), pl.daysPresent ?? null, pl.daysAbsent ?? null, pl.daysRetard ?? null, pl.extraHours ?? null, pl.extraHourRate ?? null, pl.extraHoursAmount ?? null, str(pl.id), centerId)
+      .run();
+    return;
+  }
+  await db.prepare('INSERT INTO staff_payslips (id, center_id, staff_id, month, base_salary, bonus, bonus_reason, cnss_deduction, absence_deductions, advance_deducted, net_salary, issue_date, days_present, days_absent, days_retard, extra_hours, extra_hour_rate, extra_hours_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(str(pl.id), centerId, str(staffId), staffMonthKey(pl.month), num(pl.baseSalary), num(pl.bonus), pl.bonusReason ?? null, num(pl.cnssDeduction), num(pl.absenceDeductions), num(pl.advanceDeducted), num(pl.netSalary), str(pl.issueDate), pl.daysPresent ?? null, pl.daysAbsent ?? null, pl.daysRetard ?? null, pl.extraHours ?? null, pl.extraHourRate ?? null, pl.extraHoursAmount ?? null)
+    .run();
 }
 
 
@@ -1852,14 +1882,32 @@ function monthLabelFromKey(key: string): string {
   return idx >= 1 && idx <= 12 ? labels[idx - 1] : '';
 }
 
-// 'Septembre 2026' | 'Septembre' → '2026-09' (clé stockée en base).
+// '2026-09' → 'سبتمبر 2026' (libellés arabes du client pour les fiches de paie).
+// La colonne stocke la clé 'YYYY-MM' ; l'UI (payMonth) compare/édite le libellé.
+function arabicMonthLabelFromKey(key: string): string {
+  const labels = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  if (!m) return '';
+  const idx = Number(m[2]);
+  return idx >= 1 && idx <= 12 ? `${labels[idx - 1]} ${m[1]}` : '';
+}
+
+// 'Septembre 2026' | 'Septembre' | 'سبتمبر 2026' → '2026-09' (clé stockée en base).
 function monthKeyFromLabel(label: unknown): string {
-  const labels = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-  const first = str(label).trim().split(/\s+/)[0];
-  const idx = labels.indexOf(first);
+  const frLabels = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const arLabels = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const raw = str(label).trim();
+  const first = raw.split(/\s+/)[0];
+  let idx = frLabels.findIndex(l => l.toLowerCase() === first.toLowerCase());
+  if (idx === -1) idx = arLabels.indexOf(first);
   if (idx === -1) return '';
+  // Année explicite dans le libellé (« septembre 2026 ») prioritaire ; sinon
+  // heuristique année scolaire (sept-déc = année courante, jan-mai = année+1).
+  const yearMatch = /\b(\d{4})\b/.exec(raw);
   const now = new Date();
-  const year = idx >= 8 ? now.getFullYear() : (idx <= 4 ? now.getFullYear() + 1 : now.getFullYear());
+  const year = yearMatch
+    ? Number(yearMatch[1])
+    : (idx >= 8 ? now.getFullYear() : (idx <= 4 ? now.getFullYear() + 1 : now.getFullYear()));
   return `${year}-${String(idx + 1).padStart(2, '0')}`;
 }
 

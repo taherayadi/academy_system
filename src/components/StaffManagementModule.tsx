@@ -43,6 +43,8 @@ interface StaffManagementModuleProps {
   onCreateAdvance?: (staffId: string, advance: StaffAdvance) => void;
   /** Ciblé : approuver/refuser UNE demande d'avance (PUT /api/staff-advances). */
   onUpdateAdvanceStatus?: (staffId: string, advanceId: string, status: StaffRequestStatus) => void;
+  /** Ciblé : générer UNE fiche de paie (POST /api/staff-payslips). */
+  onCreatePayslip?: (staffId: string, payslip: PaySlip) => void;
   settings?: CenterSettings;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   expenses?: CenterExpense[];
@@ -132,6 +134,7 @@ export default function StaffManagementModule({
   onUpdateLeaveStatus,
   onCreateAdvance,
   onUpdateAdvanceStatus,
+  onCreatePayslip,
   settings,
   onUpdateSettings,
   expenses = [],
@@ -725,12 +728,23 @@ const base = generatingPayslipStaff.baseSalary || 850;
       ...generatingPayslipStaff,
       payslips: [...(generatingPayslipStaff.payslips || []), slip]
     };
-    onUpdateStaff(staff.map(s => s.id === generatingPayslipStaff.id ? updatedStaff : s));
+    if (onCreatePayslip) {
+      onCreatePayslip(generatingPayslipStaff.id, slip);
+    } else {
+      onUpdateStaff(staff.map(s => s.id === generatingPayslipStaff.id ? updatedStaff : s));
+    }
 
     if (onUpdateExpenses) {
+      // L'expense doit tomber dans le mois de la fiche de paie (سبتمبر → -09-),
+      // pas dans le mois courant, sinon le filtre mensuel de la Finance le classe à tort.
+      const payMonthMatch = /^(\S+)\s+(\d{4})$/.exec(payMonth);
+      const payMonthNum = payMonthMatch ? AR_MONTH_NUM[payMonthMatch[1]] : undefined;
+      const expenseMonthDate = payMonthNum && payMonthMatch
+        ? `${payMonthMatch[2]}-${String(payMonthNum).padStart(2, '0')}-01`
+        : new Date().toISOString().split('T')[0];
       const newExpense: CenterExpense = {
         id: 'exp_' + crypto.randomUUID(),
-        date: new Date().toISOString().split('T')[0],
+        date: expenseMonthDate,
         category: 'Salaires (Personnel)',
         amount: netSalary,
         description: `راتب ${generatingPayslipStaff.firstName} ${generatingPayslipStaff.lastName} - ${payMonth}`,

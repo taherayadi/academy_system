@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus } from './types';
+import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip } from './types';
 
 
 const API_BASE = '/api';
@@ -261,6 +261,11 @@ export async function createStaffAdvanceApi(staffId: string, advance: StaffAdvan
 
 export async function updateStaffAdvanceStatusApi(staffId: string, advanceId: string, status: StaffRequestStatus): Promise<void> {
   return putDomain('/staff-advances', { staffId, advanceId, status }, 'تعذر تحديث طلب السلفة.');
+}
+
+
+export async function createStaffPayslipApi(staffId: string, payslip: PaySlip): Promise<void> {
+  return postDomain('/staff-payslips', { staffId, payslip }, 'تعذر حفظ بطاقة الأجر.');
 }
 
 
