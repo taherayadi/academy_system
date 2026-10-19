@@ -145,7 +145,7 @@ export interface CenterSettings {
   // prix par année dans center_service_prices. Voir servicePriceForYear().
   servicePrices: ServicePricesByYear;
   // Mode cantine courant — dérivé de la dernière ligne de
-  // center_meal_mode_history (lisible par le centre, écrit par la plateforme).
+  // center_meal_mode_history (choisi par le centre via les Réglages).
   mealOperatingMode?: MealOperatingMode;
   // Matières partagées (table subjects) et établissements (table etablissements)
   subjects?: string[];

@@ -324,7 +324,7 @@ export interface AppState {
 //  - center_settings (center_id, center_name, phone_number, location_city, currency, updated_at)
 //  - center_service_prices (center_id, school_year, service_key, billing_period, valid_from, price, traiteur_share)
 //  - subjects (center_id, name) — center_id '' = catalogue global de départ
-//  - center_meal_mode_history — dernière ligne = mode cantine courant (lecture seule ici)
+//  - center_meal_mode_history — dernière ligne = mode cantine courant (choisi par le centre)
 // ===========================================================================
 
 // Mapping ancien champ CenterFeeSet → (service_key, billing_period) — sert
@@ -397,8 +397,8 @@ export async function writeSettings(db: D1Database, settings: any, centerId: str
     Date.now()
   ));
 
-  // Tarifs par service/année → center_service_prices. Le mode cantine n'est
-  // PAS écrit ici : il appartient à la plateforme via center_meal_mode_history.
+  // Tarifs par service/année → center_service_prices. Le mode cantine est
+  // journalisé séparément ci-dessous (center_meal_mode_history).
   const sp: Record<string, Record<string, number>> = (settings.servicePrices && typeof settings.servicePrices === 'object')
     ? JSON.parse(JSON.stringify(settings.servicePrices))
     : {};
@@ -450,6 +450,21 @@ export async function writeSettings(db: D1Database, settings: any, centerId: str
       stmts.push(db.prepare(
         'INSERT INTO center_service_prices (center_id, school_year, service_key, billing_period, valid_from, price, traiteur_share) VALUES (?, ?, ?, ?, ?, ?, NULL)'
       ).bind(centerId, year, serviceKey, period, today, n));
+    }
+  }
+
+  // Mode cantine : le CENTRE choisit le mode d'exploitation (external_traiteur
+  // ou in_house_kitchen). On journalise tout changement dans
+  // center_meal_mode_history (la dernière ligne = mode courant lu par
+  // readSettings). Idempotent le même jour : UNIQUE(center_id, effective_from).
+  const requestedMealMode = str(settings.mealOperatingMode || settings.meal_operating_mode);
+  if (requestedMealMode === 'external_traiteur' || requestedMealMode === 'in_house_kitchen') {
+    const currentMealMode = str((await db.prepare('SELECT mode FROM center_meal_mode_history WHERE center_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').bind(centerId).first<any>())?.mode);
+    if (currentMealMode !== requestedMealMode) {
+      stmts.push(db.prepare(
+        'INSERT INTO center_meal_mode_history (center_id, mode, effective_from, created_at) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(center_id, effective_from) DO UPDATE SET mode = excluded.mode'
+      ).bind(centerId, requestedMealMode, today, Date.now()));
     }
   }
 

@@ -425,12 +425,31 @@ export default function SettingsModule({ settings, onUpdateSettings, onExportDat
                     <Utensils className="h-4 w-4 text-brand-600" />
                     المطعم والوجبات (Cantine Adaptative)
                   </span>
-                  {/* Mode cantine : géré par la plateforme (center_meal_mode_history) —
-                      lecture seule ici. Le centre voit le mode courant. */}
-                  <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-brand-600/20 text-[11px] font-bold text-brand-700">
-                    {(formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur'
-                      ? '🤝 متعاقد مع Traiteur خارجي'
-                      : '👨‍🍳 مطبخ داخلي (طباخ قار)'}
+                  {/* Mode cantine : le centre choisit son mode d'exploitation.
+                      Enregistré via center_meal_mode_history au PUT /api/settings. */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-brand-600/20">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'external_traiteur' }))}
+                      className={`px-3 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                        (formData.mealOperatingMode || 'external_traiteur') === 'external_traiteur'
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      🤝 متعاقد مع Traiteur خارجي
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, mealOperatingMode: 'in_house_kitchen' }))}
+                      className={`px-3 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                        formData.mealOperatingMode === 'in_house_kitchen'
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      👨‍🍳 مطبخ داخلي (طباخ قار)
+                    </button>
                   </div>
                 </div>
 
