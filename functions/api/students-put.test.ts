@@ -257,4 +257,61 @@ describe('PUT /api/students (single, existing student)', () => {
       .get(STUDENT_ID, YEAR) as any;
     expect(yr.etablissement_id).toBe(created.id);
   });
+
+  it('updating only the profile preserves payments, meal attendance, notes and enrollments', async () => {
+    // Enfants existants : ne doivent jamais être supprimés par un PUT de profil.
+    sqlite.prepare(`
+      INSERT INTO payments (id, center_id, student_id, date, service_key, billing_period, period_month,
+        school_year, payment_type, method, amount, total_required, discount, receipt_number, created_at)
+      VALUES ('pay_keep', ?, ?, '2026-10-15', 'suivi', 'month', '2026-10',
+        ?, 'full', 'cash', 100, 100, 0, 'REC-KEEP', 1)
+    `).run(CENTER, STUDENT_ID, YEAR);
+    sqlite.prepare(`
+      INSERT INTO meal_attendances (center_id, student_id, date, service_key, billing_mode, status, unit_price, created_at)
+      VALUES (?, ?, '2026-10-15', 'lunch', 'unit', 'paid', 8, 1)
+    `).run(CENTER, STUDENT_ID);
+    sqlite.prepare(`
+      INSERT INTO suivi_notes (student_id, school_year, trimester, subject, devoir1)
+      VALUES (?, ?, '1', 'Mathématiques', 12)
+    `).run(STUDENT_ID, YEAR);
+    sqlite.prepare(`
+      INSERT INTO student_service_enrollments
+        (id, center_id, student_id, service_key, school_year, billing_mode,
+         monthly_price, annual_price, unit_price, valid_from)
+      VALUES ('enr_keep', ?, ?, 'suivi', ?, 'subscription', 250, 150, NULL, '2026-09-01')
+    `).run(CENTER, STUDENT_ID, YEAR);
+
+    // Payload de profil : aucun paiement, pointage, note, frais ni inscription.
+    const {
+      payments: _payments,
+      mealAttendances: _mealAttendances,
+      suiviNotes: _suiviNotes,
+      enrolledServices: _enrolledServices,
+      suiviFees: _suiviFees,
+      etudeFees: _etudeFees,
+      libraryFees: _libraryFees,
+      mealSubscription: _mealSubscription,
+      ...profilePayload
+    } = studentPayload;
+
+    const res = await onRequestPut(context({ ...profilePayload, etablissement: 'jawhara' }));
+    expect(res.status).toBe(200);
+
+    // Profil bien mis à jour.
+    const yr = sqlite.prepare('SELECT grade, etablissement_id FROM student_years WHERE student_id = ? AND school_year = ?')
+      .get(STUDENT_ID, YEAR) as any;
+    expect(yr.grade).toBe('Lycée 1ère Année');
+    expect(yr.etablissement_id).toBe(
+      (sqlite.prepare('SELECT id FROM etablissements WHERE center_id = ? AND name = ?').get(CENTER, 'jawhara') as any).id
+    );
+
+    // Enfants intacts.
+    const count = (table: string) => (sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE student_id = ?`).get(STUDENT_ID) as any).n;
+    expect(count('payments')).toBe(1);
+    expect(count('meal_attendances')).toBe(1);
+    expect(count('suivi_notes')).toBe(1);
+    expect(count('student_service_enrollments')).toBe(1);
+    const enr = sqlite.prepare('SELECT monthly_price, annual_price FROM student_service_enrollments WHERE id = ?').get('enr_keep') as any;
+    expect(enr).toMatchObject({ monthly_price: 250, annual_price: 150 });
+  });
 });

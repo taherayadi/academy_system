@@ -25,7 +25,7 @@ import {
   Lock,
   Cookie
 } from 'lucide-react';
-import { Student, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
+import { Student, StudentUpdate, ParentInfo, Sibling, AuthorizedPerson, CenterSettings, getFeesForYear, DEFAULT_ACADEMIC_YEARS, PaymentRecord, getCurrentAcademicYear, EXTERNAL_GRADE_OPTIONS, gradeLabelBilingual, ACADEMIC_MONTHS, getCurrentAcademicIndex } from '../types';
 import { hasSchoolLevel } from '../utils/centerType';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -35,7 +35,7 @@ import DateField from './DateField';
 interface StudentRegistrationModuleProps {
   students: Student[];
   onAddStudent: (student: Omit<Student, 'id'>) => void;
-  onUpdateStudent: (student: Student) => void;
+  onUpdateStudent: (student: StudentUpdate) => void;
   onDeleteStudent: (id: string) => void;
   settings?: CenterSettings;
   openAddFormTrigger?: boolean;
@@ -67,6 +67,16 @@ const parentalSituationLabel = (key?: string): string => {
     default: return key || 'متزوجان';
   }
 };
+
+const ENROLLMENT_KEYS = ['suivi', 'etude', 'library', 'meals', 'gouterMatin', 'gouterSoir', 'gouterBoth'] as const;
+
+/** Compare uniquement les cases d'inscription réellement pilotées par ce formulaire. */
+function sameEnrolledServices(
+  a?: Student['enrolledServices'],
+  b?: Student['enrolledServices']
+): boolean {
+  return ENROLLMENT_KEYS.every(key => Boolean(a?.[key]) === Boolean(b?.[key]));
+}
 
 function isNetworkError(err: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
@@ -493,7 +503,33 @@ export default function StudentRegistrationModule({
     };
 
     if (editingStudentId) {
-      onUpdateStudent({ ...payload, id: editingStudentId });
+      // Un PUT de profil ne doit pas transporter les données enfants :
+      // paiements, pointages repas, notes et frais ont leurs propres APIs.
+      const {
+        payments: _payments,
+        mealAttendances: _mealAttendances,
+        suiviNotes: _suiviNotes,
+        enrolledServices,
+        suiviFees,
+        etudeFees,
+        libraryFees,
+        mealSubscription,
+        ...profile
+      } = payload;
+
+      const update: StudentUpdate = { ...profile, id: editingStudentId };
+
+      // Les inscriptions/frais ne sont envoyés que s'ils ont changé dans ce
+      // formulaire. Sinon le serveur conserve les lignes existantes.
+      if (!sameEnrolledServices(enrolledServices, existing?.enrolledServices)) {
+        update.enrolledServices = enrolledServices;
+        update.suiviFees = suiviFees;
+        update.etudeFees = etudeFees;
+        update.libraryFees = libraryFees;
+        update.mealSubscription = mealSubscription;
+      }
+
+      onUpdateStudent(update);
       toast.success(`تم تحديث ملف التلميذ (${firstName} ${lastName}) بنجاح!`);
     } else {
       onAddStudent(payload);

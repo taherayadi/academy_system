@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate } from './types';
+import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate } from './types';
 
 
 const API_BASE = '/api';
@@ -143,8 +143,11 @@ export async function createStudentApi(student: Student): Promise<void> {
 }
 
 
-export async function updateStudentApi(student: Student): Promise<void> {
-  return putDomain('/students', student, 'تعذر تعديل بيانات التلميذ.');
+export async function updateStudentApi(student: StudentUpdate): Promise<void> {
+  // Les données enfants ont leurs endpoints dédiés. On ne les envoie jamais
+  // dans un PUT de profil, même si un appelant legacy fournit l'élève complet.
+  const { payments: _payments, mealAttendances: _mealAttendances, suiviNotes: _suiviNotes, ...profile } = student;
+  return putDomain('/students', profile, 'تعذر تعديل بيانات التلميذ.');
 }
 
 

@@ -878,6 +878,19 @@ async function resolveSubjectIds(db: D1Database, centerId: string, names: string
   return map;
 }
 
+/**
+ * Vrai si le payload demande explicitement une mise à jour des inscriptions
+ * de services (frais ou cases d'inscription). Un PUT de profil seul n'envoie
+ * aucun de ces champs : on conserve alors les inscriptions existantes.
+ */
+function hasStudentEnrollmentPayload(s: any): boolean {
+  return s?.enrolledServices !== undefined
+    || s?.suiviFees !== undefined
+    || s?.etudeFees !== undefined
+    || s?.libraryFees !== undefined
+    || s?.mealSubscription !== undefined;
+}
+
 async function buildStudentsStmts(db: D1Database, students: any[], centerId: string = DEFAULT_CENTER_ID, mode: 'insert' | 'update' = 'insert'): Promise<D1PreparedStatement[]> {
   const stmts: D1PreparedStatement[] = [];
   const etabNames: string[] = [];
@@ -890,18 +903,21 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
     // supprimée. Un DELETE casserait les FK RESTRICT (formation_enrollments,
     // meal_forfait_closure_items) et CASCADE-effacerait des données hors payload
     // (student_attendance, course_session_attendance, revision_seance_students).
+    const studentType = str((s as any).studentType) || null;
+    const studentStatus = str((s as any).status) || null;
     const studentBind = [
-      str((s as any).studentType) || 'regular', s.firstName, s.lastName, s.birthDate || null, s.birthPlace || null,
+      mode === 'update' ? studentType : (studentType || 'regular'),
+      s.firstName ?? null, s.lastName ?? null, s.birthDate || null, s.birthPlace || null,
       str((s as any).contactPhone) || null, s.allergies ?? '', s.parentalSituation || null, s.parentalComments ?? null,
       s.registration?.date ?? null, s.registration?.location ?? null, s.registration?.signedElectronically ? 1 : 0, s.registration?.signatureName ?? null,
-      str((s as any).status) || 'active'
+      mode === 'update' ? studentStatus : (studentStatus || 'active')
     ];
     // NB: studentBind = 14 valeurs (SANS created_at). Le UPDATE n'a que 14
     // placeholders SET + 2 WHERE : binder la 15e valeur (Date.now()) ferait
     // échouer .bind() (« wrong number of parameters » → 500 sur tout PUT
     // d'un élève existant).
     if (mode === 'update') {
-      stmts.push(db.prepare('UPDATE students SET student_type = ?, first_name = ?, last_name = ?, birth_date = ?, birth_place = ?, contact_phone = ?, allergies = ?, parental_situation = ?, parental_comments = ?, registration_date = ?, registration_location = ?, registration_signed_electronically = ?, registration_signature_name = ?, status = ? WHERE id = ? AND center_id = ?').bind(
+      stmts.push(db.prepare('UPDATE students SET student_type = COALESCE(?, student_type), first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name), birth_date = ?, birth_place = ?, contact_phone = COALESCE(?, contact_phone), allergies = ?, parental_situation = ?, parental_comments = ?, registration_date = ?, registration_location = ?, registration_signed_electronically = ?, registration_signature_name = ?, status = COALESCE(?, status) WHERE id = ? AND center_id = ?').bind(
         ...studentBind, s.id, centerId
       ));
     } else {
@@ -911,38 +927,65 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
     }
 
     // Année scolaire (grade + établissement + emploi du temps vivent ici).
-    stmts.push(db.prepare('INSERT OR IGNORE INTO student_years (student_id, center_id, school_year, grade, etablissement_id, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?)').bind(
+    // En update, on met à jour la ligne de l'année au lieu de la supprimer :
+    // les autres années scolaires de l'élève restent intactes.
+    const yearSql = mode === 'update'
+      ? `INSERT INTO student_years (student_id, center_id, school_year, grade, etablissement_id, time_sheet_id)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (student_id, school_year) DO UPDATE SET
+           grade = excluded.grade,
+           etablissement_id = excluded.etablissement_id,
+           time_sheet_id = COALESCE(excluded.time_sheet_id, student_years.time_sheet_id)`
+      : 'INSERT OR IGNORE INTO student_years (student_id, center_id, school_year, grade, etablissement_id, time_sheet_id) VALUES (?, ?, ?, ?, ?, ?)';
+    stmts.push(db.prepare(yearSql).bind(
       s.id, centerId, schoolYear, str(s.grade) || '', (s.etablissement && etabIds[str(s.etablissement).trim()]) || null, s.timeSheetId ?? null
     ));
 
     // Inscriptions services (suivi/étude/biblio + repas/goûters).
-    const enrollBase = { studentId: s.id as string, schoolYear, validFrom: schoolYearStart(schoolYear) };
-    const pushEnrollment = (serviceKey: string, billingMode: 'subscription' | 'unit', prices: { monthly?: number; annual?: number; unit?: number }) => {
-      stmts.push(db.prepare('INSERT OR IGNORE INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
-        crypto.randomUUID(), centerId, enrollBase.studentId, serviceKey, enrollBase.schoolYear, billingMode,
-        prices.monthly ?? null, prices.annual ?? null, prices.unit ?? null, enrollBase.validFrom
-      ));
-    };
-    const es = s.enrolledServices || {};
-    if (es.suivi) pushEnrollment('suivi', 'subscription', { monthly: num(s.suiviFees?.monthlyFee), annual: num(s.suiviFees?.annualRegistrationFee) });
-    if (es.etude) pushEnrollment('etude', 'subscription', { monthly: num(s.etudeFees?.monthlyFee), annual: num(s.etudeFees?.annualRegistrationFee) });
-    if (es.library) pushEnrollment('bibliotheque', 'subscription', { monthly: num(s.libraryFees?.monthlyFee), annual: num(s.libraryFees?.annualRegistrationFee) });
-    if (es.meals) {
-      if (s.mealSubscription?.mode === 'unit') pushEnrollment('lunch', 'unit', { unit: num(s.mealSubscription?.unitPrice) });
-      else pushEnrollment('lunch', 'subscription', { monthly: num(s.mealSubscription?.monthlyPrice), unit: num(s.mealSubscription?.unitPrice) });
+    // En update, on ne les reconstruit que si le payload les mentionne :
+    // une simple édition de profil ne doit pas toucher aux frais/inscriptions.
+    if (mode === 'insert' || hasStudentEnrollmentPayload(s)) {
+      const enrollBase = { studentId: s.id as string, schoolYear, validFrom: schoolYearStart(schoolYear) };
+      const pushEnrollment = (serviceKey: string, billingMode: 'subscription' | 'unit', prices: { monthly?: number; annual?: number; unit?: number }) => {
+        stmts.push(db.prepare('INSERT OR IGNORE INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+          crypto.randomUUID(), centerId, enrollBase.studentId, serviceKey, enrollBase.schoolYear, billingMode,
+          prices.monthly ?? null, prices.annual ?? null, prices.unit ?? null, enrollBase.validFrom
+        ));
+      };
+      const es = s.enrolledServices || {};
+      if (es.suivi) pushEnrollment('suivi', 'subscription', { monthly: num(s.suiviFees?.monthlyFee), annual: num(s.suiviFees?.annualRegistrationFee) });
+      if (es.etude) pushEnrollment('etude', 'subscription', { monthly: num(s.etudeFees?.monthlyFee), annual: num(s.etudeFees?.annualRegistrationFee) });
+      if (es.library) pushEnrollment('bibliotheque', 'subscription', { monthly: num(s.libraryFees?.monthlyFee), annual: num(s.libraryFees?.annualRegistrationFee) });
+      if (es.meals) {
+        if (s.mealSubscription?.mode === 'unit') pushEnrollment('lunch', 'unit', { unit: num(s.mealSubscription?.unitPrice) });
+        else pushEnrollment('lunch', 'subscription', { monthly: num(s.mealSubscription?.monthlyPrice), unit: num(s.mealSubscription?.unitPrice) });
+      }
+      if (es.gouterMatin || es.gouterBoth) pushEnrollment('gouter_matin', 'subscription', {});
+      if (es.gouterSoir || es.gouterBoth) pushEnrollment('gouter_apres_midi', 'subscription', {});
     }
-    if (es.gouterMatin || es.gouterBoth) pushEnrollment('gouter_matin', 'subscription', {});
-    if (es.gouterSoir || es.gouterBoth) pushEnrollment('gouter_apres_midi', 'subscription', {});
 
-    const mother = s.mother || {}; const father = s.father || {};
-    // extra_phones est NOT NULL (JSON array) : un bind explicite de NULL
-    // contournerait le DEFAULT '[]' et ferait échouer l'insert (SQLITE_CONSTRAINT).
-    stmts.push(db.prepare('INSERT INTO student_parents (student_id, role, name, birth_date, profession, address, phone_fixed, phone_mobile, email, extra_phones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, 'mother', mother.name ?? '', mother.birthDate ?? '', mother.profession ?? '', mother.address ?? '', mother.phoneFixed ?? '', mother.phoneMobile ?? '', mother.email ?? '', JSON.stringify(Array.isArray(mother.extraPhones) ? mother.extraPhones : [])));
-    stmts.push(db.prepare('INSERT INTO student_parents (student_id, role, name, birth_date, profession, address, phone_fixed, phone_mobile, email, extra_phones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, 'father', father.name ?? '', father.birthDate ?? '', father.profession ?? '', father.address ?? '', father.phoneFixed ?? '', father.phoneMobile ?? '', father.email ?? '', JSON.stringify(Array.isArray(father.extraPhones) ? father.extraPhones : [])));
-    for (const sib of s.siblings || []) stmts.push(db.prepare('INSERT INTO siblings (id, student_id, name, age, grade) VALUES (?, ?, ?, ?, ?)').bind(sib.id, s.id, sib.name, num(sib.age), sib.grade));
-    for (const ap of s.authorizedPersons || []) stmts.push(db.prepare('INSERT INTO authorized_persons (id, student_id, name, phone, relation) VALUES (?, ?, ?, ?, ?)').bind(ap.id, s.id, ap.name, ap.phone, ap.relation));
-    const hist = s.academicHistory || {};
-    [['nMinus1', 1], ['nMinus2', 2], ['nMinus3', 3]].forEach(([key, n]) => { const h = hist[key]; stmts.push(db.prepare('INSERT INTO academic_history (student_id, n_minus, school, grade) VALUES (?, ?, ?, ?)').bind(s.id, n, h?.school ?? '', h?.grade ?? '')); });
+    if (mode === 'insert' || s.mother !== undefined || s.father !== undefined) {
+      const mother = s.mother || {}; const father = s.father || {};
+      // extra_phones est NOT NULL (JSON array) : un bind explicite de NULL
+      // contournerait le DEFAULT '[]' et ferait échouer l'insert (SQLITE_CONSTRAINT).
+      stmts.push(db.prepare('INSERT INTO student_parents (student_id, role, name, birth_date, profession, address, phone_fixed, phone_mobile, email, extra_phones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, 'mother', mother.name ?? '', mother.birthDate ?? '', mother.profession ?? '', mother.address ?? '', mother.phoneFixed ?? '', mother.phoneMobile ?? '', mother.email ?? '', JSON.stringify(Array.isArray(mother.extraPhones) ? mother.extraPhones : [])));
+      stmts.push(db.prepare('INSERT INTO student_parents (student_id, role, name, birth_date, profession, address, phone_fixed, phone_mobile, email, extra_phones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(s.id, 'father', father.name ?? '', father.birthDate ?? '', father.profession ?? '', father.address ?? '', father.phoneFixed ?? '', father.phoneMobile ?? '', father.email ?? '', JSON.stringify(Array.isArray(father.extraPhones) ? father.extraPhones : [])));
+    }
+    if (mode === 'insert' || Array.isArray(s.siblings)) {
+      for (const sib of s.siblings || []) stmts.push(db.prepare('INSERT INTO siblings (id, student_id, name, age, grade) VALUES (?, ?, ?, ?, ?)').bind(sib.id, s.id, sib.name, num(sib.age), sib.grade));
+    }
+    if (mode === 'insert' || Array.isArray(s.authorizedPersons)) {
+      for (const ap of s.authorizedPersons || []) stmts.push(db.prepare('INSERT INTO authorized_persons (id, student_id, name, phone, relation) VALUES (?, ?, ?, ?, ?)').bind(ap.id, s.id, ap.name, ap.phone, ap.relation));
+    }
+    if (mode === 'insert' || s.academicHistory !== undefined) {
+      const hist = s.academicHistory || {};
+      [['nMinus1', 1], ['nMinus2', 2], ['nMinus3', 3]].forEach(([key, n]) => { const h = hist[key]; stmts.push(db.prepare('INSERT INTO academic_history (student_id, n_minus, school, grade) VALUES (?, ?, ?, ?)').bind(s.id, n, h?.school ?? '', h?.grade ?? '')); });
+    }
+    // Les données enfants ne sont écrites qu'à la création/restauration bulk.
+    // Un PUT de profil ne doit jamais réécrire paiements, pointages ou notes :
+    // ils ont leurs endpoints dédiés (POST /api/payments, /api/meal-attendances,
+    // /api/suivi-notes).
+    if (mode === 'insert') {
     for (const p of s.payments || []) {
       const { serviceKey, period } = paymentServiceKey(p.service, p.month);
       // Normalize UI labels → DB STRICT enums + refund shape (see paymentMethodKey).
@@ -981,6 +1024,7 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
     // entier) ; cette boucle ne sert qu'aux restaurations bulk.
     const subjectIdsForStudent = await resolveSubjectIds(db, centerId, (s.suiviNotes || []).flatMap((yr: any) => (yr.trimesters || []).flatMap((tr: any) => Object.keys(tr.subjects || {}))));
     for (const yr of s.suiviNotes || []) for (const tr of yr.trimesters || []) for (const [subject, grades] of Object.entries(tr.subjects || {})) { const g = grades as any; const sid = subjectIdsForStudent[subject]; if (!sid) continue; stmts.push(db.prepare('INSERT OR IGNORE INTO suivi_notes (id, student_id, school_year, trimester, subject_id, devoir1, devoir2, synthese) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), s.id, yr.schoolYear, tr.trimester, sid, g?.devoir1 ?? null, g?.devoir2 ?? null, g?.synthese ?? null)); }
+    }
   }
   return stmts;
 }
@@ -1016,22 +1060,30 @@ export async function updateSingleStudent(db: D1Database, student: any, centerId
   // (formation_enrollments, meal_forfait_closure_items) bloqueraient le DELETE
   // pour un élève inscrit à une formation, et le DELETE CASCADE effacerait des
   // données hors payload (student_attendance, course_session_attendance,
-  // revision_seance_students). enrollments + student_years sont supprimés
-  // explicitement pour que les frais/grade mis à jour repartent du payload.
-  const deleteStmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM payments WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM meal_attendances WHERE student_id = ?').bind(student.id),
-    // NB : suivi_notes n'est PAS supprimé ici — les notes sont gérées par
-    // l'endpoint dédié /api/suivi-notes et ne font plus partie du payload
-    // PUT /api/students. Un DELETE reconstruirait les notes depuis un
-    // payload potentiellement périmé et les effacerait.
-    db.prepare('DELETE FROM academic_history WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM authorized_persons WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM siblings WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM student_parents WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM student_service_enrollments WHERE student_id = ?').bind(student.id),
-    db.prepare('DELETE FROM student_years WHERE student_id = ?').bind(student.id)
-  ];
+  // revision_seance_students).
+  //
+  // Les données enfants (paiements, pointages repas, notes, inscriptions) ne
+  // sont supprimées QUE si le payload les fournit explicitement. Un simple
+  // changement de profil (établissement, parents, etc.) ne doit rien effacer.
+  const deleteStmts: D1PreparedStatement[] = [];
+  if (student.academicHistory !== undefined) {
+    deleteStmts.push(db.prepare('DELETE FROM academic_history WHERE student_id = ?').bind(student.id));
+  }
+  if (Array.isArray(student.authorizedPersons)) {
+    deleteStmts.push(db.prepare('DELETE FROM authorized_persons WHERE student_id = ?').bind(student.id));
+  }
+  if (Array.isArray(student.siblings)) {
+    deleteStmts.push(db.prepare('DELETE FROM siblings WHERE student_id = ?').bind(student.id));
+  }
+  if (student.mother !== undefined || student.father !== undefined) {
+    deleteStmts.push(db.prepare('DELETE FROM student_parents WHERE student_id = ?').bind(student.id));
+  }
+  if (hasStudentEnrollmentPayload(student)) {
+    deleteStmts.push(db.prepare('DELETE FROM student_service_enrollments WHERE student_id = ?').bind(student.id));
+  }
+  // NB : payments, meal_attendances, suivi_notes et student_years ne sont
+  // jamais supprimés ici. student_years est mis à jour par upsert dans
+  // buildStudentsStmts (les autres années restent intactes).
   const insertStmts = await buildStudentsStmts(db, [student], centerId, 'update');
   const all = [...deleteStmts, ...insertStmts];
   for (let i = 0; i < all.length; i += 500) await db.batch(all.slice(i, i + 500));

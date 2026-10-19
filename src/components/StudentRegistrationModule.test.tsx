@@ -158,6 +158,33 @@ describe('StudentRegistrationModule remarks alignment — academic-history secti
     expect(saved.academicHistory.nMinus1.grade).toBe('');
   });
 
+  it('editing sends only profile fields, not payments, meals, notes or fees', async () => {
+    const onUpdateStudent = vi.fn();
+    const st = makeStudent({
+      payments: [{ id: 'pay_1', date: '2026-10-15', amountPaid: 100 } as any],
+      mealAttendances: [{ date: '2026-10-15', service: 'lunch', type: 'unit', paid: true }],
+      suiviNotes: [{ schoolYear: '2026/2027', trimesters: [] }]
+    });
+    renderModule({ students: [st], onUpdateStudent });
+
+    fireEvent.click(screen.getByTitle('تعديل الفيش'));
+    fireEvent.submit(document.querySelector('form')!);
+
+    await waitFor(() => expect(onUpdateStudent).toHaveBeenCalled());
+    const saved = onUpdateStudent.mock.calls[0][0];
+    expect(saved.firstName).toBe('Ahmed');
+    // Données enfants : jamais dans le PUT de profil.
+    expect(saved.payments).toBeUndefined();
+    expect(saved.mealAttendances).toBeUndefined();
+    expect(saved.suiviNotes).toBeUndefined();
+    // Inscriptions/frais inchangés : omis, le serveur conserve l'existant.
+    expect(saved.enrolledServices).toBeUndefined();
+    expect(saved.suiviFees).toBeUndefined();
+    expect(saved.etudeFees).toBeUndefined();
+    expect(saved.libraryFees).toBeUndefined();
+    expect(saved.mealSubscription).toBeUndefined();
+  });
+
   it('keeps stored academicHistory verbatim when editing under a crèche (FR-010)', async () => {
     const onUpdateStudent = vi.fn();
     const st = makeStudent({

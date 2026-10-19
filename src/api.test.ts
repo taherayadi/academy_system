@@ -234,6 +234,20 @@ describe('Atomic Entity Mutators', () => {
     expect(opts.body).toBe(JSON.stringify(student));
   });
 
+  it('updateStudentApi strips child records (they have dedicated endpoints)', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+    const student = {
+      id: 'st_123',
+      firstName: 'Mariem',
+      payments: [{ id: 'pay_1' }],
+      mealAttendances: [{ date: '2026-10-15', service: 'lunch' }],
+      suiviNotes: [{ schoolYear: '2026/2027', trimesters: [] }]
+    };
+    await updateStudentApi(student as any);
+    const [, opts] = mockFetch.mock.calls[0];
+    expect(JSON.parse(opts.body)).toEqual({ id: 'st_123', firstName: 'Mariem' });
+  });
+
   it('deleteStudentApi sends DELETE with query param id', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
     await deleteStudentApi('st_123');

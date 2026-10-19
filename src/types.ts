@@ -755,6 +755,14 @@ export interface StudentDbRow {
   createdAt: number;
 }
 
+/**
+ * Mise à jour partielle d'un élève : seuls les champs présents sont modifiés.
+ * Les données enfants (paiements, pointages, inscriptions, notes…) ont leurs
+ * propres endpoints et ne doivent pas transiter par PUT /api/students.
+ */
+export type StudentUpdate = Partial<Student> & { id: string };
+
+
 export interface Student {
   id: string;
   firstName: string;
