@@ -413,9 +413,6 @@ export default function TransportSubscriptionModule({
                     <tr key={st.id} className="hover:bg-slate-50/80 transition" data-testid={`transport-student-${st.id}`}>
                       <td className="p-4 font-extrabold text-slate-900">
                         <div className="flex items-center gap-2">
-                          <span className="p-1.5 shrink-0 bg-brand-600/[0.06] text-brand-600 rounded-lg border border-brand-600/20">
-                            <Bus className="h-3.5 w-3.5" />
-                          </span>
                           <button
                             type="button"
                             onClick={() => setUnenrollStudent(st)}
