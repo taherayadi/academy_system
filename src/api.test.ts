@@ -111,16 +111,18 @@ describe('saveDatabase', () => {
 // fetchDatabase (concurrent domain load)
 // ---------------------------------------------------------------------------
 describe('fetchDatabase', () => {
-  it('calls all 16 domain endpoints concurrently', async () => {
-    // settings + 14 list domains return arrays; /skills returns a document
+  it('calls all 17 domain endpoints concurrently', async () => {
+    // settings + 14 list domains + /skills (document) + /salles (list)
     const responses = [
       ...Array.from({ length: 15 }, () => jsonResponse([])),
-      jsonResponse({ catalog: [], evaluations: [] })
+      jsonResponse({ catalog: [], evaluations: [] }),
+      jsonResponse([])
     ];
     mockFetch.mockImplementation(() => Promise.resolve(responses.shift()));
 
     const db = await fetchDatabase();
-    expect(mockFetch).toHaveBeenCalledTimes(16);
+    expect(mockFetch).toHaveBeenCalledTimes(17);
+    expect(mockFetch.mock.calls.some(([url]: any) => url === '/api/salles')).toBe(true);
     expect(db.students).toEqual([]);
     expect(db.staff).toEqual([]);
     expect(db.settings).toEqual([]);
@@ -135,6 +137,7 @@ describe('fetchDatabase', () => {
     expect(db.studentTimeSheets).toEqual([]);
     expect(db.formations).toEqual([]);
     expect(db.events).toEqual([]);
+    expect(db.salles).toEqual([]);
   });
 
   it('throws UnauthorizedError if any endpoint returns 401', async () => {

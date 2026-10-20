@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon, CreditCard } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon, CreditCard, DoorOpen } from 'lucide-react';
 
-import { Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, initialCenterSettings, normalizeSettings } from './types';
+import { Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, Salle, initialCenterSettings, normalizeSettings } from './types';
 
-import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, updateTimesheetApi, deleteTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, deletePaymentApi, createMealAttendanceApi, updateMealAttendanceApi, deleteMealAttendanceApi, updateMealEnrollmentApi, resetMealDataApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, UnauthorizedError } from './api';
+import { fetchDatabase, saveDatabase, saveStudents, saveStaff, saveSlots, createSlotApi, deleteSlotApi, saveCourses, removeCourseStudentApi, deleteCourseApi, createCourseApi, saveSessions, saveMealPlans, saveExpenses, saveTimesheets, upsertTimesheetApi, updateTimesheetApi, deleteTimesheetApi, saveExternalStudents, saveRevisionSeances, createRevisionSeanceApi, updateRevisionSeanceApi, addRevisionStudentApi, removeRevisionStudentApi, deleteRevisionSeanceApi, saveStudentTimeSheets, deleteStudentTimeSheetApi, saveStudentAttendanceApi, fetchStudentAttendanceApi, saveFormations, createFormationApi, deleteFormationApi, addFormationStudentApi, removeFormationStudentApi, saveFormationScheduleApi, saveEventsApi, createEventApi, deleteEventApi, addEventParticipantApi, deleteEventParticipantApi, saveMealForfaitClosures, fetchMealForfaitClosures, saveSettings, createStudentApi, updateStudentApi, deleteStudentApi, createStaffApi, updateStaffApi, deleteStaffApi, createExpenseApi, deleteExpenseApi, createPaymentApi, deletePaymentApi, createMealAttendanceApi, updateMealAttendanceApi, deleteMealAttendanceApi, updateMealEnrollmentApi, resetMealDataApi, saveSuiviNoteApi, fetchCentersApi, fetchRenewalRequestsApi, saveActivities, createActivityApi, deleteActivityApi, fetchActivitiesApi, saveSkills, createSkillApi, deleteSkillApi, addSkillEvaluationApi, fetchSkillsApi, createStaffLeaveRequestApi, updateStaffLeaveRequestStatusApi, createStaffAdvanceApi, updateStaffAdvanceStatusApi, createStaffPayslipApi, upsertStudentYearApi, unassignStudentYearApi, createSalleApi, updateSalleApi, deleteSalleApi, UnauthorizedError } from './api';
 import { saveSessionUser, clearSessionUser, clearLocalSession } from './auth';
 
 // Module Components
@@ -18,6 +18,7 @@ import EtudeModule from './components/EtudeModule';
 import ExternalCoursesModule from './components/ExternalCoursesModule';
 import SeanceRevisionModule from './components/SeanceRevisionModule';
 import FormationModule from './components/FormationModule';
+import SallesModule from './components/SallesModule';
 import EventsModule from './components/EventsModule';
 import ActivitiesModule from './components/ActivitiesModule';
 import CompetencesModule from './components/CompetencesModule';
@@ -52,6 +53,7 @@ export const TAB_MODULE: Record<string, string> = {
   module4: 'coursParticuliers',   // الدروس الخصوصية
   module4b: 'revision',           // حصة مراجعة
   formations: 'formations',       // التكوينات والدورات
+  salles: 'formations',           // إدارة القاعات (gestion des salles)
   events: 'events',               // الفعاليات والخرجات
   module5: 'bibliotheque',        // المكتبة
   module6: 'cantine',             // إدارة الوجبات
@@ -246,7 +248,7 @@ export default function App() {
     if (currentUser && !hasCenterModule(activeTab)) {
       setActiveTab('dashboard');
     }
-    if (currentUser && !hasStudy && ['module3', 'module4', 'module4b', 'formations'].includes(activeTab)) {
+    if (currentUser && !hasStudy && ['module3', 'module4', 'module4b', 'formations', 'salles'].includes(activeTab)) {
       setActiveTab('dashboard');
     }
   }, [currentUser, currentCenter, activeTab, hasStudy]);
@@ -266,6 +268,7 @@ export default function App() {
   const [studentTimeSheets, setStudentTimeSheets] = useState<StudentTimeSheet[]>([]);
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceRecord[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
+  const [salles, setSalles] = useState<Salle[]>([]);
   const [events, setEvents] = useState<SchoolEvent[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [skillsDoc, setSkillsDoc] = useState<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>({ catalog: [], evaluations: [] });
@@ -293,8 +296,8 @@ export default function App() {
     expenses: CenterExpense[]; timesheets: TimesheetEntry[]; externalStudents: ExternalStudentRegister[];
     revisionSeances: RevisionSeance[]; studentTimeSheets: StudentTimeSheet[];
     studentAttendance: StudentAttendanceRecord[]; formations: Formation[]; events: SchoolEvent[];
-    activities: Activity[]; skills: Skill[]; skillEvaluations: SkillEvaluation[];
-  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [], activities: [], skills: [], skillEvaluations: [] });
+    activities: Activity[]; skills: Skill[]; skillEvaluations: SkillEvaluation[]; salles: Salle[];
+  }>({ settings: null, students: [], staff: [], slots: [], courses: [], sessions: [], mealPlans: [], expenses: [], timesheets: [], externalStudents: [], revisionSeances: [], studentTimeSheets: [], studentAttendance: [], formations: [], events: [], activities: [], skills: [], skillEvaluations: [], salles: [] });
 
   // Serializes full-state PUTs so concurrent module updates never overwrite each other.
   const commitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -330,7 +333,8 @@ export default function App() {
           events: db.events || [],
           activities: db.activities || [],
           skills: db.skills || [],
-          skillEvaluations: db.skillEvaluations || []
+          skillEvaluations: db.skillEvaluations || [],
+          salles: db.salles || []
         };
         setStudents(db.students || []);
         setStaff(db.staff || []);
@@ -347,6 +351,7 @@ export default function App() {
         setEvents(db.events || []);
         setActivities(db.activities || []);
         setSkillsDoc({ catalog: db.skills || [], evaluations: db.skillEvaluations || [] });
+        setSalles(db.salles || []);
         setSettings(db.settings);
       })
       .catch((err) => {
@@ -1013,7 +1018,21 @@ export default function App() {
 
   const handleDeleteEvent = (eventId: string) => {
     setEvents(prev => prev.filter(e => e.id !== eventId));
-    commitDomain(() => deleteEventApi(eventId));
+    commitDomain(() => deleteEventApi(eventId));  };
+
+  // Salle management (gestion des salles) — targeted POST/PUT/DELETE, same
+  // anti-overwrite discipline as the other granular domain endpoints.
+  const handleCreateSalle = (salle: Salle) => {
+    setSalles(prev => prev.some(s => s.id === salle.id) ? prev.map(s => s.id === salle.id ? salle : s) : [...prev, salle]);
+    commitDomain(() => createSalleApi(salle));  };
+
+  const handleUpdateSalle = (salle: Salle) => {
+    setSalles(prev => prev.map(s => s.id === salle.id ? salle : s));
+    commitDomain(() => updateSalleApi(salle));  };
+
+  const handleDeleteSalle = (salleId: string) => {
+    setSalles(prev => prev.filter(s => s.id !== salleId));
+    commitDomain(() => deleteSalleApi(salleId));
   };
 
   const handleAddEventParticipant = (eventId: string, participant: EventParticipant) => {
@@ -1366,7 +1385,8 @@ export default function App() {
       events: next.events !== undefined ? (next.events as SchoolEvent[]) : events,
       activities: next.activities !== undefined ? (next.activities as Activity[]) : activities,
       skills: next.skills !== undefined ? (next.skills as Skill[]) : skillsDoc.catalog,
-      skillEvaluations: next.skillEvaluations !== undefined ? (next.skillEvaluations as SkillEvaluation[]) : skillsDoc.evaluations
+      skillEvaluations: next.skillEvaluations !== undefined ? (next.skillEvaluations as SkillEvaluation[]) : skillsDoc.evaluations,
+      salles
     };
 
     commitDomain(async () => {
@@ -1391,6 +1411,7 @@ export default function App() {
       setStudentAttendance(freshAttendance);
       setFormations(normalizeFormations(freshDb.formations));
       setEvents(freshDb.events || []);
+      setSalles(freshDb.salles || []);
       stateRef.current = { ...freshDb, studentAttendance: freshAttendance };
     });
 
@@ -1481,6 +1502,7 @@ export default function App() {
         hasStudy && { id: 'module4', label: 'الدروس الخصوصية', icon: BookMarked },
         hasStudy && { id: 'module4b', label: 'حصة مراجعة', icon: BookOpenCheck },
         hasStudy && { id: 'formations', label: 'التكوينات والدورات', icon: Award },
+        hasStudy && { id: 'salles', label: 'إدارة القاعات', icon: DoorOpen },
         { id: 'events', label: 'الفعاليات والخرجات', icon: Calendar },
         hasActivitiesModule && { id: 'activites', label: 'الأنشطة والبرنامج', icon: PuzzleIcon },
         hasSkillsModule && { id: 'competences', label: 'المهارات والكفاءات', icon: BrainIcon },
@@ -1818,10 +1840,21 @@ export default function App() {
                   onCreateFormation={handleCreateFormation}
                   onDeleteFormation={handleDeleteFormation}
                   onAddFormationStudent={handleAddFormationStudent}
-                  onRemoveFormationStudent={handleRemoveFormationStudent}
-                  onUpdateFormationSchedule={handleUpdateFormationSchedule}
+                  onRemoveFormationStudent={handleRemoveFormationStudent}                  onUpdateFormationSchedule={handleUpdateFormationSchedule}
+                  salles={salles}
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
+                  sidebarCollapsed={sidebarCollapsed}
+                />
+              )}
+
+              {activeTab === 'salles' && (
+                <SallesModule
+                  salles={salles}
+                  onCreateSalle={handleCreateSalle}
+                  onUpdateSalle={handleUpdateSalle}
+                  onDeleteSalle={handleDeleteSalle}
+                  formations={formations}
                   sidebarCollapsed={sidebarCollapsed}
                 />
               )}

@@ -6,9 +6,12 @@ import {
   X,
   Plus,
   Trash2,
-  CalendarRange
+  CalendarRange,
+  DoorOpen,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
-import { Formation, FormationSeance } from '../types';
+import { Formation, FormationSeance, Salle } from '../types';
 import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
 import { useToast } from './Toast';
 
@@ -17,6 +20,11 @@ interface FormationScheduleModalProps {
   formation: Formation | null;
   onClose: () => void;
   onSave: (schedule: FormationSeance[]) => void;
+  // Salles gérées par le centre (gestion des salles) + TOUTES les formations :
+  // la disponibilité d'une salle est déduite des grilles horaires qui la
+  // mentionnent (même jour, créneaux qui se chevauchent).
+  salles?: Salle[];
+  allFormations?: Formation[];
 }
 
 const TIME_OPTIONS: string[] = [];
@@ -32,11 +40,15 @@ const toMin = (t: string) => {
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 };
 
+const overlaps = (aS: number, aE: number, bS: number, bE: number) => !isNaN(aS) && !isNaN(aE) && aS < bE && bS < aE;
+
 export default function FormationScheduleModal({
   open,
   formation,
   onClose,
-  onSave
+  onSave,
+  salles,
+  allFormations
 }: FormationScheduleModalProps) {
   const toast = useToast();
   const [draft, setDraft] = useState<FormationSeance[]>([]);
@@ -57,6 +69,13 @@ export default function FormationScheduleModal({
     (formation?.students || []).forEach(s => { map[s.id] = s.studentName; });
     return map;
   }, [formation]);
+
+  // Map salle id -> salle record (capacités, noms)
+  const salleById = useMemo(() => {
+    const map: Record<string, Salle> = {};
+    (salles || []).forEach(s => { map[s.id] = s; });
+    return map;
+  }, [salles]);
 
   useEffect(() => {
     if (open) {
@@ -91,7 +110,7 @@ export default function FormationScheduleModal({
         if (a.day !== b.day) continue;
         const aS = toMin(a.startTime), aE = toMin(a.endTime);
         const bS = toMin(b.startTime), bE = toMin(b.endTime);
-        if (!(aS < bE && bS < aE)) continue;
+        if (!overlaps(aS, aE, bS, bE)) continue;
         const shared = (a.students || []).filter(id => (b.students || []).includes(id));
         for (const id of shared) {
           out.push({
@@ -101,6 +120,55 @@ export default function FormationScheduleModal({
             secondMatiere: b.matiere
           });
         }
+      }
+    }
+    return out;
+  };
+
+  /**
+   * Disponibilité d'UNE salle pour UNE ligne du brouillon :
+   * occupée si (a) une AUTRE ligne du même brouillon l'utilise avec un
+   * créneau qui se chevauche le même jour, ou (b) une séance d'un AUTRE
+   * formation du centre l'occupe (détayée par le nom du formation).
+   */
+  const salleOccupiersFor = (row: FormationSeance): { formationName: string; matiere?: string }[] => {
+    if (!row.salle || !row.day) return [];
+    const out: { formationName: string; matiere?: string }[] = [];
+    // a) conflits internes au brouillon courant
+    (draft || []).forEach(other => {
+      if (other.id === row.id || !other.salle || other.salle !== row.salle || other.day !== row.day) return;
+      if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(other.startTime), toMin(other.endTime))) return;
+      out.push({ formationName: formation.name || 'هذا التكوين', matiere: other.matiere });
+    });
+    // b) séances des AUTRES formations
+    (allFormations || []).forEach(f => {
+      if (f.id === formation.id) return;
+      (Array.isArray(f.schedule) ? f.schedule : []).forEach(s => {
+        if (!s.salle || s.salle !== row.salle || s.day !== row.day) return;
+        if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(s.startTime), toMin(s.endTime))) return;
+        out.push({ formationName: f.name || 'تكوين', matiere: s.matiere });
+      });
+    });
+    return out;
+  };
+
+  const isSalleFree = (row: FormationSeance): boolean => salleOccupiersFor(row).length === 0;
+
+  // Conflits de salle sur l'ensemble du brouillon (bloquant à l'enregistrement).
+  const findSalleConflicts = (rows: FormationSeance[]) => {
+    const out: { salle: string; day: string; occupier: string }[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (!row.salle || !row.day) continue;
+      for (const occ of salleOccupiersFor(row)) {
+        const key = `${row.salle}|${row.day}|${occ.formationName}|${occ.matiere || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          salle: salleById[row.salle]?.name || 'قاعة',
+          day: row.day,
+          occupier: `${occ.formationName}${occ.matiere ? ` (${occ.matiere})` : ''}`
+        });
       }
     }
     return out;
@@ -133,7 +201,8 @@ export default function FormationScheduleModal({
         day: FORMATION_WORK_DAYS[0],
         startTime: '09:00',
         endTime: '10:30',
-        matiere: matieres[0] || ''
+        matiere: matieres[0] || '',
+        salle: ''
       }
     ]);
   };
@@ -152,6 +221,17 @@ export default function FormationScheduleModal({
       toast.error('ادخل بيانات الحصص بشكل صحيح.');
       return;
     }
+    // Une salle occupée au même créneau ne peut pas être réservée deux fois.
+    const salleConflicts = findSalleConflicts(valid);
+    if (salleConflicts.length > 0) {
+      const lines = salleConflicts.slice(0, 4).map(c => `قاعة ${c.salle} — يوم ${c.day} (مستأجرة من طرف ${c.occupier})`);
+      setError(
+        'توفر القاعات:\n' +
+        lines.join('\n') +
+        (salleConflicts.length > 4 ? `\nو ${salleConflicts.length - 4} أخرى...` : '')
+      );
+      return;
+    }
     const conflicts = findStudentConflicts(valid);
     if (conflicts.length > 0) {
       const names = [...new Set(conflicts.map(c => `${c.studentName} (${c.firstMatiere} ↔ ${c.secondMatiere} يوم ${c.day})`))];
@@ -163,7 +243,7 @@ export default function FormationScheduleModal({
       return;
     }
     const distinctDays = new Set(valid.map(r => r.day)).size;
-    onSave(valid);
+    onSave(valid.map(r => ({ ...r, salle: r.salle || undefined })));
     onClose();
     toast.success('تم حفظ جدول الحصص للتكوين');
     if (distinctDays === 1 && valid.length > 1) {
@@ -203,8 +283,14 @@ export default function FormationScheduleModal({
         {/* Body */}
         <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
           {error && (
-            <div className="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-[11px] font-bold">
+            <div className="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-[11px] font-bold whitespace-pre-line">
               {error}
+            </div>
+          )}
+
+          {(salles || []).length === 0 && (
+            <div className="px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-bold">
+              لم تُسجَّل أي قاعة بعد — يمكنك إدارة القاعات من وحدة «إدارة القاعات» ثم اختيارها هنا.
             </div>
           )}
 
@@ -218,7 +304,12 @@ export default function FormationScheduleModal({
                 </p>
               </div>
             ) : (
-              draft.map((row) => (
+              draft.map((row) => {
+                const occupiers = salleOccupiersFor(row);
+                const salleRecord = row.salle ? salleById[row.salle] : null;
+                const studentsCount = (row.students || []).length;
+                const overCapacity = !!salleRecord && salleRecord.capacity > 0 && studentsCount > salleRecord.capacity;
+                return (
                 <div
                   key={row.id}
                   className="bg-slate-50 rounded-xl p-2 border border-slate-200 space-y-2"
@@ -227,7 +318,7 @@ export default function FormationScheduleModal({
                     <select
                       value={row.day}
                       onChange={e => updateRow(row.id, { day: e.target.value })}
-                      className="col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {FORMATION_WORK_DAYS.map(d => (
                         <option key={d} value={d}>{d}</option>
@@ -259,11 +350,22 @@ export default function FormationScheduleModal({
                           students: matiereName ? enrolledStudentIdsForMatiere(matiereName) : (row.students || [])
                         });
                       }}
-                      className="col-span-4 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">المادة...</option>
                       {matieres.map(m => (
                         <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={row.salle || ''}
+                      onChange={e => updateRow(row.id, { salle: e.target.value || undefined })}
+                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      title="القاعة"
+                    >
+                      <option value="">القاعة...</option>
+                      {(salles || []).map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                     <button
@@ -274,6 +376,29 @@ export default function FormationScheduleModal({
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
+
+                  {/* Salle availability indicator */}
+                  {row.salle && (
+                    <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+                      {occupiers.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 border border-red-200 text-red-700 rounded-full text-[10px] font-black">
+                          <AlertTriangle className="h-3 w-3" />
+                          القاعة {salleRecord?.name || ''} مشغولة في هذا التوقيت — {occupiers.map(o => `${o.formationName}${o.matiere ? ` (${o.matiere})` : ''}`).join(' / ')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-[10px] font-black">
+                          <CheckCircle2 className="h-3 w-3" />
+                          القاعة {salleRecord?.name || ''} متوفرة في هذا التوقيت
+                        </span>
+                      )}
+                      {overCapacity && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full text-[10px] font-black">
+                          <DoorOpen className="h-3 w-3" />
+                          انتبه: سعة القاعة {salleRecord!.capacity} أقل من عدد التلاميذ ({studentsCount})
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Student list for this seance */}
                   <div className="flex flex-wrap items-center gap-1.5 px-0.5">
@@ -305,7 +430,8 @@ export default function FormationScheduleModal({
                     </select>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
 

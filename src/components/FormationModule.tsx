@@ -29,6 +29,7 @@ import {
   FormationStudent,
   FormationPayment,
   FormationSeance,
+  Salle,
   CenterSettings,
   getAppSubjects,
   getCurrentAcademicYear,
@@ -57,6 +58,7 @@ interface FormationModuleProps {
   onAddFormationStudent?: (formationId: string, student: FormationStudent) => void;
   onRemoveFormationStudent?: (formationId: string, studentId: string) => void;
   onUpdateFormationSchedule?: (formationId: string, schedule: FormationSeance[]) => void;
+  salles?: Salle[]; // salles du centre (gestion des salles) pour جدول حصص التكوين
   settings?: CenterSettings | null;
   onUpdateSettings?: (newSettings: CenterSettings) => void;
   sidebarCollapsed?: boolean;
@@ -70,6 +72,7 @@ export default function FormationModule({
   onAddFormationStudent,
   onRemoveFormationStudent,
   onUpdateFormationSchedule,
+  salles,
   settings,
   onUpdateSettings,
   sidebarCollapsed
@@ -2342,6 +2345,8 @@ export default function FormationModule({
         formation={selectedFormation}
         onClose={() => setIsScheduleModalOpen(false)}
         onSave={handleSaveFormationSchedule}
+        salles={salles}
+        allFormations={formations}
       />
 
     </div>

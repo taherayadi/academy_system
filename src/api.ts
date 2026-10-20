@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, StudentServiceEnrollment, StudentServiceEnrollmentInput, StudentServiceEnrollmentPatch, TransportTripRecord, TransportTripInput, TransportTripPatch } from './types';
+import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, StudentServiceEnrollment, StudentServiceEnrollmentInput, StudentServiceEnrollmentPatch, TransportTripRecord, TransportTripInput, TransportTripPatch, Salle } from './types';
 
 
 const API_BASE = '/api';
@@ -86,6 +86,7 @@ export interface DatabaseState {
   activities: Activity[];
   skills: Skill[];
   skillEvaluations: SkillEvaluation[];
+  salles: Salle[];
 }
 
 
@@ -706,6 +707,25 @@ export async function fetchSkillsApi(): Promise<{ catalog: Skill[]; evaluations:
 }
 
 
+/**
+ * Crée / met à jour UNE seule salle (POST /api/salles) — idempotent, ciblé,
+ * jamais la liste complète. Utilisé pour « ajouter une salle » et « modifier ».
+ */
+export async function createSalleApi(salle: Salle): Promise<void> {
+  return postDomain('/salles', salle, 'تعذر حفظ القاعة.');
+}
+
+/** Mise à jour ciblée d'UNE salle (PUT /api/salles — même upsert serveur). */
+export async function updateSalleApi(salle: Salle): Promise<void> {
+  return putDomain('/salles', salle, 'تعذر تحديث القاعة.');
+}
+
+/** Supprime UNE salle ciblée (DELETE /api/salles?id=). */
+export async function deleteSalleApi(salleId: string): Promise<void> {
+  return deleteDomain(`/salles?id=${encodeURIComponent(salleId)}`, 'تعذر حذف القاعة.');
+}
+
+
 export async function saveMealForfaitClosures(closures: MealForfaitClosure[]): Promise<void> {
   return putDomain('/meal-forfait-closures', closures, 'تعذر حفظ بيانات إغلاقات الوجبات.');
 }
@@ -812,7 +832,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     formations,
     events,
     activities,
-    skills
+    skills,
+    salles
   ] = await Promise.all([
     getDomain<CenterSettings>('/settings', 'تعذر تحميل إعدادات المنظومة.'),
     getDomain<Student[]>('/students', 'تعذر تحميل بيانات التلاميذ.'),
@@ -829,7 +850,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     getDomain<Formation[]>('/formations', 'تعذر تحميل بيانات التكوينات.'),
     fetchEventsApi(),
     getDomain<Activity[]>('/activities', 'تعذر تحميل بيانات الأنشطة.'),
-    getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.')
+    getDomain<{ catalog: Skill[]; evaluations: SkillEvaluation[] }>('/skills', 'تعذر تحميل بيانات المهارات.'),
+    getDomain<Salle[]>('/salles', 'تعذر تحميل بيانات القاعات.')
   ]);
 
   return {
@@ -849,7 +871,8 @@ export async function fetchDatabase(): Promise<DatabaseState> {
     revisionSeances: revisionSeances || [],
     studentTimeSheets: studentTimeSheets || [],
     formations: formations || [],
-    events: events || []
+    events: events || [],
+    salles: salles || []
   };
 }
 

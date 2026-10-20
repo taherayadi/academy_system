@@ -1444,6 +1444,68 @@ export async function deleteSlot(db: D1Database, slotId: string, centerId: strin
 }
 
 // ===========================================================================
+// SALLES (gestion des salles — التكوينات والدورات)
+// ===========================================================================
+
+/** La colonne `equipment` est TEXT (CSV) : l'API l'expose comme string[]. */
+function parseEquipmentCsv(raw: any): string[] {
+  if (Array.isArray(raw)) return raw.map(x => str(x)).filter(Boolean);
+  return (raw == null ? '' : str(raw)).split(',').map(x => x.trim()).filter(Boolean);
+}
+
+/**
+ * Lit les salles du centre. La table `salles` est créée par la migration
+ * 0009 (dépôt admin propriétaire du schéma) : tant qu'elle n'est pas
+ * déployée, on renvoie une liste vide plutôt que de casser l'API.
+ */
+export async function readSalles(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any[]> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM salles WHERE center_id = ? ORDER BY name COLLATE NOCASE, created_at').bind(centerId).all();
+    return (results || []).map((r: any) => ({
+      id: str(r.id),
+      name: str(r.name),
+      capacity: num(r.capacity),
+      equipment: parseEquipmentCsv(r.equipment),
+      createdAt: str(r.created_at)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Upsert d'UNE salle du centre (add / update ciblés — jamais la liste complète). */
+export async function createSalle(db: D1Database, salle: any, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(salle?.id);
+  if (!id) throw new Error('معرّف القاعة مفقود.');
+  const name = str(salle?.name);
+  if (!name) throw new Error('اسم القاعة مطلوب.');
+  const capacity = num(salle?.capacity);
+  if (capacity < 0) throw new Error('بيانات القاعة غير صالحة.');
+  // Un id déjà pris par un AUTRE centre ne doit pas être détourné.
+  const existingId = await db.prepare('SELECT center_id FROM salles WHERE id = ?').bind(id).first<any>();
+  if (existingId && str(existingId.center_id) !== centerId) throw new Error('القاعة غير موجودة في هذا المركز.');
+  // Deux salles du même centre ne peuvent pas porter le même nom.
+  const sameName = await db.prepare('SELECT id FROM salles WHERE center_id = ? AND name = ?').bind(centerId, name).first<any>();
+  if (sameName && str(sameName.id) !== id) throw new Error('يوجد مسبقاً قاعة بهذا الاسم في هذا المركز.');
+  // equipment arrive en string[] (catalog statique) ; on s'aligne aussi sur
+  // les anciens payloads texte libre en normalisant via le même parseur.
+  const equipmentCsv = parseEquipmentCsv(salle?.equipment).join(', ');
+  await db.batch([
+    db.prepare(
+      'INSERT INTO salles (id, center_id, name, capacity, equipment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, capacity = excluded.capacity, equipment = excluded.equipment, updated_at = excluded.updated_at'
+    ).bind(id, centerId, name, capacity, equipmentCsv, Date.now(), Date.now())
+  ]);
+}
+
+/** Supprime UNE salle du centre. */
+export async function deleteSalle(db: D1Database, salleId: string, centerId: string = DEFAULT_CENTER_ID): Promise<void> {
+  const id = str(salleId);
+  if (!id) throw new Error('معرّف القاعة مفقود.');
+  const res = await db.prepare('DELETE FROM salles WHERE id = ? AND center_id = ?').bind(id, centerId).run();
+  if (!res.meta.changes) throw new Error('القاعة غير موجودة في هذا المركز.');
+}
+
+// ===========================================================================
 // EXTERNAL COURSES
 // ===========================================================================
 

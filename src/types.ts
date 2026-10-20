@@ -1489,7 +1489,43 @@ export interface FormationSeance {
   // IDs of the students attending this seance. A student cannot attend two
   // overlapping seances on the same day.
   students?: string[];
+  // Salle (قاعة) chosen from the center's managed list. Availability is
+  // checked against all formations' schedules (same day + time overlap).
+  salle?: string;
 }
+
+
+/**
+ * A salle (classroom/room) managed by the center (gestion des salles).
+ * Referenced by name from FormationSeance.salle; availability is derived
+ * from the formations' schedules, never stored.
+ */
+export interface Salle {
+  id: string;
+  name: string;        // اسم القاعة (unique per center)
+  capacity: number;    // الطاقة الاستيعابية
+  equipment: string[]; // التجهيزات — one entry per item from the static catalog
+}
+
+/**
+ * Statique catalog (قائمة ثابتة) of equipment for salles — تجهيزات القاعات.
+ * A salle picks items from THIS list (multi-select); stored as a
+ * comma-separated string in `Salle.equipment`. Legacy free-text rows keep
+ * their items (parsed the same way).
+ */
+export const SALLE_EQUIPMENT_OPTIONS: string[] = [
+  'سبورة بيضاء',
+  'سبورة تفاعلية',
+  'جهاز عرض (Data show)',
+  'مكتب الأستاذ',
+  'طاولات فردية',
+  'طاولات جماعية',
+  'خزانة أدوات',
+  'تكييف',
+  'تدفئة',
+  'اتصال بالإنترنت',
+  'مرايا'
+];
 
 
 export type StaffPayslip = PaySlip;
