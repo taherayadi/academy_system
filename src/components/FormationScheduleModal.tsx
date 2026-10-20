@@ -42,6 +42,16 @@ const toMin = (t: string) => {
 
 const overlaps = (aS: number, aE: number, bS: number, bE: number) => !isNaN(aS) && !isNaN(aE) && aS < bE && bS < aE;
 
+// Deux plages de DATES (YYYY-MM-DD, comparable lexicographiquement) se
+// chevauchent si chaque début précède la fin de l'autre. Une salle n'est
+// occupée que si les DEUX formations tournent à la même période : samedi 9h
+// dans la salle A pour un formation du 10/10 au 20/10 reste libre pour un
+// formation du 25/10 au 30/10, même jour même heure.
+const dateRangesOverlap = (aStart?: string, aEnd?: string, bStart?: string, bEnd?: string) => {
+  if (!aStart || !aEnd || !bStart || !bEnd) return false;
+  return aStart <= bEnd && bStart <= aEnd;
+};
+
 export default function FormationScheduleModal({
   open,
   formation,
@@ -140,9 +150,11 @@ export default function FormationScheduleModal({
       if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(other.startTime), toMin(other.endTime))) return;
       out.push({ formationName: formation.name || 'هذا التكوين', matiere: other.matiere });
     });
-    // b) séances des AUTRES formations
+    // b) séances des AUTRES formations — uniquement celles dont la PÉRIODE
+    // (start_date → end_date) chevauche celle du formation courant.
     (allFormations || []).forEach(f => {
       if (f.id === formation.id) return;
+      if (!dateRangesOverlap(formation.startDate, formation.endDate, f.startDate, f.endDate)) return;
       (Array.isArray(f.schedule) ? f.schedule : []).forEach(s => {
         if (!s.salle || s.salle !== row.salle || s.day !== row.day) return;
         if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(s.startTime), toMin(s.endTime))) return;

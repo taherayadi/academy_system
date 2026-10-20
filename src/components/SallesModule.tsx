@@ -116,58 +116,58 @@ export default function SallesModule({
     setDeleteTarget(null);
   };
 
-  // Nombre de séances hebdomadaires utilisant la salle (info, parse le JSON schedule).
-  const usageCount = (salleName: string): number =>
+  // Nombre de séances hebdomadaires utilisant la salle (info ; le schedule
+  // stocke l'ID de la salle via FormationSeance.salle).
+  const usageCount = (salleId: string): number =>
     (formations || []).reduce((acc, f) => acc + (Array.isArray(f.schedule)
-      ? f.schedule.filter(se => se.salle === salleName).length
+      ? f.schedule.filter(se => se.salle === salleId).length
       : 0), 0);
 
   return (
     <div className="min-h-screen bg-[#FCFAF6]" dir="rtl">
       <div className="p-4 md:p-8 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className={sidebarCollapsed ? 'md:pl-2' : 'md:pl-2'}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-            <div className="flex items-center gap-3">
-              <span className="w-12 h-12 rounded-2xl bg-brand-600/10 text-brand-600 flex items-center justify-center">
-                <DoorOpen className="h-6 w-6" />
+        {/* Module Banner — même style que التكوينات والدورات */}
+        <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
+                القاعات
               </span>
-              <div>
-                <h1 className="text-xl md:text-2xl font-black text-slate-900">إدارة القاعات</h1>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">
-                  إضافة وتعديل وحذف القاعات — تُوظَّف في جدول حصص التكوين مع التحقق من التوفر
-                </p>
-              </div>
+              <span className="text-xs text-slate-400 font-bold">Gestion des salles</span>
             </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-black rounded-2xl shadow-md transition cursor-pointer self-start sm:self-auto"
-            >
-              <Plus className="h-4 w-4" />
-              إضافة قاعة
-            </button>
+            <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
+              <DoorOpen className="h-6 w-6 text-brand-600" />
+              إدارة القاعات
+            </h2>
+            <p className="text-slate-500 text-xs mt-1">
+              إضافة وتعديل وحذف القاعات — تُوظَّف في جدول حصص التكوين مع التحقق من التوفر.
+            </p>
           </div>
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            إضافة قاعة
+          </button>
         </div>
 
-        {/* Search + stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-6">
-          <div className="lg:col-span-3 relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        {/* Toolbar: search + stats (barre d'outils alignée) */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-5">
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
             <input
+              type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="بحث بالاسم أو التجهيزات..."
-              className="w-full pr-10 pl-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-600/30"
+              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600 transition"
             />
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center border border-brand-100">
-              <DoorOpen className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-lg font-black text-slate-900 leading-none">{salles.length}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-1">قاعة مسجَّلة</p>
-            </div>
+          <div className="flex-1" />
+          <div className="bg-white rounded-xl border border-slate-200/70 shadow-sm px-4 py-2 flex items-center gap-2 h-9">
+            <span className="text-base font-black text-slate-900 leading-none">{salles.length}</span>
+            <span className="text-[10px] font-bold text-slate-500">قاعة مسجَّلة</span>
           </div>
         </div>
 
@@ -175,8 +175,8 @@ export default function SallesModule({
         {filtered.length === 0 ? (
           <div className="p-10 text-center bg-white rounded-3xl border border-dashed border-slate-200 shadow-sm">
             <DoorOpen className="h-8 w-8 text-brand-600 mx-auto mb-3" />
-            <p className="text-xs font-black text-slate-500">
-              {salles.length === 0 ? 'لا توجد قاعات بعد — أضف أول قاعة.' : 'لانتائج مطابقة للبحث.'}
+            <p className="text-xs font-bold text-slate-400">
+              {salles.length === 0 ? 'لا توجد قاعات بعد — أضف أول قاعة.' : 'لا توجد نتائج مطابقة للبحث.'}
             </p>
           </div>
         ) : (
@@ -186,7 +186,7 @@ export default function SallesModule({
                 key={salle.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3"
+                className="bg-white rounded-3xl border border-slate-200/70 shadow-lg shadow-slate-900/5 p-4 flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -195,7 +195,7 @@ export default function SallesModule({
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-black text-slate-900 truncate">{salle.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400">{usageCount(salle.name)} حصة تكوين بالأسبوع</p>
+                      <p className="text-[10px] font-bold text-slate-400">{usageCount(salle.id)} حصة تكوين بالأسبوع</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
