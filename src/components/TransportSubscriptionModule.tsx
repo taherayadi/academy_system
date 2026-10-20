@@ -10,11 +10,9 @@ import {
   X,
   UserPlus,
   Calendar,
-  Users,
   AlertCircle,
   Trash2,
-  Wallet,
-  CircleDollarSign,
+  FileCheck,
 } from 'lucide-react';
 import {
   Student,
@@ -31,6 +29,7 @@ import {
   paymentMethodLabel,
 } from '../types';
 import { useToast } from './Toast';
+import DateField from './DateField';
 
 interface TransportSubscriptionModuleProps {
   students: Student[];
@@ -60,7 +59,7 @@ const EMPTY_MEAL_SUBSCRIPTION = {
 };
 
 /**
- * Abonnements Transport — même logique de gestion que la Moutaba'a:
+ * Abonnements Transport — même logique et même interface que la Moutaba'a:
  *  - uniquement les élèves inscrits au service transport ;
  *  - grille mensuelle Septembre → Mai ;
  *  - paiement mensuel via POST /api/payments (service « Transport ») ;
@@ -76,6 +75,7 @@ export default function TransportSubscriptionModule({
   const centerName = settings?.centerName || 'EduSphère';
   const [searchTerm, setSearchTerm] = useState('');
   const [schoolYear, setSchoolYear] = useState<string>(getCurrentAcademicYear());
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [enrollSearch, setEnrollSearch] = useState('');
   const [unenrollStudent, setUnenrollStudent] = useState<Student | null>(null);
@@ -83,7 +83,9 @@ export default function TransportSubscriptionModule({
   const [selectedStudentForPayment, setSelectedStudentForPayment] = useState<Student | null>(null);
   const [paymentMonth, setPaymentMonth] = useState<AcademicMonth>('Septembre');
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [totalRequired, setTotalRequired] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
+  const [paymentType, setPaymentType] = useState<'full' | 'advance' | 'balance'>('full');
   const [paymentMethod, setPaymentMethod] = useState<'Espèces' | 'Chèque'>('Espèces');
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().split('T')[0]);
@@ -130,6 +132,10 @@ export default function TransportSubscriptionModule({
     return nonEnrolledStudents.filter(st => !q || `${st.firstName} ${st.lastName} ${st.grade || ''}`.toLowerCase().includes(q));
   }, [nonEnrolledStudents, enrollSearch]);
 
+  const totalPages = Math.ceil(transportStudents.length / 20) || 1;
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedStudents = transportStudents.slice((safePage - 1) * 20, safePage * 20);
+
   const getMonthStatus = (st: Student, month: AcademicMonth): MonthStatus => {
     const monthLabel = `${month} (${studentYear(st)})`;
     const monthPayments = (st.payments || []).filter(
@@ -168,13 +174,19 @@ export default function TransportSubscriptionModule({
     setSelectedStudentForPayment(st);
     setPaymentMonth(month);
     setDiscount(status.discount);
-    setAmountPaid(status.status === 'advance' ? status.remaining : Math.max(0, fee - status.discount));
+    setTotalRequired(fee);
     setPaymentMethod('Espèces');
     setChequeNumber('');
     setChequeDate(new Date().toISOString().split('T')[0]);
-    setNotes(status.status === 'advance'
-      ? `تكملة خلاص باقي شهر ${ARABIC_ACADEMIC_MONTHS[month]} — اشتراك النقل (${studentYear(st)})`
-      : `خلاص اشتراك النقل لشهر ${ARABIC_ACADEMIC_MONTHS[month]} (${studentYear(st)})`);
+    if (status.status === 'advance') {
+      setAmountPaid(status.remaining);
+      setPaymentType('balance');
+      setNotes(`تكملة خلاص باقي شهر ${month} (السنة ${studentYear(st)})`);
+    } else {
+      setAmountPaid(Math.max(0, fee - status.discount));
+      setPaymentType('full');
+      setNotes(`خلاص اشتراك النقل لشهر ${month} (السنة ${studentYear(st)})`);
+    }
   };
 
   const handleSubmitPayment = (e: React.FormEvent) => {
@@ -227,7 +239,7 @@ export default function TransportSubscriptionModule({
       remainingBalance: Math.max(0, effectiveRequired - totalPaidAfterThis),
       service: 'Transport',
       month: `${paymentMonth} (${studentYear(st)})`,
-      paymentType: totalPaidAfterThis >= effectiveRequired ? 'full' : 'balance',
+      paymentType: totalPaidAfterThis >= effectiveRequired ? (paymentType === 'balance' ? 'balance' : 'full') : 'advance',
       method: paymentMethod,
       chequeNumber: paymentMethod === 'Chèque' ? chequeNumber : undefined,
       chequeDate: paymentMethod === 'Chèque' ? chequeDate : undefined,
@@ -278,31 +290,21 @@ export default function TransportSubscriptionModule({
     toast.success(`تم إلغاء اشتراك النقل للتلميذ (${st.firstName} ${st.lastName}).`);
   };
 
-  const stats = useMemo(() => {
-    let paid = 0;
-    let advance = 0;
-    let unpaid = 0;
-    let expected = 0;
-    transportStudents.forEach(st => {
-      const fee = monthlyFeeFor(st);
-      expected += fee;
-      const status = getMonthStatus(st, currentMonth);
-      if (status.status === 'paid') paid += 1;
-      else if (status.status === 'advance') advance += 1;
-      else unpaid += 1;
-    });
-    return { paid, advance, unpaid, expected };
-  }, [transportStudents, currentMonth, settings, schoolYear]);
+  const standardFee = selectedStudentForPayment ? monthlyFeeFor(selectedStudentForPayment) : 0;
+  const activeMonthStatus = selectedStudentForPayment ? getMonthStatus(selectedStudentForPayment, paymentMonth) : null;
+  const isAdvanceStatus = activeMonthStatus?.status === 'advance';
 
   return (
     <div className="space-y-6">
+
+      {/* Module Banner */}
       <div className="bg-white border border-slate-200/70 p-6 rounded-3xl shadow-lg shadow-slate-900/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-brand-600/[0.06] text-brand-700 text-xs font-bold rounded-lg border border-brand-600/20">
               اشتراك النقل
             </span>
-            <span className="text-xs text-slate-400 font-bold">إدارة التلاميذ المسجلين في خدمة النقل</span>
+            <span className="text-xs text-slate-400 font-bold">المتابعة الشهرية لخدمة النقل</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
             <Bus className="h-6 w-6 text-brand-600" />
@@ -334,20 +336,14 @@ export default function TransportSubscriptionModule({
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 no-print">
-        <StatCard icon={<Users className="h-4 w-4" />} label="تلاميذ النقل" value={String(transportStudents.length)} tone="brand" />
-        <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label={`مسددون — ${ARABIC_ACADEMIC_MONTHS[currentMonth]}`} value={String(stats.paid)} tone="emerald" />
-        <StatCard icon={<Clock className="h-4 w-4" />} label="خلاص جزئي" value={String(stats.advance)} tone="amber" />
-        <StatCard icon={<Wallet className="h-4 w-4" />} label="غير مسددين" value={String(stats.unpaid)} tone="red" />
-      </div>
-
+      {/* Filter and Academic Year Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between no-print">
         <div className="relative w-full sm:w-80">
           <Search className="absolute right-3.5 top-3 h-4 w-4 text-slate-400" />
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             placeholder="بحث باسم التلميذ أو المستوى..."
             className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
@@ -358,104 +354,133 @@ export default function TransportSubscriptionModule({
           <label className="text-xs font-black text-slate-700">السنة الدراسية:</label>
           <select
             value={schoolYear}
-            onChange={(e) => setSchoolYear(e.target.value)}
+            onChange={(e) => { setSchoolYear(e.target.value); setCurrentPage(1); }}
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
           >
-            {years.map(yr => <option key={yr} value={yr}>{yr}</option>)}
+            {years.map(yr => <option key={yr} value={yr}>السنة الدراسية {yr}</option>)}
           </select>
         </div>
       </div>
 
+      {/* TRANSPORT MONTH GRID TABLE (Septembre -> Mai) */}
       <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
         <div className="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-slate-50/50">
           <div>
             <h3 className="font-extrabold text-slate-900 text-base">شبكة اشتراكات النقل ({schoolYear})</h3>
             <p className="text-xs text-slate-500">اضغط على شهر لتسجيل دفعة أو معاينة الوصل.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs font-bold whitespace-nowrap">
-            <Legend color="bg-emerald-500" label="مسدد" />
-            <Legend color="bg-amber-500" label="خلاص جزئي" />
-            <Legend color="bg-red-400" label="غير مسدد" />
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-bold whitespace-nowrap">
+            <div className="flex items-center gap-1.5 text-amber-700">
+              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+              <span>Payé</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-brand-700">
+              <div className="w-3 h-3 rounded-full bg-brand-600"></div>
+              <span>Avance</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-red-600">
+              <div className="w-3 h-3 rounded-full bg-red-400"></div>
+              <span>Non payé</span>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto overscroll-x-contain">
-          <table className="w-full min-w-[1050px] text-right text-xs">
+          <table className="w-full min-w-[1100px] text-right text-xs">
             <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
               <tr>
                 <th className="p-4">التلميذ</th>
                 <th className="p-4">الاشتراك الشهري</th>
                 {ACADEMIC_MONTHS.map(m => (
-                  <th key={m} className="p-3 text-center">{ARABIC_ACADEMIC_MONTHS[m]}</th>
+                  <th key={m} className="p-4 text-center">
+                    {ARABIC_ACADEMIC_MONTHS[m]}
+                  </th>
                 ))}
-                <th className="p-3 text-center">إجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {transportStudents.length === 0 ? (
+              {paginatedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={ACADEMIC_MONTHS.length + 3} className="p-10 text-center text-slate-400 font-bold">
+                  <td colSpan={ACADEMIC_MONTHS.length + 2} className="p-8 text-center text-slate-400 font-bold">
                     لا يوجد تلاميذ مسجلون في خدمة النقل.
                   </td>
                 </tr>
               ) : (
-                transportStudents.map(st => {
+                paginatedStudents.map(st => {
                   const fee = monthlyFeeFor(st);
                   return (
                     <tr key={st.id} className="hover:bg-slate-50/80 transition" data-testid={`transport-student-${st.id}`}>
                       <td className="p-4 font-extrabold text-slate-900">
                         <div className="flex items-center gap-2">
-                          <span className="w-8 h-8 rounded-xl bg-brand-600/[0.08] text-brand-700 flex items-center justify-center shrink-0">
-                            <Bus className="h-4 w-4" />
+                          <span className="p-1.5 shrink-0 bg-brand-600/[0.06] text-brand-600 rounded-lg border border-brand-600/20">
+                            <Bus className="h-3.5 w-3.5" />
                           </span>
-                          <div>
-                            <div>{st.firstName} {st.lastName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold">{st.grade || '—'}</div>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setUnenrollStudent(st)}
+                            data-testid={`transport-unenroll-${st.id}`}
+                            title="إلغاء اشتراك النقل"
+                            className="p-1.5 shrink-0 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{st.firstName} {st.lastName}</span>
                         </div>
                       </td>
-                      <td className="p-4 font-mono font-black text-slate-800">{fee} د.ت</td>
+                      <td className="p-4 font-mono font-bold">{fee} د.ت</td>
+
+                      {/* Academic months cells */}
                       {ACADEMIC_MONTHS.map(m => {
-                        const status = getMonthStatus(st, m);
+                        const mStatus = getMonthStatus(st, m);
                         const disabled = fee <= 0;
                         return (
-                          <td key={m} className="p-2 text-center">
-                            <button
-                              type="button"
-                              data-testid={`transport-month-${st.id}-${m}`}
-                              disabled={disabled}
-                              onClick={() => openPayment(st, m)}
-                              title={disabled ? 'حدد رسوم النقل أولاً' : `${m} — ${status.status}`}
-                              className={`w-full min-w-[72px] px-2 py-2 rounded-xl border text-[10px] font-black transition ${
+                          <td key={m} className="p-3 text-center">
+                            {disabled ? (
+                              <button
+                                type="button"
                                 disabled
-                                  ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                                  : status.status === 'paid'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                    : status.status === 'advance'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                                      : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                              } cursor-pointer`}
-                            >
-                              {disabled ? '—' : status.status === 'paid'
-                                ? '✓ مسدد'
-                                : status.status === 'advance'
-                                  ? `باقي ${status.remaining}`
-                                  : 'غير مسدد'}
-                            </button>
+                                data-testid={`transport-month-${st.id}-${m}`}
+                                title="حدد رسوم النقل أولاً"
+                                className="w-full py-1.5 px-2 bg-slate-50 text-slate-300 border border-slate-200 rounded-xl font-bold text-[10px] cursor-not-allowed"
+                              >
+                                —
+                              </button>
+                            ) : mStatus.status === 'paid' ? (
+                              <button
+                                type="button"
+                                onClick={() => openPayment(st, m)}
+                                data-testid={`transport-month-${st.id}-${m}`}
+                                className="w-full py-1.5 px-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
+                                title="طباعة الوصل"
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Payé ({mStatus.paidAmount} د.ت) 🖨️
+                              </button>
+                            ) : mStatus.status === 'advance' ? (
+                              <button
+                                type="button"
+                                onClick={() => openPayment(st, m)}
+                                data-testid={`transport-month-${st.id}-${m}`}
+                                className="w-full py-1.5 px-2 bg-brand-600/10 text-brand-700 border border-brand-600/20 rounded-xl font-black text-[10px] flex items-center justify-center gap-1 hover:bg-brand-600/20 transition cursor-pointer"
+                              >
+                                <Clock className="h-3 w-3" />
+                                Avance ({mStatus.paidAmount} د.ت)
+                                <span className="block text-[9px] font-normal">باقي {mStatus.remaining}د.ت</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openPayment(st, m)}
+                                data-testid={`transport-month-${st.id}-${m}`}
+                                className="w-full py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-red-700 border border-slate-200 hover:border-red-200 rounded-xl font-bold text-[10px] transition cursor-pointer"
+                              >
+                                Non payé
+                              </button>
+                            )}
                           </td>
                         );
                       })}
-                      <td className="p-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setUnenrollStudent(st)}
-                          data-testid={`transport-unenroll-${st.id}`}
-                          title="إلغاء اشتراك النقل"
-                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
                     </tr>
                   );
                 })
@@ -463,60 +488,113 @@ export default function TransportSubscriptionModule({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls (20 by 20) */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-bold">
+              عرض {((safePage - 1) * 20) + 1} - {Math.min(safePage * 20, transportStudents.length)} من أصل {transportStudents.length} تلميذ
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={safePage === 1}
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer"
+              >
+                السابقة
+              </button>
+              <span className="text-xs font-black text-slate-700">
+                صفحة {safePage} من {totalPages}
+              </span>
+              <button
+                disabled={safePage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer"
+              >
+                التالية
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ENROLL MODAL */}
+      {/* ENROLL STUDENT MODAL */}
       <AnimatePresence>
         {isEnrollModalOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 no-print">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-5 bg-brand-600 text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <UserPlus className="h-5 w-5" />
-                  <div>
-                    <h3 className="font-black text-sm">إلحاق تلميذ بخدمة النقل</h3>
-                    <p className="text-[10px] text-white/70 font-bold">الاشتراك الشهري: {monthlyFeeFor({ academicYear: schoolYear } as Student)} د.ت</p>
-                  </div>
+                  <UserPlus className="h-5 w-5 text-white/80" />
+                  <h3 className="text-lg font-black">إلحاق تلميذ بخدمة النقل</h3>
                 </div>
-                <button onClick={() => setIsEnrollModalOpen(false)} className="p-2 hover:bg-white/10 rounded-xl cursor-pointer">
+
+                <button
+                  onClick={() => setIsEnrollModalOpen(false)}
+                  className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="p-4 space-y-3">
-                <div className="relative">
-                  <Search className="absolute right-3.5 top-3 h-4 w-4 text-slate-400" />
-                  <input
-                    value={enrollSearch}
-                    onChange={(e) => setEnrollSearch(e.target.value)}
-                    placeholder="بحث عن تلميذ..."
-                    className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand-600"
-                  />
-                </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
-                  {enrollmentSearchResults.length === 0 ? (
-                    <p className="p-6 text-center text-xs font-bold text-slate-400">لا يوجد تلاميذ متاحون للإلحاق.</p>
-                  ) : enrollmentSearchResults.map(st => (
-                    <div key={st.id} className="p-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-black text-slate-900">{st.firstName} {st.lastName}</p>
-                        <p className="text-[10px] font-bold text-slate-400">{st.grade || '—'} — {studentYear(st)}</p>
+
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-500 font-medium">
+                  اختر تلميذاً من القائمة العامة لإلحاقه بخدمة النقل (الاشتراك الشهري: {monthlyFeeFor({ academicYear: schoolYear } as Student)} د.ت):
+                </p>
+
+                {nonEnrolledStudents.length > 0 && (
+                  <div className="relative">
+                    <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={enrollSearch}
+                      onChange={(e) => setEnrollSearch(e.target.value)}
+                      placeholder="بحث باسم التلميذ..."
+                      className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                    />
+                  </div>
+                )}
+
+                {nonEnrolledStudents.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border">
+                    جميع التلاميذ مسجلون في خدمة النقل!
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
+                    {enrollmentSearchResults.length === 0 ? (
+                      <p className="p-6 text-center text-xs font-bold text-slate-400">لا يوجد تلاميذ متاحون للإلحاق.</p>
+                    ) : enrollmentSearchResults.map(st => (
+                      <div key={st.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-extrabold text-xs text-slate-900">{st.firstName} {st.lastName}</p>
+                          <p className="text-[10px] text-slate-400">{st.grade || '—'} — ولي الأمر: <span dir="ltr">{st.father?.phoneMobile || st.mother?.phoneMobile || 'لا يوجد'}</span></p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleEnrollStudent(st)}
+                          data-testid={`transport-enroll-${st.id}`}
+                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-900/5 cursor-pointer flex items-center gap-1"
+                        >
+                          <FileCheck className="h-3.5 w-3.5" />
+                          إلحاق بالنقل
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleEnrollStudent(st)}
-                        data-testid={`transport-enroll-${st.id}`}
-                        className="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-black rounded-xl transition cursor-pointer flex items-center gap-1"
-                      >
-                        <UserPlus className="h-3.5 w-3.5" />
-                        إلحاق
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsEnrollModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl"
+                  >
+                    إغلاق
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -529,32 +607,48 @@ export default function TransportSubscriptionModule({
         {unenrollStudent && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 no-print">
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-5 bg-red-600 text-white flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                <h3 className="font-black text-sm">إلغاء اشتراك النقل</h3>
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-red-300" />
+                  <div>
+                    <h3 className="text-lg font-black">إلغاء اشتراك النقل</h3>
+                    <p className="text-xs text-slate-300">
+                      التلميذ(ة): {unenrollStudent.firstName} {unenrollStudent.lastName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setUnenrollStudent(null)}
+                  className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-6 space-y-4">
                 <p className="text-sm font-bold text-slate-700 leading-relaxed">
-                  هل تريد إلغاء اشتراك النقل للتلميذ{' '}
-                  <strong className="text-slate-950">{unenrollStudent.firstName} {unenrollStudent.lastName}</strong>؟
+                  هل تريد إلغاء اشتراك النقل لهذا التلميذ؟
                 </p>
-                <p className="text-[11px] font-bold text-slate-400">
+                <p className="text-xs font-bold text-slate-400 leading-relaxed bg-slate-50 border border-slate-200 rounded-2xl p-3">
                   سيبقى سجل الدفعات محفوظاً في المنظومة المالية، لكن التلميذ لن يظهر بعد الآن في خطة الحافلة ولا في شبكة الاشتراكات.
                 </p>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => setUnenrollStudent(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer">
+                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    onClick={() => setUnenrollStudent(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  >
                     إلغاء
                   </button>
                   <button
                     onClick={handleUnenrollStudent}
                     data-testid="transport-unenroll-confirm"
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                   >
+                    <Trash2 className="h-4 w-4" />
                     تأكيد الإلغاء
                   </button>
                 </div>
@@ -564,116 +658,231 @@ export default function TransportSubscriptionModule({
         )}
       </AnimatePresence>
 
-      {/* PAYMENT MODAL */}
+      {/* FRACTIONAL PAYMENT ENTRY MODAL */}
       <AnimatePresence>
         {selectedStudentForPayment && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
-              <div className="p-5 bg-brand-600 text-white flex justify-between items-center">
+              <div className="p-6 bg-brand-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
+                  <CreditCard className="h-5 w-5 text-white/80" />
                   <div>
-                    <h3 className="font-black text-sm">دفع اشتراك النقل</h3>
-                    <p className="text-[10px] text-white/70 font-bold">
-                      {selectedStudentForPayment.firstName} {selectedStudentForPayment.lastName} — {paymentMonth} ({studentYear(selectedStudentForPayment)})
+                    <h3 className="text-lg font-black">
+                      تنزيل دفعة شهر {paymentMonth} ({studentYear(selectedStudentForPayment)})
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      التلميذ(ة): {selectedStudentForPayment.firstName} {selectedStudentForPayment.lastName}
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setSelectedStudentForPayment(null)} className="p-2 hover:bg-white/10 rounded-xl cursor-pointer">
+
+                <button
+                  onClick={() => setSelectedStudentForPayment(null)}
+                  className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitPayment} className="p-5 space-y-4 text-xs">
-                {(() => {
-                  const st = selectedStudentForPayment;
-                  const fee = monthlyFeeFor(st);
-                  const status = getMonthStatus(st, paymentMonth);
-                  return (
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <span className="text-[10px] text-slate-500 font-bold block">المبلغ الشهري</span>
-                        <strong className="text-sm font-black text-slate-900 font-mono">{fee} د.ت</strong>
-                      </div>
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                        <span className="text-[10px] text-emerald-700 font-bold block">المسدد</span>
-                        <strong className="text-sm font-black text-emerald-700 font-mono">{status.paidAmount} د.ت</strong>
-                      </div>
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
-                        <span className="text-[10px] text-red-600 font-bold block">الباقي</span>
-                        <strong className="text-sm font-black text-red-700 font-mono">{status.remaining} د.ت</strong>
-                      </div>
+              <form onSubmit={handleSubmitPayment} className="p-6 space-y-4">
+                {isAdvanceStatus && activeMonthStatus && (
+                  <div className="p-3.5 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs space-y-1.5 font-bold text-brand-700">
+                    <div className="flex justify-between items-center">
+                      <span>سبق خلاص تسبقة لشهر {paymentMonth}:</span>
+                      <span className="font-mono text-brand-700 font-extrabold text-sm">{activeMonthStatus.paidAmount} د.ت</span>
                     </div>
-                  );
-                })()}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-black text-slate-600 block mb-1">التخفيض (د.ت)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.001"
-                      value={discount}
-                      onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
-                    />
+                    <div className="flex justify-between items-center border-t border-brand-600/25 pt-1.5">
+                      <span>المتبقي لاستكمال الشهر (Solde):</span>
+                      <span className="font-mono text-red-700 font-black text-sm">{activeMonthStatus.remaining} د.ت</span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-black text-slate-600 block mb-1">المبلغ المدفوع (د.ت)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.001"
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(Number(e.target.value) || 0)}
-                      data-testid="transport-pay-amount"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
-                    />
+                )}
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">نوع الدفعة *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentType('full');
+                        const targetVal = isAdvanceStatus ? activeMonthStatus.remaining : Math.max(0, standardFee - (Number(discount) || 0));
+                        setAmountPaid(targetVal);
+                        setTotalRequired(standardFee);
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        paymentType === 'full'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {isAdvanceStatus
+                        ? `خلاص الباقي (${activeMonthStatus?.remaining} د.ت)`
+                        : `خلاص كامل (${standardFee} د.ت)`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentType('advance');
+                        const defaultAdv = isAdvanceStatus
+                          ? Math.min(50, activeMonthStatus.remaining)
+                          : Math.round(Math.max(0, standardFee - (Number(discount) || 0)) / 2);
+                        setAmountPaid(defaultAdv);
+                        setTotalRequired(standardFee);
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        paymentType === 'advance'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      تسبقة (Avance)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentType('balance');
+                        if (isAdvanceStatus) {
+                          setAmountPaid(activeMonthStatus.remaining);
+                        }
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        paymentType === 'balance'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      تكملة باقي (Solde)
+                    </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-black text-slate-600 block mb-1">طريقة الدفع</label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as 'Espèces' | 'Chèque')}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
-                  >
-                    <option value="Espèces">Espèces</option>
-                    <option value="Chèque">Chèque</option>
-                  </select>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة الدفع *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setPaymentMethod('Espèces'); setChequeNumber(''); setChequeDate(new Date().toISOString().split('T')[0]); }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        paymentMethod === 'Espèces'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      نقداً (Espèces)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('Chèque')}
+                      className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        paymentMethod === 'Chèque'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      شيك (Par Chèque)
+                    </button>
+                  </div>
                 </div>
 
                 {paymentMethod === 'Chèque' && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-black text-slate-600 block mb-1">رقم الشيك</label>
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-brand-600/[0.06] rounded-xl border border-brand-600/20">
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">رقم الشيك *</label>
                       <input
+                        type="text" required
                         value={chequeNumber}
                         onChange={(e) => setChequeNumber(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
+                        placeholder="رقم الشيك"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] font-black text-slate-600 block mb-1">تاريخ الشيك</label>
-                      <input
-                        type="date"
+                    <div className="flex flex-col justify-end">
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">تاريخ الدفع *</label>
+                      <DateField
+                        required
                         value={chequeDate}
                         onChange={(e) => setChequeDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-brand-600"
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 h-[38px]"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-[11px] font-black text-slate-600 block mb-1">ملاحظات</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    التخفيض (د.ت) <span className="text-[10px] text-brand-700/80 font-semibold">(يجب أن يكون أقل من المبلغ)</span>
+                  </label>
+                  <input
+                    type="number" min="0" max={Math.max(0, standardFee - 1)}
+                    value={discount}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const val = Math.max(0, Math.min(standardFee - 1, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0));
+                      setDiscount(val);
+                      if (paymentType === 'full') {
+                        setAmountPaid(Math.max(0, standardFee - val));
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
+                  />
+                  <p className="text-[10px] text-slate-400 font-bold mt-1">
+                    المستوجب بعد التخفيض: {Math.max(0, standardFee - (Number(discount) || 0))} د.ت
+                    {Number(discount) >= standardFee && standardFee > 0 && (
+                      <span className="text-red-500 font-black block mt-0.5">⚠️ التخفيض لا يمكن أن يساوي أو يتجاوز {standardFee} د.ت!</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">
+                      المبلغ المدفوع (د.ت) *
+                    </label>
+                    <input
+                      type="number" required min="0"
+                      value={amountPaid}
+                      max={isAdvanceStatus ? activeMonthStatus?.remaining : undefined}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = Math.max(0, Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0);
+                        if (isAdvanceStatus && activeMonthStatus && val > activeMonthStatus.remaining) {
+                          toast.warning(`عذراً، المبلغ المطلوب لاستكمال الشهر هو ${activeMonthStatus.remaining} د.ت فقط!`);
+                          setAmountPaid(activeMonthStatus.remaining);
+                        } else {
+                          setAmountPaid(val);
+                        }
+                      }}
+                      data-testid="transport-pay-amount"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-brand-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">
+                      إجمالي الشهر (د.ت)
+                    </label>
+                    <input
+                      type="number" required value={totalRequired} readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Remaining calculation banner */}
+                <div className="p-3 bg-brand-600/[0.06] rounded-2xl border border-brand-600/20 text-xs flex justify-between font-bold text-brand-700">
+                  <span>المبلغ المتبقي بعد هذه الدفعة:</span>
+                  <span className="font-mono text-sm font-black text-red-700">
+                    {Math.max(0, Math.max(0, Number(totalRequired) - (Number(discount) || 0)) - (activeMonthStatus?.paidAmount || 0) - Number(amountPaid || 0))} د.ت
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">ملاحظات</label>
                   <input
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -681,22 +890,22 @@ export default function TransportSubscriptionModule({
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                   <button
-                    type="button"
-                    onClick={() => setSelectedStudentForPayment(null)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                    type="button" onClick={() => setSelectedStudentForPayment(null)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || standardFee <= 0}
+                    title={isSubmitting ? undefined : 'أدخل رسوم النقل في الإعدادات أولاً'}
                     data-testid="transport-pay-submit"
-                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <CircleDollarSign className="h-4 w-4" />
-                    تسجيل الدفعة
+                    <CheckCircle2 className="h-4 w-4" />
+                    تأكيد الدفع وطباعة الوصل
                   </button>
                 </div>
               </form>
@@ -705,24 +914,33 @@ export default function TransportSubscriptionModule({
         )}
       </AnimatePresence>
 
-      {/* RECEIPT MODAL */}
+      {/* PRINT RECEIPT MODAL */}
       <AnimatePresence>
         {printingReceipt && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print">
+          <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-8"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-8"
             >
-              <div className="p-5 bg-slate-900 text-white flex justify-between items-center no-print">
-                <div className="flex items-center gap-2">
-                  <Printer className="h-5 w-5 text-brand-500" />
-                  <h3 className="font-black text-sm">وصل خلاص اشتراك النقل</h3>
+              <div className="p-4 bg-brand-600 text-white flex justify-between items-center no-print">
+                <span className="font-bold text-sm">وصل خلاص رسمي</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="h-4 w-4" />
+                    طباعة الوصل 🖨️
+                  </button>
+                  <button
+                    onClick={() => setPrintingReceipt(null)}
+                    className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-                <button onClick={() => setPrintingReceipt(null)} className="p-2 hover:bg-white/10 rounded-xl cursor-pointer">
-                  <X className="h-5 w-5" />
-                </button>
               </div>
 
               <div className="min-h-0 overflow-y-auto">
@@ -730,16 +948,16 @@ export default function TransportSubscriptionModule({
                   const { student, payment } = printingReceipt;
                   const monthPayments = (student.payments || []).filter(p => p.service === 'Transport' && p.month === payment.month);
                   const totalPaid = monthPayments.reduce((sum, p) => sum + p.amountPaid, 0);
-                  const totalRequired = payment.totalRequired || 0;
-                  const remaining = Math.max(0, totalRequired - totalPaid);
+                  const fullFeeRequired = payment.totalRequired || 0;
+                  const remaining = Math.max(0, fullFeeRequired - totalPaid);
                   const totalDiscount = monthPayments.reduce((max, p) => Math.max(max, p.discount || 0), 0);
                   return (
                     <div className="print-area print-one p-6 sm:p-8 bg-white text-slate-900 rounded-2xl w-full mx-auto text-xs font-sans flex flex-col">
                       <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
                         <div>
-                          <h2 className="text-lg font-black text-slate-950">{centerName} — وصل خلاص اشتراك النقل</h2>
-                          <p className="text-[10px] text-slate-500 font-mono">رقم الوصل: {payment.receiptNumber}</p>
-                          <p className="text-[10px] text-slate-400">تاريخ الدفعة: {payment.date}</p>
+                          <h2 className="text-lg font-black text-slate-950">{centerName} — وصل خلاص كشف المدفوعات</h2>
+                          <p className="text-[10px] text-slate-500 font-mono">رقم آخر وصل: {payment.receiptNumber}</p>
+                          <p className="text-[10px] text-slate-400">تاريخ آخر دفعة: {payment.date}</p>
                         </div>
                         <div className="text-left font-mono font-bold text-xs bg-slate-100 p-2 rounded border border-slate-300">
                           <p>الخدمة: <strong>النقل المدرسي</strong></p>
@@ -752,6 +970,7 @@ export default function TransportSubscriptionModule({
                           <span className="text-slate-500 font-bold">اسم التلميذ(ة):</span>
                           <span className="font-extrabold text-slate-900">{student.firstName} {student.lastName}{student.grade ? ` (${student.grade})` : ''}</span>
                         </div>
+
                         <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                           <span className="text-slate-500 font-bold">اسم الولي المسجل:</span>
                           <span className="font-bold text-slate-800">{student.father?.name || student.mother?.name || 'غير مدون'}</span>
@@ -762,15 +981,16 @@ export default function TransportSubscriptionModule({
                             <span>سجل دفعات هذا الشهر:</span>
                             <span className="text-[10px] text-slate-500 font-normal">عدد الدفعات: {monthPayments.length}</span>
                           </h4>
+
                           <div className="border border-slate-300 rounded-xl overflow-x-auto">
-                            <table className="min-w-[520px] w-full text-right text-[11px]">
+                            <table className="min-w-[640px] w-full text-right text-[11px]">
                               <thead className="bg-slate-100 text-slate-800 font-black border-b border-slate-300">
                                 <tr>
                                   <th className="p-2">#</th>
                                   <th className="p-2">التاريخ</th>
                                   <th className="p-2">رقم الوصل</th>
-                                  <th className="p-2">طريقة الدفع</th>
-                                  <th className="p-2 text-left">المبلغ</th>
+                                  <th className="p-2">طريقة الدفع / ملاحظات</th>
+                                  <th className="p-2 text-left">المبلغ المقبوض</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-200 bg-white">
@@ -779,7 +999,11 @@ export default function TransportSubscriptionModule({
                                     <td className="p-2 font-bold text-slate-400">{idx + 1}</td>
                                     <td className="p-2 font-mono text-slate-700">{p.date}</td>
                                     <td className="p-2 font-mono text-slate-500 text-[10px]">{p.receiptNumber}</td>
-                                    <td className="p-2 font-bold">{paymentMethodLabel(p.method)}</td>
+                                    <td className="p-2 text-slate-800 font-medium">
+                                      <span className="font-bold">{paymentMethodLabel(p.method)}</span>
+                                      {p.notes && <span className="text-slate-500 text-[10px] block">{p.notes}</span>}
+                                      {p.discount ? <span className="text-brand-700 text-[10px] block font-bold">التخفيض: {p.discount} د.ت</span> : null}
+                                    </td>
                                     <td className="p-2 text-left font-black font-mono text-brand-700">{p.amountPaid} د.ت</td>
                                   </tr>
                                 ))}
@@ -791,12 +1015,14 @@ export default function TransportSubscriptionModule({
                         <div className="grid grid-cols-3 gap-2 pt-2">
                           <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-300">
                             <span className="text-[10px] text-slate-600 block font-bold">مبلغ الشهر:</span>
-                            <span className="text-base font-black text-slate-900 font-mono">{totalRequired} د.ت</span>
+                            <span className="text-base font-black text-slate-900 font-mono">{fullFeeRequired} د.ت</span>
                           </div>
+
                           <div className="p-2.5 bg-brand-600/[0.06] rounded-xl border border-brand-600/30">
                             <span className="text-[10px] text-brand-700 block font-bold">المسدد حتى الآن:</span>
                             <span className="text-base font-black text-brand-700 font-mono">{totalPaid} د.ت</span>
                           </div>
+
                           <div className={`p-2.5 rounded-xl border ${remaining === 0 ? 'bg-slate-50 border-slate-200' : 'bg-brand-600/[0.06] border-brand-600/20'}`}>
                             <span className="text-[10px] text-brand-700 block font-bold">الرصيد المتبقي:</span>
                             <span className={`text-base font-black font-mono ${remaining === 0 ? 'text-slate-400' : 'text-red-700'}`}>{remaining} د.ت</span>
@@ -836,47 +1062,10 @@ export default function TransportSubscriptionModule({
                   );
                 })()}
               </div>
-
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 no-print">
-                <button onClick={() => setPrintingReceipt(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl cursor-pointer">
-                  إغلاق
-                </button>
-                <button onClick={() => window.print()} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1.5">
-                  <Printer className="h-4 w-4" />
-                  طباعة الوصل
-                </button>
-              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: 'brand' | 'emerald' | 'amber' | 'red' }) {
-  const tones = {
-    brand: 'bg-brand-600/[0.06] text-brand-700 border-brand-600/20',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    red: 'bg-red-50 text-red-600 border-red-200',
-  };
-  return (
-    <div className={`p-4 rounded-2xl border ${tones[tone]} flex items-center justify-between gap-2`}>
-      <div>
-        <span className="text-[10px] font-bold block opacity-80">{label}</span>
-        <strong className="text-xl font-black font-mono">{value}</strong>
-      </div>
-      <span className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shrink-0">{icon}</span>
-    </div>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5 text-slate-600">
-      <span className={`w-2.5 h-2.5 rounded-full ${color}`}></span>
-      {label}
-    </span>
   );
 }

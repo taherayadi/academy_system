@@ -205,7 +205,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const formationsEnabled = hasModule('formations');
   const transportEnabled = hasModule('transport');
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'annualInscriptions' | 'formations' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'annualInscriptions' | 'formations' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
 
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -269,7 +269,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
 
   // Pagination states (20 items per page for most tabs)
   const pageSize = 20;
-  const [ledgerPage, setLedgerPage] = useState<number>(1);
   const [expensesPage, setExpensesPage] = useState<number>(1);
   const [extDetailPage, setExtDetailPage] = useState<number>(1);
   const [restoPage, setRestoPage] = useState<number>(1);
@@ -1032,7 +1031,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               value={schoolYearFilter}
               onChange={(e) => {
                 setSchoolYearFilter(e.target.value);
-                setLedgerPage(1);
                 setHistoryPage(1);
                 setExpensesPage(1);
                 setChequesPageByService({});
@@ -1054,7 +1052,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
               value={monthFilter}
               onChange={(e) => {
                 setMonthFilter(e.target.value);
-                setLedgerPage(1);
                 setHistoryPage(1);
                 setExpensesPage(1);
                 setChequesPageByService({});
@@ -1076,7 +1073,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setLedgerPage(1);
               setHistoryPage(1);
               setExpensesPage(1);
             }}
@@ -1116,14 +1112,6 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
           }`}
         >
           📊 لوحة التوزيع والإيرادات
-        </button>
-        <button
-          onClick={() => setActiveTab('studentLedger')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            activeTab === 'studentLedger' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          🎓 بطاقة التلميذ المجمعة
         </button>
         <button
           onClick={() => setActiveTab('history')}
@@ -1318,113 +1306,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
         </div>
       )}
 
-      {/* TAB 2: CONSOLIDATED STUDENT LEDGER (ALL SERVICES SEPT -> MAI) */}
-      {activeTab === 'studentLedger' && (() => {
-        // Colonnes de services affichées uniquement si le module est au plan
-        const showEtudeCol = hasModule('etude');
-        const showLibraryCol = hasModule('bibliotheque');
-        const showRepasCol = hasModule('cantine');
-        const ledgerColCount = 4 + (showEtudeCol ? 1 : 0) + (showLibraryCol ? 1 : 0) + (showRepasCol ? 1 : 0);
-
-        const ledgerStudents = filteredStudents.filter(st => {
-          if (!searchTerm) return true;
-          return `${st.firstName} ${st.lastName} ${st.grade}`.toLowerCase().includes(searchTerm.toLowerCase());
-        });
-
-        const totalPages = Math.ceil(ledgerStudents.length / pageSize) || 1;
-        const currentPage = Math.min(Math.max(1, ledgerPage), totalPages);
-        const paginatedLedger = ledgerStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-        return (
-          <div className="bg-white rounded-3xl border border-slate-200/70 overflow-hidden shadow-lg shadow-slate-900/5 no-print">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">جدول خلاص الخدمات حسب التلميذ</h3>
-                <p className="text-[11px] text-slate-400">إجمالي التلاميذ: {ledgerStudents.length} — عرض 20 تلميذ بكل صفحة</p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-[640px] w-full text-right text-xs">
-                <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-4">التلميذ</th>
-                    <th className="p-4">السنة الدراسية</th>
-                    <th className="p-4">المستوى</th>
-                    <th className="p-4">Suivi Scolaire</th>
-                    {showEtudeCol && <th className="p-4">Étude {centerName}</th>}
-                    {showLibraryCol && <th className="p-4">Bibliothèque</th>}
-                    {showRepasCol && <th className="p-4">Repas (مطعم)</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedLedger.length === 0 ? (
-                    <tr>
-                      <td colSpan={ledgerColCount} className="p-8 text-center text-slate-400">لا توجد بيانات مطابقة لشروط البحث.</td>
-                    </tr>
-                  ) : (
-                    paginatedLedger.map(st => {
-                      const hasSuiviPaid = (st.payments || []).some(p => p.service === 'Suivi');
-                      const hasTC = (st.payments || []).some(p => p.service === 'Étude' || p.service === 'Inscription Étude');
-                      const hasLib = (st.payments || []).some(p => p.service === 'Bibliothèque');
-                      const hasMeal = (st.payments || []).some(p => p.service === 'Repas');
-
-                      return (
-                        <tr key={st.id} className="hover:bg-slate-50/80 transition font-bold">
-                          <td className="p-4 font-black text-slate-900">{st.firstName} {st.lastName}</td>
-                          <td className="p-4 font-mono text-slate-500">{st.academicYear || getCurrentAcademicYear()}</td>
-                          <td className="p-4 text-slate-500">{gradeLabelBilingual(st.grade)}</td>
-                          <td className="p-4">
-                            {hasSuiviPaid ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-red-500">غير مدفوع</span>}
-                          </td>
-                          {showEtudeCol && (
-                            <td className="p-4">
-                              {hasTC ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
-                            </td>
-                          )}
-                          {showLibraryCol && (
-                            <td className="p-4">
-                              {hasLib ? <span className="text-brand-700">✓ منتظم</span> : <span className="text-slate-400">-</span>}
-                            </td>
-                          )}
-                          {showRepasCol && (
-                            <td className="p-4">
-                              {hasMeal ? <span className="text-brand-700">✓ مشترك</span> : <span className="text-slate-400">-</span>}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
-                <button
-                  disabled={currentPage <= 1}
-                  onClick={() => setLedgerPage(currentPage - 1)}
-                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
-                >
-                  ◀ السابق
-                </button>
-                <span className="text-slate-600">صفحة {currentPage} من {totalPages} (20 تلميذ / صفحة)</span>
-                <button
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setLedgerPage(currentPage + 1)}
-                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl disabled:opacity-40 cursor-pointer"
-                >
-                  التالي ▶
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* TAB 3: PAYMENT HISTORY */}
+      {/* TAB 2: PAYMENT HISTORY */}
       {activeTab === 'history' && (() => {
         const historyServiceOptions = serviceOptions.filter(s => s.value !== 'Repas' && s.value !== 'Goûter' && s.value !== 'Formation' && !s.value.startsWith('Inscription'));
 
@@ -1587,17 +1469,13 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                               const g = item.group;
                               return (
                           <tr key={g.chequeNumber} className="hover:bg-brand-600/[0.05] transition">
-                            <td className="p-4 font-mono font-bold text-slate-500 text-[10px]">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
+                            <td className="p-4 font-mono font-bold text-slate-500">{g.receiptNumbers[0]}{g.receiptNumbers.length > 1 ? ` +${g.receiptNumbers.length - 1}` : ''}</td>
                             <td className="p-4 font-mono text-slate-600">{g.chequeDate || '-'}</td>
-                            <td className="p-4 font-black text-slate-900 text-[11px]">{g.studentNames.join(', ')}</td>
-                            <td className="p-4">
-                              <div className="flex flex-wrap gap-1">
-                                {Array.from(new Set(g.payments.map(p => paymentServiceLabel(p)))).map(label => (
-                                  <span key={label} className="inline-flex px-1.5 py-0.5 bg-brand-600/10 text-brand-700 rounded-md font-bold text-[9px]">{label}</span>
-                                ))}
-                              </div>
+                            <td className="p-4 font-black text-slate-900">{g.studentNames.join(', ')}</td>
+                            <td className="p-4 font-bold text-brand-700">
+                              {Array.from(new Set(g.payments.map(p => paymentServiceLabel(p)))).join(' · ')}
                             </td>
-                            <td className="p-4 font-bold text-slate-700 text-[10px]">
+                            <td className="p-4 font-bold text-slate-700">
                               {(() => {
                                 const distinctServices = new Set(g.payments.map(p => p.service));
                                 const distinctMonths = new Set(g.payments.map(p => p.month));
