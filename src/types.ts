@@ -771,6 +771,45 @@ export interface StudentServiceEnrollmentPatch {
 }
 
 
+/**
+ * Trajet de bus créé manuellement par le centre (table `transport_trips`).
+ * `weekday` : 1 = lundi … 7 = dimanche.
+ */
+export interface TransportTripRecord {
+  id: string;
+  staffId: string | null;
+  weekday: number;
+  departureTime: string;
+  tripType: 'to_school' | 'to_center';
+  notes: string;
+  studentIds: string[];
+  createdAt?: number | null;
+  updatedAt?: number | null;
+}
+
+/** Création d'un trajet — POST /api/transport-trips. */
+export interface TransportTripInput {
+  id?: string;
+  staffId?: string | null;
+  weekday: number;
+  departureTime: string;
+  tripType: 'to_school' | 'to_center';
+  notes?: string;
+  studentIds: string[];
+}
+
+/** Mise à jour partielle — PUT /api/transport-trips. */
+export interface TransportTripPatch {
+  id: string;
+  staffId?: string | null;
+  weekday?: number;
+  departureTime?: string;
+  tripType?: 'to_school' | 'to_center';
+  notes?: string;
+  studentIds?: string[];
+}
+
+
 export interface StudentRegistration {
   date: string;
   location: string;

@@ -335,8 +335,8 @@ input[type="date"] {
   }
 }
 
-/* Bus Route Sheet — ensure trip blocks allow page breaks between them,
-   and show the mini-header (bus-trip-page-header) only at top of a new printed page */
+/* Bus Route Sheet — allow page breaks between trip blocks without
+   repeating a header line between trips. */
 @media print {
   /* Allow page breaks between trip blocks */
   .bus-trip-block {
@@ -354,15 +354,6 @@ input[type="date"] {
   .print-area:has(.bus-trip-block) tr {
     break-inside: auto !important;
     page-break-inside: auto !important;
-  }
-
-  /* The per-trip mini-header: hidden by default, shown only in print on non-first trips */
-  .bus-trip-page-header {
-    display: flex !important;
-    visibility: visible !important;
-    padding-top: 4mm;
-    padding-bottom: 2mm;
-    margin-bottom: 2mm;
   }
 
   /* Main bus header: only show once, at the very top */

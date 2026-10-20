@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, StudentServiceEnrollment, StudentServiceEnrollmentInput, StudentServiceEnrollmentPatch } from './types';
+import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, StudentServiceEnrollment, StudentServiceEnrollmentInput, StudentServiceEnrollmentPatch, TransportTripRecord, TransportTripInput, TransportTripPatch } from './types';
 
 
 const API_BASE = '/api';
@@ -421,6 +421,52 @@ export async function updateStudentServiceEnrollmentApi(patch: StudentServiceEnr
 
 export async function deleteStudentServiceEnrollmentApi(id: string): Promise<void> {
   return deleteDomain(`/student-service-enrollments?id=${encodeURIComponent(id)}`, 'تعذر حذف تسجيل الخدمة.');
+}
+
+
+/**
+ * CRUD des trajets de bus créés manuellement par le centre :
+ *   GET    /api/transport-trips?weekday=&staffId=
+ *   POST   création (id serveur si absent)
+ *   PUT    mise à jour partielle (dont la liste des élèves)
+ *   DELETE ?id= suppression
+ */
+export async function fetchTransportTripsApi(filter?: {
+  weekday?: number; staffId?: string;
+}): Promise<TransportTripRecord[]> {
+  const params = new URLSearchParams();
+  if (filter?.weekday) params.set('weekday', String(filter.weekday));
+  if (filter?.staffId) params.set('staffId', filter.staffId);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const rows = await getDomain<any[]>(`/transport-trips${suffix}`, 'تعذر تحميل رحلات النقل.');
+  return (rows || []).map(r => ({
+    id: r.id,
+    staffId: r.staffId ?? r.staff_id ?? null,
+    weekday: Number(r.weekday),
+    departureTime: r.departureTime ?? r.departure_time ?? '',
+    tripType: (r.tripType ?? r.trip_type) as TransportTripRecord['tripType'],
+    notes: r.notes ?? '',
+    studentIds: Array.isArray(r.studentIds)
+      ? r.studentIds
+      : Array.isArray(r.student_ids)
+        ? r.student_ids
+        : [],
+    createdAt: r.createdAt ?? r.created_at ?? null,
+    updatedAt: r.updatedAt ?? r.updated_at ?? null
+  }));
+}
+
+export async function createTransportTripApi(input: TransportTripInput): Promise<string | undefined> {
+  const data = await postDomainJson<{ id?: string }>('/transport-trips', input, 'تعذر إنشاء رحلة النقل.');
+  return data?.id;
+}
+
+export async function updateTransportTripApi(patch: TransportTripPatch): Promise<void> {
+  return putDomain('/transport-trips', patch, 'تعذر تحديث رحلة النقل.');
+}
+
+export async function deleteTransportTripApi(id: string): Promise<void> {
+  return deleteDomain(`/transport-trips?id=${encodeURIComponent(id)}`, 'تعذر حذف رحلة النقل.');
 }
 
 

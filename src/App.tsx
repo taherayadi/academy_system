@@ -1894,8 +1894,6 @@ export default function App() {
                 <BusDriverModule
                   students={students}
                   staff={staff}
-                  slots={slots}
-                  studentTimeSheets={studentTimeSheets}
                   settings={settings}
                   sidebarCollapsed={sidebarCollapsed}
                 />

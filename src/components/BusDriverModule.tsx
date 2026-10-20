@@ -17,37 +17,35 @@ import {
   RotateCcw,
   AlertTriangle,
   X,
-  PlusCircle
+  PlusCircle,
+  Pencil,
+  Loader2
 } from 'lucide-react';
 import { 
   Student, 
   StaffMember, 
-  EtudeSlot,
-  StudentTimeSheet, 
   CenterSettings, 
-  TIMESHEET_DAYS, 
-  TimesheetDay 
+  TimesheetDay,
+  TransportTripRecord,
+  TransportTripInput,
+  TransportTripPatch
 } from '../types';
 import { gradeLabelBilingual } from '../types';
+import {
+  fetchTransportTripsApi,
+  createTransportTripApi,
+  updateTransportTripApi,
+  deleteTransportTripApi
+} from '../api';
+import { useToast } from './Toast';
 import logo from '../assets/logo.png';
 
 interface BusDriverModuleProps {
   students: Student[];
   staff: StaffMember[];
-  slots: EtudeSlot[];
-  studentTimeSheets: StudentTimeSheet[];
   settings?: CenterSettings;
   sidebarCollapsed?: boolean;
 }
-
-export const ARABIC_DAYS_MAP: Record<string, string> = {
-  'Lundi': 'الأثنين',
-  'Mardi': 'الثلاثاء',
-  'Mercredi': 'الأربعاء',
-  'Jeudi': 'الخميس',
-  'Vendredi': 'الجمعة',
-  'Samedi': 'السبت'
-};
 
 const DAY_NAMES_ORDER: TimesheetDay[] = ['الأثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
@@ -57,43 +55,12 @@ const timeToMin = (t: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-const computeDepartureTime = (schoolStartTime: string): string => {
-  const mins = timeToMin(schoolStartTime) - 30;
-  if (mins < 0) return '07:30';
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-};
+const weekdayForDay = (day: TimesheetDay): number => DAY_NAMES_ORDER.indexOf(day) + 1;
 
-const MERGE_GAP_MIN = 120;
-
-function mergeDaySeances(
-  slots: { startTime: string; endTime: string }[],
-  gapMin = MERGE_GAP_MIN
-): { startTime: string; endTime: string }[] {
-  const sorted = slots
-    .filter(s => s.startTime && s.endTime && timeToMin(s.startTime) < timeToMin(s.endTime))
-    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
-  if (sorted.length === 0) return [];
-  const blocks: { startTime: string; endTime: string }[] = [];
-  for (const s of sorted) {
-    const last = blocks[blocks.length - 1];
-    if (last && timeToMin(s.startTime) - timeToMin(last.endTime) <= gapMin) {
-      if (timeToMin(s.endTime) > timeToMin(last.endTime)) {
-        last.endTime = s.endTime;
-      }
-    } else {
-      blocks.push({ startTime: s.startTime, endTime: s.endTime });
-    }
-  }
-  return blocks;
-}
-
-// ─── LocalStorage for per-day bus edits ──────────────────────────────
+// ─── LocalStorage for per-day passenger absences ─────────────────────
 const STORAGE_KEY = 'bus_driver_edits_v1';
 
 interface DayTripEdit {
-  departureTime?: string;
   removed?: Record<string, string>;
 }
 
@@ -114,14 +81,11 @@ function saveBusEdits(edits: BusEditsStorage): void {
 
 export interface TransportPassenger {
   student: Student;
-  timeSheet?: StudentTimeSheet;
   etablissement: string;
   tripType: 'to_school' | 'to_center';
   departureTime: string;
   targetTime: string;
   gradeLevel: string;
-  isManual?: boolean;
-  manualEntryId?: string;
 }
 
 export interface EtablissementGroup {
@@ -132,6 +96,7 @@ export interface EtablissementGroup {
 
 export interface TransportTrip {
   id: string;
+  staffId: string | null;
   departureTime: string;
   tripType: 'to_school' | 'to_center';
   title: string;
@@ -141,25 +106,15 @@ export interface TransportTrip {
   etabGroups: EtablissementGroup[];
 }
 
-// ─── Manual trip (temporary, in-memory only) ─────────────────────────
-
-export interface ManualTripEntry {
-  id: string;
-  tripType: 'to_school' | 'to_center';
-  departureTime: string;
-  studentIds: string[];
-}
-
 // ─── Component ───────────────────────────────────────────────────────
 
 export default function BusDriverModule({
   students,
   staff,
-  slots,
-  studentTimeSheets,
   settings,
 }: BusDriverModuleProps) {
   const centerName = settings?.centerName || 'EduSphère';
+  const { showToast } = useToast();
   const [selectedDay, setSelectedDay] = useState<TimesheetDay>(() => {
     const jsDay = new Date().getDay();
     if (jsDay >= 1 && jsDay <= 6) return DAY_NAMES_ORDER[jsDay - 1];
@@ -183,30 +138,66 @@ export default function BusDriverModule({
   const [boardedStatus, setBoardedStatus] = useState<Record<string, boolean>>({});
   const toggleBoarded = (key: string) => setBoardedStatus(prev => ({ ...prev, [key]: !prev[key] }));
 
-  // ─── Editable program state ──────────────────────────────────────
+  // ─── Itinéraires persistés (créés manuellement, jamais déduits des
+  //     emplois du temps) ─────────────────────────────────────────────
+  const [tripRecords, setTripRecords] = useState<TransportTripRecord[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
+  const [tripsLoadError, setTripsLoadError] = useState('');
+  const [tripSaving, setTripSaving] = useState(false);
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
+
+  const loadTrips = async (showSpinner = true) => {
+    if (showSpinner) setTripsLoading(true);
+    setTripsLoadError('');
+    try {
+      setTripRecords(await fetchTransportTripsApi());
+    } catch (err: any) {
+      setTripsLoadError(err?.message || 'تعذر تحميل رحلات النقل.');
+    } finally {
+      if (showSpinner) setTripsLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadTrips(); }, []);
+
+  // ─── Editable program state (absences journalières uniquement) ────
   const [busEdits, setBusEdits] = useState<BusEditsStorage>(loadBusEdits);
   const [editingRemoval, setEditingRemoval] = useState<{ tripId: string; studentId: string } | null>(null);
   const [removeRemark, setRemoveRemark] = useState('');
 
   useEffect(() => { saveBusEdits(busEdits); }, [busEdits]);
 
-  // ─── Manual trips (in-memory, per selected day) ───────────────────
-  // keyed by TimesheetDay → ManualTripEntry[]
-  const [manualTripsByDay, setManualTripsByDay] = useState<Record<string, ManualTripEntry[]>>({});
-
-  // Form state
+  // Form state (création + édition d'un trajet)
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualFormType, setManualFormType] = useState<'to_school' | 'to_center'>('to_school');
   const [manualFormTime, setManualFormTime] = useState('07:30');
+  const [manualFormStaffId, setManualFormStaffId] = useState('');
   const [manualFormStudentIds, setManualFormStudentIds] = useState<Set<string>>(new Set());
   const [manualStudentSearch, setManualStudentSearch] = useState('');
 
   const openManualForm = () => {
+    setEditingTripId(null);
     setManualFormType('to_school');
     setManualFormTime('07:30');
+    setManualFormStaffId(busDriver?.id || '');
     setManualFormStudentIds(new Set());
     setManualStudentSearch('');
     setShowManualForm(true);
+  };
+
+  const openEditTrip = (trip: TransportTrip) => {
+    setEditingTripId(trip.id);
+    setManualFormType(trip.tripType);
+    setManualFormTime(trip.departureTime);
+    setManualFormStaffId(trip.staffId || busDriver?.id || '');
+    setManualFormStudentIds(new Set(trip.passengers.map(p => p.student.id)));
+    setManualStudentSearch('');
+    setShowManualForm(true);
+  };
+
+  const closeManualForm = () => {
+    setShowManualForm(false);
+    setEditingTripId(null);
   };
 
   const toggleManualStudent = (id: string) =>
@@ -216,41 +207,73 @@ export default function BusDriverModule({
       return next;
     });
 
-  const submitManualTrip = () => {
-    if (manualFormStudentIds.size === 0 || !manualFormTime) return;
-    const entry: ManualTripEntry = {
-      id: `manual_${Date.now()}`,
-      tripType: manualFormType,
-      departureTime: manualFormTime,
-      studentIds: Array.from(manualFormStudentIds),
-    };
-    setManualTripsByDay(prev => ({
-      ...prev,
-      [selectedDay]: [...(prev[selectedDay] || []), entry],
-    }));
-    setShowManualForm(false);
-  };
+  const submitManualTrip = async () => {
+    const studentIds = Array.from(manualFormStudentIds);
+    if (studentIds.length === 0 || !manualFormTime || !manualFormStaffId || tripSaving) return;
 
-  const deleteManualPassenger = (entryId: string, studentId: string) => {
-    setManualTripsByDay(prev => {
-      const dayEntries = (prev[selectedDay] || []).map(e => {
-        if (e.id !== entryId) return e;
-        const ids = e.studentIds.filter(id => id !== studentId);
-        return { ...e, studentIds: ids };
-      }).filter(e => e.studentIds.length > 0);
-      return { ...prev, [selectedDay]: dayEntries };
-    });
-  };
-
-  // ─── Edit helpers ────────────────────────────────────────────────
-  const overrideDepartureTime = (tripId: string, newTime: string) => {
-    setBusEdits(prev => ({
-      ...prev,
-      [selectedDay]: {
-        ...prev[selectedDay],
-        [tripId]: { ...prev[selectedDay]?.[tripId], departureTime: newTime || undefined }
+    setTripSaving(true);
+    try {
+      if (editingTripId) {
+        const patch: TransportTripPatch = {
+          id: editingTripId,
+          staffId: manualFormStaffId,
+          departureTime: manualFormTime,
+          tripType: manualFormType,
+          studentIds
+        };
+        await updateTransportTripApi(patch);
+        showToast('تم تحديث الرحلة بنجاح.', 'success');
+      } else {
+        const input: TransportTripInput = {
+          staffId: manualFormStaffId,
+          weekday: weekdayForDay(selectedDay),
+          departureTime: manualFormTime,
+          tripType: manualFormType,
+          studentIds
+        };
+        await createTransportTripApi(input);
+        showToast('تمت إضافة الرحلة بنجاح.', 'success');
       }
-    }));
+      await loadTrips(false);
+      closeManualForm();
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حفظ الرحلة.', 'error');
+    } finally {
+      setTripSaving(false);
+    }
+  };
+
+  const persistTripPatch = async (tripId: string, patch: Omit<TransportTripPatch, 'id'>) => {
+    const previous = tripRecords.find(trip => trip.id === tripId);
+    setTripRecords(prev => prev.map(trip => trip.id === tripId ? { ...trip, ...patch } : trip));
+    try {
+      await updateTransportTripApi({ id: tripId, ...patch });
+    } catch (err: any) {
+      if (previous) {
+        setTripRecords(prev => prev.map(trip => trip.id === tripId ? previous : trip));
+      }
+      showToast(err?.message || 'تعذر تحديث الرحلة.', 'error');
+    }
+  };
+
+  const deleteTrip = async (tripId: string) => {
+    if (!window.confirm('هل تريد حذف هذه الرحلة نهائياً؟')) return;
+    try {
+      await deleteTransportTripApi(tripId);
+      setTripRecords(prev => prev.filter(trip => trip.id !== tripId));
+      setBusEdits(prev => {
+        const next: BusEditsStorage = {};
+        for (const [day, edits] of Object.entries(prev)) {
+          const copy = { ...edits };
+          delete copy[tripId];
+          next[day] = copy;
+        }
+        return next;
+      });
+      showToast('تم حذف الرحلة.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف الرحلة.', 'error');
+    }
   };
 
   const confirmRemovePassenger = () => {
@@ -300,171 +323,70 @@ export default function BusDriverModule({
   });
   const dayRemovedCount = dayRemovedPassengers.length;
 
-  // ─── Main trip computation (merged blocks + edit overrides) ──────
+  // ─── Trajets du jour sélectionné (uniquement ceux enregistrés par le
+  //     centre ; aucun calcul automatique depuis les emplois du temps) ──
+  const selectedWeekday = weekdayForDay(selectedDay);
+
+  const dayRecords = useMemo(
+    () => tripRecords
+      .filter(record => record.weekday === selectedWeekday)
+      .sort((a, b) => timeToMin(a.departureTime) - timeToMin(b.departureTime)),
+    [tripRecords, selectedWeekday]
+  );
+
   const { trips, passengersByEtab, allDayPassengers, allEtablissements } = useMemo(() => {
-    const passengers: TransportPassenger[] = [];
-    const tsMap = new Map<string, StudentTimeSheet>();
-    studentTimeSheets.forEach(ts => tsMap.set(ts.id, ts));
+    const dayBusEdits = busEdits[selectedDay] || {};
 
-    transportStudents.forEach(st => {
-      const etab = st.etablissement?.trim() || 'المؤسسة غير محددة';
-      const stYear = st.academicYear;
-      let timeSheet: StudentTimeSheet | undefined;
-      if (st.timeSheetId && tsMap.has(st.timeSheetId)) {
-        const candidate = tsMap.get(st.timeSheetId)!;
-        if (!stYear || !candidate.schoolYear || candidate.schoolYear === stYear) {
-          timeSheet = candidate;
-        }
-      }
-      if (!timeSheet) {
-        timeSheet = studentTimeSheets.find(ts =>
-          ts.gradeLevel === st.grade &&
-          (!stYear || !ts.schoolYear || ts.schoolYear === stYear)
-        );
-      }
+    const tripsList: TransportTrip[] = dayRecords.map(record => {
+      const passengers = record.studentIds
+        .map(studentId => {
+          const st = transportStudents.find(student => student.id === studentId);
+          if (!st) return null;
+          const etab = st.etablissement?.trim() || 'المؤسسة غير محددة';
+          const passenger: TransportPassenger = {
+            student: st,
+            etablissement: etab,
+            tripType: record.tripType,
+            departureTime: record.departureTime,
+            targetTime: record.departureTime,
+            gradeLevel: st.grade
+          };
+          return passenger;
+        })
+        .filter(Boolean) as TransportPassenger[];
 
-      if (timeSheet && timeSheet.weeklySchedule) {
-        const daySlots = timeSheet.weeklySchedule.filter(s => s.day === selectedDay);
-        const blocks = mergeDaySeances(daySlots);
-        blocks.forEach(block => {
-          passengers.push({
-            student: st, timeSheet, etablissement: etab,
-            tripType: 'to_school', departureTime: computeDepartureTime(block.startTime),
-            targetTime: block.startTime, gradeLevel: st.grade
-          });
-          passengers.push({
-            student: st, timeSheet, etablissement: etab,
-            tripType: 'to_center', departureTime: block.endTime,
-            targetTime: block.endTime, gradeLevel: st.grade
-          });
-        });
-      } else {
-        const engDay = Object.keys(ARABIC_DAYS_MAP).find(k => ARABIC_DAYS_MAP[k] === selectedDay);
-        const centerSlots = slots.filter(s => s.day === engDay && (s.enrolledStudentIds || []).includes(st.id));
-        if (centerSlots.length > 0) {
-          const blocks = mergeDaySeances(centerSlots);
-          blocks.forEach(block => {
-            passengers.push({
-              student: st, etablissement: etab,
-              tripType: 'to_center', departureTime: block.startTime,
-              targetTime: block.startTime, gradeLevel: st.grade
-            });
-            passengers.push({
-              student: st, etablissement: etab,
-              tripType: 'to_school', departureTime: block.endTime,
-              targetTime: block.endTime, gradeLevel: st.grade
-            });
-          });
-        } else if (st.etablissement) {
-          passengers.push({
-            student: st, etablissement: etab,
-            tripType: 'to_school', departureTime: '07:30', targetTime: '08:00', gradeLevel: st.grade
-          });
-          passengers.push({
-            student: st, etablissement: etab,
-            tripType: 'to_center', departureTime: '12:00', targetTime: '12:30', gradeLevel: st.grade
-          });
-        }
-      }
-    });
-
-    // Group into trips
-    const tripGroups = new Map<string, TransportPassenger[]>();
-    passengers.forEach(p => {
-      const key = `${p.departureTime}__${p.tripType}`;
-      if (!tripGroups.has(key)) tripGroups.set(key, []);
-      tripGroups.get(key)!.push(p);
-    });
-
-    const tripsList: TransportTrip[] = [];
-    tripGroups.forEach((groupPassengers, key) => {
-      const [depTime, typeStr] = key.split('__');
-      const tripType = typeStr as 'to_school' | 'to_center';
-      groupPassengers.sort((a, b) => {
-        const c = a.etablissement.localeCompare(b.etablissement, 'ar');
-        if (c !== 0) return c;
+      passengers.sort((a, b) => {
+        const byEtab = a.etablissement.localeCompare(b.etablissement, 'ar');
+        if (byEtab !== 0) return byEtab;
         return a.student.lastName.localeCompare(b.student.lastName, 'ar');
       });
+
       const etabMap = new Map<string, TransportPassenger[]>();
-      groupPassengers.forEach(p => {
+      passengers.forEach(p => {
         const list = etabMap.get(p.etablissement) || [];
         list.push(p);
         etabMap.set(p.etablissement, list);
       });
+
       const etabGroups: EtablissementGroup[] = [];
       etabMap.forEach((pList, etabName) => {
         etabGroups.push({ etablissement: etabName, count: pList.length, passengers: pList });
       });
-      tripsList.push({
-        id: key, departureTime: depTime, tripType,
-        title: tripType === 'to_school'
+
+      return {
+        id: record.id,
+        staffId: record.staffId,
+        departureTime: record.departureTime,
+        tripType: record.tripType,
+        title: record.tripType === 'to_school'
           ? `رحلة الذهاب: من ${centerName} إلى المؤسسات التعليمية`
           : `رحلة العودة: من المؤسسات التعليمية إلى ${centerName}`,
-        description: tripType === 'to_school'
-          ? `نقل التلاميذ من ${centerName} للالتحاق بصفوفهم (بداية الحصة: ${groupPassengers[0]?.targetTime || depTime})`
-          : `إحضار التلاميذ من المدارس إلى ${centerName} بعد انتهاء الحصص (المغادرة: ${depTime})`,
-        passengers: groupPassengers,
+        description: record.notes,
+        passengers,
         etablissements: Array.from(etabMap.keys()),
         etabGroups
-      });
+      };
     });
-
-    // ─── Apply busEdits: departure overrides + passenger removals ──
-    const dayBusEdits = busEdits[selectedDay] || {};
-    for (const trip of tripsList) {
-      const edit = dayBusEdits[trip.id];
-      if (edit?.departureTime) trip.departureTime = edit.departureTime;
-    }
-
-    // ─── Inject manual trips for this day ────────────────────────────
-    const dayManual = manualTripsByDay[selectedDay] || [];
-    for (const entry of dayManual) {
-      const key = `${entry.departureTime}__${entry.tripType}`;
-      let trip = tripsList.find(t => t.id === key);
-      if (!trip) {
-        // Create a brand-new trip card for this manual-only slot
-        trip = {
-          id: key,
-          departureTime: entry.departureTime,
-          tripType: entry.tripType,
-          title: entry.tripType === 'to_school'
-            ? `رحلة الذهاب: من ${centerName} إلى المؤسسات التعليمية`
-            : `رحلة العودة: من المؤسسات التعليمية إلى ${centerName}`,
-          description: '',
-          passengers: [],
-          etablissements: [],
-          etabGroups: [],
-        };
-        tripsList.push(trip);
-      }
-      for (const sid of entry.studentIds) {
-        if (trip.passengers.some(p => p.student.id === sid)) continue; // already there
-        const st = transportStudents.find(s => s.id === sid);
-        if (!st) continue;
-        const etab = st.etablissement?.trim() || 'المؤسسة غير محددة';
-        const manualPassenger: TransportPassenger = {
-          student: st,
-          etablissement: etab,
-          tripType: entry.tripType,
-          departureTime: entry.departureTime,
-          targetTime: entry.departureTime,
-          gradeLevel: st.grade,
-          isManual: true,
-          manualEntryId: entry.id,
-        };
-        trip.passengers.push(manualPassenger);
-        if (!trip.etablissements.includes(etab)) trip.etablissements.push(etab);
-      }
-      // Rebuild etabGroups for this trip
-      const etabMap = new Map<string, TransportPassenger[]>();
-      trip.passengers.forEach(p => {
-        const l = etabMap.get(p.etablissement) || []; l.push(p); etabMap.set(p.etablissement, l);
-      });
-      trip.etabGroups = [];
-      etabMap.forEach((pList, etabName) => {
-        trip!.etabGroups.push({ etablissement: etabName, count: pList.length, passengers: pList });
-      });
-    }
 
     tripsList.sort((a, b) => timeToMin(a.departureTime) - timeToMin(b.departureTime));
 
@@ -498,7 +420,7 @@ export default function BusDriverModule({
       allDayPassengers: processedTrips.flatMap(t => t.passengers),
       allEtablissements: Array.from(etabsSet).sort()
     };
-  }, [transportStudents, students, studentTimeSheets, slots, selectedDay, busEdits, manualTripsByDay]);
+  }, [dayRecords, transportStudents, busEdits, selectedDay, centerName]);
 
 
   const filteredTrips = useMemo(() => {
@@ -561,7 +483,7 @@ export default function BusDriverModule({
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              تخطيط رحلات الذهاب والإياب لنقل التلاميذ بين {centerName} والمؤسسات التربوية حسب جداول التوقيت
+              إنشاء وإدارة رحلات الذهاب والإياب يدوياً لنقل التلاميذ بين {centerName} والمؤسسات التربوية
             </p>
           </div>
         </div>
@@ -706,15 +628,33 @@ export default function BusDriverModule({
       <div className="no-print space-y-4">
         {activeView === 'trips' && (
           <div className="space-y-4">
-            {filteredTrips.length === 0 ? (
+            {tripsLoadError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-red-700">{tripsLoadError}</span>
+                <button
+                  type="button"
+                  onClick={() => { void loadTrips(); }}
+                  className="px-3 py-1.5 bg-white border border-red-200 text-red-700 font-bold text-xs rounded-xl cursor-pointer hover:bg-red-100 transition"
+                >
+                  إعادة المحاولة
+                </button>
+              </div>
+            )}
+            {tripsLoading ? (
+              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+                <Loader2 className="h-10 w-10 mx-auto mb-3 text-brand-600 animate-spin" />
+                <p className="text-xs font-bold">جارٍ تحميل رحلات النقل...</p>
+              </div>
+            ) : filteredTrips.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
                 <Bus className="h-12 w-12 mx-auto mb-3 opacity-40 text-brand-600" />
                 <h3 className="text-base font-black text-slate-700">لا توجد رحلات مبرمجة ليوم {selectedDay}</h3>
-                <p className="text-xs text-slate-400 mt-1">تأكد من تسجيل المؤسسة التعليمية في بطاقات التلاميذ أو تعيين التايم شيت.</p>
+                <p className="text-xs text-slate-400 mt-1">أضف رحلة يدوية واختر التلاميذ والسائق. لا يتم إنشاء الرحلات تلقائياً.</p>
               </div>
             ) : (
               filteredTrips.map((trip, tripIndex) => {
                 const isToSchool = trip.tripType === 'to_school';
+                const tripDriver = staff.find(member => member.id === trip.staffId) || null;
                 return (
                   <motion.div
                     key={trip.id}
@@ -745,7 +685,7 @@ export default function BusDriverModule({
                             <input
                               type="time"
                               value={trip.departureTime}
-                              onChange={(e) => overrideDepartureTime(trip.id, e.target.value)}
+                              onChange={(e) => { void persistTripPatch(trip.id, { departureTime: e.target.value }); }}
                               className="font-mono bg-white/20 px-2 py-1 rounded-lg text-sm w-24 text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/40 border-none"
                               dir="ltr"
                             />
@@ -760,15 +700,26 @@ export default function BusDriverModule({
                         <span className="bg-white/15 px-3 py-1 rounded-xl">
                           {trip.etablissements.length} {trip.etablissements.length === 1 ? 'مؤسسة' : 'مؤسسات'}
                         </span>
-                        {busEdits[selectedDay]?.[trip.id]?.departureTime && (
-                          <button
-                            onClick={() => overrideDepartureTime(trip.id, '')}
-                            className="bg-white/30 hover:bg-white/40 px-2 py-1 rounded-xl text-[10px] font-bold cursor-pointer transition flex items-center gap-1"
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                            إعادة التوقيت
-                          </button>
-                        )}
+                        <span className="bg-white/15 px-3 py-1 rounded-xl flex items-center gap-1.5">
+                          <UserCheck className="h-3.5 w-3.5" />
+                          {tripDriver ? `${tripDriver.firstName} ${tripDriver.lastName}` : 'بدون سائق'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditTrip(trip)}
+                          className="bg-white/15 hover:bg-white/25 p-1.5 rounded-lg cursor-pointer transition"
+                          title="تعديل الرحلة والتلاميذ"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void deleteTrip(trip.id); }}
+                          className="bg-white/15 hover:bg-red-500/70 p-1.5 rounded-lg cursor-pointer transition"
+                          title="حذف الرحلة"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
 
@@ -841,11 +792,6 @@ export default function BusDriverModule({
                                         <span className="font-black text-slate-900 text-xs block">
                                           {p.student.lastName} {p.student.firstName}
                                         </span>
-                                        {p.isManual && (
-                                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-2 py-0.5 bg-brand-600/[0.05] text-brand-700 border border-brand-600/20 text-[10px] font-black rounded-md">
-                                            ✏️ يدوي
-                                          </span>
-                                        )}
                                       </td>
                                       <td className="p-3">
                                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md font-bold text-[11px]">
@@ -874,25 +820,14 @@ export default function BusDriverModule({
                                         </button>
                                       </td>
                                       <td className="p-3 text-center">
-                                        {p.isManual ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => deleteManualPassenger(p.manualEntryId!, p.student.id)}
-                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                                            title="حذف التلميذ اليدوي من هذه الرحلة"
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditingRemoval({ tripId: trip.id, studentId: p.student.id })}
-                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                                            title="حذف التلميذ من هذه الرحلة اليوم"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingRemoval({ tripId: trip.id, studentId: p.student.id })}
+                                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                          title="تسجيل غياب التلميذ لهذا اليوم"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
                                       </td>
                                     </tr>
 
@@ -993,7 +928,7 @@ export default function BusDriverModule({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 no-print"
-            onClick={(e) => { if (e.target === e.currentTarget) setShowManualForm(false); }}
+            onClick={(e) => { if (e.target === e.currentTarget) closeManualForm(); }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
@@ -1007,14 +942,16 @@ export default function BusDriverModule({
               <div className="flex items-center justify-between p-5 border-b border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-brand-600/[0.05] text-brand-600 flex items-center justify-center">
-                    <PlusCircle className="h-5 w-5 text-brand-600" />
+                    {editingTripId ? <Pencil className="h-5 w-5 text-brand-600" /> : <PlusCircle className="h-5 w-5 text-brand-600" />}
                   </div>
                   <div>
-                    <h3 className="font-black text-slate-900 text-sm">إضافة رحلة يدوية</h3>
+                    <h3 className="font-black text-slate-900 text-sm">
+                      {editingTripId ? 'تعديل الرحلة' : 'إضافة رحلة يدوية'}
+                    </h3>
                     <p className="text-[11px] text-slate-400 font-bold">ليوم: {selectedDay}</p>
                   </div>
                 </div>
-                <button onClick={() => setShowManualForm(false)}
+                <button onClick={closeManualForm}
                   className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer">
                   <X className="h-5 w-5" />
                 </button>
@@ -1060,6 +997,32 @@ export default function BusDriverModule({
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
                     dir="ltr"
                   />
+                </div>
+
+                {/* Driver (staff_id) */}
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">
+                    السائق / الإطار المسؤول
+                  </label>
+                  {staff.length === 0 ? (
+                    <div className="px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800">
+                      لا يوجد إطار مسجل. أضف السائق في قائمة الإطار أولاً.
+                    </div>
+                  ) : (
+                    <select
+                      value={manualFormStaffId}
+                      onChange={(e) => setManualFormStaffId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-600/40 cursor-pointer"
+                    >
+                      <option value="">اختر السائق...</option>
+                      {staff.map(member => (
+                        <option key={member.id} value={member.id}>
+                          {member.lastName} {member.firstName}
+                          {member.role === 'chauffeur_bus' ? ' — سائق حافلة' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 {/* Student selector */}
@@ -1129,18 +1092,24 @@ export default function BusDriverModule({
               {/* Modal Footer */}
               <div className="p-5 border-t border-slate-100 flex items-center justify-between gap-3">
                 <button
-                  onClick={() => setShowManualForm(false)}
+                  onClick={closeManualForm}
                   className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
-                  onClick={submitManualTrip}
-                  disabled={manualFormStudentIds.size === 0 || !manualFormTime}
+                  onClick={() => { void submitManualTrip(); }}
+                  disabled={manualFormStudentIds.size === 0 || !manualFormTime || !manualFormStaffId || tripSaving}
                   className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl transition cursor-pointer shadow-md shadow-brand-600/25"
                 >
-                  <PlusCircle className="h-4 w-4 text-brand-600" />
-                  إضافة {manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}
+                  {tripSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : editingTripId ? (
+                    <Pencil className="h-4 w-4" />
+                  ) : (
+                    <PlusCircle className="h-4 w-4" />
+                  )}
+                  {editingTripId ? 'حفظ التعديلات' : `إضافة ${manualFormStudentIds.size > 0 ? `(${manualFormStudentIds.size} تلميذ)` : ''}`}
                 </button>
               </div>
             </motion.div>
@@ -1189,16 +1158,9 @@ export default function BusDriverModule({
         <div className="space-y-6">
           {printTrips.map((trip, tripIndex) => {
             const isToSchool = trip.tripType === 'to_school';
+            const tripDriver = staff.find(member => member.id === trip.staffId) || null;
             return (
               <div key={trip.id} className={`border border-slate-400 rounded-lg overflow-hidden break-inside-avoid${tripIndex > 0 ? ' bus-trip-block' : ''}`}>
-                {/* Repeated mini-header inside each trip block (visible only on print for page 2+) */}
-                {tripIndex > 0 && (
-                  <div className="bus-trip-page-header hidden border-b border-slate-300 pb-2 mb-2 flex justify-between items-center text-[10px] text-slate-600 font-bold">
-                    <span>{centerName} — ورقة مسار الحافلة</span>
-                    <span>اليوم: {selectedDay} | سائق: {busDriver ? `${busDriver.firstName} ${busDriver.lastName}` : 'سائق معتمد'}</span>
-                  </div>
-                )}
-
                 <div className="bg-slate-800 text-white p-2 flex justify-between items-center text-xs font-bold">
                   <div className="flex items-center gap-2">
                     <span className="bg-white/20 text-white px-2 py-0.5 rounded font-black text-[11px]">
@@ -1210,6 +1172,8 @@ export default function BusDriverModule({
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <span>السائق: {tripDriver ? `${tripDriver.firstName} ${tripDriver.lastName}` : 'غير محدد'}</span>
+                    <span>•</span>
                     <span>({trip.passengers.length} تلاميذ)</span>
                     <span>•</span>
                     <span>({trip.etablissements.length} مؤسسات)</span>
