@@ -145,4 +145,19 @@ describe('paymentServiceKey — abonnement vs unitaire', () => {
       period_month: null
     });
   });
+
+  it('enregistre un abonnement Transport mensuel avec service_key=transport', async () => {
+    const row = await addPayment({
+      service: 'Transport',
+      month: 'Octobre (2026/2027)',
+      amountPaid: 45,
+      totalRequired: 45
+    });
+    expect(row).toMatchObject({
+      service_key: 'transport',
+      billing_period: 'month',
+      period_month: '2026-10',
+      school_year: '2026/2027'
+    });
+  });
 });

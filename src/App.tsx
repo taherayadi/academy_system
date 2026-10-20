@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BookOpen, Clock, BookMarked, Utensils, DollarSign, Users, Bus, Menu, X, Settings as SettingsIcon, LogOut, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Loader2, AlertTriangle, RefreshCw, Award, CalendarCheck, Calendar, Shapes as ShapesIcon, Puzzle as PuzzleIcon, Brain as BrainIcon, CreditCard } from 'lucide-react';
 
 import { Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, CenterSettings, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, SchoolEvent, EventParticipant, CenterTenant, MealForfaitClosure, Activity, Skill, SkillEvaluation, PaymentRecord, ChequeReconciliation, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, initialCenterSettings, normalizeSettings } from './types';
 
@@ -27,6 +27,7 @@ import FinanceModule from './components/FinanceModule';
 import StaffManagementModule from './components/StaffManagementModule';
 import SettingsModule from './components/SettingsModule';
 import BusDriverModule from './components/BusDriverModule';
+import TransportSubscriptionModule from './components/TransportSubscriptionModule';
 import LoginScreen from './components/LoginScreen';
 import LandingPage from './components/LandingPage';
 import AdvertisementCarousel from './components/AdvertisementCarousel';
@@ -55,6 +56,7 @@ export const TAB_MODULE: Record<string, string> = {
   module5: 'bibliotheque',        // المكتبة
   module6: 'cantine',             // إدارة الوجبات
   moduleBus: 'transport',         // خطة الحافلة
+  moduleTransportSub: 'transport', // اشتراك النقل
   module7: 'finance',             // المنظومة المالية
   module8: 'staff',               // إدارة الموظفين
   moduleActivities: 'activites', // الأنشطة والبرنامج
@@ -1485,6 +1487,7 @@ export default function App() {
         LIBRARY_ENABLED && { id: 'module5', label: 'المكتبة', icon: BookOpen },
         { id: 'module6', label: 'إدارة الوجبات', icon: Utensils },
         { id: 'moduleBus', label: 'خطة الحافلة', icon: Bus },
+        { id: 'moduleTransportSub', label: 'اشتراك النقل', icon: CreditCard },
         hasStaffOrEtude && { id: 'module8', label: 'إدارة الموظفين', icon: Users },
         { id: 'module7', label: 'المنظومة المالية', icon: DollarSign },
         { id: 'settings', label: 'الإعدادات', icon: SettingsIcon },
@@ -1895,6 +1898,15 @@ export default function App() {
                   studentTimeSheets={studentTimeSheets}
                   settings={settings}
                   sidebarCollapsed={sidebarCollapsed}
+                />
+              )}
+
+              {activeTab === 'moduleTransportSub' && (
+                <TransportSubscriptionModule
+                  students={students}
+                  settings={settings}
+                  onUpdateStudent={handleUpdateSingleStudent}
+                  onRecordPayment={handleRecordPayment}
                 />
               )}
 

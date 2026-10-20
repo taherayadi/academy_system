@@ -106,6 +106,7 @@ const getServiceOptions = (centerName: string): { value: string; label: string }
   { value: 'Repas', label: 'وجبات (Déjeuner)' },
   { value: 'Goûter', label: 'اللمجة (Goûter)' },
   { value: 'Assurance', label: 'تأمين' },
+  { value: 'Transport', label: 'اشتراك النقل' },
   { value: 'Autres', label: 'أخرى' }
 ];
 
@@ -191,6 +192,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Événements': 'events',
     'Bibliothèque': 'bibliotheque', 'Inscription Bibliothèque': 'bibliotheque',
     'Repas': 'cantine', 'Goûter': 'cantine',
+    'Transport': 'transport',
     'Assurance': 'coursParticuliers' // تأمين الدروس الخصوصية (كراس خارجي)
   };
   const serviceOptions = getServiceOptions(centerName).filter(s => {
@@ -201,6 +203,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
   const coursPartEnabled = hasModule('coursParticuliers');
   const revisionsEnabled = hasModule('revision');
   const formationsEnabled = hasModule('formations');
+  const transportEnabled = hasModule('transport');
 
   const [activeTab, setActiveTab] = useState<'overview' | 'studentLedger' | 'history' | 'annualInscriptions' | 'formations' | 'expenses' | 'externalCours' | 'restaurant' | 'cheques'>('overview');
 
@@ -749,6 +752,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     'Bibliothèque': 'مكتبة',
     'Inscription Bibliothèque': 'تسجيل المكتبة',
     'Repas': 'وجبات',
+    'Transport': 'اشتراك النقل',
     'Assurance': 'تأمين',
     'Autres': 'أخرى'
   };
@@ -928,6 +932,7 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
     Événements: grossNetFor(p => p.service === 'Événements'),
     Bibliotheque: grossNetFor(p => p.service === 'Bibliothèque' || p.service === 'Inscription Bibliothèque'),
     Assurance: grossNetFor(p => p.service === 'Assurance'),
+    Transport: grossNetFor(p => p.service === 'Transport'),
     Autres: grossNetFor(p => p.service === 'Autres'),
     Repas: repasRowValue,
     Gouter: gouterRowValue
@@ -1216,6 +1221,12 @@ export default function FinanceModule({ students, expenses, onUpdateExpenses, on
                 <span className="text-slate-700">1. المتابعة الدراسية:</span>
                 <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Suivi)} د.ت</span>
               </div>
+              {transportEnabled && revenueByService.Transport !== 0 && (
+                <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
+                  <span className="text-slate-700">اشتراكات النقل:</span>
+                  <span className="font-mono text-brand-700 font-black">{fmt(revenueByService.Transport)} د.ت</span>
+                </div>
+              )}
             {hasModule('etude') && (
               <div className="p-3 bg-slate-50 rounded-2xl border flex justify-between font-bold">
                 <span className="text-slate-700">2. دراسات {centerName}:</span>

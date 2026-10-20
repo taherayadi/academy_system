@@ -125,4 +125,14 @@ describe('App type gating (study modules)', () => {
       expect(screen.getAllByText(label).length, `unknown type must show ${label}`).toBeGreaterThan(0);
     }
   });
+
+  it('shows the transport subscription tab only when the transport module is enabled', async () => {
+    await loginAs(makeCenter('formation', ['scolaire', 'finance', 'transport']));
+    expect(screen.getAllByText('اشتراك النقل').length).toBeGreaterThan(0);
+  });
+
+  it('hides the transport subscription tab when the transport module is disabled', async () => {
+    await loginAs(makeCenter('formation', ['scolaire', 'finance']));
+    expect(screen.queryByText('اشتراك النقل')).toBeNull();
+  });
 });
