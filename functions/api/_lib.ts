@@ -960,8 +960,16 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
         if (s.mealSubscription?.mode === 'unit') pushEnrollment('lunch', 'unit', { unit: num(s.mealSubscription?.unitPrice) });
         else pushEnrollment('lunch', 'subscription', { monthly: num(s.mealSubscription?.monthlyPrice), unit: num(s.mealSubscription?.unitPrice) });
       }
-      if (es.gouterMatin || es.gouterBoth) pushEnrollment('gouter_matin', 'subscription', {});
-      if (es.gouterSoir || es.gouterBoth) pushEnrollment('gouter_apres_midi', 'subscription', {});
+      if (es.gouterMatin || es.gouterBoth) {
+        const gm = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'month');
+        const gu = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'unit');
+        pushEnrollment('gouter_matin', 'subscription', { monthly: gm ?? undefined, unit: gu ?? undefined });
+      }
+      if (es.gouterSoir || es.gouterBoth) {
+        const sm = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'month');
+        const su = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'unit');
+        pushEnrollment('gouter_apres_midi', 'subscription', { monthly: sm ?? undefined, unit: su ?? undefined });
+      }
     }
 
     if (mode === 'insert' || s.mother !== undefined || s.father !== undefined) {
@@ -2158,6 +2166,23 @@ export interface MealEnrollmentUpdate {
   gouterSoir?: boolean;
 }
 
+async function getServicePrice(db: D1Database, centerId: string, schoolYear: string, serviceKey: string, billingPeriod: 'month' | 'unit' | 'year'): Promise<number | null> {
+  // Try current year, then DEFAULT, then any year
+  let row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
+    .bind(centerId, schoolYear, serviceKey, billingPeriod).first<any>();
+  if (!row) {
+    row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
+      .bind(centerId, 'DEFAULT', serviceKey, billingPeriod).first<any>();
+  }
+  if (!row) {
+    row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND service_key = ? AND billing_period = ? ORDER BY school_year DESC, valid_from DESC LIMIT 1')
+      .bind(centerId, serviceKey, billingPeriod).first<any>();
+  }
+  if (!row || row.price == null) return null;
+  const n = Number(row.price);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function applyMealEnrollment(db: D1Database, entry: MealEnrollmentUpdate, centerId: string): Promise<void> {
   const studentId = str(entry?.studentId);
   if (!studentId) throw new Error('studentId requis.');
@@ -2196,8 +2221,24 @@ async function applyMealEnrollment(db: D1Database, entry: MealEnrollmentUpdate, 
       monthly: lunch.monthlyPrice, annual: lunch.annualPrice, unit: lunch.unitPrice
     });
   }
-  if (entry?.gouterMatin !== undefined) setEnrollment('gouter_matin', entry.gouterMatin === true);
-  if (entry?.gouterSoir !== undefined) setEnrollment('gouter_apres_midi', entry.gouterSoir === true);
+  if (entry?.gouterMatin !== undefined) {
+    if (entry.gouterMatin === true) {
+      const monthly = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'month');
+      const unit = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'unit');
+      setEnrollment('gouter_matin', true, 'subscription', { monthly: monthly ?? undefined, unit: unit ?? undefined });
+    } else {
+      setEnrollment('gouter_matin', false);
+    }
+  }
+  if (entry?.gouterSoir !== undefined) {
+    if (entry.gouterSoir === true) {
+      const monthly = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'month');
+      const unit = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'unit');
+      setEnrollment('gouter_apres_midi', true, 'subscription', { monthly: monthly ?? undefined, unit: unit ?? undefined });
+    } else {
+      setEnrollment('gouter_apres_midi', false);
+    }
+  }
 
   if (stmts.length) await db.batch(stmts);
 }
