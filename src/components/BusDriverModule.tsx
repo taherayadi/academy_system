@@ -173,6 +173,13 @@ export default function BusDriverModule({
 
   const busDriver = useMemo(() => staff.find(s => s.role === 'chauffeur_bus') || null, [staff]);
 
+  // Le module Transport ne concerne que les élèves inscrits au service
+  // transport (student_service_enrollments.service_key = 'transport').
+  const transportStudents = useMemo(
+    () => students.filter(st => st.enrolledServices?.transport === true),
+    [students]
+  );
+
   const [boardedStatus, setBoardedStatus] = useState<Record<string, boolean>>({});
   const toggleBoarded = (key: string) => setBoardedStatus(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -299,7 +306,7 @@ export default function BusDriverModule({
     const tsMap = new Map<string, StudentTimeSheet>();
     studentTimeSheets.forEach(ts => tsMap.set(ts.id, ts));
 
-    students.forEach(st => {
+    transportStudents.forEach(st => {
       const etab = st.etablissement?.trim() || 'المؤسسة غير محددة';
       const stYear = st.academicYear;
       let timeSheet: StudentTimeSheet | undefined;
@@ -432,7 +439,7 @@ export default function BusDriverModule({
       }
       for (const sid of entry.studentIds) {
         if (trip.passengers.some(p => p.student.id === sid)) continue; // already there
-        const st = students.find(s => s.id === sid);
+        const st = transportStudents.find(s => s.id === sid);
         if (!st) continue;
         const etab = st.etablissement?.trim() || 'المؤسسة غير محددة';
         const manualPassenger: TransportPassenger = {
@@ -491,7 +498,7 @@ export default function BusDriverModule({
       allDayPassengers: processedTrips.flatMap(t => t.passengers),
       allEtablissements: Array.from(etabsSet).sort()
     };
-  }, [students, studentTimeSheets, slots, selectedDay, busEdits, manualTripsByDay]);
+  }, [transportStudents, students, studentTimeSheets, slots, selectedDay, busEdits, manualTripsByDay]);
 
 
   const filteredTrips = useMemo(() => {
@@ -1076,7 +1083,7 @@ export default function BusDriverModule({
                     />
                   </div>
                   <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-100">
-                    {students
+                    {transportStudents
                       .filter(st => {
                         if (!manualStudentSearch.trim()) return true;
                         const q = manualStudentSearch.toLowerCase();

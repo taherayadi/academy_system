@@ -33,6 +33,11 @@ beforeEach(() => {
       key TEXT PRIMARY KEY, category TEXT NOT NULL,
       label_fr TEXT NOT NULL, label_ar TEXT NOT NULL, module_key TEXT NOT NULL
     ) STRICT;
+    CREATE TABLE center_service_prices (
+      center_id TEXT NOT NULL, school_year TEXT NOT NULL, service_key TEXT NOT NULL,
+      billing_period TEXT NOT NULL CHECK (billing_period IN ('month','unit','year')),
+      valid_from TEXT NOT NULL, price REAL NOT NULL, traiteur_share REAL
+    ) STRICT;
     CREATE TABLE etablissements (
       id TEXT PRIMARY KEY,
       center_id TEXT NOT NULL REFERENCES centers(id) ON DELETE CASCADE,
@@ -146,7 +151,8 @@ beforeEach(() => {
       VALUES ('${CENTER}', 'c', 'c', 'garderie', 'starter', 'trial', 1, 1);
     INSERT INTO services (key, category, label_fr, label_ar, module_key) VALUES
       ('suivi', 'scolaire', 'Suivi scolaire', 'المتابعة الدراسية', 'scolaire'),
-      ('etude', 'scolaire', 'Étude', 'الدراسة', 'etude');
+      ('etude', 'scolaire', 'Étude', 'الدراسة', 'etude'),
+      ('transport', 'other', 'Transport scolaire', 'النقل المدرسي', 'transport');
     INSERT INTO students (id, center_id, first_name, last_name, birth_date, created_at)
       VALUES ('${STUDENT_ID}', '${CENTER}', 'Ayadi', 'Taher', '2021-02-07', 1);
     INSERT INTO student_years (student_id, center_id, school_year, grade)
@@ -313,5 +319,43 @@ describe('PUT /api/students (single, existing student)', () => {
     expect(count('student_service_enrollments')).toBe(1);
     const enr = sqlite.prepare('SELECT monthly_price, annual_price FROM student_service_enrollments WHERE id = ?').get('enr_keep') as any;
     expect(enr).toMatchObject({ monthly_price: 250, annual_price: 150 });
+  });
+
+  it('creates a transport service enrollment with its monthly fee', async () => {
+    const res = await onRequestPut(context({
+      ...studentPayload,
+      enrolledServices: { ...studentPayload.enrolledServices, transport: true },
+      transportFees: { monthlyFee: 45 }
+    }));
+    expect(res.status).toBe(200);
+
+    const row = sqlite.prepare(
+      "SELECT billing_mode, monthly_price, annual_price, unit_price FROM student_service_enrollments WHERE student_id = ? AND service_key = 'transport'"
+    ).get(STUDENT_ID) as any;
+    expect(row).toMatchObject({
+      billing_mode: 'subscription',
+      monthly_price: 45,
+      annual_price: null,
+      unit_price: null
+    });
+  });
+
+  it('falls back to the center transport price when no fee is supplied', async () => {
+    sqlite.prepare(`
+      INSERT INTO center_service_prices (center_id, school_year, service_key, billing_period, valid_from, price)
+      VALUES (?, ?, 'transport', 'month', '2026-09-01', 60)
+    `).run(CENTER, YEAR);
+
+    const res = await onRequestPut(context({
+      ...studentPayload,
+      enrolledServices: { ...studentPayload.enrolledServices, transport: true },
+      transportFees: undefined
+    }));
+    expect(res.status).toBe(200);
+
+    const row = sqlite.prepare(
+      "SELECT monthly_price FROM student_service_enrollments WHERE student_id = ? AND service_key = 'transport'"
+    ).get(STUDENT_ID) as any;
+    expect(row.monthly_price).toBe(60);
   });
 });

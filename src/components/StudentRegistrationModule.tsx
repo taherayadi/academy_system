@@ -68,7 +68,7 @@ const parentalSituationLabel = (key?: string): string => {
   }
 };
 
-const ENROLLMENT_KEYS = ['suivi', 'etude', 'library', 'meals', 'gouterMatin', 'gouterSoir', 'gouterBoth'] as const;
+const ENROLLMENT_KEYS = ['suivi', 'etude', 'library', 'meals', 'gouterMatin', 'gouterSoir', 'gouterBoth', 'transport'] as const;
 
 /** Compare uniquement les cases d'inscription réellement pilotées par ce formulaire. */
 function sameEnrolledServices(
@@ -205,6 +205,7 @@ export default function StudentRegistrationModule({
   const [gouterMatinEnrolled, setGouterMatinEnrolled] = useState(false);
   const [gouterSoirEnrolled, setGouterSoirEnrolled] = useState(false);
   const [gouterBothEnrolled, setGouterBothEnrolled] = useState(false);
+  const [transportEnrolled, setTransportEnrolled] = useState(false);
 
   // Sync open trigger
   React.useEffect(() => {
@@ -247,6 +248,7 @@ export default function StudentRegistrationModule({
     setGouterMatinEnrolled(false);
     setGouterSoirEnrolled(false);
     setGouterBothEnrolled(false);
+    setTransportEnrolled(false);
     setEditingStudentId(null);
   };
 
@@ -285,6 +287,7 @@ export default function StudentRegistrationModule({
     setGouterMatinEnrolled(st.enrolledServices?.gouterMatin ?? false);
     setGouterSoirEnrolled(st.enrolledServices?.gouterSoir ?? false);
     setGouterBothEnrolled(st.enrolledServices?.gouterBoth ?? (!!st.enrolledServices?.gouterMatin && !!st.enrolledServices?.gouterSoir));
+    setTransportEnrolled(st.enrolledServices?.transport ?? false);
 
     // Repas is active only if explicitly enrolled and not terminated/refunded
     const currentIdx = getCurrentAcademicIndex();
@@ -394,6 +397,7 @@ export default function StudentRegistrationModule({
     setGouterMatinEnrolled(sourceSt.enrolledServices?.gouterMatin ?? false);
     setGouterSoirEnrolled(sourceSt.enrolledServices?.gouterSoir ?? false);
     setGouterBothEnrolled(sourceSt.enrolledServices?.gouterBoth ?? (!!sourceSt.enrolledServices?.gouterMatin && !!sourceSt.enrolledServices?.gouterSoir));
+    setTransportEnrolled(sourceSt.enrolledServices?.transport ?? false);
 
     setIsImportModalOpen(false);
     setIsFormOpen(true);
@@ -474,7 +478,8 @@ export default function StudentRegistrationModule({
         meals: hasModule('cantine') ? (lockedMeals ? true : mealsEnrolled) : false,
         gouterMatin: hasModule('cantine') ? (lockedGouter ? (existing?.enrolledServices?.gouterMatin ?? gouterMatinEnrolled) : gouterMatinEnrolled) : false,
         gouterSoir: hasModule('cantine') ? (lockedGouter ? (existing?.enrolledServices?.gouterSoir ?? gouterSoirEnrolled) : gouterSoirEnrolled) : false,
-        gouterBoth: hasModule('cantine') ? (lockedGouter ? (existing?.enrolledServices?.gouterBoth ?? gouterBothEnrolled) : gouterBothEnrolled) : false
+        gouterBoth: hasModule('cantine') ? (lockedGouter ? (existing?.enrolledServices?.gouterBoth ?? gouterBothEnrolled) : gouterBothEnrolled) : false,
+        transport: hasModule('transport') ? transportEnrolled : false
       },
       suiviFees: {
         annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelSuivi : 150,
@@ -487,6 +492,9 @@ export default function StudentRegistrationModule({
       libraryFees: {
         annualRegistrationFee: settings ? getFeesForYear(settings, academicYear).fraisAnnuelBibliotheque : 20,
         monthlyFee: settings ? getFeesForYear(settings, academicYear).fraisMensuelBibliotheque : 30
+      },
+      transportFees: {
+        monthlyFee: settings ? getFeesForYear(settings, academicYear).fraisTransportMensuel : 0
       },
       mealSubscription: {
         mode: 'subscription',
@@ -513,6 +521,7 @@ export default function StudentRegistrationModule({
         suiviFees,
         etudeFees,
         libraryFees,
+        transportFees,
         mealSubscription,
         ...profile
       } = payload;
@@ -526,6 +535,7 @@ export default function StudentRegistrationModule({
         update.suiviFees = suiviFees;
         update.etudeFees = etudeFees;
         update.libraryFees = libraryFees;
+        update.transportFees = transportFees;
         update.mealSubscription = mealSubscription;
       }
 
@@ -757,6 +767,11 @@ export default function StudentRegistrationModule({
                 {st.enrolledServices?.library && (
                   <span className="text-[10px] font-bold bg-brand-600/[0.06] text-brand-700 px-2 py-0.5 rounded-md border border-brand-600/20/50">
                     Bibliothèque
+                  </span>
+                )}
+                {st.enrolledServices?.transport && (
+                  <span className="text-[10px] font-bold bg-brand-600/[0.06] text-brand-700 px-2 py-0.5 rounded-md border border-brand-600/20/50">
+                    Transport
                   </span>
                 )}
                 {st.enrolledServices?.meals && (
@@ -1462,7 +1477,24 @@ export default function StudentRegistrationModule({
                         )}
                       </div>
                     </label>
-                    )}                      {hasModule('cantine') && (
+                    )}
+
+                    {hasModule('transport') && (
+                    <label className={`p-4 rounded-2xl border transition flex items-center gap-3 ${transportEnrolled ? 'bg-brand-600/[0.06] border-brand-600 text-brand-700 cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600 cursor-pointer'}`}>
+                      <input
+                        type="checkbox" checked={transportEnrolled} onChange={(e) => setTransportEnrolled(e.target.checked)}
+                        className="h-4 w-4 rounded text-brand-600 focus:ring-brand-600"
+                      />
+                      <div>
+                        <span className="font-bold text-xs block">Transport Scolaire</span>
+                        <span className="text-[10px] text-slate-500 font-mono font-bold">
+                          {settings ? getFeesForYear(settings, academicYear).fraisTransportMensuel || 0 : 0} د.ت/شهر
+                        </span>
+                      </div>
+                    </label>
+                    )}
+
+                    {hasModule('cantine') && (
                       <label className={`p-4 rounded-2xl border transition flex items-center gap-3 ${lockedMeals ? 'bg-slate-100 border-slate-300 text-slate-700 cursor-not-allowed' : mealsEnrolled ? 'bg-brand-600/[0.06] border-brand-600 text-brand-700 cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600 cursor-pointer'}`}>
                         <input 
                           type="checkbox" checked={mealsEnrolled} disabled={lockedMeals} onChange={(e) => setMealsEnrolled(e.target.checked)}
@@ -1927,6 +1959,7 @@ export default function StudentRegistrationModule({
                       {printingRegistrationStudent.enrolledServices?.suivi && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Suivi Scolaire</span>}
                       {printingRegistrationStudent.enrolledServices?.etude && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Étude {centerName}</span>}
                       {printingRegistrationStudent.enrolledServices?.library && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Bibliothèque</span>}
+                      {printingRegistrationStudent.enrolledServices?.transport && <span className="px-2 py-1 bg-brand-600/10 text-brand-800 rounded font-bold">✓ Transport Scolaire</span>}
                       {printingRegistrationStudent.enrolledServices?.meals && <span className="px-2 py-1 bg-brand-600/10 text-brand-700 rounded font-bold">✓ Repas</span>}
                       {(
                         (printingRegistrationStudent.enrolledServices?.gouterBoth || (printingRegistrationStudent.enrolledServices?.gouterMatin && printingRegistrationStudent.enrolledServices?.gouterSoir)) ? (

@@ -345,7 +345,8 @@ const LEGACY_FEE_SERVICE_MAP: Record<string, { serviceKey: string; period: strin
   fraisGouterMatinUnitaire: { serviceKey: 'gouter_matin', period: 'unit' },
   fraisGouterSoirMensuel: { serviceKey: 'gouter_apres_midi', period: 'month' },
   fraisGouterSoirUnitaire: { serviceKey: 'gouter_apres_midi', period: 'unit' },
-  fraisDeuxGoutersMensuel: { serviceKey: 'gouter_both', period: 'month' }
+  fraisDeuxGoutersMensuel: { serviceKey: 'gouter_both', period: 'month' },
+  fraisTransportMensuel: { serviceKey: 'transport', period: 'month' }
 };
 
 export async function readSettings(db: D1Database, centerId: string = DEFAULT_CENTER_ID): Promise<any> {
@@ -754,6 +755,7 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
     const lunchRow = enrolledFromRows(enrolls, 'lunch');
     const matinRow = enrolledFromRows(enrolls, 'gouter_matin');
     const soirRow = enrolledFromRows(enrolls, 'gouter_apres_midi');
+    const transportRow = enrolledFromRows(enrolls, 'transport');
     const lunchSubscription = lunchRow && str(lunchRow.billing_mode) === 'subscription';
     const attended = mealsByStudent[id] || [];
     const consumedSubscription = attended.filter(a => a.type === 'subscription' && a.service === 'lunch').length;
@@ -776,7 +778,8 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
         meals: !!lunchRow,
         gouterMatin: !!matinRow,
         gouterSoir: !!soirRow,
-        gouterBoth: !!matinRow && !!soirRow
+        gouterBoth: !!matinRow && !!soirRow,
+        transport: !!transportRow
       },
       suiviFees: {
         annualRegistrationFee: suiviRow?.annual_price != null ? num(suiviRow.annual_price) : 0,
@@ -789,6 +792,9 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
       libraryFees: {
         annualRegistrationFee: libraryRow?.annual_price != null ? num(libraryRow.annual_price) : 0,
         monthlyFee: libraryRow?.monthly_price != null ? num(libraryRow.monthly_price) : 0
+      },
+      transportFees: {
+        monthlyFee: transportRow?.monthly_price != null ? num(transportRow.monthly_price) : 0
       },
       mealSubscription: {
         mode: lunchRow && str(lunchRow.billing_mode) === 'unit' ? 'unit' : 'subscription',
@@ -893,6 +899,7 @@ function hasStudentEnrollmentPayload(s: any): boolean {
     || s?.suiviFees !== undefined
     || s?.etudeFees !== undefined
     || s?.libraryFees !== undefined
+    || s?.transportFees !== undefined
     || s?.mealSubscription !== undefined;
 }
 
@@ -975,6 +982,14 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
       if (es.suivi) pushEnrollment('suivi', 'subscription', { monthly: num(s.suiviFees?.monthlyFee), annual: num(s.suiviFees?.annualRegistrationFee) });
       if (es.etude) pushEnrollment('etude', 'subscription', { monthly: num(s.etudeFees?.monthlyFee), annual: num(s.etudeFees?.annualRegistrationFee) });
       if (es.library) pushEnrollment('bibliotheque', 'subscription', { monthly: num(s.libraryFees?.monthlyFee), annual: num(s.libraryFees?.annualRegistrationFee) });
+      if (es.transport) {
+        // Prix mensuel porté par l'inscription : tarif saisi dans Paramètres au
+        // moment de l'inscription, sinon résolu depuis center_service_prices.
+        const monthly = s.transportFees?.monthlyFee != null
+          ? num(s.transportFees.monthlyFee)
+          : (await priceFor(schoolYear, 'transport', 'month') ?? undefined);
+        pushEnrollment('transport', 'subscription', { monthly });
+      }
       if (es.meals) {
         if (s.mealSubscription?.mode === 'unit') pushEnrollment('lunch', 'unit', { unit: num(s.mealSubscription?.unitPrice) });
         else pushEnrollment('lunch', 'subscription', { monthly: num(s.mealSubscription?.monthlyPrice), unit: num(s.mealSubscription?.unitPrice) });

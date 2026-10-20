@@ -174,6 +174,7 @@ export interface CenterFeeSet {
   fraisGouterSoirMensuel: number;
   fraisGouterSoirUnitaire: number;
   fraisDeuxGoutersMensuel: number;
+  fraisTransportMensuel: number;
 }
 
 /**
@@ -198,7 +199,8 @@ export const LEGACY_FEE_SERVICE_MAP: Record<keyof CenterFeeSet, { serviceKey: st
   fraisGouterMatinUnitaire: { serviceKey: 'gouter_matin', period: 'unit' },
   fraisGouterSoirMensuel: { serviceKey: 'gouter_apres_midi', period: 'month' },
   fraisGouterSoirUnitaire: { serviceKey: 'gouter_apres_midi', period: 'unit' },
-  fraisDeuxGoutersMensuel: { serviceKey: 'gouter_both', period: 'month' }
+  fraisDeuxGoutersMensuel: { serviceKey: 'gouter_both', period: 'month' },
+  fraisTransportMensuel: { serviceKey: 'transport', period: 'month' }
 };
 
 /** Prix d'un service pour une année (clé composite « service:period »). */
@@ -314,7 +316,8 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
       fraisGouterMatinUnitaire: Number(fb.fraisGouterMatinUnitaire) || 0,
       fraisGouterSoirMensuel: Number(fb.fraisGouterSoirMensuel) || 0,
       fraisGouterSoirUnitaire: Number(fb.fraisGouterSoirUnitaire) || 0,
-      fraisDeuxGoutersMensuel: Number(fb.fraisDeuxGoutersMensuel) || 0
+      fraisDeuxGoutersMensuel: Number(fb.fraisDeuxGoutersMensuel) || 0,
+      fraisTransportMensuel: Number(fb.fraisTransportMensuel) || 0
     };
   }
 
@@ -340,7 +343,8 @@ export function normalizeFeeSet(raw: any, fallback?: Partial<CenterFeeSet> | nul
     fraisGouterMatinUnitaire: getNum('fraisGouterMatinUnitaire', 'frais_gouter_matin_unitaire', undefined, Number(fb.fraisGouterMatinUnitaire) || 0),
     fraisGouterSoirMensuel: getNum('fraisGouterSoirMensuel', 'frais_gouter_soir_mensuel', undefined, Number(fb.fraisGouterSoirMensuel) || 0),
     fraisGouterSoirUnitaire: getNum('fraisGouterSoirUnitaire', 'frais_gouter_soir_unitaire', undefined, Number(fb.fraisGouterSoirUnitaire) || 0),
-    fraisDeuxGoutersMensuel: getNum('fraisDeuxGoutersMensuel', 'frais_deux_gouters_mensuel', undefined, Number(fb.fraisDeuxGoutersMensuel) || 0)
+    fraisDeuxGoutersMensuel: getNum('fraisDeuxGoutersMensuel', 'frais_deux_gouters_mensuel', undefined, Number(fb.fraisDeuxGoutersMensuel) || 0),
+    fraisTransportMensuel: getNum('fraisTransportMensuel', 'frais_transport_mensuel', undefined, Number(fb.fraisTransportMensuel) || 0)
   };
 }
 
@@ -456,7 +460,8 @@ export function getFeesForYear(settings: CenterSettings | null | undefined, year
     fraisAssuranceCoursExternes: 0,
     fraisGouterMatinMensuel: 0, fraisGouterMatinUnitaire: 0,
     fraisGouterSoirMensuel: 0, fraisGouterSoirUnitaire: 0,
-    fraisDeuxGoutersMensuel: 0
+    fraisDeuxGoutersMensuel: 0,
+    fraisTransportMensuel: 0
   };
   const sp = settings?.servicePrices;
   if (!sp) return empty;
@@ -849,6 +854,7 @@ export interface Student {
     gouterMatin?: boolean;
     gouterSoir?: boolean;
     gouterBoth?: boolean;
+    transport?: boolean;
   };
   
   // MODULE 2: Suivi Fees
@@ -867,6 +873,11 @@ export interface Student {
   libraryFees: {
     annualRegistrationFee: number; // ex: 20 DT
     monthlyFee: number;            // ex: 30 DT
+  };
+
+  // MODULE Transport: monthly subscription fee
+  transportFees?: {
+    monthlyFee: number;
   };
 
   // MODULE 6: Meals Config

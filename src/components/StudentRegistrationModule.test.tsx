@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudentRegistrationModule from './StudentRegistrationModule';
-import { Student } from '../types';
+import { Student, initialCenterSettings, getCurrentAcademicYear } from '../types';
 
 vi.mock('./Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
@@ -183,6 +183,36 @@ describe('StudentRegistrationModule remarks alignment — academic-history secti
     expect(saved.etudeFees).toBeUndefined();
     expect(saved.libraryFees).toBeUndefined();
     expect(saved.mealSubscription).toBeUndefined();
+  });
+
+  it('enrolls the student in transport with the monthly fee when the module is enabled', async () => {
+    const onAddStudent = vi.fn();
+    const settings = {
+      ...initialCenterSettings,
+      servicePrices: {
+        [getCurrentAcademicYear()]: { 'transport:month': 45 }
+      }
+    };
+    renderModule({ centerType: 'formation', onAddStudent, enabledModules: ['transport'], settings });
+    await openAddForm();
+
+    const transportLabel = screen.getByText('Transport Scolaire').closest('label')!;
+    const transportCheckbox = transportLabel.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    fireEvent.click(transportCheckbox);
+
+    fireEvent.change(screen.getByPlaceholderText('مثال: ياسين'), { target: { value: 'Yassine' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: الطرابلسي'), { target: { value: 'Trabelsi' } });
+    fireEvent.submit(document.querySelector('form')!);
+
+    const saved = onAddStudent.mock.calls[0][0];
+    expect(saved.enrolledServices.transport).toBe(true);
+    expect(saved.transportFees.monthlyFee).toBe(45);
+  });
+
+  it('hides the transport option when the module is not in the center plan', async () => {
+    renderModule({ enabledModules: ['cantine'] });
+    await openAddForm();
+    expect(screen.queryByText('Transport Scolaire')).toBeNull();
   });
 
   it('keeps stored academicHistory verbatim when editing under a crèche (FR-010)', async () => {

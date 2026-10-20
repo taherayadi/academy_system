@@ -52,6 +52,18 @@ describe('getFeesForYear', () => {
     const fees = getFeesForYear(settings, '2025/2026');
     expect(fees.prixPlatTraiteur).toBeDefined();
   });
+
+  it('resolves the monthly transport fee from servicePrices', () => {
+    const withTransport: CenterSettings = {
+      ...settings,
+      servicePrices: {
+        ...settings.servicePrices,
+        '2025/2026': { ...settings.servicePrices['2025/2026'], 'transport:month': 45 },
+      },
+    };
+    expect(getFeesForYear(withTransport, '2025/2026').fraisTransportMensuel).toBe(45);
+    expect(getFeesForYear(withTransport, '2099/2100').fraisTransportMensuel).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -81,3 +81,28 @@ describe('SettingsModule — decimal goûter pricing (revision D, remark S1)', (
     expect(servicePriceForYear(saved.servicePrices, 'gouter_both', 'month', getCurrentAcademicYear())).toBe(30);
   });
 });
+
+describe('SettingsModule — transport monthly fee', () => {
+  it('hides the transport fee when the module is not in the center plan', () => {
+    renderSettings();
+    expect(document.querySelector('input[data-fee="fraisTransportMensuel"]')).toBeNull();
+  });
+
+  it('saves the transport monthly fee into center service prices', () => {
+    const onUpdate = vi.fn();
+    render(
+      <SettingsModule
+        settings={initialCenterSettings}
+        onUpdateSettings={onUpdate}
+        enabledModules={['transport']}
+      />
+    );
+    const input = document.querySelector('input[data-fee="fraisTransportMensuel"]') as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    fireEvent.change(input!, { target: { value: '50' } });
+    clickSave();
+
+    const saved = onUpdate.mock.calls[0][0] as CenterSettings;
+    expect(servicePriceForYear(saved.servicePrices, 'transport', 'month', getCurrentAcademicYear())).toBe(50);
+  });
+});

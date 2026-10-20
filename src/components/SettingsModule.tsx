@@ -622,6 +622,36 @@ export default function SettingsModule({ settings, onUpdateSettings, onExportDat
               </div>
             )}
 
+            {/* Transport scolaire — uniquement si le module est au plan */}
+            {hasModule('transport') && (
+            <div className="bg-brand-600/[0.04] p-4 rounded-2xl border border-brand-600/20 space-y-3">
+              <span className="text-xs font-extrabold text-brand-700 block border-b border-brand-600/20 pb-1">
+                النقل المدرسي
+              </span>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  الاشتراك الشهري
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    data-fee="fraisTransportMensuel"
+                    value={currentYearFees.fraisTransportMensuel}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => updateFee('fraisTransportMensuel', Number((e.target.value || '').replace(/^0+(\d)/, '$1')) || 0)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold font-mono"
+                  />
+                  <span className="text-xs font-black text-slate-500">د.ت</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-bold mt-1.5">
+                  يُطبّق تلقائياً عند تسجيل التلميذ في النقل.
+                </p>
+              </div>
+            </div>
+            )}
+
             {/* Étude — uniquement si le module est au plan */}
             {hasModule('etude') && (
             <div className="bg-brand-600/5 p-4 rounded-2xl border border-brand-600/20 space-y-3">
