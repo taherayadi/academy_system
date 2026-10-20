@@ -596,9 +596,9 @@ export function paymentMethodKey(method: unknown): string {
 // on livre donc des libellés, comme l'ancien modèle.
 export function paymentMethodLabelKey(method: unknown): string {
   const m = str(method).trim().toLowerCase();
-  if (m === 'cheque') return 'Chèque';
-  if (m === 'transfer') return 'Virement';
-  if (m === 'card') return 'Carte';
+  if (m === 'cheque' || m === 'chèque' || m === 'par chèque' || m === 'par cheque') return 'Chèque';
+  if (m === 'transfer' || m === 'virement') return 'Virement';
+  if (m === 'card' || m === 'carte') return 'Carte';
   if (m === 'cash' || m === 'espèces' || m === 'especes') return 'Espèces';
   return str(method) || 'Espèces';
 }

@@ -646,9 +646,9 @@ export type ChequeReconciliation =
  */
 export function paymentMethodLabel(method: unknown): string {
   const m = typeof method === 'string' ? method.trim().toLowerCase() : '';
-  if (m === 'cheque') return 'Chèque';
-  if (m === 'transfer') return 'Virement';
-  if (m === 'card') return 'Carte';
+  if (m === 'cheque' || m === 'chèque' || m === 'par chèque' || m === 'par cheque') return 'Chèque';
+  if (m === 'transfer' || m === 'virement') return 'Virement';
+  if (m === 'card' || m === 'carte') return 'Carte';
   return 'Espèces'; // 'cash', 'espèces', valeur absente/inconnue
 }
 

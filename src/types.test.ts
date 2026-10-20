@@ -10,11 +10,31 @@ import {
   buildExternalGradeOptions,
   servicePriceForYear,
   withServicePrice,
+  paymentMethodLabel,
   APP_SUBJECTS,
   type CenterSettings,
   type Student,
   type CenterFeeSet,
 } from './types';
+
+// ---------------------------------------------------------------------------
+// paymentMethodLabel (receipt display)
+// ---------------------------------------------------------------------------
+describe('paymentMethodLabel', () => {
+  it('keeps cheque payments labelled Chèque (accented and DB key forms)', () => {
+    expect(paymentMethodLabel('Chèque')).toBe('Chèque');
+    expect(paymentMethodLabel('chèque')).toBe('Chèque');
+    expect(paymentMethodLabel('cheque')).toBe('Chèque');
+    expect(paymentMethodLabel('Par chèque')).toBe('Chèque');
+  });
+
+  it('keeps cash, transfer and card labels distinct', () => {
+    expect(paymentMethodLabel('Espèces')).toBe('Espèces');
+    expect(paymentMethodLabel('cash')).toBe('Espèces');
+    expect(paymentMethodLabel('Virement')).toBe('Virement');
+    expect(paymentMethodLabel('Carte')).toBe('Carte');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // getFeesForYear (vue legacy sur servicePrices — nouveau schéma)

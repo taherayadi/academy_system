@@ -105,6 +105,30 @@ describe('TransportSubscriptionModule', () => {
     });
   });
 
+  it('affiche Chèque sur le reçu quand la mensualité est payée par chèque', () => {
+    const onRecordPayment = vi.fn();
+    render(
+      <TransportSubscriptionModule
+        students={[makeStudent()]}
+        settings={makeSettings()}
+        onUpdateStudent={vi.fn()}
+        onRecordPayment={onRecordPayment}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('transport-month-st_1-Octobre'));
+    fireEvent.click(screen.getByText('شيك (Par Chèque)'));
+    fireEvent.change(screen.getByPlaceholderText('رقم الشيك'), { target: { value: 'CHQ-123' } });
+    fireEvent.click(screen.getByTestId('transport-pay-submit'));
+
+    expect(onRecordPayment).toHaveBeenCalledTimes(1);
+    expect(onRecordPayment.mock.calls[0][1]).toMatchObject({
+      method: 'Chèque',
+      chequeNumber: 'CHQ-123',
+    });
+    expect(screen.getByText('Chèque')).toBeTruthy();
+  });
+
   it('inscrit un élève au transport avec le tarif mensuel configuré', () => {
     const onUpdateStudent = vi.fn();
     const enrolled = makeStudent();
