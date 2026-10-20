@@ -1,4 +1,7 @@
-import { Env, json, readBody, getContextCenterId, str, num } from './_lib';
+import { Env, json, readBody, getContextCenterId } from './_lib';
+
+const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0) || 0);
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
 function validDate(d: any): boolean {
   return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -36,7 +39,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!body || typeof body !== 'object') return json({ error: 'بيانات غير صالحة.' }, 400);
 
     const id = str(body.id) || crypto.randomUUID();
-    const studentId = str(body.studentId);
+    const studentId = str(body.studentId ?? body.student_id);
     const serviceKey = str(body.serviceKey || body.service_key);
     const schoolYear = str(body.schoolYear || body.school_year);
     const billingMode = str(body.billingMode || body.billing_mode) || 'subscription';

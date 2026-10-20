@@ -1,4 +1,4 @@
-import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate } from './types';
+import { CenterSettings, Student, StudentUpdate, StaffMember, EtudeSlot, ExternalCourse, ExternalCourseSession, MealPlanDay, CenterExpense, TimesheetEntry, ExternalStudentRegister, RevisionSeance, RevisionSeanceStudent, UserAccount, StudentTimeSheet, StudentAttendanceRecord, Formation, FormationStudent, FormationSeance, CenterTenant, MealForfaitClosure, RenewalRequest, PlanHistoryEntry, SchoolEvent, EventParticipant, Activity, SkillEvaluation, Skill, PaymentRecord, LeaveRequest, StaffAdvance, StaffRequestStatus, PaySlip, MealAttendanceInput, MealAttendanceKey, MealEnrollmentUpdate, StudentServiceEnrollment, StudentServiceEnrollmentInput, StudentServiceEnrollmentPatch } from './types';
 
 
 const API_BASE = '/api';
@@ -107,6 +107,11 @@ async function putDomain(path: string, body: unknown, defaultErrMsg: string): Pr
 
 /** Generic POST helper for granular domain endpoints. */
 async function postDomain(path: string, body: unknown, defaultErrMsg: string): Promise<void> {
+  await postDomainJson(path, body, defaultErrMsg);
+}
+
+/** POST helper returning the JSON response (used when the server assigns an id). */
+async function postDomainJson<T>(path: string, body: unknown, defaultErrMsg: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: authHeaders(true),
@@ -117,6 +122,11 @@ async function postDomain(path: string, body: unknown, defaultErrMsg: string): P
   if (!res.ok) {
     const data: { error?: string } = await res.json().catch(() => ({}));
     throw new Error(data.error || defaultErrMsg);
+  }
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return {} as T;
   }
 }
 
@@ -366,6 +376,51 @@ export async function deleteMealAttendanceApi(key: MealAttendanceKey): Promise<v
 /** Inscription/désinscription repas & goûter — sans PUT élève. */
 export async function updateMealEnrollmentApi(update: MealEnrollmentUpdate | MealEnrollmentUpdate[]): Promise<void> {
   return putDomain('/meal-enrollments', update, 'تعذر حفظ inscription المطعم.');
+}
+
+
+/**
+ * CRUD des lignes `student_service_enrollments` : une inscription = un
+ * service + une année + une période de validité (`valid_from` / `valid_to`).
+ *   GET    /api/student-service-enrollments?studentId=&serviceKey=&schoolYear=
+ *   POST   création (id serveur si absent)
+ *   PUT    mise à jour partielle
+ *   DELETE ?id= suppression
+ */
+export async function fetchStudentServiceEnrollmentsApi(filter?: {
+  studentId?: string; serviceKey?: string; schoolYear?: string;
+}): Promise<StudentServiceEnrollment[]> {
+  const params = new URLSearchParams();
+  if (filter?.studentId) params.set('studentId', filter.studentId);
+  if (filter?.serviceKey) params.set('serviceKey', filter.serviceKey);
+  if (filter?.schoolYear) params.set('schoolYear', filter.schoolYear);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const rows = await getDomain<any[]>(`/student-service-enrollments${suffix}`, 'تعذر تحميل تسجيلات الخدمات.');
+  return (rows || []).map(r => ({
+    id: r.id,
+    studentId: r.student_id ?? r.studentId,
+    serviceKey: r.service_key ?? r.serviceKey,
+    schoolYear: r.school_year ?? r.schoolYear,
+    billingMode: r.billing_mode ?? r.billingMode,
+    monthlyPrice: r.monthly_price ?? r.monthlyPrice ?? null,
+    annualPrice: r.annual_price ?? r.annualPrice ?? null,
+    unitPrice: r.unit_price ?? r.unitPrice ?? null,
+    validFrom: r.valid_from ?? r.validFrom,
+    validTo: r.valid_to ?? r.validTo ?? null
+  }));
+}
+
+export async function createStudentServiceEnrollmentApi(input: StudentServiceEnrollmentInput): Promise<string | undefined> {
+  const data = await postDomainJson<{ id?: string }>('/student-service-enrollments', input, 'تعذر إنشاء تسجيل الخدمة.');
+  return data?.id;
+}
+
+export async function updateStudentServiceEnrollmentApi(patch: StudentServiceEnrollmentPatch): Promise<void> {
+  return putDomain('/student-service-enrollments', patch, 'تعذر تحديث تسجيل الخدمة.');
+}
+
+export async function deleteStudentServiceEnrollmentApi(id: string): Promise<void> {
+  return deleteDomain(`/student-service-enrollments?id=${encodeURIComponent(id)}`, 'تعذر حذف تسجيل الخدمة.');
 }
 
 

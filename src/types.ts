@@ -721,6 +721,51 @@ export interface MealEnrollmentUpdate {
 }
 
 
+/**
+ * Ligne de la table `student_service_enrollments` (inscription d'un élève à
+ * un service, avec sa période de validité et ses prix).
+ */
+export interface StudentServiceEnrollment {
+  id: string;
+  studentId: string;
+  serviceKey: string;
+  schoolYear: string;
+  billingMode: 'subscription' | 'unit';
+  monthlyPrice?: number | null;
+  annualPrice?: number | null;
+  unitPrice?: number | null;
+  validFrom: string;
+  validTo?: string | null;
+}
+
+/** Création d'une inscription de service — POST /api/student-service-enrollments. */
+export interface StudentServiceEnrollmentInput {
+  id?: string;
+  studentId: string;
+  serviceKey: string;
+  schoolYear: string;
+  billingMode?: 'subscription' | 'unit';
+  monthlyPrice?: number | null;
+  annualPrice?: number | null;
+  unitPrice?: number | null;
+  validFrom: string;
+  validTo?: string | null;
+}
+
+/** Mise à jour partielle — PUT /api/student-service-enrollments. */
+export interface StudentServiceEnrollmentPatch {
+  id: string;
+  serviceKey?: string;
+  schoolYear?: string;
+  billingMode?: 'subscription' | 'unit';
+  monthlyPrice?: number | null;
+  annualPrice?: number | null;
+  unitPrice?: number | null;
+  validFrom?: string;
+  validTo?: string | null;
+}
+
+
 export interface StudentRegistration {
   date: string;
   location: string;

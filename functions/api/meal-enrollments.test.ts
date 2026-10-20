@@ -42,6 +42,20 @@ beforeEach(() => {
       UNIQUE (student_id, service_key, school_year, valid_from),
       FOREIGN KEY (center_id, student_id) REFERENCES students(center_id, id) ON DELETE CASCADE
     ) STRICT;
+    CREATE TABLE center_service_prices (
+      center_id TEXT NOT NULL,
+      school_year TEXT NOT NULL,
+      service_key TEXT NOT NULL,
+      billing_period TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      price REAL NOT NULL,
+      traiteur_share REAL
+    ) STRICT;
+    INSERT INTO center_service_prices (center_id, school_year, service_key, billing_period, valid_from, price)
+      VALUES ('c1', '2026/2027', 'gouter_matin', 'month', '2026-09-01', 45),
+             ('c1', '2026/2027', 'gouter_matin', 'unit', '2026-09-01', 3),
+             ('c1', '2026/2027', 'gouter_apres_midi', 'month', '2026-09-01', 40),
+             ('c1', '2026/2027', 'gouter_apres_midi', 'unit', '2026-09-01', 2.5);
   `);
   sqlite.prepare('INSERT INTO students (id, center_id) VALUES (?, ?)').run(STUDENT, CENTER);
   sqlite.prepare('INSERT INTO students (id, center_id) VALUES (?, ?)').run(STUDENT_2, CENTER);
@@ -118,6 +132,14 @@ describe('PUT /api/meal-enrollments', () => {
     expect(rows().map(r => r.service_key)).toEqual(['gouter_apres_midi', 'gouter_matin', 'lunch']);
     await onRequestPut(ctx({ studentId: STUDENT, schoolYear: YEAR, gouterMatin: false, gouterSoir: false }));
     expect(rows().map(r => r.service_key)).toEqual(['lunch']);
+  });
+
+  it('reprend les prix mensuel et unitaire du Goûter depuis les tarifs du centre', async () => {
+    const res = await onRequestPut(ctx({ studentId: STUDENT, schoolYear: YEAR, gouterMatin: true, gouterSoir: true }));
+    expect(res.status).toBe(200);
+    const byService = Object.fromEntries(rows().map(r => [r.service_key, r]));
+    expect(byService.gouter_matin).toMatchObject({ monthly_price: 45, unit_price: 3 });
+    expect(byService.gouter_apres_midi).toMatchObject({ monthly_price: 40, unit_price: 2.5 });
   });
 
   it('accepte un tableau pour l’inscription en masse', async () => {

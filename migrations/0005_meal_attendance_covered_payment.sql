@@ -69,7 +69,35 @@ WHERE status = 'covered_by_subscription'
 -- 4bis) Même règle pour les anciens pointages unitaires marqués 'paid'
 --      sans paid_payment_id. On tente d'abord de retrouver le paiement
 --      unitaire du même jour (period_month NULL).
-v
+UPDATE meal_attendances
+SET paid_payment_id = (
+  SELECT p.id
+  FROM payments p
+  WHERE p.center_id = meal_attendances.center_id
+    AND p.student_id = meal_attendances.student_id
+    AND p.date = meal_attendances.date
+    AND p.period_month IS NULL
+    AND p.billing_period = 'unit'
+    AND p.is_refund = 0
+    AND p.amount > 0
+    AND (
+      (meal_attendances.service_key = 'lunch' AND p.service_key = 'lunch')
+      OR (
+        meal_attendances.service_key IN ('gouter_matin', 'gouter_apres_midi')
+        AND p.service_key IN ('gouter_matin', 'gouter_apres_midi', 'gouter_both')
+      )
+    )
+  ORDER BY p.created_at DESC
+  LIMIT 1
+)
+WHERE status = 'paid'
+  AND paid_payment_id IS NULL;
+
+UPDATE meal_attendances
+SET status = 'unpaid'
+WHERE status = 'paid'
+  AND paid_payment_id IS NULL;
+
 -- 5) Le pointage est exposé par la vue v_meal_center_income. SQLite refuse
 --    le RENAME tant que cette vue pointe vers l'ancienne table : on la
 --    recrée après la reconstruction (même définition que la production).

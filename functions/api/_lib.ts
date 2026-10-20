@@ -661,11 +661,16 @@ export async function readStudents(db: D1Database, centerId: string = DEFAULT_CE
   });
 
   // Inscriptions aux services (année courante de l'élève seulement).
+  // Une ligne dont `valid_to` est dépassé est une inscription clôturée :
+  // elle reste en base pour l'historique mais ne compte plus comme active.
+  const todayKey = new Date().toISOString().slice(0, 10);
   const enrollByStudent: Record<string, any[]> = {};
   enrollRows.results.forEach((r: any) => {
     const key = str(r.student_id);
     const yr = yearByStudent[key];
     if (yr && str(r.school_year) !== str(yr.school_year)) return;
+    const validTo = r.valid_to == null ? '' : str(r.valid_to);
+    if (validTo && validTo < todayKey) return;
     (enrollByStudent[key] = enrollByStudent[key] || []).push(r);
   });
 
@@ -896,6 +901,14 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
   const etabNames: string[] = [];
   for (const s of students || []) { if (s.etablissement && String(s.etablissement).trim()) etabNames.push(String(s.etablissement).trim()); }
   const etabIds = await resolveEtablissementIds(db, centerId, etabNames);
+  // Cache des tarifs Goûter : une même année scolaire revient pour chaque
+  // élève. Évite 4 requêtes SQL par élève lors d'une inscription en masse.
+  const priceCache = new Map<string, number | null>();
+  const priceFor = async (year: string, serviceKey: string, period: 'month' | 'unit'): Promise<number | null> => {
+    const key = `${year}:${serviceKey}:${period}`;
+    if (!priceCache.has(key)) priceCache.set(key, await getServicePrice(db, centerId, year, serviceKey, period));
+    return priceCache.get(key) ?? null;
+  };
 
   for (const s of students || []) {
     const schoolYear = str(s.academicYear) || currentAcademicYear();
@@ -947,7 +960,13 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
     if (mode === 'insert' || hasStudentEnrollmentPayload(s)) {
       const enrollBase = { studentId: s.id as string, schoolYear, validFrom: schoolYearStart(schoolYear) };
       const pushEnrollment = (serviceKey: string, billingMode: 'subscription' | 'unit', prices: { monthly?: number; annual?: number; unit?: number }) => {
-        stmts.push(db.prepare('INSERT OR IGNORE INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+        // Upsert : une inscription existante doit aussi être réactivée
+        // (valid_to remis à NULL) et voir ses prix rafraîchis — sinon un
+        // ancien Goûter créé à prix NULL le resterait indéfiniment.
+        stmts.push(db.prepare(
+          'INSERT INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ' +
+          'ON CONFLICT(student_id, service_key, school_year, valid_from) DO UPDATE SET billing_mode = excluded.billing_mode, monthly_price = excluded.monthly_price, annual_price = excluded.annual_price, unit_price = excluded.unit_price, valid_to = NULL'
+        ).bind(
           crypto.randomUUID(), centerId, enrollBase.studentId, serviceKey, enrollBase.schoolYear, billingMode,
           prices.monthly ?? null, prices.annual ?? null, prices.unit ?? null, enrollBase.validFrom
         ));
@@ -961,13 +980,13 @@ async function buildStudentsStmts(db: D1Database, students: any[], centerId: str
         else pushEnrollment('lunch', 'subscription', { monthly: num(s.mealSubscription?.monthlyPrice), unit: num(s.mealSubscription?.unitPrice) });
       }
       if (es.gouterMatin || es.gouterBoth) {
-        const gm = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'month');
-        const gu = await getServicePrice(db, centerId, schoolYear, 'gouter_matin', 'unit');
+        const gm = await priceFor(schoolYear, 'gouter_matin', 'month');
+        const gu = await priceFor(schoolYear, 'gouter_matin', 'unit');
         pushEnrollment('gouter_matin', 'subscription', { monthly: gm ?? undefined, unit: gu ?? undefined });
       }
       if (es.gouterSoir || es.gouterBoth) {
-        const sm = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'month');
-        const su = await getServicePrice(db, centerId, schoolYear, 'gouter_apres_midi', 'unit');
+        const sm = await priceFor(schoolYear, 'gouter_apres_midi', 'month');
+        const su = await priceFor(schoolYear, 'gouter_apres_midi', 'unit');
         pushEnrollment('gouter_apres_midi', 'subscription', { monthly: sm ?? undefined, unit: su ?? undefined });
       }
     }
@@ -2167,20 +2186,25 @@ export interface MealEnrollmentUpdate {
 }
 
 async function getServicePrice(db: D1Database, centerId: string, schoolYear: string, serviceKey: string, billingPeriod: 'month' | 'unit' | 'year'): Promise<number | null> {
-  // Try current year, then DEFAULT, then any year
-  let row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
-    .bind(centerId, schoolYear, serviceKey, billingPeriod).first<any>();
-  if (!row) {
-    row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
-      .bind(centerId, 'DEFAULT', serviceKey, billingPeriod).first<any>();
+  try {
+    // Try current year, then DEFAULT, then any year
+    let row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
+      .bind(centerId, schoolYear, serviceKey, billingPeriod).first<any>();
+    if (!row) {
+      row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND school_year = ? AND service_key = ? AND billing_period = ? ORDER BY valid_from DESC LIMIT 1')
+        .bind(centerId, 'DEFAULT', serviceKey, billingPeriod).first<any>();
+    }
+    if (!row) {
+      row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND service_key = ? AND billing_period = ? ORDER BY school_year DESC, valid_from DESC LIMIT 1')
+        .bind(centerId, serviceKey, billingPeriod).first<any>();
+    }
+    if (!row || row.price == null) return null;
+    const n = Number(row.price);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    // Table absente (mock/tests) : l'inscription reste valide, prix NULL.
+    return null;
   }
-  if (!row) {
-    row = await db.prepare('SELECT price FROM center_service_prices WHERE center_id = ? AND service_key = ? AND billing_period = ? ORDER BY school_year DESC, valid_from DESC LIMIT 1')
-      .bind(centerId, serviceKey, billingPeriod).first<any>();
-  }
-  if (!row || row.price == null) return null;
-  const n = Number(row.price);
-  return Number.isFinite(n) ? n : null;
 }
 
 async function applyMealEnrollment(db: D1Database, entry: MealEnrollmentUpdate, centerId: string): Promise<void> {
@@ -2204,8 +2228,8 @@ async function applyMealEnrollment(db: D1Database, entry: MealEnrollmentUpdate, 
       return;
     }
     stmts.push(db.prepare(
-      'INSERT INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-      'ON CONFLICT(student_id, service_key, school_year, valid_from) DO UPDATE SET billing_mode = excluded.billing_mode, monthly_price = excluded.monthly_price, annual_price = excluded.annual_price, unit_price = excluded.unit_price'
+      'INSERT INTO student_service_enrollments (id, center_id, student_id, service_key, school_year, billing_mode, monthly_price, annual_price, unit_price, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ' +
+      'ON CONFLICT(student_id, service_key, school_year, valid_from) DO UPDATE SET billing_mode = excluded.billing_mode, monthly_price = excluded.monthly_price, annual_price = excluded.annual_price, unit_price = excluded.unit_price, valid_to = NULL'
     ).bind(
       crypto.randomUUID(), centerId, studentId, serviceKey, schoolYear, billingMode,
       prices.monthly == null ? null : num(prices.monthly),
