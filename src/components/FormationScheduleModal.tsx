@@ -287,7 +287,6 @@ export default function FormationScheduleModal({
       );
       return;
     }
-    const distinctDates = new Set(valid.map(r => r.date)).size;
     const normalized = valid.map(r => ({
       ...r,
       // Le libellé du jour est TOUJOURS dérivé de la date réelle enregistrée.
@@ -297,9 +296,6 @@ export default function FormationScheduleModal({
     onSave(normalized);
     onClose();
     toast.success('تم حفظ جدول الحصص للتكوين');
-    if (distinctDates === 1 && valid.length > 1) {
-      toast.error('انتبه: جميع الحصص في نفس التاريخ — يُفضَّل توزيعها على تواريخ مختلفة.');
-    }
   };
 
   return (
