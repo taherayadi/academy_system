@@ -1481,24 +1481,28 @@ export interface Formation {
 
 export interface FormationSeance {
   id: string;
-  day: string;          // e.g. الأثنين
+  // Date réelle de la séance (YYYY-MM-DD). Le planning part du jour + de la
+  // date de début de la formation ; `day` n'est que le libellé dérivé.
+  // Optionnel pour les anciennes grilles enregistrées sans date.
+  date?: string;
+  day: string;          // e.g. الأربعاء (dérivé de `date`)
   startTime: string;    // e.g. 09:00
   endTime: string;      // e.g. 11:00
   matiere: string;      // subject name
   description?: string;
   // IDs of the students attending this seance. A student cannot attend two
-  // overlapping seances on the same day.
+  // overlapping seances at the same date/time.
   students?: string[];
   // Salle (قاعة) chosen from the center's managed list. Availability is
-  // checked against all formations' schedules (same day + time overlap).
+  // checked against all formations' schedules (same date + time overlap).
   salle?: string;
 }
 
 
 /**
  * A salle (classroom/room) managed by the center (gestion des salles).
- * Referenced by name from FormationSeance.salle; availability is derived
- * from the formations' schedules, never stored.
+ * Referenced by id from FormationSeance.salle; availability is derived from
+ * the formations' schedules (same real date + time overlap), never stored.
  */
 export interface Salle {
   id: string;

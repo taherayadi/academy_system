@@ -21,7 +21,8 @@ import {
   ChevronRight,
   Printer,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  DoorOpen
 } from 'lucide-react';
 import {
   Formation,
@@ -43,7 +44,7 @@ import { useToast } from './Toast';
 import { fetchSubjectsApi, createSubjectApi } from '../api';
 import DateField from './DateField';
 import FormationScheduleModal from './FormationScheduleModal';
-import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
+import { groupFormationSeances } from '../utils/formationSchedule';
 import { instalmentsOf, hasUncashedCheque, collectedAmount, formationPaymentRowId } from '../utils/formationPayment';
 
 // A formation fee may be paid in several instalments with DIFFERENT methods
@@ -948,10 +949,10 @@ export default function FormationModule({
                   </div>
                 </div>
 
-                {/* Weekly schedule */}
+                {/* Dated schedule: one card per actual date, from formation start */}
                 <div className="space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-700">جدول الحصص الأسبوعي:</span>
+                    <span className="text-xs font-black text-slate-700">جدول الحصص:</span>
                     <button
                       onClick={() => setPrintingSchedule(selectedFormation)}
                       disabled={!selectedFormation.schedule?.length}
@@ -963,44 +964,46 @@ export default function FormationModule({
                   </div>
                   {(selectedFormation.schedule || []).length === 0 ? (
                     <p className="text-[11px] text-slate-400 font-bold">
-                      لا يوجد جدول بعد. اضغط "جدول الحصص" لإضافة حصص الأسبوع.
+                      لا يوجد جدول بعد. اضغط "جدول الحصص" لإضافة حصص في تواريخ فترة التكوين.
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {FORMATION_WORK_DAYS.map(day => {
-                        const daySeances = (Array.isArray(selectedFormation.schedule) ? selectedFormation.schedule : []).filter(s => s.day === day);
-                        return (
-                          <div key={day} className="bg-brand-600/[0.06] rounded-xl p-2.5 border border-brand-600/20">
-                            <span className="text-[11px] font-black text-brand-700 block mb-1.5">{day}</span>
-                            {daySeances.length === 0 ? (
-                              <span className="text-[10px] text-slate-400 font-bold">—</span>
-                            ) : (
-                              <div className="space-y-1">
-                                {daySeances.map(se => (
-                                  <div key={se.id} className="bg-white rounded-lg border border-brand-600/20 p-2 space-y-1">
-                                    <div className="flex items-center justify-between text-[11px]">
-                                      <span className="font-black text-slate-800">{se.matiere}</span>
-                                      <span className="font-mono text-[10px] text-slate-500">{se.startTime} - {se.endTime}</span>
-                                    </div>
-                                    {(se.students || []).length > 0 && (
-                                      <div className="flex flex-wrap gap-1">
-                                        {se.students!.map(sid => (
-                                          <span
-                                            key={sid}
-                                            className="px-1.5 py-0.5 bg-brand-600/[0.06] border border-brand-600/20 text-brand-700 rounded-full text-[9px] font-bold"
-                                          >
-                                            {(selectedFormation.students.find(s => s.id === sid)?.studentName) || 'تلميذ'}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
+                      {groupFormationSeances(selectedFormation.schedule).map(group => (
+                        <div key={group.key} className="bg-brand-600/[0.06] rounded-xl p-2.5 border border-brand-600/20">
+                          <span className="text-[11px] font-black text-brand-700 block mb-1.5">{group.label}</span>
+                          <div className="space-y-1">
+                            {group.seances.map(se => {
+                              const salleName = se.salle
+                                ? (salles || []).find(s => s.id === se.salle)?.name
+                                : undefined;
+                              return (
+                                <div key={se.id} className="bg-white rounded-lg border border-brand-600/20 p-2 space-y-1">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="font-black text-slate-800">{se.matiere}</span>
+                                    <span className="font-mono text-[10px] text-slate-500">{se.startTime} - {se.endTime}</span>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                  <div className="flex flex-wrap gap-1">
+                                    {salleName && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-full text-[9px] font-bold">
+                                        <DoorOpen className="h-2.5 w-2.5" />
+                                        {salleName}
+                                      </span>
+                                    )}
+                                    {(se.students || []).map(sid => (
+                                      <span
+                                        key={sid}
+                                        className="px-1.5 py-0.5 bg-brand-600/[0.06] border border-brand-600/20 text-brand-700 rounded-full text-[9px] font-bold"
+                                      >
+                                        {(selectedFormation.students.find(s => s.id === sid)?.studentName) || 'تلميذ'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -2247,6 +2250,11 @@ export default function FormationModule({
           );
           return matched.length ? matched : allStudents;
         };
+        const salleNameById = (id?: string) =>
+          id ? ((salles || []).find(s => s.id === id)?.name || '') : '';
+        // Une ligne par DATE réelle de séance, triée chronologiquement depuis
+        // le début de la formation (plus de grille figée lundi → samedi).
+        const scheduleGroups = groupFormationSeances(f.schedule);
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden">
@@ -2274,7 +2282,7 @@ export default function FormationModule({
                   <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3 mb-4">
                     <div>
                       <p className="text-lg font-black text-brand-600">{settings?.centerName || 'EduSphère'}</p>
-                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">جدول حصص أسبوعي — تكوين: {f.name}</p>
+                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">جدول حصص التكوين — {f.name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-[11px] font-black">الموسم الدراسي: {f.schoolYear}</p>
@@ -2283,47 +2291,42 @@ export default function FormationModule({
                   </div>
 
                   <div className="overflow-x-auto">
-                      <table className="min-w-[560px] w-full border-collapse text-right">
+                      <table className="min-w-[640px] w-full border-collapse text-right">
                         <thead>
                           <tr className="bg-slate-100">
-                            <th className="border border-slate-300 p-2">اليوم</th>
+                            <th className="border border-slate-300 p-2">اليوم والتاريخ</th>
                             <th className="border border-slate-300 p-2">التوقيت</th>
                             <th className="border border-slate-300 p-2">المادة</th>
+                            <th className="border border-slate-300 p-2">القاعة</th>
                             <th className="border border-slate-300 p-2">الأستاذ / التلاميذ</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {FORMATION_WORK_DAYS.map(day => {
-                            const daySeances = (Array.isArray(f.schedule) ? f.schedule : [])
-                              .filter(s => s.day === day)
-                              .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                            if (daySeances.length === 0) {
-                              return (
-                                <tr key={day}>
-                                  <td className="border border-slate-300 p-2 font-bold">{day}</td>
-                                  <td className="border border-slate-300 p-2 text-slate-400" colSpan={3}>لا حصص</td>
-                                </tr>
-                              );
-                            }
-                            return daySeances.map((s, idx) => (
-                              <tr key={`${day}-${idx}`}>
-                                {idx === 0 ? (
-                                  <td className="border border-slate-300 p-2 font-bold align-top" rowSpan={daySeances.length}>{day}</td>
-                                ) : null}
-                                <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
-                                <td className="border border-slate-300 p-2">{s.matiere}</td>
-                                <td className="border border-slate-300 p-2 align-top">
-                                  <div className="font-bold">الأستاذ: ........................................</div>
-                                  <div className="mt-1 space-y-0.5">
-                                    {studentsForSeance(s.matiere).map((st, si) => (
-                                      <div key={st.id ?? si}>• {st.studentName}</div>
-                                    ))}
-                                  </div>
-                                  <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
+                          {scheduleGroups.length === 0 ? (
+                            <tr>
+                              <td className="border border-slate-300 p-2 text-slate-400" colSpan={5}>لا حصص</td>
+                            </tr>
+                          ) : scheduleGroups.map(group => group.seances.map((s, idx) => (
+                            <tr key={`${group.key}-${s.id || idx}`}>
+                              {idx === 0 ? (
+                                <td className="border border-slate-300 p-2 font-bold align-top whitespace-nowrap" rowSpan={group.seances.length}>
+                                  {group.label}
                                 </td>
-                              </tr>
-                            ));
-                          })}
+                              ) : null}
+                              <td className="border border-slate-300 p-2 font-mono whitespace-nowrap">{s.startTime} - {s.endTime}</td>
+                              <td className="border border-slate-300 p-2">{s.matiere}</td>
+                              <td className="border border-slate-300 p-2 whitespace-nowrap">{salleNameById(s.salle) || '—'}</td>
+                              <td className="border border-slate-300 p-2 align-top">
+                                <div className="font-bold">الأستاذ: ........................................</div>
+                                <div className="mt-1 space-y-0.5">
+                                  {studentsForSeance(s.matiere).map((st, si) => (
+                                    <div key={st.id ?? si}>• {st.studentName}</div>
+                                  ))}
+                                </div>
+                                <div className="mt-1 text-slate-400">تلاميذ إضافيون: ........................................</div>
+                              </td>
+                            </tr>
+                          )))}
                         </tbody>
                       </table>
                   </div>

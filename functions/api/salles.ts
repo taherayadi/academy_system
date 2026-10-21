@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   } catch (err: any) {
     console.error('Error:', err);
     const message: string = err instanceof Error ? err.message : '';
-    const bad = message.includes('مفقود') || message.includes('مطلوب') || message.includes('غير موجود') || message.includes('غير صالحة') || message.includes('مسبقاً');
+    const bad = message.includes('مفقود') || message.includes('مطلوب') || message.includes('غير موجود') || message.includes('غير صالحة') || message.includes('مسبقاً') || message.includes('سالبة');
     return json({ error: err?.message || 'تعذر حفظ بيانات القاعة.' }, bad ? 400 : 500);
   }
 };
@@ -41,7 +41,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return json({ ok: true });  } catch (err: any) {
     console.error('Error:', err);
     const message: string = err instanceof Error ? err.message : '';
-    const bad = message.includes('مفقود') || message.includes('مطلوب') || message.includes('غير موجود') || message.includes('غير صالحة') || message.includes('مسبقاً');
+    const bad = message.includes('مفقود') || message.includes('مطلوب') || message.includes('غير موجود') || message.includes('غير صالحة') || message.includes('مسبقاً') || message.includes('سالبة');
     return json({ error: err?.message || 'تعذر تحديث بيانات القاعة.' }, bad ? 400 : 500);
   }
 };

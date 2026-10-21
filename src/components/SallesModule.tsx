@@ -92,7 +92,14 @@ export default function SallesModule({
       toast.error('يوجد مسبقاً قاعة بهذا الاسم في هذا المركز.');
       return;
     }
-    const capacity = Math.max(0, Math.round(Number(formCapacity) || 0));
+    // La capacité peut être 0 (non renseignée) mais JAMAIS négative.
+    const rawCapacity = String(formCapacity).trim();
+    const parsedCapacity = rawCapacity === '' ? 0 : Number(rawCapacity);
+    if (!Number.isFinite(parsedCapacity) || parsedCapacity < 0) {
+      toast.error('السعة الاستيعابية لا يمكن أن تكون سالبة.');
+      return;
+    }
+    const capacity = Math.round(parsedCapacity);
     const record: Salle = {
       id: editingId || `salle_${crypto.randomUUID()}`,
       name,
@@ -195,7 +202,7 @@ export default function SallesModule({
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-black text-slate-900 truncate">{salle.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400">{usageCount(salle.id)} حصة تكوين بالأسبوع</p>
+                      <p className="text-[10px] font-bold text-slate-400">{usageCount(salle.id)} حصة تكوين مبرمجة</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -257,7 +264,7 @@ export default function SallesModule({
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <form onSubmit={handleSave} className="p-5 space-y-3">
+              <form onSubmit={handleSave} noValidate className="p-5 space-y-3">
                 <div>
                   <label className="block text-[11px] font-black text-slate-600 mb-1">اسم القاعة *</label>
                   <input
@@ -273,6 +280,7 @@ export default function SallesModule({
                   <input
                     type="number"
                     min={0}
+                    step={1}
                     value={formCapacity}
                     onChange={e => setFormCapacity(e.target.value)}
                     placeholder="مثال: 30"

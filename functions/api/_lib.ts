@@ -1479,8 +1479,11 @@ export async function createSalle(db: D1Database, salle: any, centerId: string =
   if (!id) throw new Error('معرّف القاعة مفقود.');
   const name = str(salle?.name);
   if (!name) throw new Error('اسم القاعة مطلوب.');
-  const capacity = num(salle?.capacity);
-  if (capacity < 0) throw new Error('بيانات القاعة غير صالحة.');
+  const rawCapacity = num(salle?.capacity);
+  if (!Number.isFinite(rawCapacity) || rawCapacity < 0) {
+    throw new Error('السعة الاستيعابية لا يمكن أن تكون سالبة.');
+  }
+  const capacity = Math.round(rawCapacity);
   // Un id déjà pris par un AUTRE centre ne doit pas être détourné.
   const existingId = await db.prepare('SELECT center_id FROM salles WHERE id = ?').bind(id).first<any>();
   if (existingId && str(existingId.center_id) !== centerId) throw new Error('القاعة غير موجودة في هذا المركز.');

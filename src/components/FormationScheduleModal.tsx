@@ -12,7 +12,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Formation, FormationSeance, Salle } from '../types';
-import { FORMATION_WORK_DAYS } from '../utils/formationSchedule';
+import { arabicWeekday, buildFormationDateOptions, formatFormationDate, parseIsoDate, seancesConflict } from '../utils/formationSchedule';
 import { useToast } from './Toast';
 
 interface FormationScheduleModalProps {
@@ -22,7 +22,7 @@ interface FormationScheduleModalProps {
   onSave: (schedule: FormationSeance[]) => void;
   // Salles gérées par le centre (gestion des salles) + TOUTES les formations :
   // la disponibilité d'une salle est déduite des grilles horaires qui la
-  // mentionnent (même jour, créneaux qui se chevauchent).
+  // mentionnent (même date réelle, créneaux qui se chevauchent).
   salles?: Salle[];
   allFormations?: Formation[];
 }
@@ -33,24 +33,6 @@ for (let h = 8; h <= 17; h++) {
     TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:${m}`);
   }
 }
-
-const toMin = (t: string) => {
-  const m = String(t).match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return NaN;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-};
-
-const overlaps = (aS: number, aE: number, bS: number, bE: number) => !isNaN(aS) && !isNaN(aE) && aS < bE && bS < aE;
-
-// Deux plages de DATES (YYYY-MM-DD, comparable lexicographiquement) se
-// chevauchent si chaque début précède la fin de l'autre. Une salle n'est
-// occupée que si les DEUX formations tournent à la même période : samedi 9h
-// dans la salle A pour un formation du 10/10 au 20/10 reste libre pour un
-// formation du 25/10 au 30/10, même jour même heure.
-const dateRangesOverlap = (aStart?: string, aEnd?: string, bStart?: string, bEnd?: string) => {
-  if (!aStart || !aEnd || !bStart || !bEnd) return false;
-  return aStart <= bEnd && bStart <= aEnd;
-};
 
 export default function FormationScheduleModal({
   open,
@@ -87,17 +69,45 @@ export default function FormationScheduleModal({
     return map;
   }, [salles]);
 
+  // Toutes les dates réelles de la formation, du jour de début au jour de fin.
+  // La première option EST le jour + la date de début (ex. الأربعاء 21/10/2026).
+  const dateOptions = useMemo(
+    () => buildFormationDateOptions(formation?.startDate, formation?.endDate),
+    [formation?.startDate, formation?.endDate]
+  );
+
   useEffect(() => {
     if (open) {
       setError(null);
-      setDraft(
-        (Array.isArray(formation?.schedule) ? formation.schedule : []).map(s => ({
-          ...s,
-          id: s.id || crypto.randomUUID()
-        }))
-      );
+      const rows: FormationSeance[] = [];
+      (Array.isArray(formation?.schedule) ? formation.schedule : []).forEach(s => {
+        const base: FormationSeance = { ...s, id: s.id || crypto.randomUUID() };
+        if (s.date) {
+          const matched = dateOptions.find(o => o.date === s.date);
+          rows.push({ ...base, day: matched?.day || s.day });
+          return;
+        }
+        // Ancienne séance sans date = planning HEBDOMADAIRE : on la développe
+        // sur toutes les occurrences de son jour dans la période de formation.
+        // Chaque occurrence devient une ligne datée (la première garde l'id
+        // d'origine) — aucune semaine n'est perdue lors de la transition.
+        const occurrences = dateOptions.filter(o => o.day === s.day);
+        if (occurrences.length === 0) {
+          rows.push(base);
+          return;
+        }
+        occurrences.forEach((occurrence, index) => {
+          rows.push({
+            ...base,
+            id: index === 0 ? base.id : crypto.randomUUID(),
+            date: occurrence.date,
+            day: occurrence.day
+          });
+        });
+      });
+      setDraft(rows);
     }
-  }, [open, formation]);
+  }, [open, formation, dateOptions]);
 
   if (!open || !formation) return null;
 
@@ -110,22 +120,21 @@ export default function FormationScheduleModal({
       .map(s => s.id);
   };
 
-  // A student cannot attend two seances that overlap on the same day
+  // A student cannot attend two seances that overlap at the same DATE + time.
+  // The same weekday on another date (mercredi 21/10 vs mercredi 28/10) is fine.
   const findStudentConflicts = (rows: FormationSeance[]) => {
+    const range = { startDate: formation.startDate, endDate: formation.endDate };
     const out: { studentName: string; day: string; firstMatiere: string; secondMatiere: string }[] = [];
     for (let i = 0; i < rows.length; i++) {
       for (let j = i + 1; j < rows.length; j++) {
         const a = rows[i];
         const b = rows[j];
-        if (a.day !== b.day) continue;
-        const aS = toMin(a.startTime), aE = toMin(a.endTime);
-        const bS = toMin(b.startTime), bE = toMin(b.endTime);
-        if (!overlaps(aS, aE, bS, bE)) continue;
+        if (!seancesConflict(a, b, range, range)) continue;
         const shared = (a.students || []).filter(id => (b.students || []).includes(id));
         for (const id of shared) {
           out.push({
             studentName: studentNameById[id] || 'تلميذ',
-            day: a.day,
+            day: a.date ? `${a.day} ${formatFormationDate(a.date)}` : a.day,
             firstMatiere: a.matiere,
             secondMatiere: b.matiere
           });
@@ -137,27 +146,30 @@ export default function FormationScheduleModal({
 
   /**
    * Disponibilité d'UNE salle pour UNE ligne du brouillon :
-   * occupée si (a) une AUTRE ligne du même brouillon l'utilise avec un
-   * créneau qui se chevauche le même jour, ou (b) une séance d'un AUTRE
-   * formation du centre l'occupe (détayée par le nom du formation).
+   * occupée si (a) une AUTRE ligne du même brouillon l'utilise à la même
+   * DATE + créneau, ou (b) une séance d'un AUTRE formation du centre l'occupe
+   * à la même DATE + créneau. Deux formations qui se suivent (21/10 → 30/10
+   * et 02/11 → 10/11) peuvent donc réutiliser la même salle le même jour de
+   * la semaine. Les anciennes séances sans date retombent sur le jour de
+   * semaine + le chevauchement des périodes.
    */
   const salleOccupiersFor = (row: FormationSeance): { formationName: string; matiere?: string }[] => {
-    if (!row.salle || !row.day) return [];
+    if (!row.salle || (!row.day && !row.date)) return [];
+    const ownRange = { startDate: formation.startDate, endDate: formation.endDate };
     const out: { formationName: string; matiere?: string }[] = [];
     // a) conflits internes au brouillon courant
     (draft || []).forEach(other => {
-      if (other.id === row.id || !other.salle || other.salle !== row.salle || other.day !== row.day) return;
-      if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(other.startTime), toMin(other.endTime))) return;
+      if (other.id === row.id || !other.salle || other.salle !== row.salle) return;
+      if (!seancesConflict(row, other, ownRange, ownRange)) return;
       out.push({ formationName: formation.name || 'هذا التكوين', matiere: other.matiere });
     });
-    // b) séances des AUTRES formations — uniquement celles dont la PÉRIODE
-    // (start_date → end_date) chevauche celle du formation courant.
+    // b) séances des AUTRES formations du centre.
     (allFormations || []).forEach(f => {
       if (f.id === formation.id) return;
-      if (!dateRangesOverlap(formation.startDate, formation.endDate, f.startDate, f.endDate)) return;
+      const otherRange = { startDate: f.startDate, endDate: f.endDate };
       (Array.isArray(f.schedule) ? f.schedule : []).forEach(s => {
-        if (!s.salle || s.salle !== row.salle || s.day !== row.day) return;
-        if (!overlaps(toMin(row.startTime), toMin(row.endTime), toMin(s.startTime), toMin(s.endTime))) return;
+        if (!s.salle || s.salle !== row.salle) return;
+        if (!seancesConflict(row, s, ownRange, otherRange)) return;
         out.push({ formationName: f.name || 'تكوين', matiere: s.matiere });
       });
     });
@@ -171,14 +183,15 @@ export default function FormationScheduleModal({
     const out: { salle: string; day: string; occupier: string }[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
-      if (!row.salle || !row.day) continue;
+      if (!row.salle || (!row.day && !row.date)) continue;
+      const when = row.date ? `${row.day} ${formatFormationDate(row.date)}` : row.day;
       for (const occ of salleOccupiersFor(row)) {
-        const key = `${row.salle}|${row.day}|${occ.formationName}|${occ.matiere || ''}`;
+        const key = `${row.salle}|${when}|${occ.formationName}|${occ.matiere || ''}`;
         if (seen.has(key)) continue;
         seen.add(key);
         out.push({
           salle: salleById[row.salle]?.name || 'قاعة',
-          day: row.day,
+          day: when,
           occupier: `${occ.formationName}${occ.matiere ? ` (${occ.matiere})` : ''}`
         });
       }
@@ -206,11 +219,14 @@ export default function FormationScheduleModal({
   };
 
   const addRow = () => {
+    // Première ligne = premier jour de la formation (jour + date réels).
+    const first = dateOptions[0];
     setDraft(prev => [
       ...prev,
       {
         id: crypto.randomUUID(),
-        day: FORMATION_WORK_DAYS[0],
+        date: first?.date,
+        day: first?.day || '',
         startTime: '09:00',
         endTime: '10:30',
         matiere: matieres[0] || '',
@@ -228,15 +244,32 @@ export default function FormationScheduleModal({
       toast.error('الجدول فارغ. أضف حصصاً على الأقل.');
       return;
     }
-    const valid = draft.filter(r => r.day && r.startTime && r.endTime && r.matiere);
-    if (valid.length === 0) {
-      toast.error('ادخل بيانات الحصص بشكل صحيح.');
+    const valid = draft.filter(r => r.date && r.day && r.startTime && r.endTime && r.matiere);
+    if (valid.length === 0 || valid.length !== draft.length) {
+      toast.error('ادخل تاريخ كل حصة ويومها وتوقيتها والمادة بشكل صحيح.');
       return;
     }
-    // Une salle occupée au même créneau ne peut pas être réservée deux fois.
+    // Chaque séance doit tomber DANS la période de la formation.
+    const invalidDate = valid.find(r => {
+      if (!parseIsoDate(r.date)) return true;
+      if (formation.startDate && r.date! < formation.startDate) return true;
+      if (formation.endDate && r.date! > formation.endDate) return true;
+      return false;
+    });
+    if (invalidDate) {
+      toast.error(
+        `تاريخ الحصة (${formatFormationDate(invalidDate.date)}) خارج فترة التكوين` +
+        (formation.startDate || formation.endDate
+          ? ` (${formatFormationDate(formation.startDate)} ← ${formatFormationDate(formation.endDate)}).`
+          : '.')
+      );
+      return;
+    }
+    // Une salle occupée à la même date + créneau ne peut pas être réservée
+    // deux fois, même si le jour de la semaine est identique.
     const salleConflicts = findSalleConflicts(valid);
     if (salleConflicts.length > 0) {
-      const lines = salleConflicts.slice(0, 4).map(c => `قاعة ${c.salle} — يوم ${c.day} (مستأجرة من طرف ${c.occupier})`);
+      const lines = salleConflicts.slice(0, 4).map(c => `قاعة ${c.salle} — ${c.day} (مستأجرة من طرف ${c.occupier})`);
       setError(
         'توفر القاعات:\n' +
         lines.join('\n') +
@@ -246,7 +279,7 @@ export default function FormationScheduleModal({
     }
     const conflicts = findStudentConflicts(valid);
     if (conflicts.length > 0) {
-      const names = [...new Set(conflicts.map(c => `${c.studentName} (${c.firstMatiere} ↔ ${c.secondMatiere} يوم ${c.day})`))];
+      const names = [...new Set(conflicts.map(c => `${c.studentName} (${c.firstMatiere} ↔ ${c.secondMatiere} — ${c.day})`))];
       setError(
         'لا يمكن للتلميذ حضور حسبتين في نفس التوقيت:\n' +
         names.slice(0, 4).join('\n') +
@@ -254,12 +287,18 @@ export default function FormationScheduleModal({
       );
       return;
     }
-    const distinctDays = new Set(valid.map(r => r.day)).size;
-    onSave(valid.map(r => ({ ...r, salle: r.salle || undefined })));
+    const distinctDates = new Set(valid.map(r => r.date)).size;
+    const normalized = valid.map(r => ({
+      ...r,
+      // Le libellé du jour est TOUJOURS dérivé de la date réelle enregistrée.
+      day: arabicWeekday(r.date) || r.day,
+      salle: r.salle || undefined
+    }));
+    onSave(normalized);
     onClose();
     toast.success('تم حفظ جدول الحصص للتكوين');
-    if (distinctDays === 1 && valid.length > 1) {
-      toast.error('انتبه: جميع الحصص في نفس اليوم — يُفضَّل توزيعها على أيام الأسبوع.');
+    if (distinctDates === 1 && valid.length > 1) {
+      toast.error('انتبه: جميع الحصص في نفس التاريخ — يُفضَّل توزيعها على تواريخ مختلفة.');
     }
   };
 
@@ -281,6 +320,9 @@ export default function FormationScheduleModal({
                 {formation.name}
                 {formation.grade ? ` — ${formation.grade}` : ''}
                 {formation.branch ? ` / ${formation.branch}` : ''}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-bold">
+                فترة التكوين: {formatFormationDate(formation.startDate)} ← {formatFormationDate(formation.endDate)}
               </p>
             </div>
           </div>
@@ -321,6 +363,11 @@ export default function FormationScheduleModal({
                 const salleRecord = row.salle ? salleById[row.salle] : null;
                 const studentsCount = (row.students || []).length;
                 const overCapacity = !!salleRecord && salleRecord.capacity > 0 && studentsCount > salleRecord.capacity;
+                // Une ancienne date hors période reste visible pour être
+                // corrigée (sinon le select afficherait une valeur vide).
+                const rowDateOptions = row.date && !dateOptions.some(o => o.date === row.date)
+                  ? [{ date: row.date, day: row.day, label: `${row.day} ${formatFormationDate(row.date)}` }, ...dateOptions]
+                  : dateOptions;
                 return (
                 <div
                   key={row.id}
@@ -328,12 +375,17 @@ export default function FormationScheduleModal({
                 >
                   <div className="grid grid-cols-12 gap-2 items-center">
                     <select
-                      value={row.day}
-                      onChange={e => updateRow(row.id, { day: e.target.value })}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      value={row.date || ''}
+                      onChange={e => {
+                        const option = dateOptions.find(o => o.date === e.target.value);
+                        updateRow(row.id, { date: option?.date, day: option?.day || '' });
+                      }}
+                      className="col-span-12 sm:col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      title="يوم وتاريخ الحصة"
                     >
-                      {FORMATION_WORK_DAYS.map(d => (
-                        <option key={d} value={d}>{d}</option>
+                      <option value="">اليوم والتاريخ...</option>
+                      {rowDateOptions.map(o => (
+                        <option key={o.date} value={o.date}>{o.label}</option>
                       ))}
                     </select>
                     <select
@@ -342,14 +394,14 @@ export default function FormationScheduleModal({
                         const start = e.target.value;
                         updateRow(row.id, { startTime: start, endTime: row.endTime <= start ? (TIME_OPTIONS.find(t => t > start) || '17:00') : row.endTime });
                       }}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-4 sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <select
                       value={row.endTime}
                       onChange={e => updateRow(row.id, { endTime: e.target.value })}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-4 sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       {TIME_OPTIONS.filter(t => t > row.startTime).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -362,7 +414,7 @@ export default function FormationScheduleModal({
                           students: matiereName ? enrolledStudentIdsForMatiere(matiereName) : (row.students || [])
                         });
                       }}
-                      className="col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-4 sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                     >
                       <option value="">المادة...</option>
                       {matieres.map(m => (
@@ -372,7 +424,7 @@ export default function FormationScheduleModal({
                     <select
                       value={row.salle || ''}
                       onChange={e => updateRow(row.id, { salle: e.target.value || undefined })}
-                      className="col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      className="col-span-4 sm:col-span-2 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-600"
                       title="القاعة"
                     >
                       <option value="">القاعة...</option>
@@ -382,7 +434,7 @@ export default function FormationScheduleModal({
                     </select>
                     <button
                       onClick={() => removeRow(row.id)}
-                      className="col-span-1 p-1.5 text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                      className="col-span-4 sm:col-span-1 p-1.5 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                       title="حذف"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
